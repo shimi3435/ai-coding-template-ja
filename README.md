@@ -1,0 +1,1 @@
+# ai-coding-template-ja
