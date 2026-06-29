@@ -13,9 +13,13 @@ _Avoid_: 標準セット, 基本機能
 _Avoid_: 追加機能, プラグイン
 
 **単一の正（AGENTS.md）**:
-全エージェント共通の作業方針の実体を一元化したファイル。CLAUDE.md・docs/agents は AGENTS.md と矛盾しない補助に留まる。
+全エージェント共通の**作業方針（意図・自然言語）**の実体を一元化したファイル。CLAUDE.md・docs/agents は AGENTS.md と矛盾しない補助に留まる。MCP 接続・承認モード・サンドボックス等の**ツール固有の機構設定は管轄外**（`.codex/config.toml` / `.mcp.json` が担い、AGENTS.md の意図を各ツールで実現する設定と位置づける）。
 _Avoid_: ルートルール, マスター設定
 
 **Skill 実体**:
 vendoring した SKILL.md の正本。`.agents/skills/` に置き、Claude Code 用 `.claude/skills` はそこへの symlink とする。
 _Avoid_: スキル本体, オリジナル
+
+**green（doctor / check が通る状態）**:
+`task doctor` の exit 0 を指す。FAIL（機械コアの破損）がゼロであること。WARN（未設定・オプション未導入）と INFO は green を壊さない。到達性チェックは既定で行わず、作成直後・CI・オフラインでも green になる。
+_Avoid_: 成功, パス, OK

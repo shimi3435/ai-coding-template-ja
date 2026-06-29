@@ -123,6 +123,7 @@ ai-coding-template-ja
 - API key / token を自動生成・自動保存すること
 - 外部 Skills を常に最新版へ自動更新すること
 - 研究ごとの差異を吸収しきる巨大テンプレートにすること
+- テンプレート更新を下流リポジトリへ自動伝播すること（Use this template は切り離し。version スタンプ＋手動 cherry-pick 手順のみ提供）【Q18・ADR-0005】
 
 重要なのは、**過剰な全部入りではなく、安全に拡張できる最小実用コア**にすることである。
 
@@ -176,6 +177,7 @@ ai-coding-template-ja
 - .env.example
 - LICENSE（MIT・テンプレ著者のオリジナル成果物に適用）【Q14・ADR-0001】
 - README.md（日本語）
+- TEMPLATE_VERSION（テンプレ由来版スタンプ・doctor が INFO 表示）【Q18・ADR-0005】
 - tests/test_smoke.py
 - 最小 CI（GitHub Actions: uv sync / ruff / basedpyright / pytest）
 ```
@@ -262,6 +264,19 @@ docs/agents/
 ```
 
 初版の 9 分割（codex / claude-code / openspec / gsd / research / skills 等）は廃し、内容を上記 3 本に統合する。Codex / Claude-code 固有の差分は AGENTS.md / CLAUDE.md 本文に直接書く。必要が生じたら分割する。
+
+### 6.4 規約・技術選定・用語の書き場所（重複防止）【Q24】
+
+3者の役割を排他的に定義し、同じ事実を複数箇所に再掲しない（workflow.md に固定）。
+
+```text
+- AGENTS.md      = 作業方針の単一の正（how to work：規則・安全・ツール・ワークフロー）。
+- openspec/project.md = OpenSpec 固有規約のみ（capability の粒度・spec の書き方）。
+                  作業方針は AGENTS.md を参照（1 行リンク）・再掲しない。
+- CONTEXT.md     = 用語集のみ（語の定義。実装決定・技術選定は書かない）。
+- 技術選定の "正" = pyproject.toml（実体）。project.md / AGENTS.md は説明で、version・依存値の
+                  源にしない（値を散らさない＝Q21 の env 一元化と同じ思想）。
+```
 
 ---
 
@@ -350,6 +365,8 @@ caveman           # 過度な複雑化・不要な抽象化・テンプレ肥大
 
 各 Skill の用途は初版 §7 と同じ。caveman と AGENTS.md の「最小変更」ルールが役割的に近いため、**caveman は「設計判断時に明示的に呼ぶ Skill」**、AGENTS.md は「常時適用される原則」と整理して重複を避ける（workflow.md に記載）。
 
+【Q15・ADR-0001 追補】上記 5 つは**コア候補**であり、vendoring 可否（再配布可否）が確定するまでコア確定としない。PR2 のブロッカーとして各 skill の供給源（repo / plugin・commit）とライセンスを調査し、(a) 再配布可 / (b) 帰属必須＋再配布可 / (c) 再配布不可・copyleft・plugin で同梱不可、の 3 分類へ振り分ける。(c) は opt-in 取得へ降格する。caveman は (c) になる可能性が高い前提で設計する（SKILL.md 層まで同梱不可なら docs/optional の hook 登録手順へ。簡素化原則は AGENTS.md に内包済みのため機能は失われない）。
+
 ### 9.2 Skills 管理方針
 
 ```text
@@ -413,6 +430,20 @@ Serena MCP  # セマンティックなコード理解・symbol 単位編集・�
 
 `.mcp.json` をコミットするかは要検討（チーム共有したい設定なら可、個人 token / local path が混ざるなら template のみ）。
 
+二重化の吸収【Q21】:
+
+```text
+- Context7 MCP 接続は .mcp.json.template（Claude Code）と .codex/config.toml.template（Codex）の
+  両方に要る。完全な単一化はフォーマットが違い不可。
+- 実値の二重化は .env（CONTEXT7_API_KEY 等）を唯一の値の源にして消す。両 template は env を参照。
+  エンドポイント等の構造はコメントで「両者を揃える」と注記。
+- 「単一の正」は層で定義: AGENTS.md = 作業方針(意図)の単一の正。MCP 接続・承認モード・
+  サンドボックス等のツール固有機構設定は AGENTS.md の管轄外（意図を各ツールで実現する設定）。
+- doctor が緩く整合検査（両 template に Context7 が在る・承認モードが過度に緩くない）。
+- config.toml.template の approval_policy / sandbox_mode 既定は AGENTS.md Safety と整合する
+  保守側（書き込み・ネットワークは確認寄り）。対応を docs/agents/safety.md に 1 表で明記。
+```
+
 ---
 
 ## 11. Python 開発環境
@@ -433,10 +464,24 @@ uv を中心にする。pyenv 併用はオプション層で説明する。
 
 研究ライブラリ互換性のため 3.11 へ下げる余地は残すが、既定は 3.12。
 
-### 11.3 依存（コア）
+バージョン宣言の整合【Q20】:
 
 ```text
-[dev]
+- requires-python = ">=3.12"（下限のみ・上限を付けない）を pyproject に既定。
+- .python-version = 3.12（使う interpreter を固定）。requires-python（サポート範囲）とは別物。
+- uv.lock はコミット済（§27-8）。lock は requires-python の範囲で解決される。
+- 3.11 へ下げたい下流の手順（docs に明記・ワンステップではない）:
+  requires-python を ">=3.11" へ緩める → .python-version を 3.11 → uv lock 再生成 → task check。
+- 既定を最新寄り(3.12)にし、3.11 対応を最初から背負わない（lock が古い解決に寄り CI と
+  研究環境がずれるのを避ける）。下げは少数派なので手順で対応する。
+```
+
+### 11.3 依存（コア）
+
+コア dev ツールは **extra でなく dependency-group `dev`** に置く（無印 `uv sync` が既定で入れるため）【Q23】。
+
+```text
+[dependency-groups.dev]
 ruff
 basedpyright
 pytest
@@ -456,6 +501,17 @@ hydra-core / mlflow / dvc
 
 [dev-extra]  # 候補
 hypothesis / pydantic / pydantic-settings / rich / typer
+```
+
+extra/group スコープの固定【Q23】:
+
+```text
+- 無印 uv sync（task setup / CI / rename 後）= dev group のみ・extra なし。
+  → コアは常に軽く揃う（ruff/basedpyright/pytest が必ず入る）。
+- research / dev-extra は extra に置き既定では入れない。
+- オプション導入は専用タスク: task setup:research = uv sync --extra research /
+  task setup:all = uv sync --all-extras（docs/optional に記載）。
+- CI（コア）は extra なし。research を要する CI は別ワークフロー（§21 オプション）で --extra research。
 ```
 
 ---
@@ -499,6 +555,17 @@ gitleaks
 
 `gitleaks` を pre-commit に常駐させるかは要検討（導入コストと誤検知）。最低限 `detect-private-key` はコア pre-commit に入れる。
 
+品質ゲートの分担【Q19】:
+
+```text
+- pre-commit（コア・軽量）: ruff + ファイル系 + detect-private-key のみ。
+  basedpyright / pytest は入れない（探索的 WIP コミットを軽く保つ）。
+- task check が「コミット前の標準動作」（AGENTS.md に明記・既出を強化）。
+- pre-push フック（オプション・docs/optional）: push 時のみ basedpyright / pytest を回し
+  CI 赤を先取り。探索コミットを邪魔せず push 単位で型・test を検証。
+- CI（§21）が最終ゲート。「commit は軽い / push・CI で型と test」を README・workflow.md に 1 行ルール化。
+```
+
 ---
 
 ## 13. タスクランナー（Taskfile）
@@ -507,7 +574,7 @@ gitleaks
 
 ```text
 [コア]
-task setup       # 依存導入・hooks 設定
+task setup       # uv sync（dev group のみ・extra なし）＋ hooks 設定【Q23】
 task check       # 品質チェック一式
 task fix         # 自動修正
 task test        # pytest
@@ -517,8 +584,10 @@ task hooks       # pre-commit install
 task doctor      # 環境診断
 task clean       # キャッシュ削除
 task rename      # パッケージ改名（scripts/rename-package.py）
+task prune-template-docs  # docs/template/ と grill.md を削除（下流のクリーンアップ・任意）【Q25】
 
 [オプション]
+task setup:research / task setup:all   # extra を明示導入【Q23】
 task security    # pip-audit / bandit
 task skills:update / task skills:doctor
 task mcp:setup
@@ -534,12 +603,25 @@ task mcp:setup
 ./scripts/bootstrap.sh
 ```
 
+導入経路の線引き【Q22】:
+
+```text
+- uv: bootstrap が確認プロンプト付きで astral.sh/uv/install.sh を実行。
+  非対話バイパス = ASSUME_YES env（CI / エージェント用）。
+- go-task: 自動導入せず手順表示に留める（公式インストーラ or apt/snap 選択肢を提示）。
+  理由: 導入経路が環境差大・uv ほど中心でない。npm 版は Node 要のため非推奨（Node 非依存方針）。
+- gh: apt（gh 公式 apt repo）手順表示（ADR-0004 の「未導入なら手順表示」と一致）。
+- curl | sh は既定で確認プロンプト・ASSUME_YES env で非対話化。
+- 各ツール導入後にバージョンを表示（doctor も版を記録）。
+- 再現性の主軸は uv.lock ＋ TEMPLATE_VERSION で担保。ツール本体の版は厳密固定しない（正直に明記）。
+```
+
 bootstrap.sh の責務:
 
 ```text
 1. Ubuntu / 必須コマンドの有無を確認する
-2. uv を導入する（未導入時）
-3. Task (go-task) を導入する、または導入方法を表示する
+2. uv を導入する（未導入時・確認付き / ASSUME_YES でバイパス）【Q22】
+3. Task (go-task) は導入方法を表示する（自動導入しない）【Q22】
 4. Node.js / npm / npx の有無を確認する（任意・ハード依存にしない）【Q7・ADR-0002】
    - コア MCP（Context7 リモート HTTP）・skills vendoring・gh（Go バイナリ）は Node 不要
    - Node が無くても bootstrap はブロックしない。doctor が WARN 表示し、
@@ -649,10 +731,24 @@ task setup / task check / task doctor
 
 ```text
 scripts/rename-package.py（task rename から実行）
-- 入力: 新パッケージ名（例 my_research_project）
-- 置換対象: src ディレクトリ名 / pyproject.toml の name と
-  [tool.*] 参照 / import 文 / README 内の名称
-- ドライラン（--dry-run）を既定で提供し、変更差分を表示してから適用
+- 正面入力: module 名（識別子・例 my_research_project）【Q16】
+  - 配布名は module.replace("_","-") で自動導出（例 my-research-project）
+- バリデーション（最初に実行・失敗なら変更ゼロで abort）【Q16】
+  - str.isidentifier() and not keyword.iskeyword()
+  - 小文字＋アンダースコア以外は warning（PEP 8）
+- 置換対象（網羅・docs に固定）【Q16】
+  - src/<old>/ ディレクトリ rename
+  - pyproject.toml: [project].name = 配布名 / [tool.*] の packages・include
+    （basedpyright / coverage 等）= module 名
+  - 全 *.py の import <old> / from <old>
+  - openspec/project.md
+  - テンプレ（.codex/config.toml.template / .mcp.json.template に名前があれば）
+  - CI yml / README / AGENTS.md / CLAUDE.md の例示
+- 置換は module 形と distribution 形を別パターン・単語境界付きで行う【Q16】
+  （裸の "ja" 等を巻き込まない）
+- --dry-run を既定で提供し差分表示してから適用
+- 適用後は uv sync（§17 後段）。冪等（既定名が無ければ no-op で正常終了）【Q16】
+- 対象外（README/docs に明記）: repo 名 / GitHub remote / Actions の secret 名【Q16】
 ```
 
 【Q3・解決済】rename スクリプト方式に確定。`__PACKAGE_NAME__` プレースホルダ方式は、
@@ -712,6 +808,7 @@ ai-coding-template-ja/
 ├── CLAUDE.md                 # 薄く（@AGENTS.md）
 ├── README.md
 ├── LICENSE
+├── TEMPLATE_VERSION          # テンプレ由来版（doctor INFO 表示）【Q18】
 ├── pyproject.toml
 ├── uv.lock
 ├── .python-version           # 3.12
@@ -727,12 +824,14 @@ ai-coding-template-ja/
 │   │   ├── workflow.md       # OpenSpec/GSD 境界・フロー・Skills
 │   │   ├── safety.md
 │   │   └── mcp.md
-│   ├── adr/                  # 設計判断の記録（0001-0003 作成済）
-│   ├── optional/             # オプション層の導入手順（GSD/Serena/research 等）
-│   └── grill/
-│       └── ai-coding-template-ja.md
+│   ├── adr/                  # 下流の研究用に空出荷（0000-template.md 1 枚のみ）【Q25】
+│   ├── optional/             # オプション層の導入手順（GSD/Serena/research/template-update 等）
+│   └── template/             # テンプレ自身のメタ文書（下流が任意 prune 可）【Q25】
+│       ├── adr/              # テンプレ設計判断（0001-0006）
+│       └── grill/
+│           └── ai-coding-template-ja.md
 ├── openspec/                 # コア（project.md ＋空 specs/changes のみ）【Q6】
-│   ├── project.md            # 規約・技術選定
+│   ├── project.md            # OpenSpec 固有規約のみ（作業方針=AGENTS.md/技術値=pyproject 参照）【Q24】
 │   ├── specs/                # 空（コピー先が自分の能力仕様を書く）
 │   └── changes/              # 空
 ├── .agents/
@@ -768,6 +867,24 @@ ai-coding-template-ja/
 ## 20. 環境診断（doctor.py）
 
 `task doctor` から実行。診断結果は日本語表示。
+
+合否規約（exit code・§20 全体に適用）【Q17】:
+
+```text
+- FAIL (exit 1) = 機械コアが壊れている時のみ:
+  Python バージョン不一致 / uv 不在 / uv sync 不可 / pyproject・uv.lock 破損 /
+  ruff・basedpyright・pytest が呼べない。
+  ※ ネットワーク・API key・認証・engine 不在は FAIL にしない。
+- WARN (exit 0) = 未設定・オプション未導入:
+  .env 無し / CONTEXT7_API_KEY 無し / gh 未認証 / OpenSpec engine 不在 /
+  既定パッケージ名のまま / Node 未導入。
+- INFO (exit 0) = オプション未導入の通知（Serena / GSD 等）＋ TEMPLATE_VERSION 表示【Q18】
+  ＋ テンプレ ADR/grill 残存（任意 prune 可）【Q25】。
+- 到達性チェック（Context7 リモート等を実際に叩く）は既定で行わない。
+  key 未設定なら「未設定 WARN」で止める。叩くのは task doctor --online 時のみ。
+- green の定義 = exit 0（FAIL ゼロ・WARN/INFO は許容）。作成直後・CI・オフラインで green。
+- CI は doctor を必須ジョブにしない（CI 本体は §21 の uv sync/ruff/basedpyright/pytest）。
+```
 
 ```text
 [コア診断]
@@ -857,6 +974,7 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 - scripts/bootstrap.sh / doctor.py（コア診断）/ rename-package.py が存在する
 - tests/test_smoke.py が存在する
 - task setup / task check / task doctor / task rename が実行できる
+- task doctor が green（exit 0・FAIL ゼロ。WARN/INFO は許容。到達性は既定オフ）【Q17】
 - rename 実行後（src 名 + pyproject name 変更 + uv sync 張り直し）も task check が green【Q13】
 - 最小 CI が緑になる
 - secret がコミットされていない
@@ -956,7 +1074,7 @@ Ubuntu 限定という決定を前提にしています。
 - AGENTS.md を主体、CLAUDE.md は薄く参照               [確定]
 - docs/agents は workflow/safety/mcp の 3 本           [確定]
 - OpenSpec をコア、GSD をオプションにする              [確定]
-- Skills（grill-me/grill-with-docs/tdd/diagnose/caveman）はコア [確定]
+- Skills 5 つはコア候補・vendoring 可否確定後に確定        [確定 Q15/ADR-0001]
 - Context7 のみコア MCP・GitHub MCP/Serena はオプション [確定 Q10/ADR-0004]
 - Codex / Claude Code は両方コア対応                    [確定]
 - basedpyright は basic モード既定                      [確定]
@@ -983,6 +1101,19 @@ Ubuntu 限定という決定を前提にしています。
 - rename 仕上げは uv sync（editable 張り直し）・rename 後 green  [確定 Q13]
 - ルート LICENSE = MIT・vendored skill は個別 LICENSE＋lock 記録 [確定 Q14/ADR-0001]
 - 設計判断を docs/adr/0004 に追加記録                          [確定]
+- コア Skill 5 つは候補・vendoring 可否(再配布)確定後に確定     [確定 Q15/ADR-0001]
+- rename 正面入力は module 名・配布名を自動導出・入力検証必須   [確定 Q16]
+- doctor は exit code 規約(機械コア破損のみ FAIL)・到達性既定オフ [確定 Q17]
+- テンプレ更新は非自動伝播・TEMPLATE_VERSION＋手動手順のみ      [確定 Q18/ADR-0005]
+- 設計判断を docs/adr/0005 に追加記録                          [確定]
+- pre-commit は軽量維持・型/test は task check と CI・pre-push は任意 [確定 Q19]
+- requires-python = ">=3.12"(下限のみ)・3.11 へは再 lock 手順    [確定 Q20]
+- 単一の正は層で定義(AGENTS.md=意図/機構設定は管轄外)・MCP 実値は .env 一元化 [確定 Q21]
+- uv は確認付き自動導入(ASSUME_YES でバイパス)・go-task/gh は手順表示  [確定 Q22]
+- コア dev は dependency-group dev・無印 uv sync は dev のみ・extra は専用タスク [確定 Q23]
+- 規約/技術/用語の場所: AGENTS.md=方針・project.md=OpenSpec 固有・CONTEXT.md=用語・pyproject=技術値 [確定 Q24]
+- テンプレ自身の ADR/grill は docs/template/ 隔離・docs/adr 空出荷・任意 prune  [確定 Q25/ADR-0006]
+- 設計判断を docs/adr/0006 に追加記録                          [確定]
 ```
 
 ---

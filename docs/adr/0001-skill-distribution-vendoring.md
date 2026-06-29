@@ -33,3 +33,15 @@
   - **hook / plugin 型**（caveman 等）: 機能が 2 層に分かれる。(i) SKILL.md 本体は vendoring + symlink で両エージェントとも Skill 呼び出し（明示起動）でき、この層は「両対応コア」を満たす。(ii) SessionStart / UserPromptSubmit 等での**自動発火**は `.claude/settings.json` への hook 登録に依存する Claude Code 固有の上乗せで、Codex の hook 機構は別物。よって自動発火層は「同一実体を両者が参照」モデルの外であり、Claude 専用の任意設定として切り出す。
   - 整合: 「caveman をコア維持」が約束するのは (i) の SKILL.md レベルの両対応まで。(ii) の Claude hook 自動発火はコア保証に含めず optional。caveman の簡素化原則自体は AGENTS.md（常時適用の最小変更ルール）にも書かれており、hook 不在でも原則は両エージェントで効く。
   - PR2 の実機確認に「各コア skill（特に caveman）の配布形態確認と、hook 自動発火層の Claude 側登録手順確定」を含める（§27）。
+
+## 追補（Q15）: コア候補は vendoring 可否確定後に確定する
+
+「コア Skills = grill-me / grill-with-docs / tdd / diagnose / caveman の 5 つ」は**コア候補**であり、各 skill の供給源とライセンスを調査するまで確定しない。本 ADR 自身が「copyleft / 再配布不可 / 帰属必須なら vendoring せず opt-in 取得へ回す」と例外を持つため、5 つ全てがコア vendoring 可能とは限らない。これを明示的なゲートにする。
+
+- **PR2 のブロッカーとしてライセンス調査タスクを置く**。各 skill について `source`（repo URL / plugin marketplace）と `commit` を確定し、再配布可否を 3 分類する:
+  - (a) MIT / Apache 等で再配布可 → vendoring（コア・同梱）
+  - (b) 帰属必須だが再配布可 → vendoring ＋ `LICENSE` / `NOTICE` 同梱（コア）
+  - (c) 再配布不可 / copyleft / plugin で同梱不可 → **opt-in 取得**（コアから降格、`task skills:update` で個別取得）
+- **caveman は (c) に落ちる可能性が高い前提で設計する**。SKILL.md 層まで再配布不可なら「コア Skill」の看板を外し `docs/optional` の hook 登録手順へ回す。簡素化原則は AGENTS.md（常時適用の最小変更ルール）に内包済みのため、機能自体は失われない。
+- skills.lock.json の `redistribution` を `allowed` / `blocked` で必須化し、**`blocked` の skill が `.agents/skills/` に同梱されていないことを検証する CI チェック**を PR2 受け入れに追加する。
+- §5.1 / §9.1 / §26 の「コア Skills = 5 つ」は「**コア候補。vendoring 可否確定後に確定**」と読み替える。
