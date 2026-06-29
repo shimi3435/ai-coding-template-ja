@@ -46,9 +46,13 @@ tasks:
       - uv run pre-commit install
 
   doctor:
-    desc: 環境診断（read-only・sync しない）
+    desc: |
+      環境診断（read-only・sync しない）。既定は green を保つ助言診断。
+        task doctor                 # 既定（到達性なし・gh は WARN）
+        task doctor -- --online     # Context7 到達性も確認
+        task doctor -- --github     # gh 不在を FAIL 扱い（GitHub 文脈 opt-in）
     cmds:
-      - uv run --no-sync python scripts/doctor.py
+      - uv run --no-sync python scripts/doctor.py {{.CLI_ARGS}}
 
   rename:
     desc: |
