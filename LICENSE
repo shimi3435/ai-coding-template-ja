@@ -19,3 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Third-party vendored skills under `.agents/skills/` are NOT covered by the MIT
+license above. Each vendored skill is distributed under its own license, which
+is included as `.agents/skills/<skill>/LICENSE`. Their source, commit, and
+license are recorded in `.agents/skills/skills.lock.json`.
