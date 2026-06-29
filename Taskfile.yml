@@ -58,6 +58,11 @@ tasks:
     cmds:
       - uv run python scripts/rename-package.py {{.CLI_ARGS}}
 
+  mcp:setup:
+    desc: MCP 設定（.mcp.json / .codex/config.toml）を template ＋ .env から冪等生成
+    cmds:
+      - bash scripts/setup-mcp.sh
+
   skills:update:
     desc: vendored skill の symlink（.claude/skills・.codex/skills）を冪等再生成
     cmds:

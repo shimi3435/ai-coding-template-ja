@@ -1,0 +1,18 @@
+# Codex CLI 設定テンプレート（コミットする・実体 .codex/config.toml は gitignore）。
+# scripts/setup-mcp.sh が .env の CONTEXT7_API_KEY を埋めて実体を生成する。
+#
+# 承認・サンドボックスは AGENTS.md Safety と整合する保守側（書き込み・ネットワークは
+# 確認寄り）。対応表は docs/agents/safety.md。
+# - approval_policy = "on-request": エージェントが必要時に承認を求める。
+# - sandbox_mode = "workspace-write": 書き込みは作業ツリー内に限定。
+#   ネットワークアクセスは既定で無効（必要時に明示 opt-in）。
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# Context7 リモート MCP（コア MCP・リモート HTTP・Node 不要）。
+# header 名は literal CONTEXT7_API_KEY（Bearer ではない）。.mcp.json.template と揃える。
+# Codex の mcp_servers にはツール allowlist フィールドが無いため、tools 制限は
+# Claude 側 .mcp.json でのみ行う（least-privilege）。
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+http_headers = { "CONTEXT7_API_KEY" = "__CONTEXT7_API_KEY__" }
