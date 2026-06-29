@@ -388,11 +388,13 @@ caveman           # 過度な複雑化・不要な抽象化・テンプレ肥大
 .agents/skills を正・.claude/skills を symlink で解消。初版の「Codex に skill 機構なし」
 という想定は誤りで、両エージェントが同一 SKILL.md を消費する。
 
-【Q11・ADR-0001 補正】コア Skill は配布形態で 2 分類され vendoring 手段が異なる:
+【Q11・ADR-0001 補正】コア Skill（候補）は配布形態で 2 分類され vendoring 手段が異なる:
 - 純 SKILL.md 型（tdd / diagnose / grill-me / grill-with-docs 本体）: 同梱 + symlink で再現可。
 - hook/plugin 型（caveman 等）: SessionStart / UserPromptSubmit hook を .claude/settings.json へ
   登録して発火するため SKILL.md symlink だけでは再現しない。別手順（hook 登録 / plugin install）で扱う。
-  caveman はコア維持。各コア skill の配布形態は PR2 で実機確認（§27）。
+  caveman のコア扱いは Q15 で条件付きに改められた: SKILL.md 層まで再配布可ならコア候補に残るが、
+  plugin で同梱不可・再配布不可なら (c) として opt-in 降格する（必ずコア vendoring とは限らない）。
+  各コア skill（候補）の配布形態と vendoring 可否は PR2 で実機確認＋ライセンス調査（§27）。
 
 ---
 
@@ -862,7 +864,7 @@ ai-coding-template-ja/
     └── .gitkeep
 ```
 
-初版にあった `bootstrap.ps1` / `*.ps1` / `docs/setup/{windows,macos,linux}.md` は削除（Ubuntu 限定・docs 圧縮のため）。`docs/adr/` は本グリルで結晶化した判断（0001-0003）を記録するため復活。`openspec/specs/` の初期 spec（bootstrap/ai-agent-rules/python-environment）は規約であり capability spec でないため廃止（内容は AGENTS.md / project.md / docs へ）。
+初版にあった `bootstrap.ps1` / `*.ps1` / `docs/setup/{windows,macos,linux}.md` は削除（Ubuntu 限定・docs 圧縮のため）。本グリルで結晶化した判断（ADR 0001-0006）は**テンプレ自身のメタ文書**であり、Q25/ADR-0006 に従い **`docs/template/adr/` に隔離**する（実装フェーズ PR2 で物理移動。本 planning workspace では参照を壊さないため `docs/adr/` に残置）。出荷時の `docs/adr/` は**下流の研究 ADR 用に空**（`0000-template.md` の道標 1 枚のみ）とする。`openspec/specs/` の初期 spec（bootstrap/ai-agent-rules/python-environment）は規約であり capability spec でないため廃止（内容は AGENTS.md / project.md / docs へ）。
 
 ---
 
@@ -1093,7 +1095,7 @@ Ubuntu 限定という決定を前提にしています。
 - OpenSpec 初期は project.md ＋空 specs/changes           [確定 Q6]
 - gitleaks は CI security＋task security（pre-commit 非常駐）[確定 Q8]
 - 受け入れは PR1 機械コア / PR2 統合 / PR3 オプションの 3 段 [確定 Q9]
-- 設計判断を docs/adr/0001-0003 に記録                    [確定]
+- 設計判断を ADR 0001-0003 に記録（テンプレ自身のメタ ADR。PR2 で docs/template/adr/ へ移動）[確定 Q25/ADR-0006]
 - openai-codex-cc はオプション層・クロス AI レビューは可用性
   ゲート付きエージェント手順（CI 自動送信にしない）          [確定]
 - コア MCP は Context7 のみ・GitHub MCP はオプション降格        [確定 Q10/ADR-0004]
