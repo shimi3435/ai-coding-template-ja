@@ -25,7 +25,7 @@
 
 [AI ツール]
 - Skills: コア（grill-me / grill-with-docs / tdd / diagnose / caveman）
-- MCP: Context7 / GitHub をコア、Serena はオプション
+- MCP: Context7 のみコア、GitHub MCP / Serena はオプション【Q10・ADR-0004】
 
 [ドキュメント]
 - docs/agents は推奨 3 本（workflow.md / safety.md / mcp.md）に圧縮
@@ -42,11 +42,15 @@
 - LICENSE を含める
 ```
 
-> 【grill-with-docs 反映済】本ドキュメントは grill セッション（Q1-Q9）で更新済。
-> 追加で結晶化した決定は §26、設計判断の記録は `docs/adr/0001-0003`、
+> 【grill-with-docs 反映済】本ドキュメントは grill セッション（Q1-Q14）で更新済。
+> 追加で結晶化した決定は §26、設計判断の記録は `docs/adr/0001-0004`、
 > 用語定義は `CONTEXT.md` を参照。主な改訂: §7（OpenSpec/GSD 境界）/ §9.2（skill vendoring）/
 > §10（MCP リモート既定）/ §14・§20（Node 非コア）/ §17（rename 確定）/ §19（openspec 最小）/
 > §23（受け入れ 3 段階）。
+> 第 2 グリル（Q10-Q14）: GitHub MCP をオプション降格・`gh` をコア前提（§5・§10・§14・§20・ADR-0004）/
+> skill は hook 型（caveman）を別扱いに 2 分類（§9.2・ADR-0001）/ OpenSpec engine 不在を診断＋Markdown
+> fallback で補強（§7・§19・§20・ADR-0003）/ rename 仕上げを `uv sync` に修正・rename 後 green を保証
+> （§17・§23.1）/ ルート LICENSE = MIT・vendored skill は個別 LICENSE（§5・ADR-0001）。
 
 ---
 
@@ -154,9 +158,13 @@ ai-coding-template-ja
 - grill-me / grill-with-docs / tdd / diagnose / caveman
 
 [MCP（コア）]
-- Context7 MCP（最新ドキュメント確認）
-- GitHub MCP（read 中心・write は最小）
+- Context7 MCP のみ（最新ドキュメント確認・Copilot 非依存）【Q10・ADR-0004】
+- GitHub read 操作は gh CLI で代替（GitHub MCP はオプションへ降格）
 - 設定は .mcp.json.template で配布
+
+[GitHub CLI（コア前提）]【Q10・ADR-0004】
+- gh をコア前提化。bootstrap が未導入なら導入手順を表示、doctor が必須診断
+- 認証（gh auth login / GH_TOKEN）は利用者が手動。Copilot 契約不要
 
 [導入・診断]
 - scripts/bootstrap.sh（Ubuntu のみ）
@@ -166,7 +174,7 @@ ai-coding-template-ja
 [品質・運用]
 - .gitignore（data/ results/ 等を初期から無視）
 - .env.example
-- LICENSE
+- LICENSE（MIT・テンプレ著者のオリジナル成果物に適用）【Q14・ADR-0001】
 - README.md（日本語）
 - tests/test_smoke.py
 - 最小 CI（GitHub Actions: uv sync / ruff / basedpyright / pytest）
@@ -181,6 +189,8 @@ ai-coding-template-ja
 - GSD（実装タスク分解・進捗管理）
 
 [MCP]
+- GitHub MCP（構造化された Issue/PR/Actions 参照・Copilot 契約や複雑解析が要る場合）【Q10・ADR-0004】
+  - リモート HTTP read-only / ローカルバイナリ / Docker のいずれかで opt-in
 - Serena MCP（セマンティックなコード理解・大規模リファクタリング）
 
 [研究用ライブラリ（research extra）]
@@ -248,7 +258,7 @@ AGENTS.md に書いた内容を CLAUDE.md に再掲しない。
 docs/agents/
 ├── workflow.md   # OpenSpec / GSD の責務境界と作業フロー、Skills 利用タイミング
 ├── safety.md     # 危険操作・secret・MCP write の扱い
-└── mcp.md        # Context7 / GitHub（コア）/ Serena（オプション）の利用方針
+└── mcp.md        # Context7（コア）/ gh CLI（GitHub read 代替）/ GitHub MCP・Serena（オプション）
 ```
 
 初版の 9 分割（codex / claude-code / openspec / gsd / research / skills 等）は廃し、内容を上記 3 本に統合する。Codex / Claude-code 固有の差分は AGENTS.md / CLAUDE.md 本文に直接書く。必要が生じたら分割する。
@@ -291,6 +301,14 @@ GSD（オプション）= 「複数 change を横断する上位管理」
 
 レビュー観点【解決済 / Q5・ADR-0003】: per-change を OpenSpec が所有することで重複は消え、
 GSD 未導入時もタスク管理は手薄にならない（OpenSpec tasks.md が担うため）。
+
+【Q12・ADR-0003 補正】この境界は `/opsx:apply`（engine）が存在することに依存する。テンプレが
+コミットするのは `openspec/`（project.md ＋空 specs/changes）データのみで engine の実体は別途要る。
+→ PR2 で配布形態（Claude Code / Codex の plugin か独立 CLI か）を実機確認（§27）、doctor に
+  openspec 可用性診断を追加（不在なら WARN）。
+→ engine 不在環境でも崩れぬよう fallback「OpenSpec を Markdown 規約として最小成立」を保証する
+  （空 specs/changes ＋ project.md があればエージェントが手で change/tasks.md を運用でき境界維持）。
+  `/opsx:apply` は自動化であって境界の前提ではない。
 
 ---
 
@@ -350,6 +368,12 @@ caveman           # 過度な複雑化・不要な抽象化・テンプレ肥大
 .agents/skills を正・.claude/skills を symlink で解消。初版の「Codex に skill 機構なし」
 という想定は誤りで、両エージェントが同一 SKILL.md を消費する。
 
+【Q11・ADR-0001 補正】コア Skill は配布形態で 2 分類され vendoring 手段が異なる:
+- 純 SKILL.md 型（tdd / diagnose / grill-me / grill-with-docs 本体）: 同梱 + symlink で再現可。
+- hook/plugin 型（caveman 等）: SessionStart / UserPromptSubmit hook を .claude/settings.json へ
+  登録して発火するため SKILL.md symlink だけでは再現しない。別手順（hook 登録 / plugin install）で扱う。
+  caveman はコア維持。各コア skill の配布形態は PR2 で実機確認（§27）。
+
 ---
 
 ## 10. 導入したい MCP
@@ -357,23 +381,22 @@ caveman           # 過度な複雑化・不要な抽象化・テンプレ肥大
 ### 10.1 コア MCP
 
 ```text
-Context7 MCP  # ライブラリ / CLI / SDK の最新ドキュメント確認
-GitHub MCP    # Issue / PR / Actions / repo 情報の参照（read 中心）
+Context7 MCP  # ライブラリ / CLI / SDK の最新ドキュメント確認（コア MCP はこれのみ）
 ```
 
 - Context7 は **MCP のみ**を採用（Skill 版とは重複させない）。
   実行形態は **リモート HTTP**（`https://mcp.context7.com/mcp` ＋ `CONTEXT7_API_KEY`）を既定とし Node 非依存【Q7・ADR-0002】。
-- GitHub MCP は **read-only を既定**とし、write 権限・toolset は最小に絞る。
-- GitHub MCP の実行形態は **リモート HTTP read-only を既定**にする【Q4・ADR-0002】。
-  `https://api.githubcopilot.com/mcp/x/all/readonly`（fine-grained read PAT を .env で供給）。
-  → ローカルプロセス・Docker・npx いずれも不要。
-  → Copilot エンタイトルメントを要する可能性があり、未契約環境はローカルバイナリ版
-     （`github-mcp-server stdio --read-only --toolsets=...`）を fallback として docs に併記。
-  → Docker 版・ローカル npx 版はオプション層へ置く。
+- **GitHub MCP はコアから外しオプション層へ降格**【Q10・ADR-0004】。理由: リモート GitHub MCP
+  （`api.githubcopilot.com`）が Copilot エンタイトルメントを要する可能性があり、対象利用者（個人/
+  小規模研究）は未契約率が高い。コア既定が Copilot 依存だと「作成直後 green」（§23.1）と衝突する。
+- GitHub の read 操作（Issue/PR/Actions/repo 参照）は **`gh` CLI**（Bash 経由）で代替。`gh` は無料 PAT で
+  動き Copilot 不要のためコア前提に格上げ（bootstrap §14 / doctor §20）。
 
 ### 10.2 オプション MCP
 
 ```text
+GitHub MCP  # 構造化された Issue/PR/Actions 参照・Copilot 契約や複雑解析が要る場合に opt-in【Q10・ADR-0004】
+            # リモート HTTP read-only（ホスト/アカウントのポリシー次第で Copilot 要・要検証）/ ローカルバイナリ（Go・Node 不要）/ Docker から選択
 Serena MCP  # セマンティックなコード理解・symbol 単位編集・大規模リファクタリング
             # 既存コードが育ってから / Notebook→src 移行時に opt-in
 ```
@@ -517,10 +540,12 @@ bootstrap.sh の責務:
 2. uv を導入する（未導入時）
 3. Task (go-task) を導入する、または導入方法を表示する
 4. Node.js / npm / npx の有無を確認する（任意・ハード依存にしない）【Q7・ADR-0002】
-   - コア MCP はリモート HTTP、skills は vendoring のため Node 不要
+   - コア MCP（Context7 リモート HTTP）・skills vendoring・gh（Go バイナリ）は Node 不要
    - Node が無くても bootstrap はブロックしない。doctor が WARN 表示し、
      ローカル/npx 版 MCP を opt-in する場合のみ Node を要求する
-5. GitHub CLI (gh) の有無を確認する
+5. GitHub CLI (gh) を確認する（コア前提）【Q10・ADR-0004】
+   - GitHub read 操作の代替手段のため未導入なら導入手順を表示する
+   - 認証（gh auth login / GH_TOKEN）は利用者が手動。secret は保存しない
 6. task setup を実行する
 ```
 
@@ -572,7 +597,7 @@ bootstrap でやらないこと:
 
 ## Tools
 - 実装前に Context7 でライブラリ/CLI の最新仕様を確認する。
-- GitHub MCP は read を基本とし、write 操作は事前確認する。
+- GitHub の read 操作はコアでは gh CLI を使う。GitHub MCP はオプションで、有効時も read を基本とし write は事前確認する。
 - Serena はオプション。大規模リファクタリング時のみ使う。
 
 ## Validation
@@ -597,8 +622,8 @@ bootstrap でやらないこと:
 
 ## 構成
 - コア層: uv / ruff / basedpyright / pytest / pre-commit / Taskfile /
-  AGENTS.md / OpenSpec / Skills / Context7・GitHub MCP / Codex・Claude Code
-- オプション層: GSD / Serena MCP / research extra / notebook 管理 / 追加 CI
+  AGENTS.md / OpenSpec / Skills / Context7 MCP / gh CLI / Codex・Claude Code
+- オプション層: GSD / GitHub MCP / Serena MCP / research extra / notebook 管理 / 追加 CI
 
 ## このテンプレートから新規プロジェクトを作る
 1. GitHub の "Use this template" で新規リポジトリを作成
@@ -632,7 +657,15 @@ scripts/rename-package.py（task rename から実行）
 【Q3・解決済】rename スクリプト方式に確定。`__PACKAGE_NAME__` プレースホルダ方式は、
 有効な Python 識別子でなくインストール不能なため §23.1「作成直後に task check が通る」と
 衝突するので却下。既定名 `ai_coding_template_ja` が実体として動き、rename は衛生処理。
-rename は置換後に `uv lock`（--no-upgrade）で root プロジェクト名のみ refresh する。
+
+【Q13・修正】rename の仕上げは `uv lock` のみでは不足。bootstrap の `uv sync` が root を
+旧名で editable install 済みのため、`uv lock` だけだと `.venv` の editable が旧名のまま残り
+rename 後の `task check`（新名 import）が `ModuleNotFoundError` で赤になる。
+→ rename は置換後に **`uv sync`**（lock refresh ＋ editable を新名へ張り直し）を実行する。
+  uv docs 上 `uv sync` は lock 後に環境へ install/sync し project を既定で editable install するため適切。
+  rename では **`uv sync --locked` を使わない**（lock refresh が起きず旧名のままになる）。
+  万一 editable が張り替わらない場合の fallback: `uv sync || (rm -rf .venv && uv sync)`。
+→ 受け入れは「rename 後に task check が green」を保証する（§23.1）。
 
 ---
 
@@ -741,15 +774,17 @@ ai-coding-template-ja/
 - pyproject.toml / uv.lock
 - ruff / basedpyright / pytest / pre-commit
 - Node.js / npm / npx（任意・未導入は WARN。コアはリモート MCP で Node 不要）【Q7】
-- Task / Git / gh
-- リモート GitHub MCP の到達性 / Copilot エンタイトルメント（使えない環境を早期検知）【ADR-0002】
+- Task / Git / gh（gh はコア前提・未導入は WARN ＋導入案内）【Q10】
+- Context7 MCP（コア MCP）の到達性 / CONTEXT7_API_KEY
+- OpenSpec engine（/opsx:apply）の可用性（不在なら WARN・Markdown fallback 案内）【Q12】
+- Skills ディレクトリの存在 ＋ hook 型 skill（caveman）の hook 登録状況【Q11】
 - .env の有無と必要 key 雛形
 - .mcp.json / .codex/config.toml の生成状況
-- Skills ディレクトリの存在
 - パッケージ名がテンプレート既定 (ai_coding_template_ja) のままか
   → 警告（task rename の案内）
 
 [オプション診断（導入時のみ）]
+- GitHub MCP（リモート到達性 / Copilot エンタイトルメント）【Q10・ADR-0004】
 - Serena MCP / GSD / research extra / Docker
 - codex CLI の可用性・認証（openai-codex-cc のクロス AI レビュー用）
 ```
@@ -801,6 +836,8 @@ pip-audit / bandit / gitleaks
 - sudo / 管理者権限が必要な操作は明示する
 - クロス AI レビュー（openai-codex-cc）はコードを外部（OpenAI）へ送信するため、
   CI/hook で自動送信せず、可用性ゲート付きの人起点手順に限定する
+- コア MCP（Context7 リモート HTTP）はクエリを第三者へ送信する。機微情報を含むクエリに注意し、
+  プライバシー/オフライン重視のプロジェクトはローカル MCP へ opt-in する（ADR-0002）
 ```
 
 ---
@@ -819,6 +856,7 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 - scripts/bootstrap.sh / doctor.py（コア診断）/ rename-package.py が存在する
 - tests/test_smoke.py が存在する
 - task setup / task check / task doctor / task rename が実行できる
+- rename 実行後（src 名 + pyproject name 変更 + uv sync 張り直し）も task check が green【Q13】
 - 最小 CI が緑になる
 - secret がコミットされていない
 ```
@@ -831,8 +869,10 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 - docs/agents/{workflow,safety,mcp}.md が存在する
 - openspec/ = project.md ＋空 specs/changes が存在する
 - コア Skills が vendoring され .agents/skills 正・.claude/skills symlink で利用可能
-- .mcp.json.template / .codex/config.toml.template（リモート read-only）が存在する
-- doctor が MCP / skills / Copilot エンタイトルメントを診断する
+  （hook 型 caveman は hook 登録手順で再現・配布形態は実機確認済）【Q11】
+- .mcp.json.template / .codex/config.toml.template（Context7 リモート）が存在する
+- doctor が Context7 MCP / skills / OpenSpec engine を診断する（GitHub MCP/Copilot はオプション診断）【Q10・Q12】
+- OpenSpec engine の配布形態が確認され、不在時の Markdown fallback が docs に明記【Q12】
 - CI security ジョブ（gitleaks）/ task security が利用できる
 ```
 
@@ -864,9 +904,9 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 11. 最小 CI
 
 [コア続き / 同 PR or 第 2 PR]
-12. OpenSpec 初期構成
-13. コア Skills setup
-14. Context7 / GitHub MCP template
+12. OpenSpec 初期構成（engine 配布形態の実機確認込み）
+13. コア Skills setup（hook 型 caveman の hook 登録含む）
+14. Context7 MCP template ＋ gh CLI コア前提化
 
 [オプション / 後続 PR]
 15. GSD / Serena / research extra / notebook / task security
@@ -916,7 +956,7 @@ Ubuntu 限定という決定を前提にしています。
 - docs/agents は workflow/safety/mcp の 3 本           [確定]
 - OpenSpec をコア、GSD をオプションにする              [確定]
 - Skills（grill-me/grill-with-docs/tdd/diagnose/caveman）はコア [確定]
-- Context7 / GitHub MCP はコア、Serena はオプション     [確定]
+- Context7 のみコア MCP・GitHub MCP/Serena はオプション [確定 Q10/ADR-0004]
 - Codex / Claude Code は両方コア対応                    [確定]
 - basedpyright は basic モード既定                      [確定]
 - パッケージ改名スクリプトをコアに含める                [確定]
@@ -935,6 +975,13 @@ Ubuntu 限定という決定を前提にしています。
 - 設計判断を docs/adr/0001-0003 に記録                    [確定]
 - openai-codex-cc はオプション層・クロス AI レビューは可用性
   ゲート付きエージェント手順（CI 自動送信にしない）          [確定]
+- コア MCP は Context7 のみ・GitHub MCP はオプション降格        [確定 Q10/ADR-0004]
+- gh CLI をコア前提化（GitHub read 代替・Copilot 不要）        [確定 Q10/ADR-0004]
+- コア Skill を 2 分類（純 SKILL.md 型 / hook 型 caveman）      [確定 Q11/ADR-0001]
+- OpenSpec engine 不在を doctor 診断＋Markdown fallback で補強   [確定 Q12/ADR-0003]
+- rename 仕上げは uv sync（editable 張り直し）・rename 後 green  [確定 Q13]
+- ルート LICENSE = MIT・vendored skill は個別 LICENSE＋lock 記録 [確定 Q14/ADR-0001]
+- 設計判断を docs/adr/0004 に追加記録                          [確定]
 ```
 
 ---
@@ -943,7 +990,7 @@ Ubuntu 限定という決定を前提にしています。
 
 ```text
 1. .mcp.json をコミットするか            → [解決] template のみ・実体 gitignore（§10.3/§18）
-2. GitHub MCP の実行形態と権限           → [解決 Q4/ADR-0002] リモート HTTP read-only 既定
+2. GitHub MCP の実行形態と権限           → [再解決 Q10/ADR-0004] オプション降格・コアは gh CLI で代替
 3. Skills の管理方式                      → [解決 Q2/ADR-0001] vendoring
 4. skill ディレクトリ重複の同期           → [解決 Q1/ADR-0001] .agents/skills 正・.claude symlink
 5. OpenSpec 初期 specs の作り込み         → [解決 Q6] project.md ＋空 specs/changes
@@ -953,9 +1000,18 @@ Ubuntu 限定という決定を前提にしています。
 9. research extra の最終ライブラリ        → [保留] オプション層構築時に確定（PR3）
 10. GSD オプション時のタスク管理代替       → [解決 Q5/ADR-0003] OpenSpec tasks.md が per-change を担う
 
+11. GitHub MCP のコア要否                  → [解決 Q10/ADR-0004] オプション降格・gh CLI で代替
+12. LICENSE 種別                           → [解決 Q14/ADR-0001] MIT・vendored skill は個別 LICENSE
+13. skill engine（hook 型）の再現           → [解決 Q11/ADR-0001] 2 分類・hook 型は別手順
+14. OpenSpec engine の供給                  → [解決 Q12/ADR-0003] 診断＋Markdown fallback
+15. rename 後の環境同期                     → [解決 Q13] uv sync で editable 張り直し
+
 [PR2 実装時の検証タスク（設計フォークでない）]
 - .codex/skills の symlink 要否を Codex の repo スコープ解決で実機確認
-- doctor の Copilot エンタイトルメント検出の実装
+- 各コア skill の配布形態確認（特に hook 型 caveman の hook 登録手順確定）【Q11】
+- OpenSpec engine（/opsx:apply）の供給源（plugin / 独立 CLI）の実機確認【Q12】
+- doctor の OpenSpec engine 可用性検出の実装【Q12】
+- doctor の Copilot エンタイトルメント検出（オプション診断へ移設）【Q10】
 ```
 
 ---
@@ -977,8 +1033,8 @@ Ubuntu 限定という決定を前提にしています。
 7. AGENTS.md 主体 + 薄い CLAUDE.md + docs/agents 3 本
 8. OpenSpec 初期構成（project.md ＋空 specs/changes）
 9. コア Skills（vendoring・.agents/skills 正・.claude symlink）導入スクリプト
-10. Context7 / GitHub MCP のリモート read-only 設定テンプレート（Codex / Claude Code 両対応）
-11. doctor の MCP・skills・Copilot 拡張 / CI security ジョブ
+10. Context7 MCP のリモート設定テンプレート（Codex / Claude Code 両対応）＋ gh CLI コア前提【Q10】
+11. doctor の Context7・skills・OpenSpec engine 拡張 / CI security ジョブ（Copilot/GitHub MCP はオプション診断）
 
 [PR3+（オプション）]
 12. GSD / Serena MCP / research extra / notebook 管理 / task security

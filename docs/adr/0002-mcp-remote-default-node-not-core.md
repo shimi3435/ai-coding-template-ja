@@ -1,5 +1,11 @@
 # コア MCP はリモート HTTP read-only を既定とし Node を非コア依存にする
 
+> Status: 一部 superseded（ADR-0004 による）。**GitHub MCP をコアとする部分は無効**。
+> 本 ADR で生きている責務は「**コア MCP（Context7）はリモート HTTP・コアは Node 非依存**」のみ。
+> GitHub MCP の扱いは ADR-0004 を参照（オプション降格・コアの GitHub read は gh CLI で代替）。
+
+（以下は当初記述。GitHub MCP に関する箇所は ADR-0004 で置換済）
+
 GitHub MCP と Context7 MCP は、ローカル / Docker / npx ではなく**リモート HTTP サーバ**をコア既定とする。GitHub MCP は `https://api.githubcopilot.com/mcp/x/all/readonly`（read-only パス・fine-grained PAT を `.env` で供給）、Context7 MCP は `https://mcp.context7.com/mcp`（`CONTEXT7_API_KEY`）。Skills を vendoring 化したことと合わせ、コア機能は Node.js を必要としなくなるため、Node は bootstrap のハード依存から外し、doctor では未導入を WARN 表示に留める。
 
 ## Considered Options
