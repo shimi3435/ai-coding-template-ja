@@ -54,6 +54,11 @@ jobs:
   security:
     name: security (gitleaks)
     runs-on: ubuntu-latest
+    # gitleaks-action は PR イベントで PR の commit 一覧を GitHub API から取得するため
+    # pull-requests: read が要る（既定トークンには無く 403 になる）。
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       # gitleaks は全履歴を走査するため fetch-depth: 0（浅い clone だと検出漏れ）。
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
