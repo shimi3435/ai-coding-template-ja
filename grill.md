@@ -194,6 +194,12 @@ ai-coding-template-ja
 [追加のセキュリティ・品質チェック]
 - pip-audit / bandit（task security に分離、CI は任意）
 
+[クロス AI レビュー]
+- openai-codex-cc（Codex 連携プラグイン）= PR 後のクロス AI レビュー（review-only）
+  - トリガは CI/hook の自動送信でなく「可用性ゲート付きのエージェント手順」
+  - doctor が codex CLI 可用性を診断し、利用可能なら workflow.md の手順で /codex:review を回す
+  - 要 codex CLI ＋ OpenAI 認証 ＋ ネットワーク ＋ API コスト（最小コアに反するためオプション）
+
 [その他]
 - pyenv 併用
 - GitHub MCP の Docker 実行構成
@@ -745,6 +751,7 @@ ai-coding-template-ja/
 
 [オプション診断（導入時のみ）]
 - Serena MCP / GSD / research extra / Docker
+- codex CLI の可用性・認証（openai-codex-cc のクロス AI レビュー用）
 ```
 
 表示例:
@@ -792,6 +799,8 @@ pip-audit / bandit / gitleaks
 - 外部 Skill を無制限に自動導入しない（導入元を固定・記録）
 - curl | sh で外部スクリプトを実行する場合は確認/選択式
 - sudo / 管理者権限が必要な操作は明示する
+- クロス AI レビュー（openai-codex-cc）はコードを外部（OpenAI）へ送信するため、
+  CI/hook で自動送信せず、可用性ゲート付きの人起点手順に限定する
 ```
 
 ---
@@ -861,6 +870,7 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 
 [オプション / 後続 PR]
 15. GSD / Serena / research extra / notebook / task security
+16. openai-codex-cc（クロス AI レビュー・可用性ゲート付き手順）
 ```
 
 ---
@@ -923,6 +933,8 @@ Ubuntu 限定という決定を前提にしています。
 - gitleaks は CI security＋task security（pre-commit 非常駐）[確定 Q8]
 - 受け入れは PR1 機械コア / PR2 統合 / PR3 オプションの 3 段 [確定 Q9]
 - 設計判断を docs/adr/0001-0003 に記録                    [確定]
+- openai-codex-cc はオプション層・クロス AI レビューは可用性
+  ゲート付きエージェント手順（CI 自動送信にしない）          [確定]
 ```
 
 ---
