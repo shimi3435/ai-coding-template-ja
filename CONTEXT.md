@@ -21,5 +21,5 @@ vendoring した SKILL.md の正本。`.agents/skills/` に置き、Claude Code 
 _Avoid_: スキル本体, オリジナル
 
 **green（doctor / check が通る状態）**:
-`task doctor` の exit 0 を指す。FAIL（機械コアの破損）がゼロであること。WARN（未設定・オプション未導入）と INFO は green を壊さない。到達性チェックは既定で行わず、作成直後・CI・オフラインでも green になる。
+`task doctor` と `task check` がともに exit 0 の状態を指す。`task doctor` では FAIL（機械コアの破損）がゼロであること（WARN・INFO は green を壊さない。到達性チェックは既定で行わず、作成直後・CI・オフラインでも green になる）。`task check`（ruff / basedpyright / pytest）は全て通ること。
 _Avoid_: 成功, パス, OK

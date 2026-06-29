@@ -28,10 +28,10 @@
   }
   ```
 - symlink は Ubuntu 限定前提で安全。`.codex/skills` の symlink 要否は Codex の repo スコープ解決を実機確認して決める。
-- コア Skill は配布形態で 2 分類され、vendoring 手段が異なる:
+- コア Skill（候補）は配布形態で 2 分類され、vendoring 手段が異なる（個別リストの確定は追補（Q15）のライセンス調査後）:
   - **純 SKILL.md 型**（tdd / diagnose / grill-me / grill-with-docs の本体）: `.agents/skills/` 同梱 + `.claude/skills` symlink で再現できる。
   - **hook / plugin 型**（caveman 等）: 機能が 2 層に分かれる。(i) SKILL.md 本体は vendoring + symlink で両エージェントとも Skill 呼び出し（明示起動）でき、この層は「両対応コア」を満たす。(ii) SessionStart / UserPromptSubmit 等での**自動発火**は `.claude/settings.json` への hook 登録に依存する Claude Code 固有の上乗せで、Codex の hook 機構は別物。よって自動発火層は「同一実体を両者が参照」モデルの外であり、Claude 専用の任意設定として切り出す。
-  - 整合: 「caveman をコア維持」が約束するのは (i) の SKILL.md レベルの両対応まで。(ii) の Claude hook 自動発火はコア保証に含めず optional。caveman の簡素化原則自体は AGENTS.md（常時適用の最小変更ルール）にも書かれており、hook 不在でも原則は両エージェントで効く。
+  - 整合: caveman が**コア候補に残る場合**（追補（Q15）でライセンス上 vendoring 可と判定された場合）に約束するのは (i) の SKILL.md レベルの両対応まで。(ii) の Claude hook 自動発火はコア保証に含めず optional。caveman の簡素化原則自体は AGENTS.md（常時適用の最小変更ルール）にも書かれており、hook 不在でも原則は両エージェントで効く。なお caveman の vendoring 可否自体が追補（Q15）の (c) で覆る可能性があり、その場合は本項の「コア」前提も失効する。
   - PR2 の実機確認に「各コア skill（特に caveman）の配布形態確認と、hook 自動発火層の Claude 側登録手順確定」を含める（§27）。
 
 ## 追補（Q15）: コア候補は vendoring 可否確定後に確定する

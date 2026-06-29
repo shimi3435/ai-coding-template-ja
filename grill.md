@@ -584,7 +584,7 @@ task hooks       # pre-commit install
 task doctor      # 環境診断
 task clean       # キャッシュ削除
 task rename      # パッケージ改名（scripts/rename-package.py）
-task prune-template-docs  # docs/template/ と grill.md を削除（下流のクリーンアップ・任意）【Q25】
+task prune-template-docs  # docs/template/ を削除（grill.md は PR2 で docs/template/grill/ へ移動済）【Q25】
 
 [オプション]
 task setup:research / task setup:all   # extra を明示導入【Q23】
@@ -1096,7 +1096,8 @@ Ubuntu 限定という決定を前提にしています。
   ゲート付きエージェント手順（CI 自動送信にしない）          [確定]
 - コア MCP は Context7 のみ・GitHub MCP はオプション降格        [確定 Q10/ADR-0004]
 - gh CLI をコア前提化（GitHub read 代替・Copilot 不要）        [確定 Q10/ADR-0004]
-- コア Skill を 2 分類（純 SKILL.md 型 / hook 型 caveman）      [確定 Q11/ADR-0001]
+- コア Skill の配布形態 2 分類（純 SKILL.md 型 / hook 型）方針は確定。
+  個別リスト（どの skill がコア）は Q15 のライセンス調査後に確定        [確定 Q11/Q15/ADR-0001]
 - OpenSpec engine 不在を doctor 診断＋Markdown fallback で補強   [確定 Q12/ADR-0003]
 - rename 仕上げは uv sync（editable 張り直し）・rename 後 green  [確定 Q13]
 - ルート LICENSE = MIT・vendored skill は個別 LICENSE＋lock 記録 [確定 Q14/ADR-0001]
@@ -1105,7 +1106,6 @@ Ubuntu 限定という決定を前提にしています。
 - rename 正面入力は module 名・配布名を自動導出・入力検証必須   [確定 Q16]
 - doctor は exit code 規約(機械コア破損のみ FAIL)・到達性既定オフ [確定 Q17]
 - テンプレ更新は非自動伝播・TEMPLATE_VERSION＋手動手順のみ      [確定 Q18/ADR-0005]
-- 設計判断を docs/adr/0005 に追加記録                          [確定]
 - pre-commit は軽量維持・型/test は task check と CI・pre-push は任意 [確定 Q19]
 - requires-python = ">=3.12"(下限のみ)・3.11 へは再 lock 手順    [確定 Q20]
 - 単一の正は層で定義(AGENTS.md=意図/機構設定は管轄外)・MCP 実値は .env 一元化 [確定 Q21]
@@ -1113,7 +1113,8 @@ Ubuntu 限定という決定を前提にしています。
 - コア dev は dependency-group dev・無印 uv sync は dev のみ・extra は専用タスク [確定 Q23]
 - 規約/技術/用語の場所: AGENTS.md=方針・project.md=OpenSpec 固有・CONTEXT.md=用語・pyproject=技術値 [確定 Q24]
 - テンプレ自身の ADR/grill は docs/template/ 隔離・docs/adr 空出荷・任意 prune  [確定 Q25/ADR-0006]
-- 設計判断を docs/adr/0006 に追加記録                          [確定]
+- 設計判断を docs/adr/0005-0006 に追加記録（planning workspace では現位置。
+  実装フェーズ PR2 で docs/template/adr/ へ物理移動・docs/adr は下流用に空出荷）[確定 Q25/ADR-0006]
 ```
 
 ---
