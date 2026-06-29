@@ -1,0 +1,48 @@
+[project]
+name = "ai-coding-template-ja"
+version = "0.1.0"
+description = "日本語で AI コーディングエージェントを使う研究用 Python プロジェクトのテンプレート"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# rename 対象（module 形）: src/<module>
+packages = ["src/ai_coding_template_ja"]
+
+[dependency-groups]
+# コア dev ツール。無印 `uv sync` が既定で入れる（extra ではない・Q23）。
+# version は無印にして uv.lock に固定を委ねる。
+dev = [
+    "ruff",
+    "basedpyright",
+    "pytest",
+    "pytest-cov",
+    "pre-commit",
+]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.basedpyright]
+# 研究コード/numpy/notebook で strict は警告過多になるため basic を既定。
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+include = ["src", "tests", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# rename 対象（module 形）: --cov=<module>
+addopts = "--cov=ai_coding_template_ja --cov-report=term-missing"
+
+[tool.coverage.run]
+# rename 対象（module 形）
+source = ["ai_coding_template_ja"]

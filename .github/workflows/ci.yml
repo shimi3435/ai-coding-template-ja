@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 機械コア（PR1）の最小 CI。security ジョブ（gitleaks 等）は PR2 以降で分離追加。
+# action は供給網安全のため SHA でピンする（コメントにタグを併記）。
+
+jobs:
+  check:
+    name: check (ruff / basedpyright / pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - name: Sync (locked)
+        run: uv sync --locked
+      - name: ruff format --check
+        run: uv run ruff format --check .
+      - name: ruff check
+        run: uv run ruff check .
+      - name: basedpyright
+        run: uv run basedpyright
+      - name: pytest
+        run: uv run pytest
+
+  rename-smoke:
+    name: rename-smoke (改名後にフル check 相当)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - name: Sync (locked)
+        run: uv sync --locked
+      - name: rename (apply・使い捨て名)
+        run: uv run python scripts/rename-package.py ci_rename_smoke --apply
+      - name: ruff format --check
+        run: uv run ruff format --check .
+      - name: ruff check
+        run: uv run ruff check .
+      - name: basedpyright
+        run: uv run basedpyright
+      - name: pytest
+        run: uv run pytest

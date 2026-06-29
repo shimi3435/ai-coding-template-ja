@@ -195,9 +195,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #   that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#   and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#   and can be added to the global gitignore or merged into this file. However, if you prefer,
 #   you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 # Temporary file for partial code execution
@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ───────────────────────────────────────────────────────────────────
+# ai-coding-template-ja（研究リポジトリ向けの追加・§18）
+# ───────────────────────────────────────────────────────────────────
+
+# tooling cache（オプション層）
+.serena/
+
+# secrets / generated config（template は配布するが実体は無視）
+.mcp.json
+.codex/config.toml
+
+# research data & results（.gitkeep で空ディレクトリのみ追跡）
+data/*
+!data/.gitkeep
+results/*
+!results/.gitkeep

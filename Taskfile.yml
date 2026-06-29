@@ -1,0 +1,65 @@
+version: "3"
+
+# 人間にも AI にも同じコマンドを使わせる（§13）。
+# 機械コア（PR1）のタスクのみ。オプション層のタスク（setup:research / security /
+# skills:* / mcp:setup / prune-template-docs）は後続 PR で追加する。
+
+tasks:
+  setup:
+    desc: 初期セットアップ（uv sync = dev group のみ・extra なし ＋ pre-commit hooks）
+    cmds:
+      - uv sync
+      - uv run pre-commit install
+
+  check:
+    desc: 品質チェック一式（ruff format --check / ruff check / basedpyright / pytest）
+    cmds:
+      - uv run ruff format --check .
+      - uv run ruff check .
+      - uv run basedpyright
+      - uv run pytest
+
+  fix:
+    desc: 自動修正（ruff format ＋ ruff check --fix）
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check . --fix
+
+  test:
+    desc: pytest を実行
+    cmds:
+      - uv run pytest
+
+  lint:
+    desc: ruff lint
+    cmds:
+      - uv run ruff check .
+
+  typecheck:
+    desc: basedpyright 型チェック
+    cmds:
+      - uv run basedpyright
+
+  hooks:
+    desc: pre-commit hooks を git に登録
+    cmds:
+      - uv run pre-commit install
+
+  doctor:
+    desc: 環境診断（read-only・sync しない）
+    cmds:
+      - uv run --no-sync python scripts/doctor.py
+
+  rename:
+    desc: |
+      パッケージ改名。既定は --dry-run（差分表示のみ）。適用は --apply を付ける。
+        task rename -- <module>            # dry-run
+        task rename -- <module> --apply    # 実適用（src 名 + pyproject + uv sync 張り直し）
+    cmds:
+      - uv run python scripts/rename-package.py {{.CLI_ARGS}}
+
+  clean:
+    desc: キャッシュ・カバレッジ生成物を削除
+    cmds:
+      - rm -rf .ruff_cache .pytest_cache .coverage coverage.xml htmlcov
+      - find . -type d -name __pycache__ -prune -exec rm -rf {} +
