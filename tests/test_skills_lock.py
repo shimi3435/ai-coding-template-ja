@@ -50,12 +50,18 @@ def test_lock_exists() -> None:
 
 
 def test_no_orphans_between_lock_and_dirs() -> None:
-    """lock エントリと vendored ディレクトリが一対一（孤児なし）。"""
-    lock_names = {str(s["name"]) for s in _load_lock()}
+    """vendored ディレクトリと allowed エントリが一対一（孤児なし）。
+
+    blocked エントリは同梱されない（dirs に現れない）ため、比較対象は allowed のみ。
+    blocked が dirs に在るケースは test_blocked_not_vendored が捕捉する。
+    """
+    allowed_names = {
+        str(s["name"]) for s in _load_lock() if s.get("redistribution") == "allowed"
+    }
     dirs = _vendored_dirs()
-    assert lock_names == dirs, (
-        f"lock とディレクトリが不一致: lock のみ={lock_names - dirs} / "
-        f"ディレクトリのみ={dirs - lock_names}"
+    assert allowed_names == dirs, (
+        f"allowed エントリとディレクトリが不一致: lock のみ={allowed_names - dirs} / "
+        f"ディレクトリのみ（lock 未記載 or blocked 混入）={dirs - allowed_names}"
     )
 
 

@@ -19,8 +19,9 @@
 - [AGENTS.md](AGENTS.md): 全エージェント共通の作業方針の単一の正。薄い [CLAUDE.md](CLAUDE.md)
   が `@AGENTS.md` を参照。詳細は [docs/agents/](docs/agents/)（workflow / safety / mcp）。
 - OpenSpec 初期構成: `openspec/`（project.md ＋空 specs/changes・Node 不要の手書き運用）
-- Skills（vendoring・MIT のみ）: `grill-me` / `grill-with-docs` / `tdd` / `diagnosing-bugs` /
-  `caveman`。実体は `.agents/skills/`、`.claude/skills` と `.codex/skills` が symlink。
+- Skills（vendoring・MIT のみ）: `grill-me` / `grill-with-docs`（本体の `grilling` /
+  `domain-modeling` に委譲）/ `tdd` / `diagnosing-bugs` / `caveman`。
+  実体は `.agents/skills/`、`.claude/skills` と `.codex/skills` が symlink。
   供給元・commit・license・sha256 は `.agents/skills/skills.lock.json` に記録。
 - Context7 リモート MCP のテンプレート（`.mcp.json.template` / `.codex/config.toml.template`）と
   `setup-mcp.sh`。GitHub の read 操作は `gh` CLI（GitHub MCP はオプション）。

@@ -50,11 +50,16 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 
 | skill | 用途 | 供給元 |
 | --- | --- | --- |
-| `grill-me` | 設計・実装方針・PR 前のセルフレビュー | mattpocock/skills |
-| `grill-with-docs` | ドキュメント込みの設計レビュー | mattpocock/skills |
+| `grill-me` | 設計・実装方針・PR 前のセルフレビュー（`grilling` を呼ぶ） | mattpocock/skills |
+| `grill-with-docs` | ドキュメント込みの設計レビュー（`grilling`＋`domain-modeling`） | mattpocock/skills |
+| `grilling` | 実際の relentless インタビュー本体（上記 2 つが依存） | mattpocock/skills |
+| `domain-modeling` | ドメインモデル / ADR / 用語の整備（`grill-with-docs` が依存） | mattpocock/skills |
 | `tdd` | failing test 先行で実装暴走を防ぐ | mattpocock/skills |
 | `diagnosing-bugs` | bootstrap / uv sync / pre-commit / MCP 起動失敗の切り分け | mattpocock/skills |
 | `caveman` | 過度な複雑化・不要な抽象化・テンプレ肥大化を止める | JuliusBrussee/caveman |
+
+> `grill-me` / `grill-with-docs` は薄いラッパーで、本体の `grilling`・`domain-modeling`
+> skill に委譲する。再現性のため依存先も同梱している（単体では機能しないため）。
 
 - 起動: 各エージェントの skill 機構で名前指定（例 `grill-me`）。`caveman` は明示起動が基本。
 - `caveman` の自動発火（hook）は Claude 固有のオプション。手順は
