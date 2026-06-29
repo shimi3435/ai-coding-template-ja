@@ -24,7 +24,8 @@
 - 両者の責務境界を AGENTS.md / docs/agents/workflow.md に明記し重複を禁じる
 
 [AI ツール]
-- Skills: コア（grill-me / grill-with-docs / tdd / diagnose / caveman）
+- Skills: コア候補（grill-me / grill-with-docs / tdd / diagnose / caveman）。
+  vendoring 可否（再配布可否）確定後にコア確定【Q15・ADR-0001】
 - MCP: Context7 のみコア、GitHub MCP / Serena はオプション【Q10・ADR-0004】
 
 [ドキュメント]
@@ -155,8 +156,9 @@ ai-coding-template-ja
 [仕様管理]
 - OpenSpec 初期構成（project.md ＋空 specs/changes）
 
-[Skills（コア）]
+[Skills（コア候補・vendoring 可否確定後に確定）]【Q15・ADR-0001】
 - grill-me / grill-with-docs / tdd / diagnose / caveman
+  （再配布不可・plugin 同梱不可のものは opt-in 降格。caveman は降格の可能性高）
 
 [MCP（コア）]
 - Context7 MCP のみ（最新ドキュメント確認・Copilot 非依存）【Q10・ADR-0004】
