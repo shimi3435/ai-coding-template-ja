@@ -302,8 +302,9 @@ GSD（オプション）= 「複数 change を横断する上位管理」
 レビュー観点【解決済 / Q5・ADR-0003】: per-change を OpenSpec が所有することで重複は消え、
 GSD 未導入時もタスク管理は手薄にならない（OpenSpec tasks.md が担うため）。
 
-【Q12・ADR-0003 補正】この境界は `/opsx:apply`（engine）が存在することに依存する。テンプレが
-コミットするのは `openspec/`（project.md ＋空 specs/changes）データのみで engine の実体は別途要る。
+【Q12・ADR-0003 補正】この境界の**自動化**（tasks.md 進捗マーク）は `/opsx:apply`（engine）に
+依存するが、**境界自体は依存しない**（fallback で維持可・下記）。テンプレがコミットするのは
+`openspec/`（project.md ＋空 specs/changes）データのみで engine の実体は別途要る。
 → PR2 で配布形態（Claude Code / Codex の plugin か独立 CLI か）を実機確認（§27）、doctor に
   openspec 可用性診断を追加（不在なら WARN）。
 → engine 不在環境でも崩れぬよう fallback「OpenSpec を Markdown 規約として最小成立」を保証する

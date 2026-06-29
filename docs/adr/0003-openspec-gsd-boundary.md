@@ -10,7 +10,7 @@ OpenSpec の change フォルダは `tasks.md`（実装チェックリスト）�
 
 - GSD 未導入でも per-change のタスク管理は OpenSpec `tasks.md` が担うため手薄にならない。横断ロードマップが要るときのみ PR チェックリスト等で簡易代替する。
 - この境界は AGENTS.md と `docs/agents/workflow.md` に明記する。
-- この境界は `/opsx:apply`（tasks.md 進捗マーク機構）が存在することに依存する。テンプレがコミットするのは `openspec/`（project.md + 空 specs/changes）データのみで、エンジン（スラッシュコマンド / CLI）の実体は別途要る。PR2 で配布形態（Claude Code / Codex の plugin か、独立 CLI か）を実機確認し（§27）、doctor に openspec 可用性診断を追加する（不在なら WARN）。
+- この境界の**自動化**（tasks.md の進捗マーク）は `/opsx:apply` に依存するが、**境界自体は依存しない**（fallback で維持できる。下記参照）。テンプレがコミットするのは `openspec/`（project.md + 空 specs/changes）データのみで、エンジン（スラッシュコマンド / CLI）の実体は別途要る。PR2 で配布形態（Claude Code / Codex の plugin か、独立 CLI か）を実機確認し（§27）、doctor に openspec 可用性診断を追加する（不在なら WARN）。
 - engine が再現困難な環境でも崩れないよう、fallback として「OpenSpec を Markdown 規約として最小成立」を保証する: 空の `openspec/specs|changes` + project.md があれば、エージェントが手で change / tasks.md を運用でき、per-change タスク所有の境界は維持される。`/opsx:apply` はあくまで自動化であり、境界の前提ではない。
 - fallback の最小形式を `docs/agents/workflow.md` に固定し、エージェントが勝手な形式を作らないようにする:
   - 各 change ディレクトリは `proposal.md` / `tasks.md` を必須とし、振る舞いが変わる場合のみ `specs/<capability>/spec.md` を持つ。
