@@ -1,0 +1,32 @@
+# 機械コア（PR1）の軽量フックのみ（§12）。
+# basedpyright / pytest は入れない（探索的 WIP コミットを軽く保つ）。
+# 型・test は `task check` と CI が担う。
+#
+# ruff は repo: local + `uv run --no-sync ruff` で実行し、version 源を uv.lock に
+# 単一化する（pre-commit が別途 ruff を pin して lock とズレるのを避ける）。
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --no-sync ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --no-sync ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: detect-private-key
