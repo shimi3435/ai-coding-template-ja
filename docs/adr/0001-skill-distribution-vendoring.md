@@ -10,7 +10,7 @@
 ## Consequences
 
 - 第三者 skill を公開 template に同梱＝再配布になるため、各 skill の LICENSE が再配布可か・帰属表示要否を取り込み時に確認し、供給元 commit と併せて `docs/agents/mcp.md`（または skills lock）へ記録する。
-- ルート LICENSE は **MIT**（テンプレ著者のオリジナル成果物に適用）。vendored skill は MIT 配下に含めず、`.agents/skills/<skill>/LICENSE` を各々同梱し、供給元 / 版 / ライセンスを skills lock に記録する。copyleft（GPL 等）/ 再配布不可 / 帰属必須の skill は、MIT テンプレへの同梱可否を取り込み時に判定し、不可なら vendoring せず opt-in 取得へ回す。README / LICENSE に「vendored skill は各 LICENSE に従う」旨を補記する。
+- ルート LICENSE は **MIT**（テンプレ著者のオリジナル成果物に適用）。vendored skill は MIT 配下に含めず、`.agents/skills/<skill>/LICENSE` を各々同梱し、供給元 / 版 / ライセンスを skills lock に記録する。**再配布不可 / copyleft（GPL 等）/ plugin で同梱不可**の skill は、MIT テンプレへ vendoring せず opt-in 取得へ回す（追補（Q15）の (c)）。**帰属必須でも再配布可なら vendoring 可**で、`LICENSE` / `NOTICE` を同梱する（(b)）。README / LICENSE に「vendored skill は各 LICENSE に従う」旨を補記する。
 - skills lock のファイル名と schema を固定する: `.agents/skills/skills.lock.json`。必須項目 = `name / source / commit / license / license_file / redistribution`。PR2 受け入れに schema 検証（全 vendored skill が lock に記載・`license_file` 実在）を含める。例:
 
   ```json
@@ -36,7 +36,9 @@
 
 ## 追補（Q15）: コア候補は vendoring 可否確定後に確定する
 
-「コア Skills = grill-me / grill-with-docs / tdd / diagnose / caveman の 5 つ」は**コア候補**であり、各 skill の供給源とライセンスを調査するまで確定しない。本 ADR 自身が「copyleft / 再配布不可 / 帰属必須なら vendoring せず opt-in 取得へ回す」と例外を持つため、5 つ全てがコア vendoring 可能とは限らない。これを明示的なゲートにする。
+「コア Skills = grill-me / grill-with-docs / tdd / diagnose / caveman の 5 つ」は**コア候補**であり、各 skill の供給源とライセンスを調査するまで確定しない。本 ADR は「**再配布不可 / copyleft / plugin で同梱不可**のものは vendoring せず opt-in 取得へ回す」という例外を持つため、5 つ全てがコア vendoring 可能とは限らない。これを明示的なゲートにする。
+
+判断基準は下記 3 分類で**再配布可否を一次基準**とする（帰属の要否は同梱可否を左右しない）。すなわち「**帰属必須でも再配布可なら vendoring 可**（(b)・LICENSE / NOTICE を同梱）」で、opt-in へ回すのは「**再配布不可 / copyleft / plugin で同梱不可**」の (c) のみ。
 
 - **PR2 のブロッカーとしてライセンス調査タスクを置く**。各 skill について `source`（repo URL / plugin marketplace）と `commit` を確定し、再配布可否を 3 分類する:
   - (a) MIT / Apache 等で再配布可 → vendoring（コア・同梱）
