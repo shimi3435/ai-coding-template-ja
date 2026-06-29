@@ -1,6 +1,6 @@
 # Skill は vendoring し `.agents/skills` を単一の正とする
 
-コア Skills（grill-me / grill-with-docs / tdd / diagnose / caveman）は実体をリポジトリに同梱（vendoring）し、`.agents/skills/` を正本とする。`.claude/skills` はそこへの symlink とし、Claude Code / Codex の両方が同一 SKILL.md を参照する（Codex も `$HOME/.agents/skills` 等を skill root として読む）。再現性を最優先し、外部からの自動 latest 更新は行わず、更新は `task skills:update` で明示的にのみ行う。
+コア Skills（候補: grill-me / grill-with-docs / tdd / diagnose / caveman）のうち**再配布が許可されたものだけ**を実体としてリポジトリに同梱（vendoring）し、`.agents/skills/` を正本とする（再配布可否の 3 分類は追補（Q15）を参照。`blocked` は同梱せず opt-in 取得へ回す）。`.claude/skills` はそこへの symlink とし、Claude Code / Codex の両方が同一 SKILL.md を参照する（Codex も `$HOME/.agents/skills` 等を skill root として読む）。再現性を最優先し、外部からの自動 latest 更新は行わず、更新は `task skills:update` で明示的にのみ行う。
 
 ## Considered Options
 

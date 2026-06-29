@@ -991,8 +991,10 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 - CLAUDE.md が @AGENTS.md を参照する薄い構成になっている
 - docs/agents/{workflow,safety,mcp}.md が存在する
 - openspec/ = project.md ＋空 specs/changes が存在する
-- コア Skills が vendoring され .agents/skills 正・.claude/skills symlink で利用可能
-  （hook 型 caveman は hook 登録手順で再現・配布形態は実機確認済）【Q11】
+- コア Skills（候補）のうち**再配布許可（lock の redistribution=allowed）のものだけ** vendoring され
+  .agents/skills 正・.claude/skills symlink で利用可能。blocked は同梱せず opt-in 取得へ回す【Q11・Q15】
+  （hook 型 caveman は hook 登録手順で再現・配布形態とライセンスは実機確認＋調査済）
+  ＋ skills.lock.json の schema 検証（blocked が .agents/skills に無いこと）が通る【Q15】
 - .mcp.json.template / .codex/config.toml.template（Context7 リモート）が存在する
 - doctor が Context7 MCP / skills / OpenSpec engine を診断する（GitHub MCP/Copilot はオプション診断）【Q10・Q12】
 - OpenSpec engine の配布形態が確認され、不在時の Markdown fallback が docs に明記【Q12】
@@ -1028,7 +1030,8 @@ PR1 を「機械コアのみ・作成直後 green ＋ rename 可」に絞る。
 
 [コア続き / 同 PR or 第 2 PR]
 12. OpenSpec 初期構成（engine 配布形態の実機確認込み）
-13. コア Skills setup（hook 型 caveman の hook 登録含む）
+13. コア Skills setup（先にライセンス調査→allowed のみ vendoring・blocked は opt-in／
+    hook 型 caveman の hook 登録含む）【Q15】
 14. Context7 MCP template ＋ gh CLI コア前提化
 
 [オプション / 後続 PR]
@@ -1169,7 +1172,8 @@ Ubuntu 限定という決定を前提にしています。
 [PR2（エージェント統合・なおコア）]
 7. AGENTS.md 主体 + 薄い CLAUDE.md + docs/agents 3 本
 8. OpenSpec 初期構成（project.md ＋空 specs/changes）
-9. コア Skills（vendoring・.agents/skills 正・.claude symlink）導入スクリプト
+9. コア Skills 導入スクリプト（許可 skill のみ vendoring・.agents/skills 正・.claude symlink／
+   blocked は opt-in・skills.lock.json で検証）【Q15】
 10. Context7 MCP のリモート設定テンプレート（Codex / Claude Code 両対応）＋ gh CLI コア前提【Q10】
 11. doctor の Context7・skills・OpenSpec engine 拡張 / CI security ジョブ（Copilot/GitHub MCP はオプション診断）
 
