@@ -1,8 +1,8 @@
 version: "3"
 
 # 人間にも AI にも同じコマンドを使わせる（§13）。
-# 機械コア（PR1）のタスクのみ。オプション層のタスク（setup:research / security /
-# skills:* / mcp:setup / prune-template-docs）は後続 PR で追加する。
+# 機械コア（PR1）＋エージェント統合（PR2）のタスク。research extra 等の
+# オプション層タスクは後続 PR（PR3+）で追加する。
 
 tasks:
   setup:
@@ -57,6 +57,16 @@ tasks:
         task rename -- <module> --apply    # 実適用（src 名 + pyproject + uv sync 張り直し）
     cmds:
       - uv run python scripts/rename-package.py {{.CLI_ARGS}}
+
+  skills:update:
+    desc: vendored skill の symlink（.claude/skills・.codex/skills）を冪等再生成
+    cmds:
+      - bash scripts/setup-skills.sh
+
+  skills:doctor:
+    desc: skills.lock.json と vendored skill の整合を検証（孤児/sha256/symlink 解決）
+    cmds:
+      - uv run pytest tests/test_skills_lock.py -q
 
   clean:
     desc: キャッシュ・カバレッジ生成物を削除
