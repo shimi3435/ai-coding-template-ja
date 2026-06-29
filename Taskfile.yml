@@ -77,6 +77,30 @@ tasks:
     cmds:
       - uv run pytest tests/test_skills_lock.py -q
 
+  security:
+    desc: |
+      secret / 依存スキャン。gitleaks（在席時・secret 検出で失敗）＋ pip-audit / bandit
+      は在席時のみ助言実行（未導入はスキップ・案内。正式追加は PR3）。
+    cmds:
+      - |
+        if command -v gitleaks >/dev/null 2>&1; then
+          echo "[INFO] gitleaks を実行します"
+          gitleaks detect --no-banner --redact
+        else
+          echo "[WARN] gitleaks 未導入のためスキップ（CI の security ジョブで実行されます）"
+          echo "       導入: https://github.com/gitleaks/gitleaks"
+        fi
+        if command -v pip-audit >/dev/null 2>&1; then
+          echo "[INFO] pip-audit を実行します（助言）"; pip-audit || true
+        else
+          echo "[INFO] pip-audit 未導入（PR3 で正式追加）"
+        fi
+        if command -v bandit >/dev/null 2>&1; then
+          echo "[INFO] bandit を実行します（助言）"; bandit -q -r src || true
+        else
+          echo "[INFO] bandit 未導入（PR3 で正式追加）"
+        fi
+
   clean:
     desc: キャッシュ・カバレッジ生成物を削除
     cmds:

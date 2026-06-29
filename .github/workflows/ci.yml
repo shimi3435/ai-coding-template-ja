@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
 
-# 機械コア（PR1）の最小 CI。security ジョブ（gitleaks 等）は PR2 以降で分離追加。
+# コア CI（check / rename-smoke）＋ secret スキャン（security・PR2 で追加）。
 # action は供給網安全のため SHA でピンする（コメントにタグを併記）。
 
 jobs:
@@ -50,3 +50,20 @@ jobs:
         run: uv run basedpyright
       - name: pytest
         run: uv run pytest
+
+  security:
+    name: security (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      # gitleaks は全履歴を走査するため fetch-depth: 0（浅い clone だと検出漏れ）。
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 個人の public repo は無料（GITLEAKS_LICENSE 不要で green）。
+          # 組織（org）所有 repo は GITLEAKS_LICENSE が必須（未設定だと失敗する）。
+          # その場合は repo secrets に GITLEAKS_LICENSE を設定すること。
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
