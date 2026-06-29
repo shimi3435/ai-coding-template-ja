@@ -148,7 +148,7 @@ ai-coding-template-ja
 - docs/agents/{workflow,safety,mcp}.md（3 本）
 
 [仕様管理]
-- OpenSpec 初期構成（project.md + 最小 specs）
+- OpenSpec 初期構成（project.md ＋空 specs/changes）
 
 [Skills（コア）]
 - grill-me / grill-with-docs / tdd / diagnose / caveman
@@ -553,11 +553,12 @@ bootstrap でやらないこと:
 - Codex / Claude Code の両方がこのファイルを正とする。
 - Claude Code 固有の補足のみ CLAUDE.md にある。
 
-## Workflow（OpenSpec / GSD の境界）
+## Workflow（OpenSpec / GSD の境界 / ADR-0003）
 - 「何を・なぜ作るか」は OpenSpec で確定する（仕様・受け入れ基準）。
-- 実装タスクの分解・順序付けは GSD を使う（導入時のみ）。GSD は OpenSpec の
-  確定仕様のみを入力とし、受け入れ基準を新規定義しない。
-- GSD 未導入時は OpenSpec changes + PR チェックリストでタスク管理を代替する。
+- 単一 change 内のタスク分解・順序・進捗は OpenSpec tasks.md / /opsx:apply が担う。
+- GSD（導入時のみ）は複数 change を横断するロードマップ・フェーズ順序・復帰のみを担い、
+  openspec/changes/*/tasks.md を二重化しない。受け入れ基準も新規定義しない。
+- GSD 未導入時も per-change タスクは OpenSpec tasks.md で完結する。
 - 可能なら tdd skill でテストから始める。
 - 設計が曖昧なら grill-me / grill-with-docs で確認する。
 - 複雑化しそうなら caveman で単純化する。
@@ -949,21 +950,26 @@ Ubuntu 限定という決定を前提にしています。
 
 ## 28. 期待する最終成果物
 
+> 【改訂 / Q9・§23】PR1 は機械コアのみ。エージェント統合（AGENTS/OpenSpec/Skills/MCP）は PR2。
+
 ```text
-[コア（第 1 PR で使える状態）]
+[PR1（機械コア・作成直後 green ＋ rename）]
 1. GitHub template repository として使える ai-coding-template-ja
 2. 日本語 README（新規作成→bootstrap→rename 導線）
-3. AGENTS.md 主体 + 薄い CLAUDE.md + docs/agents 3 本
-4. OpenSpec 初期構成
-5. コア Skills 導入スクリプト
-6. Context7 / GitHub MCP の設定テンプレート（Codex / Claude Code 両対応）
-7. uv による Python 開発環境（basedpyright basic）
-8. ruff / basedpyright / pytest / pre-commit / Taskfile
-9. bootstrap.sh（Ubuntu）/ doctor.py / rename-package.py
-10. 最小 CI
+3. uv による Python 開発環境（basedpyright basic）
+4. ruff / basedpyright / pytest / pre-commit（軽）/ Taskfile
+5. bootstrap.sh（Ubuntu）/ doctor.py（コア診断）/ rename-package.py
+6. 最小 CI
 
-[オプション（後続 PR）]
-11. GSD / Serena MCP / research extra / notebook 管理 / task security
+[PR2（エージェント統合・なおコア）]
+7. AGENTS.md 主体 + 薄い CLAUDE.md + docs/agents 3 本
+8. OpenSpec 初期構成（project.md ＋空 specs/changes）
+9. コア Skills（vendoring・.agents/skills 正・.claude symlink）導入スクリプト
+10. Context7 / GitHub MCP のリモート read-only 設定テンプレート（Codex / Claude Code 両対応）
+11. doctor の MCP・skills・Copilot 拡張 / CI security ジョブ
+
+[PR3+（オプション）]
+12. GSD / Serena MCP / research extra / notebook 管理 / task security
 ```
 
 ---
