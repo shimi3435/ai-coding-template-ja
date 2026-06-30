@@ -250,6 +250,7 @@ def check_context7(diag: Diagnostics, online: bool) -> None:
             diag.warn_(f"{tpl} が存在しません")
 
     _check_mcp_key_drift(diag, api_key)
+    _check_codex_key_drift(diag, api_key)
 
     if online:
         _check_context7_reachability(diag, api_key)
@@ -273,6 +274,29 @@ def _check_mcp_key_drift(diag: Diagnostics, env_key: str | None) -> None:
     if env_key is not None and live != env_key:
         diag.warn_(
             ".mcp.json の CONTEXT7_API_KEY が .env と不一致です（drift）。"
+            "task mcp:setup で再生成してください"
+        )
+
+
+def _check_codex_key_drift(diag: Diagnostics, env_key: str | None) -> None:
+    """生成済み .codex/config.toml の key が .env と一致するか（drift 検出）。
+
+    setup-mcp.sh は .mcp.json と .codex/config.toml の両方を生成し、Codex は TOML を
+    参照する。TOML 側の drift も見落とさないよう個別に検査する。
+    """
+    config = REPO_ROOT / ".codex" / "config.toml"
+    if not config.exists():
+        return
+    try:
+        with config.open("rb") as fh:
+            data = tomllib.load(fh)
+        live = data["mcp_servers"]["context7"]["http_headers"]["CONTEXT7_API_KEY"]
+    except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError):
+        diag.warn_(".codex/config.toml の解析に失敗しました（task mcp:setup で再生成）")
+        return
+    if env_key is not None and live != env_key:
+        diag.warn_(
+            ".codex/config.toml の CONTEXT7_API_KEY が .env と不一致です（drift）。"
             "task mcp:setup で再生成してください"
         )
 

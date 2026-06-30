@@ -124,6 +124,13 @@ def test_symlinks_resolve_to_skill_md(symlink_root: str) -> None:
         name = str(entry["name"])
         link = REPO_ROOT / symlink_root / name
         assert link.is_symlink(), f"{symlink_root}/{name} は symlink であること"
+        # 解決先が同名の vendored skill であることを検証する（別 skill への誤リンク
+        # を弾く。SKILL.md の存在だけでは誤リンクを見逃すため）。
+        expected = (SKILLS_ROOT / name).resolve()
+        assert link.resolve() == expected, (
+            f"{symlink_root}/{name} の解決先が一致しません"
+            f"（実際={link.resolve()} / 期待={expected}）"
+        )
         target_skill_md = link / "SKILL.md"
         assert target_skill_md.is_file(), (
             f"{symlink_root}/{name} の symlink 先に SKILL.md がありません"
