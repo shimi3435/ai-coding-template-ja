@@ -12,9 +12,8 @@
 ## テンプレート自身の設計判断はどこにあるか
 
 ai-coding-template-ja 自体の設計判断（ADR-0001 以降）は、テンプレートの
-メタ文書として `docs/template/adr/` に隔離される方針（ADR-0006）。
-本 planning workspace では参照を壊さないため暫定的に `docs/adr/` に残置しており、
-実装フェーズ（PR2）で `docs/template/adr/` へ物理移動する。
+メタ文書として `docs/template/adr/` に隔離されている（ADR-0006）。
+この `docs/adr/` には本道標（0000）のみが残り、以降は下流の研究 ADR 用に空出荷する。
 
 下流プロジェクトは `task prune-template-docs`（オプション層）で
 テンプレートのメタ文書を任意に削除できる。

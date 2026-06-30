@@ -44,7 +44,7 @@
 ```
 
 > 【grill-with-docs 反映済】本ドキュメントは grill セッション（Q1-Q14）で更新済。
-> 追加で結晶化した決定は §26、設計判断の記録は `docs/adr/0001-0004`、
+> 追加で結晶化した決定は §26、設計判断の記録は `docs/template/adr/0001-0004`、
 > 用語定義は `CONTEXT.md` を参照。主な改訂: §7（OpenSpec/GSD 境界）/ §9.2（skill vendoring）/
 > §10（MCP リモート既定）/ §14・§20（Node 非コア）/ §17（rename 確定）/ §19（openspec 最小）/
 > §23（受け入れ 3 段階）。
@@ -1108,7 +1108,7 @@ Ubuntu 限定という決定を前提にしています。
 - OpenSpec engine 不在を doctor 診断＋Markdown fallback で補強   [確定 Q12/ADR-0003]
 - rename 仕上げは uv sync（editable 張り直し）・rename 後 green  [確定 Q13]
 - ルート LICENSE = MIT・vendored skill は個別 LICENSE＋lock 記録 [確定 Q14/ADR-0001]
-- 設計判断を docs/adr/0004 に追加記録                          [確定]
+- 設計判断を docs/template/adr/0004 に追加記録                 [確定]
 - コア Skill 5 つは候補・vendoring 可否(再配布)確定後に確定     [確定 Q15/ADR-0001]
 - rename 正面入力は module 名・配布名を自動導出・入力検証必須   [確定 Q16]
 - doctor は exit code 規約(機械コア破損のみ FAIL)・到達性既定オフ [確定 Q17]
@@ -1120,8 +1120,8 @@ Ubuntu 限定という決定を前提にしています。
 - コア dev は dependency-group dev・無印 uv sync は dev のみ・extra は専用タスク [確定 Q23]
 - 規約/技術/用語の場所: AGENTS.md=方針・project.md=OpenSpec 固有・CONTEXT.md=用語・pyproject=技術値 [確定 Q24]
 - テンプレ自身の ADR/grill は docs/template/ 隔離・docs/adr 空出荷・任意 prune  [確定 Q25/ADR-0006]
-- 設計判断を docs/adr/0005-0006 に追加記録（planning workspace では現位置。
-  実装フェーズ PR2 で docs/template/adr/ へ物理移動・docs/adr は下流用に空出荷）[確定 Q25/ADR-0006]
+- 設計判断を docs/template/adr/0005-0006 に追加記録（PR2 で docs/template/adr/ へ
+  物理移動済・docs/adr は下流用に空出荷）[確定 Q25/ADR-0006]
 ```
 
 ---

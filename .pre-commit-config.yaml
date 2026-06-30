@@ -24,8 +24,12 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # vendored skill（.agents/skills/）は第三者の原本。整形フックで書き換えると
+      # skills.lock.json の sha256 と乖離するため除外する（上流バイト一致を保つ）。
       - id: end-of-file-fixer
+        exclude: '^\.agents/skills/'
       - id: trailing-whitespace
+        exclude: '^\.agents/skills/'
       - id: check-yaml
       - id: check-toml
       - id: check-json

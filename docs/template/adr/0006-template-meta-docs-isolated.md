@@ -6,12 +6,12 @@
 
 - テンプレ自身のメタ文書（ADR 0001-0006・`grill.md`・`docs/grill/`）は `docs/template/` 配下へ隔離する（`docs/template/adr/` / `docs/template/grill/`）。
 - 下流の研究 ADR 用に `docs/adr/` は**空出荷**（`0000-template.md` の道標 1 枚のみ）。研究者は自分の判断をここに積む。
-- `grill.md` は PR2 で `docs/template/grill/` 配下へ移動し root から消す。`task prune-template-docs` は `docs/template/` を一括削除する（移動後は `grill.md` もこの配下にあるため対象に含まれる）。
+- `grill.md` は PR2 で `docs/template/grill/ai-coding-template-ja.md` へ移動し root から消した。`task prune-template-docs` は `docs/template/` を一括削除する（移動後は grill ドキュメントもこの配下にあるため対象に含まれる）。
 - `task doctor` は「テンプレ ADR/grill が残存（任意 prune 可）」を **INFO** 表示する（green を壊さない）。
 - AGENTS.md / doctor はテンプレ ADR に**機能依存しない**（参照は説明用のみ）。prune しても壊れない。
 - ADR-0005 の `TEMPLATE_VERSION` は prune 後も残す（由来追跡のため）。
 
-> 注: 物理的な移動（現 `docs/adr/0001-0006` → `docs/template/adr/`）は実装フェーズ（PR2）で行う。本 planning workspace では `grill.md` 内の参照を壊さないため現位置に置いたまま記録する。
+> 注: 物理的な移動（`docs/adr/0001-0006` → `docs/template/adr/`、`grill.md` → `docs/template/grill/ai-coding-template-ja.md`）は PR2 で実施済み。`docs/adr/` は `0000-template.md` のみを残し下流の研究 ADR 用に空出荷する。
 
 ## Considered Options
 
@@ -22,4 +22,4 @@
 
 - `docs/` のディレクトリ規約が「`docs/adr/` = 下流用・`docs/template/` = テンプレ用」と二分される。README / AGENTS に明記する。
 - `task prune-template-docs` の削除対象を `docs/template/` に固定（PR2 で `grill.md` を `docs/template/grill/` へ移動済のため root の追加列挙は不要。`TEMPLATE_VERSION` は対象外）。
-- 新規にテンプレ判断を足すときは `docs/template/adr/` に書く（`docs/adr/` には書かない）。ただし本 planning workspace（テンプレ実装前）では既存 ADR 0001-0006 は `docs/adr/` に置いたままとし、物理移動は PR2 で行う。
+- 新規にテンプレ判断を足すときは `docs/template/adr/` に書く（`docs/adr/` には書かない）。既存 ADR 0001-0006 は PR2 で `docs/template/adr/` へ移動済み。

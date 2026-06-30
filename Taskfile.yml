@@ -1,8 +1,8 @@
 version: "3"
 
 # 人間にも AI にも同じコマンドを使わせる（§13）。
-# 機械コア（PR1）のタスクのみ。オプション層のタスク（setup:research / security /
-# skills:* / mcp:setup / prune-template-docs）は後続 PR で追加する。
+# 機械コア（PR1）＋エージェント統合（PR2）のタスク。research extra 等の
+# オプション層タスクは後続 PR（PR3+）で追加する。
 
 tasks:
   setup:
@@ -46,9 +46,13 @@ tasks:
       - uv run pre-commit install
 
   doctor:
-    desc: 環境診断（read-only・sync しない）
+    desc: |
+      環境診断（read-only・sync しない）。既定は green を保つ助言診断。
+        task doctor                 # 既定（到達性なし・gh は WARN）
+        task doctor -- --online     # Context7 到達性も確認
+        task doctor -- --github     # gh 不在を FAIL 扱い（GitHub 文脈 opt-in）
     cmds:
-      - uv run --no-sync python scripts/doctor.py
+      - uv run --no-sync python scripts/doctor.py {{.CLI_ARGS}}
 
   rename:
     desc: |
@@ -57,6 +61,54 @@ tasks:
         task rename -- <module> --apply    # 実適用（src 名 + pyproject + uv sync 張り直し）
     cmds:
       - uv run python scripts/rename-package.py {{.CLI_ARGS}}
+
+  mcp:setup:
+    desc: MCP 設定（.mcp.json / .codex/config.toml）を template ＋ .env から冪等生成
+    cmds:
+      - bash scripts/setup-mcp.sh
+
+  skills:update:
+    desc: vendored skill の symlink（.claude/skills・.codex/skills）を冪等再生成
+    cmds:
+      - bash scripts/setup-skills.sh
+
+  skills:doctor:
+    desc: skills.lock.json と vendored skill の整合を検証（孤児/sha256/symlink 解決）
+    cmds:
+      - uv run pytest tests/test_skills_lock.py -q
+
+  security:
+    desc: |
+      secret / 依存スキャン。gitleaks（在席時・secret 検出で失敗）＋ pip-audit / bandit
+      は在席時のみ助言実行（未導入はスキップ・案内。正式追加は PR3）。
+    cmds:
+      - |
+        if command -v gitleaks >/dev/null 2>&1; then
+          echo "[INFO] gitleaks を実行します"
+          gitleaks detect --no-banner --redact
+        else
+          echo "[WARN] gitleaks 未導入のためスキップ（CI の security ジョブで実行されます）"
+          echo "       導入: https://github.com/gitleaks/gitleaks"
+        fi
+        if command -v pip-audit >/dev/null 2>&1; then
+          echo "[INFO] pip-audit を実行します（助言）"; pip-audit || true
+        else
+          echo "[INFO] pip-audit 未導入（PR3 で正式追加）"
+        fi
+        if command -v bandit >/dev/null 2>&1; then
+          echo "[INFO] bandit を実行します（助言）"; bandit -q -r src || true
+        else
+          echo "[INFO] bandit 未導入（PR3 で正式追加）"
+        fi
+
+  prune-template-docs:
+    desc: |
+      テンプレ自身のメタ文書 docs/template/（ADR 0001-0006・grill）を削除。
+      既定は dry-run。実削除は --apply（docs/adr と TEMPLATE_VERSION は不可侵）。
+        task prune-template-docs              # dry-run
+        task prune-template-docs -- --apply   # 実削除
+    cmds:
+      - uv run --no-sync python scripts/prune-template-docs.py {{.CLI_ARGS}}
 
   clean:
     desc: キャッシュ・カバレッジ生成物を削除
