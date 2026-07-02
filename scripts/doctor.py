@@ -10,7 +10,8 @@
   key drift / gh 未認証・未導入（既定）/ OpenSpec engine 不在 / 既定パッケージ名のまま /
   Node 未導入 / Task・Git 不在 / skills symlink 壊れ / lock の blocked 在席）。
 - INFO (exit 0) = TEMPLATE_VERSION 表示 / caveman hook 未登録 /
-  テンプレ ADR・grill 残存。
+  テンプレ ADR・grill 残存 / オプション層の在席・不在（codex CLI / docker /
+  .mcp.json の Serena エントリ。純 opt-in は不在が正常なので WARN にしない）。
 - green = exit 0（FAIL ゼロ・WARN/INFO 許容）。作成直後・CI・オフラインで green。
 
 到達性チェック（Context7 リモートを実際に叩く）は既定で行わず、--online 時のみ。
@@ -405,6 +406,61 @@ def check_openspec(diag: Diagnostics) -> None:
         )
 
 
+def check_optional(diag: Diagnostics) -> None:
+    """オプション層（§23.3）の在席を INFO 報告する。WARN/FAIL は出さない。
+
+    純 opt-in は不在が正常（WARN はコア隣接の未設定専用）。ノイズ抑制のため
+    在席が確認できたものだけ個別 INFO とし、不在はまとめて 1 行 INFO にする。
+    GSD は repo ローカルに信頼できる在席シグナルが無いため probe しない
+    （docs/optional/gsd.md）。research extra のインストール状態も probe しない
+    （summary の task setup:research 案内のみ）。
+    """
+    absent: list[str] = []
+
+    if shutil.which("codex") is not None:
+        diag.info(
+            "codex CLI が在席しています"
+            "（クロス AI レビュー可・docs/optional/codex-review.md）"
+        )
+    else:
+        absent.append("codex CLI")
+
+    if shutil.which("docker") is not None:
+        diag.info(
+            "docker が在席しています（GitHub MCP の Docker 形態が利用可・"
+            "docs/agents/mcp.md）"
+        )
+    else:
+        absent.append("docker")
+
+    if _mcp_has_serena_entry():
+        diag.info(
+            "Serena MCP エントリが .mcp.json に在席しています"
+            "（docs/optional/serena.md）"
+        )
+    else:
+        absent.append("Serena MCP")
+
+    if absent:
+        diag.info(
+            "オプション未導入: " + " / ".join(absent) + "（不在が正常・手順は "
+            "docs/optional/。research extra の導入は task setup:research）"
+        )
+
+
+def _mcp_has_serena_entry() -> bool:
+    """生成済み .mcp.json に serena エントリが在るか（在席 probe のみ・接続しない）。"""
+    mcp = REPO_ROOT / ".mcp.json"
+    if not mcp.exists():
+        return False
+    try:
+        data = json.loads(mcp.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    servers = data.get("mcpServers")
+    return isinstance(servers, dict) and "serena" in servers
+
+
 def check_template_docs(diag: Diagnostics) -> None:
     """テンプレ自身のメタ文書（docs/template/）の残存を INFO 通知（任意 prune 可）。"""
     if (REPO_ROOT / "docs" / "template").is_dir():
@@ -453,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
     check_context7(diag, args.online)
     check_skills(diag)
     check_openspec(diag)
+    check_optional(diag)
     check_template_docs(diag)
     check_env_and_version(diag)
     print(f"--- 結果: FAIL={diag.fail} / WARN={diag.warn} ---")

@@ -42,6 +42,14 @@
   `uv run --group security` で同一範囲を監査（pip-audit = コア依存セット・
   bandit = `src`）。extras 込みの任意監査と `--ignore-vuln` 運用は
   [docs/optional/extras-audit.md](docs/optional/extras-audit.md)。
+- GSD（横断ロードマップ管理・opt-in install）→ [docs/optional/gsd.md](docs/optional/gsd.md)
+- Serena MCP（大規模リファクタ時のみ・uvx 実行）→ [docs/optional/serena.md](docs/optional/serena.md)
+- GitHub MCP（ローカルバイナリ / Docker / リモート HTTP の 3 形態・read-only 既定）→
+  [docs/agents/mcp.md](docs/agents/mcp.md)
+- クロス AI レビュー（Codex plugin・人起点のみ）→
+  [docs/optional/codex-review.md](docs/optional/codex-review.md)
+
+オプションの在席は `task doctor` が INFO で報告するのみ（不在が正常・WARN/FAIL にしない）。
 
 ## このテンプレートから新規プロジェクトを作る
 
@@ -90,7 +98,8 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 - `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0006・grill 記録）。
   下流では不要なら `task prune-template-docs -- --apply` で削除できる（ADR-0006）。
 - `docs/agents/` … エージェント向けの workflow / safety / mcp 詳細。
-- `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査など）。
+- `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査・
+  GSD・Serena MCP・クロス AI レビュー）。
 
 ## ライセンス
 
