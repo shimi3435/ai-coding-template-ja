@@ -27,6 +27,16 @@
   `setup-mcp.sh`。GitHub の read 操作は `gh` CLI（GitHub MCP はオプション）。
 - secret スキャン: CI security ジョブ（gitleaks）＋ `task security`。
 
+**オプション層（PR3+・opt-in・既定では入らない）**
+
+- extras（`uv.lock` に解決済み・導入は任意）:
+  - `research` = numpy / scipy / matplotlib / pandas → `task setup:research`
+  - `notebook` = jupyter / jupytext / nbstripout / nbqa → `task setup:notebook`
+  - `experiment` = hydra-core / mlflow / dvc → `task setup:experiment`
+  - 全部入り → `task setup:all`（`uv sync --all-extras`）
+- notebook 管理（nbstripout の pre-commit overlay など）は
+  [docs/optional/notebook.md](docs/optional/notebook.md)。
+
 ## このテンプレートから新規プロジェクトを作る
 
 1. GitHub の **"Use this template"** で新規リポジトリを作成
@@ -55,6 +65,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | タスク | 内容 |
 | --- | --- |
 | `task setup` | uv sync（dev group のみ）＋ pre-commit hooks |
+| `task setup:research` ほか | extras 導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
 | `task check` | 品質チェック一式 |
 | `task fix` | ruff format ＋ ruff check --fix |
 | `task test` / `task lint` / `task typecheck` | 個別実行 |
@@ -63,6 +74,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task skills:update` / `task skills:doctor` | skill symlink 再生成 / lock 整合検証 |
 | `task mcp:setup` | `.mcp.json` / `.codex/config.toml` を `.env` から生成 |
 | `task security` | secret / 依存スキャン（gitleaks ほか・在席時） |
+| `task nb:strip` / `nb:sync` / `nb:check` | notebook 出力除去 / jupytext 同期 / nbqa lint（extra 在席時） |
 | `task prune-template-docs [-- --apply]` | テンプレ メタ文書 docs/template/ の削除 |
 | `task clean` | キャッシュ・カバレッジ生成物の削除 |
 
@@ -72,7 +84,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 - `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0006・grill 記録）。
   下流では不要なら `task prune-template-docs -- --apply` で削除できる（ADR-0006）。
 - `docs/agents/` … エージェント向けの workflow / safety / mcp 詳細。
-- `docs/optional/` … オプション機能の手順（caveman hook など）。
+- `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理など）。
 
 ## ライセンス
 

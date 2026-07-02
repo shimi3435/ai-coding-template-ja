@@ -1,8 +1,7 @@
 version: "3"
 
 # 人間にも AI にも同じコマンドを使わせる（§13）。
-# 機械コア（PR1）＋エージェント統合（PR2）のタスク。research extra 等の
-# オプション層タスクは後続 PR（PR3+）で追加する。
+# 機械コア（PR1）＋エージェント統合（PR2）＋オプション層（PR3a: extras / notebook）。
 
 tasks:
   setup:
@@ -10,6 +9,26 @@ tasks:
     cmds:
       - uv sync
       - uv run pre-commit install
+
+  setup:research:
+    desc: research extra（numpy / scipy / matplotlib / pandas）を導入
+    cmds:
+      - uv sync --extra research
+
+  setup:notebook:
+    desc: notebook extra（jupyter / jupytext / nbstripout / nbqa）を導入
+    cmds:
+      - uv sync --extra notebook
+
+  setup:experiment:
+    desc: experiment extra（hydra-core / mlflow / dvc）を導入
+    cmds:
+      - uv sync --extra experiment
+
+  setup:all:
+    desc: 全 extras（research / notebook / experiment）を一括導入
+    cmds:
+      - uv sync --all-extras
 
   check:
     desc: 品質チェック一式（ruff format --check / ruff check / basedpyright / pytest）
@@ -100,6 +119,61 @@ tasks:
         else
           echo "[INFO] bandit 未導入（PR3 で正式追加）"
         fi
+
+  nb:strip:
+    desc: |
+      notebook の出力セルを除去（nbstripout・出力への secret / データ混入防止）。
+      notebook extra 未導入時はスキップ・案内のみ（exit 0）。
+    cmds:
+      - |
+        if [ ! -x .venv/bin/nbstripout ]; then
+          echo "[INFO] nbstripout 未導入のためスキップ（notebook extra）"
+          echo "       導入: task setup:notebook"
+          exit 0
+        fi
+        if [ -z "$(git ls-files -co --exclude-standard -- '*.ipynb')" ]; then
+          echo "[INFO] 対象の .ipynb がありません"
+          exit 0
+        fi
+        git ls-files -coz --exclude-standard -- '*.ipynb' \
+          | xargs -0 uv run --no-sync nbstripout
+        echo "[INFO] nbstripout 完了"
+
+  nb:sync:
+    desc: |
+      ペア済み notebook と対テキスト（py:percent 等）を同期（jupytext --sync）。
+      ペア設定は docs/optional/notebook.md 参照。extra 未導入時はスキップ（exit 0）。
+    cmds:
+      - |
+        if [ ! -x .venv/bin/jupytext ]; then
+          echo "[INFO] jupytext 未導入のためスキップ（notebook extra）"
+          echo "       導入: task setup:notebook"
+          exit 0
+        fi
+        if [ -z "$(git ls-files -co --exclude-standard -- '*.ipynb')" ]; then
+          echo "[INFO] 対象の .ipynb がありません"
+          exit 0
+        fi
+        git ls-files -coz --exclude-standard -- '*.ipynb' \
+          | xargs -0 uv run --no-sync jupytext --sync
+        echo "[INFO] jupytext --sync 完了"
+
+  nb:check:
+    desc: |
+      notebook を ruff で lint（nbqa ruff）。notebook extra 未導入時はスキップ（exit 0）。
+    cmds:
+      - |
+        if [ ! -x .venv/bin/nbqa ]; then
+          echo "[INFO] nbqa 未導入のためスキップ（notebook extra）"
+          echo "       導入: task setup:notebook"
+          exit 0
+        fi
+        if [ -z "$(git ls-files -co --exclude-standard -- '*.ipynb')" ]; then
+          echo "[INFO] 対象の .ipynb がありません"
+          exit 0
+        fi
+        git ls-files -coz --exclude-standard -- '*.ipynb' \
+          | xargs -0 uv run --no-sync nbqa ruff
 
   prune-template-docs:
     desc: |
