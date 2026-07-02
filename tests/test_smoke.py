@@ -12,10 +12,13 @@ doctor の green 検証と uv.lock 不変の検証は scripts/doctor.py 追加�
 from __future__ import annotations
 
 import importlib
+import importlib.util
+import json
 import re
 import shutil
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -82,6 +85,51 @@ def test_doctor_is_green_and_keeps_lock_unchanged() -> None:
     )
     lock_after = (REPO_ROOT / "uv.lock").read_bytes()
     assert lock_before == lock_after, "doctor 実行で uv.lock が変更されました"
+
+
+def _load_doctor_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "doctor_under_test", REPO_ROOT / "scripts" / "doctor.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _run_check_optional(doctor: ModuleType) -> tuple[int, int]:
+    diag = doctor.Diagnostics()
+    doctor.check_optional(diag)
+    return diag.fail, diag.warn
+
+
+def test_doctor_optional_adds_no_warn_or_fail_in_current_env() -> None:
+    """check_optional は現環境の在席状況によらず WARN/FAIL を増やさない（§23.3）。"""
+    fail, warn = _run_check_optional(_load_doctor_module())
+    assert (fail, warn) == (0, 0), "オプション診断は全 INFO であること"
+
+
+def test_doctor_optional_all_absent_is_info_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """オプション全不在（codex / docker / .mcp.json 無し）でも INFO のみであること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    assert _run_check_optional(doctor) == (0, 0)
+
+
+def test_doctor_optional_all_present_is_info_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """オプション全在席（codex / docker / serena エントリ）でも INFO のみであること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/present")
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    (tmp_path / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"serena": {"type": "stdio"}}}), encoding="utf-8"
+    )
+    assert _run_check_optional(doctor) == (0, 0)
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv 未導入のためスキップ")

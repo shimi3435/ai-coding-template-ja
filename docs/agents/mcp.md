@@ -47,8 +47,66 @@ task mcp:setup                # .mcp.json / .codex/config.toml を生成
 ## オプション MCP
 
 - **Serena MCP**: セマンティックなコード理解・symbol 単位編集・大規模リファクタリング。既存コードが
-  育ってから opt-in。
-- **GitHub MCP**: リモート HTTP read-only（Copilot 要の可能性）/ ローカルバイナリ / Docker から選択。
+  育ってから opt-in。手順（uvx 実行・Claude / Codex 両 snippet）は
+  [docs/optional/serena.md](../optional/serena.md)。
+
+### GitHub MCP（オプション・3 形態から選択）
+
+構造化された Issue / PR / Actions 参照が要るプロジェクトのみ opt-in する（コアは `gh` CLI）。
+共通方針: **read-only を既定**とし、PAT は環境変数で渡す（ファイルへ直書き・コミットしない）。
+コアの `.mcp.json.template` / `.codex/config.toml.template` には GitHub エントリを入れない
+（実体追記は以下の snippet を各自で）。3 形態を推奨順に:
+
+**(1) ローカル Go バイナリ `github-mcp-server`（推奨）** — Node / Docker 不要（ADR-0002 と
+最整合）。PAT が read スコープなら Copilot 契約も不要。
+[releases](https://github.com/github/github-mcp-server/releases)（v1.5.0 で
+`github-mcp-server_Linux_x86_64.tar.gz` を確認・2026-07-02）からバイナリを取得し PATH へ置く。
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "command": "github-mcp-server",
+      "args": ["stdio", "--read-only", "--toolsets", "repos,issues,pull_requests,actions"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}" }
+    }
+  }
+}
+```
+
+Codex は実体 `.codex/config.toml`（gitignore 済み）へ同等の stdio エントリを追記する
+（`command` / `args` は同一・`env = { "GITHUB_PERSONAL_ACCESS_TOKEN" = "..." }`）。TOML 側は
+環境変数展開が効かないため PAT を直書きすることになる。実体は非コミットだが
+`task mcp:setup` の再生成で消える点に注意（PAT 入りのため template へは書かない）。
+
+**(2) Docker `ghcr.io/github/github-mcp-server`** — バイナリ配置を避けたい場合。
+
+```bash
+docker run -i --rm \
+  -e GITHUB_PERSONAL_ACCESS_TOKEN \
+  -e GITHUB_READ_ONLY=1 \
+  -e GITHUB_TOOLSETS="repos,issues,pull_requests,actions" \
+  ghcr.io/github/github-mcp-server
+```
+
+（MCP クライアント設定では上記を `command: docker` ＋ `args` に分解して登録する。）
+
+**(3) リモート HTTP `https://api.githubcopilot.com/mcp/`** — インストール不要だが最後の選択肢。
+read-only は URL で指定できる（例 `https://api.githubcopilot.com/mcp/readonly`）。認証は
+`Authorization: Bearer <PAT>` header。**caveat: Copilot エンタイトルメント要の可能性（未検証）**
+— 上流 docs は PAT 直指定の設定例を載せる一方、Copilot IDE 向けガイドは Copilot ライセンスを
+要件に挙げており、ホスト / アカウントのポリシー次第で拒否され得る。使う前に手元で検証する:
+
+```bash
+gh api /user          # PAT 自体の有効性確認
+curl -sS -o /dev/null -w '%{http_code}\n' \
+  -H "Authorization: Bearer $GITHUB_PERSONAL_ACCESS_TOKEN" \
+  https://api.githubcopilot.com/mcp/readonly   # 401 なら PAT では通らない
+```
+
+`task doctor` は GitHub MCP の接続 probe をしない（既定 offline-green を維持）。検証は上記の
+手動コマンドで行う。
 
 ## skills.lock との関係
 

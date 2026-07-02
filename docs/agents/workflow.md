@@ -69,3 +69,8 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 - `caveman` と AGENTS.md の「最小変更」ルールは役割が近い。caveman は**設計判断時に明示的に
   呼ぶ skill**、AGENTS.md は**常時適用される原則**と整理して重複を避ける。
 - 再配布の前提: vendored skill は各 `LICENSE` に従う（ルート LICENSE=MIT とは別。ADR-0001）。
+
+## クロス AI レビュー（オプション）
+
+PR 前後の Codex クロス AI レビュー（人起点のみ・自動送信しない）は
+[docs/optional/codex-review.md](../optional/codex-review.md)。
