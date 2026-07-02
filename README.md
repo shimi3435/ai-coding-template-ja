@@ -12,7 +12,8 @@
 - 軽量 pre-commit（ruff ＋ ファイル系 ＋ detect-private-key）
 - タスクランナー: Taskfile（人間にも AI にも同じコマンド）
 - スクリプト: bootstrap.sh（Ubuntu）/ doctor.py（環境診断）/ rename-package.py（改名）
-- CI（GitHub Actions: uv sync / ruff / basedpyright / pytest ＋ rename-smoke ＋ security）
+- CI（GitHub Actions 4 ジョブ: check（uv sync / ruff / basedpyright / pytest）＋
+  rename-smoke ＋ security（gitleaks）＋ audit（pip-audit / bandit・PR3b））
 
 **エージェント統合（PR2・なおコア）**
 
@@ -36,6 +37,11 @@
   - 全部入り → `task setup:all`（`uv sync --all-extras`）
 - notebook 管理（nbstripout の pre-commit overlay など）は
   [docs/optional/notebook.md](docs/optional/notebook.md)。
+- セキュリティ監査ゲート（PR3b）: `security` dependency-group（pip-audit / bandit・
+  無印 `uv sync` では入らない）。CI `audit` ジョブと `task security` が
+  `uv run --group security` で同一範囲を監査（pip-audit = コア依存セット・
+  bandit = `src`）。extras 込みの任意監査と `--ignore-vuln` 運用は
+  [docs/optional/extras-audit.md](docs/optional/extras-audit.md)。
 
 ## このテンプレートから新規プロジェクトを作る
 
@@ -73,7 +79,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task rename -- <module> [--apply]` | パッケージ改名 |
 | `task skills:update` / `task skills:doctor` | skill symlink 再生成 / lock 整合検証 |
 | `task mcp:setup` | `.mcp.json` / `.codex/config.toml` を `.env` から生成 |
-| `task security` | secret / 依存スキャン（gitleaks ほか・在席時） |
+| `task security` | gitleaks（在席時）＋ pip-audit / bandit ゲート（CI audit ジョブと同一範囲） |
 | `task nb:strip` / `nb:sync` / `nb:check` | notebook 出力除去 / jupytext 同期 / nbqa lint（extra 在席時） |
 | `task prune-template-docs [-- --apply]` | テンプレ メタ文書 docs/template/ の削除 |
 | `task clean` | キャッシュ・カバレッジ生成物の削除 |
@@ -84,7 +90,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 - `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0006・grill 記録）。
   下流では不要なら `task prune-template-docs -- --apply` で削除できる（ADR-0006）。
 - `docs/agents/` … エージェント向けの workflow / safety / mcp 詳細。
-- `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理など）。
+- `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査など）。
 
 ## ライセンス
 

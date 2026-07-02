@@ -48,6 +48,13 @@ dev = [
     "pre-commit",
     "hypothesis",
 ]
+# セキュリティ監査ツール（§5.2・PR3b）。非デフォルト group のため無印 `uv sync` では
+# 入らない（コア setup は lean 維持）。CI audit ジョブと task security が
+# `uv run --group security` で実行する（監査範囲・コマンドを一致させる）。
+security = [
+    "pip-audit",
+    "bandit",
+]
 
 [tool.ruff]
 target-version = "py312"
@@ -60,6 +67,14 @@ select = ["E", "F", "I", "UP", "B"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 include = ["src", "tests", "scripts"]
+
+[tool.bandit]
+# ハードゲート対象は src のみ（CI audit ジョブ / task security が `-r src -ll` で実行）。
+# tests はゲート除外（assert・一時パス等の誤検知が多くテスト表現力を優先）。
+# scripts もゲート除外だが task security が助言（非ゲート）で走らせて可視化する
+# （doctor.py / rename-package.py の subprocess 起動が B603/B607 に当たるため）。
+# 個別の抑制は理由コメント付き `# nosec BXXX` を使う。
+exclude_dirs = ["tests", ".venv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
