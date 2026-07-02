@@ -1,7 +1,8 @@
 version: "3"
 
 # 人間にも AI にも同じコマンドを使わせる（§13）。
-# 機械コア（PR1）＋エージェント統合（PR2）＋オプション層（PR3a: extras / notebook）。
+# 機械コア（PR1）＋エージェント統合（PR2）＋オプション層（PR3a: extras / notebook・
+# PR3b: security ゲート = pip-audit / bandit）。
 
 tasks:
   setup:
@@ -98,8 +99,10 @@ tasks:
 
   security:
     desc: |
-      secret / 依存スキャン。gitleaks（在席時・secret 検出で失敗）＋ pip-audit / bandit
-      は在席時のみ助言実行（未導入はスキップ・案内。正式追加は PR3）。
+      secret / 依存監査 / SAST。gitleaks（在席時・secret 検出で失敗）＋ pip-audit（コア
+      依存セット・ゲート）＋ bandit（src ゲート・scripts は助言）。pip-audit / bandit は
+      security group（uv run --group security）で実行し CI audit ジョブと範囲・コマンド一致。
+      pip-audit は advisory DB 照会にネットワークを使う（check / doctor には入れない）。
     cmds:
       - |
         if command -v gitleaks >/dev/null 2>&1; then
@@ -109,16 +112,26 @@ tasks:
           echo "[WARN] gitleaks 未導入のためスキップ（CI の security ジョブで実行されます）"
           echo "       導入: https://github.com/gitleaks/gitleaks"
         fi
-        if command -v pip-audit >/dev/null 2>&1; then
-          echo "[INFO] pip-audit を実行します（助言）"; pip-audit || true
-        else
-          echo "[INFO] pip-audit 未導入（PR3 で正式追加）"
-        fi
-        if command -v bandit >/dev/null 2>&1; then
-          echo "[INFO] bandit を実行します（助言）"; bandit -q -r src || true
-        else
-          echo "[INFO] bandit 未導入（PR3 で正式追加）"
-        fi
+      # pip-audit（ゲート）: 監査対象は uv export の既定セット（default groups = dev ＋
+      # 推移依存）。extras（mlflow / dvc 等）は export 既定で除外＝コアゲート対象外
+      # （extras 込みの任意監査は docs/optional/extras-audit.md）。
+      # 不可避 advisory は理由コメント付き --ignore-vuln <ID>（同 docs 参照）。
+      - |
+        echo "[INFO] pip-audit を実行します（コア依存セット・ゲート）"
+        req="$(mktemp)"
+        uv export --locked --format requirements-txt --no-emit-project -o "$req"
+        uv run --locked --group security pip-audit -r "$req"
+        rm -f "$req"
+      # bandit（ゲート）: 対象は src のみ・severity medium+（-ll）。設定は pyproject
+      # [tool.bandit]（tests / scripts はゲート除外・除外理由もそちらに記載）。
+      - |
+        echo "[INFO] bandit を実行します（src・ゲート）"
+        uv run --locked --group security bandit -c pyproject.toml -r src -ll
+      # bandit（助言・非ゲート）: scripts の指摘（doctor.py / rename-package.py の
+      # subprocess = B603/B607 等）を CI 赤にせず可視化する。
+      - |
+        echo "[INFO] bandit を実行します（scripts・助言・失敗しても継続）"
+        uv run --locked --group security bandit -c pyproject.toml -r scripts -ll || true
 
   nb:strip:
     desc: |
