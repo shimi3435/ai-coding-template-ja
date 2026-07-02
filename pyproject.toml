@@ -7,6 +7,28 @@ requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = []
 
+[project.optional-dependencies]
+# オプション層（§5.2/§11.4）。既定では入れない（無印 uv sync は dev group のみ）。
+# 導入: task setup:research / setup:notebook / setup:experiment / setup:all
+# version は無印にして uv.lock に固定を委ねる（dev group と同方針）。
+research = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pandas",
+]
+notebook = [
+    "jupyter",
+    "jupytext",
+    "nbstripout",
+    "nbqa",
+]
+experiment = [
+    "hydra-core",
+    "mlflow",
+    "dvc",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -24,6 +46,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pre-commit",
+    "hypothesis",
 ]
 
 [tool.ruff]
