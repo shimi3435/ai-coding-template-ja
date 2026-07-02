@@ -17,6 +17,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -130,6 +131,86 @@ def test_doctor_optional_all_present_is_info_only(
         json.dumps({"mcpServers": {"serena": {"type": "stdio"}}}), encoding="utf-8"
     )
     assert _run_check_optional(doctor) == (0, 0)
+
+
+def test_doctor_gh_missing_is_fail_only_with_optin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gh 不在は既定 WARN・opt-in（--github / env）時のみ FAIL（ADR-0004 訂正）。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
+
+    default = doctor.Diagnostics()
+    doctor.check_gh(default, require_gh=False)
+    assert (default.fail, default.warn) == (0, 1), "既定は WARN 止まり（green 維持）"
+
+    opted_in = doctor.Diagnostics()
+    doctor.check_gh(opted_in, require_gh=True)
+    assert opted_in.fail == 1, "opt-in 時は gh 不在を FAIL とすること"
+
+
+def _make_prune_fixture(tmp_path: Path) -> Path:
+    """prune-template-docs.py を tmp へコピーした最小リポジトリ木を作る。
+
+    スクリプトは自身の位置から REPO_ROOT を導出するため、実リポジトリを
+    触らずに --apply の実削除まで検証できる。
+    """
+    (tmp_path / "scripts").mkdir()
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "prune-template-docs.py",
+        tmp_path / "scripts" / "prune-template-docs.py",
+    )
+    (tmp_path / "docs" / "template" / "adr").mkdir(parents=True)
+    (tmp_path / "docs" / "template" / "adr" / "0001-meta.md").write_text(
+        "テンプレのメタ ADR", encoding="utf-8"
+    )
+    (tmp_path / "docs" / "adr").mkdir()
+    (tmp_path / "docs" / "adr" / "0000-template.md").write_text(
+        "下流用スキャフォルド", encoding="utf-8"
+    )
+    (tmp_path / "TEMPLATE_VERSION").write_text("0.1.0\n", encoding="utf-8")
+    return tmp_path
+
+
+def _run_prune(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(root / "scripts" / "prune-template-docs.py"), *args],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_prune_template_docs_dry_run_deletes_nothing(tmp_path: Path) -> None:
+    """既定は dry-run で docs/template/ を削除しないこと（ADR-0006）。"""
+    root = _make_prune_fixture(tmp_path)
+    result = _run_prune(root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "dry-run" in result.stdout
+    assert (root / "docs" / "template" / "adr" / "0001-meta.md").is_file(), (
+        "dry-run で削除してはならない"
+    )
+
+
+def test_prune_template_docs_apply_deletes_only_target_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    """--apply は docs/template/ のみ削除し、docs/adr と TEMPLATE_VERSION は不可侵。
+    再実行は no-op で正常終了（冪等）であること。"""
+    root = _make_prune_fixture(tmp_path)
+    result = _run_prune(root, "--apply")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (root / "docs" / "template").exists(), "docs/template/ が残っている"
+    assert (root / "docs" / "adr" / "0000-template.md").is_file(), (
+        "docs/adr/ を削除してはならない"
+    )
+    assert (root / "TEMPLATE_VERSION").read_text(encoding="utf-8") == "0.1.0\n", (
+        "TEMPLATE_VERSION を変更してはならない"
+    )
+
+    rerun = _run_prune(root, "--apply")
+    assert rerun.returncode == 0, "docs/template/ 不在時は no-op で正常終了すること"
+    assert "no-op" in rerun.stdout
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv 未導入のためスキップ")
