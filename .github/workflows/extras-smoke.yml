@@ -22,9 +22,6 @@ jobs:
         run: uv sync --all-extras
       - name: import smoke (numpy / pandas / jupytext)
         run: |
-          uv run --no-sync python -c "
-          import numpy, pandas, jupytext
-          print('numpy', numpy.__version__)
-          print('pandas', pandas.__version__)
-          print('jupytext', jupytext.__version__)
-          "
+          uv run --no-sync python -c "import numpy; print('numpy', numpy.__version__)"
+          uv run --no-sync python -c "import pandas; print('pandas', pandas.__version__)"
+          uv run --no-sync python -c "import jupytext; print('jupytext', jupytext.__version__)"
