@@ -15,7 +15,7 @@
 - [x] 7. docs/optional/codex-review.md に self-review との住み分けを 1 行追記する。
 - [x] 8. `task skills:doctor`・`task check`・
        `openspec validate add-self-review-verify-skills` が green であることを確認する。
-- [ ] 9. smoke: 両 skill を実際に起動し、self-review が 2 段階挙動（修正 / 報告の
+- [x] 9. smoke: 両 skill を実際に起動し、self-review が 2 段階挙動（修正 / 報告の
        仕分け）・verify-change が未検証明記を含む報告を出すことを確認する。
 - [ ] 10. close: 全タスク完了後、マージ前の最終コミットで本 change ディレクトリを
        削除する（proposal 設計判断 5。main に change ディレクトリを載せない・
