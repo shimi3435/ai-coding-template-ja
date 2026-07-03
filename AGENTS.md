@@ -25,6 +25,8 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - GSD（導入時のみ）は複数 change を横断するロードマップ・フェーズ順序・復帰のみを担い、
   `openspec/changes/*/tasks.md` を二重化しない。受け入れ基準も新規定義しない。
 - GSD 未導入時も per-change タスクは OpenSpec `tasks.md` で完結する。
+- OpenSpec で仕様を確定する前に `spec-holes` で未定義の振る舞いを列挙して潰す。
+- 列挙した穴は可能なら例示テスト / Hypothesis property に落とす。
 - 可能なら `tdd` skill でテストから始める。
 - 設計が曖昧なら `grill-me` / `grill-with-docs` で確認する。
 - 複雑化しそうなら `caveman` で単純化する。
