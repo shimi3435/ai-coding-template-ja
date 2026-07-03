@@ -79,14 +79,15 @@ TDD → 実装 → self-review → verify-change →（任意）codex クロス�
    - `redistribution`: `"allowed"`。
 3. **pre-commit の `^\.agents/skills/` 除外は維持**。local skill も除外対象に入るが、
    sha256 の安定（フックによる書き換え防止）という便益は同じ。
-4. **specs delta は作らない**。`openspec/specs/` は出荷時空・下流所有
-   （[openspec/project.md](../../project.md)）。本 change はテンプレート自身のメタ変更で、
-   下流の capability 仕様を規定しない。受け入れ基準は本 proposal が持つ。
-   - 既知の帰結: `openspec validate` は delta 必須のため本 change を ERROR にする。
-     これは意図的で、engine は「あくまで自動化で、境界の前提ではない」
-     （[docs/agents/workflow.md](../../../docs/agents/workflow.md)）に従い Markdown
-     fallback（proposal / tasks 手書き運用）で進める。delta を作って通すと archive 時に
-     `openspec/specs/` へ仕様がマージされ「出荷時空」に反する。
+4. **specs delta は change 内に持つ**（codex レビュー反映）。当初は「`openspec/specs/` は
+   出荷時空・下流所有（[openspec/project.md](../../project.md)）」を理由に delta なしとし
+   `openspec validate` の ERROR を既知の帰結として許容したが、これは `openspec/specs/`
+   （出荷物）と `changes/<id>/specs/`（change 内 delta）の混同だった。delta を
+   [specs/agent-skills/spec.md](specs/agent-skills/spec.md) に置けば validate は green に
+   なり、設計判断 5（archive せず削除で close）により delta が `openspec/specs/` へ
+   マージされることもないため「出荷時空」と両立する。skill 追加はテンプレートの能力
+   変更なので「振る舞いが変わる場合のみ spec.md」の fallback 規約にも忠実になる。
+   初実例が validate ERROR を許容する前例を作らない。
 5. **完了後は change ディレクトリを削除して close する**。`openspec/changes/` も出荷時空
    （下流が自分の change を書く場所）のため、engine の archive（`changes/archive/` へ移動）
    は使わない。経緯は git 履歴と本 proposal の PR が保持する。
@@ -107,6 +108,8 @@ TDD → 実装 → self-review → verify-change →（任意）codex クロス�
 - [ ] docs/agents/workflow.md の skill 表に 2 行（供給元 = 自作 / local）追加。
 - [ ] docs/optional/codex-review.md に self-review との住み分け 1 行追記。
 - [ ] `task check` が green。
+- [ ] `openspec validate add-self-review-verify-skills` が green（engine 導入環境で確認。
+      delta は [specs/agent-skills/spec.md](specs/agent-skills/spec.md)）。
 
 ## Non-goals
 

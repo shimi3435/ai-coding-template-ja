@@ -13,7 +13,8 @@
 - [ ] 5. AGENTS.md の Workflow に推奨 1 行ずつを追記する（非強制トーン）。
 - [ ] 6. docs/agents/workflow.md の skill 表に 2 行を追加する（供給元 = 自作 / local）。
 - [ ] 7. docs/optional/codex-review.md に self-review との住み分けを 1 行追記する。
-- [ ] 8. `task skills:doctor` と `task check` が green であることを確認する。
+- [ ] 8. `task skills:doctor`・`task check`・
+       `openspec validate add-self-review-verify-skills` が green であることを確認する。
 - [ ] 9. smoke: 両 skill を実際に起動し、self-review が 2 段階挙動（修正 / 報告の
        仕分け）・verify-change が未検証明記を含む報告を出すことを確認する。
 - [ ] 10. close: 全タスク完了・PR マージ後に本 change ディレクトリを削除する
