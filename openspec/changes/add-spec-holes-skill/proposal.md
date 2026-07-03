@@ -28,6 +28,9 @@
   - 「列挙した穴は可能なら例示テスト / Hypothesis property に落とす。」
 - [docs/agents/workflow.md](../../../docs/agents/workflow.md) の skill 表に 1 行追加
   （供給元 = 自作 / local）＋ 2 フェーズ運用の短い補足。
+- `.agents/skills/self-review/SKILL.md` の検査観点に「spec-holes 対応表の照合」を
+  1 項目追記（フェーズ 2 の対応表の漏れ検出を self-review が実行することを実効化する。
+  編集に伴い skills.lock.json の self-review エントリの sha256 も更新）。
 
 コード（src / tests / CI / Taskfile / scripts）の変更はない。**依存の追加もない**
 （hypothesis は dev group 導入済）。既存テスト `tests/test_skills_lock.py` が
