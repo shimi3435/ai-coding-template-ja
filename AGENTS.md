@@ -29,6 +29,8 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - 設計が曖昧なら `grill-me` / `grill-with-docs` で確認する。
 - 複雑化しそうなら `caveman` で単純化する。
 - エラー調査では `diagnosing-bugs` skill を使う。
+- まとまった変更後は可能なら `verify-change` で実動作を確認する。
+- コミット / PR 前は可能なら `self-review` で自分の diff を検査する。
 - 詳細は [docs/agents/workflow.md](docs/agents/workflow.md)。
 
 ## Tools
