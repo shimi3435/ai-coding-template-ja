@@ -90,6 +90,16 @@
       "license_file": "LICENSE",
       "redistribution": "allowed",
       "sha256": "742bd6651288573c029319034e14da809cf90281dfb930172dfa5a2c13151fb4"
+    },
+    {
+      "name": "spec-holes",
+      "source": "local (first-party)",
+      "source_type": "local",
+      "commit": "local",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "redistribution": "allowed",
+      "sha256": "72bf104c4e5f9ea92880e7550c674d261484ef0dbecba2f129e79c8fa9f490b2"
     }
   ]
 }
