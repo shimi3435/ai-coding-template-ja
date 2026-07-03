@@ -13,8 +13,8 @@
        フェーズ 2 =「列挙した穴は可能なら例示テスト / Hypothesis property に落とす」）。
 - [x] 5. docs/agents/workflow.md の skill 表に 1 行を追加し（供給元 = 自作 / local）、
        2 フェーズ運用の短い補足を書く。
-- [ ] 6. `task skills:doctor` と `task check` が green であることを確認する。
-- [ ] 7. smoke: 実在の要件に対しフェーズ 1 の列挙とフェーズ 2 の対応表出力を
+- [x] 6. `task skills:doctor` と `task check` が green であることを確認する。
+- [x] 7. smoke: 実在の要件に対しフェーズ 1 の列挙とフェーズ 2 の対応表出力を
        1 回実行する（タクソノミー各項目に該当 / 非該当の判断が付くこと）。
 - [ ] 8. close: 全タスク完了・PR マージ前に本 change ディレクトリを削除する
        （proposal 設計判断 5。`git rm -r` → chore コミット → push → PR）。
