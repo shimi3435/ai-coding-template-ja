@@ -8,10 +8,10 @@
        license_file: LICENSE / redistribution: allowed / SKILL.md の sha256）。
 - [x] 3. `task skills:update` を実行し `.claude/skills`・`.codex/skills` の symlink を
        生成する。
-- [ ] 4. AGENTS.md の Workflow に追記する（フェーズ 1 =「OpenSpec で仕様を確定する
+- [x] 4. AGENTS.md の Workflow に追記する（フェーズ 1 =「OpenSpec で仕様を確定する
        前に `spec-holes` で未定義の振る舞いを列挙して潰す」（無条件）、
        フェーズ 2 =「列挙した穴は可能なら例示テスト / Hypothesis property に落とす」）。
-- [ ] 5. docs/agents/workflow.md の skill 表に 1 行を追加し（供給元 = 自作 / local）、
+- [x] 5. docs/agents/workflow.md の skill 表に 1 行を追加し（供給元 = 自作 / local）、
        2 フェーズ運用の短い補足を書く。
 - [ ] 6. `task skills:doctor` と `task check` が green であることを確認する。
 - [ ] 7. smoke: 実在の要件に対しフェーズ 1 の列挙とフェーズ 2 の対応表出力を

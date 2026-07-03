@@ -59,9 +59,16 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 | `caveman` | 過度な複雑化・不要な抽象化・テンプレ肥大化を止める | JuliusBrussee/caveman |
 | `self-review` | コミット / PR 前の自己 diff 検査（明白な欠陥は修正・判断事項は報告のみ） | 自作（local） |
 | `verify-change` | 変更後の実動作確認（`task check`→個別テスト→実行・未検証は理由付き明記） | 自作（local） |
+| `spec-holes` | 仕様の穴（未定義の振る舞い）の機械的列挙とテスト化（固定タクソノミー 12 分類） | 自作（local） |
 
 > `grill-me` / `grill-with-docs` は薄いラッパーで、本体の `grilling`・`domain-modeling`
 > skill に委譲する。再現性のため依存先も同梱している（単体では機能しないため）。
+
+> `spec-holes` は 2 フェーズ運用で強制度が非対称。**フェーズ 1（仕様時）は無条件**:
+> OpenSpec proposal / spec delta の確定前にタクソノミーを全項目当て、穴を
+> 「仕様に明記 / スコープ外と明記 / ユーザ確認」のいずれかで必ず潰す。
+> **フェーズ 2（実装時）は努力目標**: 穴を例示テスト / Hypothesis property に対応付け、
+> 落とせないものは「未検証」と理由を明記する（対応表の漏れは `self-review` が照合）。
 
 - 起動: 各エージェントの skill 機構で名前指定（例 `grill-me`）。`caveman` は明示起動が基本。
 - `caveman` の自動発火（hook）は Claude 固有のオプション。手順は
