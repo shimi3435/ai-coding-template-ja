@@ -88,9 +88,12 @@ TDD → 実装 → self-review → verify-change →（任意）codex クロス�
    マージされることもないため「出荷時空」と両立する。skill 追加はテンプレートの能力
    変更なので「振る舞いが変わる場合のみ spec.md」の fallback 規約にも忠実になる。
    初実例が validate ERROR を許容する前例を作らない。
-5. **完了後は change ディレクトリを削除して close する**。`openspec/changes/` も出荷時空
-   （下流が自分の change を書く場所）のため、engine の archive（`changes/archive/` へ移動）
-   は使わない。経緯は git 履歴と本 proposal の PR が保持する。
+5. **change ディレクトリはマージ前の最終コミットで削除して close する**。
+   `openspec/changes/` も出荷時空（下流が自分の change を書く場所）のため、engine の
+   archive（`changes/archive/` へ移動）は使わず、main に change ディレクトリを載せない
+   （Use this template は main HEAD からコピーされるため、マージ後削除では merge〜削除の
+   窓で下流へ混入し得る。document-openspec-dogfooding の codex レビュー反映）。
+   経緯は PR とブランチ履歴が保持する。
 6. **AGENTS.md では推奨（非強制）に留める**。必須ゲート化は 1 行修正にもフルレビューが
    走りテンポを落とす。実運用で効果を見てからでも遅くない。
 
