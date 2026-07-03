@@ -70,6 +70,26 @@
       "license_file": ".agents/skills/diagnosing-bugs/LICENSE",
       "redistribution": "allowed",
       "sha256": "7a0779480f323a66d109404646bcc1a14bf0232b45b3e3ea93b652a035718acb"
+    },
+    {
+      "name": "self-review",
+      "source": "local (first-party)",
+      "source_type": "local",
+      "commit": "local",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "redistribution": "allowed",
+      "sha256": "06687b7c1370fab6ef48a3e92abbafe9ac95bf72478d4617e91c65db078c2d4a"
+    },
+    {
+      "name": "verify-change",
+      "source": "local (first-party)",
+      "source_type": "local",
+      "commit": "local",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "redistribution": "allowed",
+      "sha256": "742bd6651288573c029319034e14da809cf90281dfb930172dfa5a2c13151fb4"
     }
   ]
 }

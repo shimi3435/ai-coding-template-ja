@@ -30,6 +30,8 @@ Claude Code 内で:
 ## 使い方（人起点のみ）
 
 - レビュー: `/codex:review`（読み取り専用）。PR 前のセルフチェックに使う。
+- コアの `self-review` skill は自分の diff の自己検査、本ページは別 AI（Codex）による
+  クロスレビューで役割が異なる（self-review 後の追加の脚として使う）。
 - 指摘は鵜呑みにせず、実行形で検証してから反映する（false positive があり得る）。
 - quota 到達時はレビューが失敗する（「Reviewer failed to output a response」等）。
   リセット時刻を確認して再実行する。
