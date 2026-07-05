@@ -29,8 +29,12 @@ OpenSpec engine には **2 つのアクセス形態**があり、両者は別物
 
 - `openspec list` … change / spec の一覧を出す。
 - `openspec instructions apply --change <id>` … 対象 change の apply 指示と context ファイル
-  （proposal / tasks / spec delta）を出力する。実装はこの指示に沿って進める。
-- `openspec status --change <id>` … tasks の進捗（n/m complete）を確認する。
+  （proposal / tasks / spec delta）を出力する。出力の `Progress` は `tasks.md` の**チェック
+  ボックス進捗**（n/m complete）で、タスクの実際の進捗確認はここを見る。実装はこの指示に沿う。
+- `openspec status --change <id>` … **artifact 単位**の完了状態（`proposal` / `tasks` / `specs`
+  ファイルが存在するか）を表示する。`tasks` artifact は `tasks.md` が在れば未チェック項目が
+  残っていても done 扱いになるため、**タスクのチェックボックス進捗は上の `instructions apply`
+  の `Progress` で確認する**（status では見落とす）。
 - `openspec validate <id>` … proposal / spec delta の形式検証（SHALL 1 行目制約など）。
 - `openspec archive <id>` … change を確定し `specs/` へマージする。ただし**このテンプレートは
   archive せずマージ前の削除で close する**（テンプレ自身の change 運用は
