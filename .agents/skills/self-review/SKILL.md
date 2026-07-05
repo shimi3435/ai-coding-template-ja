@@ -33,6 +33,9 @@ description: >
 - **spec-holes 対応表の照合**: `spec-holes` フェーズ 1 の穴リストがある場合、各穴が
   フェーズ 2 の対応表（例示テスト / Hypothesis property / 理由付き「未検証」）に
   落ちているかを突き合わせ、漏れを指摘する。
+- **active change の tasks.md 照合**: 実行中の OpenSpec change がある場合、その `tasks.md` の
+  チェック状態が diff の実装実態を反映しているかを突き合わせ、完了済みなのに `- [ ]` の
+  ままのタスク・未着手なのに `- [x]` のタスクなど乖離があれば指摘する（backstop）。
 
 ## 2 段階挙動
 
