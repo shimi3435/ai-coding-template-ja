@@ -29,6 +29,9 @@ engine 不在でも境界は崩れない。エンジンはあくまで自動化�
 
 - 各 change ディレクトリは `proposal.md` / `tasks.md` を必須とし、振る舞いが変わる場合のみ
   `specs/<capability>/spec.md` を持つ。
+- `spec.md` の各 requirement 本文は **1 行目**に SHALL / MUST を置く。engine parser は
+  1 行目のみで判定するため、折返しで 2 行目以降に落とすと `openspec validate` が ERROR に
+  なる（全角括弧は可）。
 - `tasks.md` は GitHub チェックボックス形式の番号付きリスト。例:
   ```markdown
   - [ ] 1. 実装 ...

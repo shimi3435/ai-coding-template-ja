@@ -20,6 +20,14 @@
 - `changes/` … 変更提案（出荷時は空）。各 change は `proposal.md` と `tasks.md` を必須とし、
   振る舞いが変わる場合のみ `specs/<capability>/spec.md` を持つ。
 
+## テンプレート自身の change 運用
+
+テンプレート自身が change を切る場合:
+
+- spec delta は `changes/<id>/specs/` に置く（`openspec validate` green と `specs/` の出荷時空が両立）。
+- close は archive ではなくマージ前の最終コミットでのディレクトリ削除で行う（main に change ディレクトリを載せない）。
+- これにより `specs/` / `changes/` の出荷時空と validate green を維持する。経緯は PR とブランチ履歴が保持する。
+
 ## エンジン（任意）
 
 `/opsx:*`（OpenSpec engine）は Node 製 CLI で、コアのハード依存ではない（ADR-0002/0003）。
