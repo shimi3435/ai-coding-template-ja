@@ -19,13 +19,38 @@
 - GSD は `openspec/changes/*/tasks.md` を二重化せず、横断の順序付けのみ行う
 - 受け入れ基準を GSD 側で新規定義しない（OpenSpec を参照する）
 
-## OpenSpec engine と Markdown fallback（ADR-0003 / Q12）
+## OpenSpec engine のアクセス形態と Markdown fallback（ADR-0003 / Q12）
 
-`/opsx:*`（OpenSpec engine）は Node 製 CLI で、コアのハード依存ではない。`task doctor` は
-`which openspec` で可用性を確認し、不在でも WARN に留める（FAIL にしない・自動実行しない）。
+OpenSpec engine には **2 つのアクセス形態**があり、両者は別物。実機は `openspec` CLI が
+入る形態のため CLI を第一線に置く。
 
-engine 不在でも境界は崩れない。エンジンはあくまで自動化で、境界の前提ではない。手書きで
-運用する場合の最小形式（エージェントが勝手な形式を作らないための固定形式）:
+**(a) `openspec` CLI（Node 製・第一線）** — `task doctor` は `which openspec` で可用性を確認し、
+不在でも WARN に留める（FAIL にしない・自動実行しない）。既存 change を CLI で駆動する導線:
+
+- `openspec list` … change / spec の一覧を出す。
+- `openspec instructions apply --change <id>` … 対象 change の apply 指示と context ファイル
+  （proposal / tasks / spec delta）を出力する。出力の `Progress` は `tasks.md` の**チェック
+  ボックス進捗**（n/m complete）で、タスクの実際の進捗確認はここを見る。実装はこの指示に沿う。
+- `openspec status --change <id>` … **artifact 単位**の完了状態（`proposal` / `tasks` / `specs`
+  ファイルが存在するか）を表示する。`tasks` artifact は `tasks.md` が在れば未チェック項目が
+  残っていても done 扱いになるため、**タスクのチェックボックス進捗は上の `instructions apply`
+  の `Progress` で確認する**（status では見落とす）。
+- `openspec validate <id>` … proposal / spec delta の形式検証（SHALL 1 行目制約など）。
+- `openspec archive <id>` … change を確定し `specs/` へマージする。ただし**このテンプレートは
+  archive せずマージ前の削除で close する**（テンプレ自身の change 運用は
+  [openspec/project.md](../../openspec/project.md)）。
+
+CLI は tasks の**自動チェックマークを付けない**。各タスク完了時に `tasks.md` の `- [ ]` を
+`- [x]` へ更新するのは実行主体（能動規律）。
+
+**(b) スラッシュコマンド `/opsx:*`（任意・別導入）** — Claude Code のスラッシュコマンド統合で、
+上記 CLI とは**別物**。CLI をインストールしただけでは `/opsx:apply` 等は存在しない（別途導入が
+要る・このテンプレートは同梱しない）。動詞の対応は `/opsx:apply` ≈
+`openspec instructions apply --change <id>`。
+
+どちらの形態も無くても（engine 不在でも）境界は崩れない。エンジンはあくまで自動化で、
+境界の前提ではない。手書きで運用する場合の最小形式（エージェントが勝手な形式を作らない
+ための固定形式）:
 
 - 各 change ディレクトリは `proposal.md` / `tasks.md` を必須とし、振る舞いが変わる場合のみ
   `specs/<capability>/spec.md` を持つ。
@@ -43,8 +68,10 @@ engine 不在でも境界は崩れない。エンジンはあくまで自動化�
   担わないため、この能動規律を実行主体が肩代わりする。
 - GSD（導入時）は change ディレクトリへ**リンク**するのみで `tasks.md` の内容を複製しない。
 
-engine を導入する場合は各自で `openspec init` を実行する（生成物はこのテンプレートには
-コミットしない。Node 依存・engine version 結合を避けるため）。
+`openspec init` は**新規プロジェクト用**。既存テンプレでは `openspec/project.md` を
+`config.yaml` へ移行するハザードがあるため**このリポジトリでは実行しない**。既存 change の
+実装に init は不要（CLI は init 無しで `instructions apply` / `status` / `validate` が機能する）。
+engine の生成物もこのテンプレートにはコミットしない（Node 依存・engine version 結合を避けるため）。
 
 ## Skills（vendoring・コア候補のうち再配布可のもの）
 

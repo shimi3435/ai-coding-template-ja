@@ -30,6 +30,10 @@
 
 ## エンジン（任意）
 
-`/opsx:*`（OpenSpec engine）は Node 製 CLI で、コアのハード依存ではない（ADR-0002/0003）。
-未導入でも上記ディレクトリ規約を手書きで運用できる（Markdown fallback）。
-導入する場合は `openspec init` を各自で実行する（生成物はこのテンプレートにはコミットしない）。
+OpenSpec engine のアクセス形態は **(a) `openspec` CLI** と **(b) スラッシュコマンド `/opsx:*`**
+（別物）。CLI 動詞（`openspec instructions apply --change` / `status` / `validate` / `list`）と
+各形態の使い分けは [docs/agents/workflow.md](../docs/agents/workflow.md) が単一の正。engine は
+コアのハード依存ではなく（ADR-0002/0003）、未導入でも上記ディレクトリ規約を手書きで運用できる
+（Markdown fallback）。`openspec init` は新規プロジェクト用で、既存リポジトリでは
+project.md→config.yaml 移行のハザードがあるため実行しない（同 workflow.md）。生成物はこの
+テンプレートにはコミットしない。

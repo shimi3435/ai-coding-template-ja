@@ -26,7 +26,8 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 
 ## Workflow（OpenSpec / GSD の境界 / ADR-0003）
 - 「何を・なぜ作るか」は OpenSpec で確定する（仕様・受け入れ基準）。
-- 単一 change 内のタスク分解・順序・進捗は OpenSpec `tasks.md` / `/opsx:apply` が担う。
+- 単一 change 内のタスク分解・順序・進捗は OpenSpec `tasks.md` / `/opsx:apply`
+  （CLI 等価: `openspec instructions apply --change <id>`・導線は workflow.md）が担う。
 - GSD（導入時のみ）は複数 change を横断するロードマップ・フェーズ順序・復帰のみを担い、
   `openspec/changes/*/tasks.md` を二重化しない。受け入れ基準も新規定義しない。
 - GSD 未導入時も per-change タスクは OpenSpec `tasks.md` で完結する。
