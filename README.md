@@ -101,6 +101,17 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 - `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査・
   GSD・Serena MCP・クロス AI レビュー）。
 
+## 研究成果物の扱い
+
+- `data/` … 入力データ。`.gitkeep` を除き gitignore 済み（中身は commit されない・各自の
+  領分。大容量 / 非公開データを置ける。認証情報・token は置かず `.env` / secret manager を使う）。
+- `results/` … 実験結果・生成物。同じく gitignore 済み。
+- `configs/` … 実験設定。追跡対象（再現性のため commit 推奨）。
+- `notebooks/` … 研究 notebook。追跡対象（出力除去は `task nb:strip` /
+  [docs/optional/notebook.md](docs/optional/notebook.md)）。
+
+gitignore 方針の正は `.gitignore` の `data/*` / `results/*` エントリ。
+
 ## ライセンス
 
 ルート [LICENSE](LICENSE) は MIT（テンプレ著者のオリジナル成果物）。`.agents/skills/` に
