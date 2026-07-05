@@ -21,7 +21,8 @@ npx @opengsd/gsd-core@latest
 
 [docs/agents/workflow.md](../agents/workflow.md) の境界を再掲する。GSD 導入時も:
 
-- **per-change のタスク分解・順序・進捗は OpenSpec `tasks.md` / `/opsx:apply` が所有する。**
+- **per-change のタスク分解・順序・進捗は OpenSpec `tasks.md` / `/opsx:apply`
+  （CLI 等価は `openspec instructions apply --change`・導線は [workflow.md](../agents/workflow.md)）が所有する。**
   GSD は `openspec/changes/*/tasks.md` を二重化しない。
 - GSD が担うのは**複数 change を横断する**ロードマップ / フェーズ順序 / マイルストーン /
   セッション跨ぎ復帰のみ。
