@@ -12,6 +12,11 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 ## General Engineering Rules
 - 変更は必要最小限に留める。
 - 無関係なリファクタリングを行わない。
+- 現在のスコープ外で正確性・セキュリティ・データ損失・将来をブロックする設計負債の問題に
+  気づいたら、直さず記録して失わない。記録先はプロジェクトの課題管理（GitHub Issue /
+  OpenSpec backlog / TODO 等）。外部システムへの write（`gh issue create` 等）は自動発行せず、
+  発見をその場で応答内に明示し文面を提案するに留める（発行は人起点・事前確認）。スタイル
+  nit・主観的 refactor は対象外。
 - 単一ファイルの肥大化を避ける。命名は具体的にする。
 - 既存の設計意図を尊重する。
 
@@ -25,6 +30,8 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - GSD（導入時のみ）は複数 change を横断するロードマップ・フェーズ順序・復帰のみを担い、
   `openspec/changes/*/tasks.md` を二重化しない。受け入れ基準も新規定義しない。
 - GSD 未導入時も per-change タスクは OpenSpec `tasks.md` で完結する。
+- change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
+  チェックを `- [x]` に更新する。engine（`/opsx:apply`）不在の Markdown fallback でも同じ。
 - OpenSpec で仕様を確定する前に `spec-holes` で未定義の振る舞いを列挙して潰す。
 - 列挙した穴は可能なら例示テスト / Hypothesis property に落とす。
 - 可能なら `tdd` skill でテストから始める。
