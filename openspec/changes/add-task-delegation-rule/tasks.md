@@ -11,6 +11,6 @@
 - [x] 3. workflow.md の既存「実行主体が tasks.md を更新」規約に、委譲時の読み替え
        （実行主体＝オーケストレータ＝main・サブエージェントはマークしない）を追記する。
 - [x] 4. `task check` と `openspec validate add-task-delegation-rule` が green であることを確認する。
-- [ ] 5. self-review で spec-holes の穴リスト（proposal 記載 H1〜H9）と本文の突き合わせを行う。
+- [x] 5. self-review で spec-holes の穴リスト（proposal 記載 H1〜H9）と本文の突き合わせを行う。
 - [ ] 6. close: マージ前の最終コミットで本 change ディレクトリを削除する（main に change
        ディレクトリを載せない・経緯は PR とブランチ履歴が保持）。
