@@ -3,6 +3,9 @@
 日本語で AI コーディングエージェント（Codex / Claude Code）を使う研究用 Python
 プロジェクトのテンプレート（Ubuntu 対象）。
 
+> 使い方の全体像・オプションの選び方・詰まったときの導線は、通し読みガイド
+> [docs/guide.md](docs/guide.md) にまとめてある（本 README は最短手順の quickstart）。
+
 ## 構成
 
 **機械コア（PR1）**
@@ -94,6 +97,8 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 
 ## ドキュメント構成
 
+- [docs/guide.md](docs/guide.md) … **人間の下流ユーザ向け通し読みガイド**（全体像・
+  立ち上げの「なぜ」・オプションの選び方・詰まったとき）。
 - `docs/adr/` … **下流の研究 ADR 用**（出荷時は `0000-template.md` の道標 1 枚のみ）。
 - `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0006・grill 記録）。
   下流では不要なら `task prune-template-docs -- --apply` で削除できる（ADR-0006）。
