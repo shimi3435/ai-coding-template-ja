@@ -149,6 +149,82 @@ def test_doctor_gh_missing_is_fail_only_with_optin(
     assert opted_in.fail == 1, "opt-in 時は gh 不在を FAIL とすること"
 
 
+def test_doctor_openspec_output_never_mentions_openspec_init(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """doctor 出力は engine 不在・在席の両経路で `openspec init` を含まないこと。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+
+    # engine 不在経路（未導入案内の WARN 文言を捕捉）
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
+    doctor.check_openspec(doctor.Diagnostics())
+
+    # engine 在席経路（probe の invalid WARN 文言まで捕捉）
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/openspec")
+    (tmp_path / "openspec" / "changes" / "some-change").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (1, "invalid change"))
+    doctor.check_openspec(doctor.Diagnostics())
+
+    out = capsys.readouterr().out
+    assert "openspec init" not in out, "doctor は openspec init を案内しないこと"
+
+
+def test_doctor_openspec_probe_skips_when_no_changes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """changes 空（dir 不在 / .gitkeep のみ）では validate を実行せず出力も無いこと。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        return 0, ""
+
+    monkeypatch.setattr(doctor, "_run", _fake_run)
+
+    doctor._check_openspec_validate(doctor.Diagnostics())  # changes dir 不在
+
+    changes = tmp_path / "openspec" / "changes"
+    changes.mkdir(parents=True)
+    (changes / ".gitkeep").write_text("", encoding="utf-8")
+    doctor._check_openspec_validate(doctor.Diagnostics())  # .gitkeep のみ
+
+    (changes / "archive").mkdir()
+    doctor._check_openspec_validate(doctor.Diagnostics())  # archive/ は change でない
+
+    assert calls == [], "changes 空では validate を実行しないこと"
+    assert capsys.readouterr().out == "", "probe 由来の出力を出さないこと"
+
+
+def test_doctor_openspec_probe_invalid_is_warn_not_fail(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """validate 非ゼロ（invalid）は WARN 1 件・FAIL ゼロで exit 0 を維持すること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    (tmp_path / "openspec" / "changes" / "some-change").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (1, "invalid change"))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    assert (diag.fail, diag.warn) == (0, 1), "invalid は WARN 止まり（非ゲート）"
+    assert diag.exit_code() == 0, "doctor の green（exit 0）を壊さないこと"
+
+
+def test_doctor_openspec_probe_valid_is_ok(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """validate 0（全 change valid）では WARN/FAIL を増やさないこと。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    (tmp_path / "openspec" / "changes" / "some-change").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (0, "ok"))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    assert (diag.fail, diag.warn) == (0, 0), "valid は OK のみ（WARN/FAIL ゼロ）"
+
+
 def _make_prune_fixture(tmp_path: Path) -> Path:
     """prune-template-docs.py を tmp へコピーした最小リポジトリ木を作る。
 

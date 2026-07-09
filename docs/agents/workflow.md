@@ -36,6 +36,8 @@ OpenSpec engine には **2 つのアクセス形態**があり、両者は別物
   残っていても done 扱いになるため、**タスクのチェックボックス進捗は上の `instructions apply`
   の `Progress` で確認する**（status では見落とす）。
 - `openspec validate <id>` … proposal / spec delta の形式検証（SHALL 1 行目制約など）。
+  PR 前チェック: change を含むブランチでは `task openspec:validate`（invalid で FAIL する
+  opt-in ゲート・engine 必須）で全 change の validate green を確認する。
 - `openspec archive <id>` … change を確定し `specs/` へマージする。ただし**このテンプレートは
   archive せずマージ前の削除で close する**（テンプレ自身の change 運用は
   [openspec/project.md](../../openspec/project.md)）。

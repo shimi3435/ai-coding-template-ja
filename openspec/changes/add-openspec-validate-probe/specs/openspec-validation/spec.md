@@ -9,6 +9,7 @@
 probe は read-only であり、リポジトリのファイルを変更しない。validate の実行自体が
 失敗した場合（クラッシュ・タイムアウト等）も WARN に留め、FAIL にしない。
 `openspec/changes/` ディレクトリ自体が存在しない場合も「change ゼロ」と同様に skip する。
+`changes/archive/`（openspec の archive 規約ディレクトリ）は change として数えない。
 invalid 時の WARN は要約に留め、詳細確認の導線として `task openspec:validate` を案内する。
 
 #### Scenario: CLI 在席・changes 非空・全 change valid
