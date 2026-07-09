@@ -82,27 +82,7 @@ tasks:
       preflight: proposal.md / tasks.md を欠く change は CLI の validate 対象から
       漏れる（fail-open）ため、CLI 実行前に検査して FAIL にする。
     cmds:
-      - |
-        if ! command -v openspec >/dev/null 2>&1; then
-          echo "[FAIL] openspec CLI 未導入のため実行できません（このゲートは engine 必須）"
-          echo "       導入: npm install -g @fission-ai/openspec"
-          echo "       運用: docs/agents/workflow.md"
-          exit 1
-        fi
-        broken=0
-        for dir in openspec/changes/*/; do
-          [ -d "$dir" ] || continue
-          name="$(basename "$dir")"
-          case "$name" in archive|.*) continue ;; esac
-          if [ ! -f "${dir}proposal.md" ] || [ ! -f "${dir}tasks.md" ]; then
-            echo "[FAIL] change ${name} に proposal.md / tasks.md がありません（必須構成・docs/agents/workflow.md）"
-            broken=1
-          fi
-        done
-        if [ "$broken" -ne 0 ]; then
-          exit 1
-        fi
-        openspec validate --changes --no-interactive
+      - uv run --no-sync python scripts/openspec-validate-gate.py
 
   rename:
     desc: |

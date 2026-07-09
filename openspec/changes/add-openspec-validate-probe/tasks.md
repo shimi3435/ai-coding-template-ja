@@ -6,3 +6,4 @@
 - [x] 4. `docs/agents/workflow.md`: `openspec validate` 導線に PR 前チェックとして `task openspec:validate` を 1 行追記する
 - [x] 5. `task check` と verify-change（doctor 実行で WARN / exit code を実機確認）を実施する
 - [x] 6. Codex adversarial-review 反映: `proposal.md` / `tasks.md` を欠く change の preflight（doctor は WARN・gate は非ゼロ FAIL）と回帰テストを追加する
+- [x] 7. Codex 再レビュー反映: gate 実体を `scripts/openspec-validate-gate.py` に切り出し（preflight 判定は doctor のヘルパーを単一の正として共有）、gate の回帰テストを openspec / task 実物に依存しない常時実行テストへ置き換える

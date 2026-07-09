@@ -408,6 +408,29 @@ def check_openspec(diag: Diagnostics) -> None:
     _check_openspec_validate(diag)
 
 
+def list_change_dirs(changes_dir: Path) -> list[Path]:
+    """change として数えるディレクトリを列挙する（archive・dot ディレクトリ除外）。
+
+    scripts/openspec-validate-gate.py（FAIL 側ゲート）と共有する単一の正。
+    """
+    if not changes_dir.is_dir():
+        return []
+    return [
+        entry
+        for entry in changes_dir.iterdir()
+        if entry.is_dir() and entry.name != "archive" and not entry.name.startswith(".")
+    ]
+
+
+def broken_change_dirs(change_dirs: list[Path]) -> list[str]:
+    """proposal.md / tasks.md を欠く change 名を返す（validate 対象から漏れる）。"""
+    return sorted(
+        entry.name
+        for entry in change_dirs
+        if not ((entry / "proposal.md").is_file() and (entry / "tasks.md").is_file())
+    )
+
+
 def _check_openspec_validate(diag: Diagnostics) -> None:
     """change があるときだけ validate probe を実行する（invalid は WARN・非ゲート）。
 
@@ -416,21 +439,10 @@ def _check_openspec_validate(diag: Diagnostics) -> None:
     proposal.md / tasks.md を欠くディレクトリは CLI の validate 対象から漏れる
     （fail-open）ため、probe 側で WARN として検出し、その場合は OK と断定しない。
     """
-    changes_dir = REPO_ROOT / "openspec" / "changes"
-    if not changes_dir.is_dir():
-        return
-    change_dirs = [
-        entry
-        for entry in changes_dir.iterdir()
-        if entry.is_dir() and entry.name != "archive" and not entry.name.startswith(".")
-    ]
+    change_dirs = list_change_dirs(REPO_ROOT / "openspec" / "changes")
     if not change_dirs:
         return
-    broken = sorted(
-        entry.name
-        for entry in change_dirs
-        if not ((entry / "proposal.md").is_file() and (entry / "tasks.md").is_file())
-    )
+    broken = broken_change_dirs(change_dirs)
     for name in broken:
         diag.warn_(
             f"change {name} に proposal.md / tasks.md がありません（必須構成・"
