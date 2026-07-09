@@ -33,6 +33,9 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - GSD 未導入時も per-change タスクは OpenSpec `tasks.md` で完結する。
 - change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
   チェックを `- [x]` に更新する。engine（`/opsx:apply`）不在の Markdown fallback でも同じ。
+- 成果物（コード / docs）を新規作成・大幅変更する task は、原則として新しいコンテキストの
+  サブエージェントへ委譲し、main が成果を検証してから進捗をマークする（見送る場合は理由を
+  一言記録する。詳細は workflow.md）。
 - OpenSpec で仕様を確定する前に `spec-holes` で未定義の振る舞いを列挙して潰す。
 - 列挙した穴は可能なら例示テスト / Hypothesis property に落とす。
 - 可能なら `tdd` skill でテストから始める。
