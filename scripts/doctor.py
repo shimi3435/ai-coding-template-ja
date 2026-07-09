@@ -413,24 +413,38 @@ def _check_openspec_validate(diag: Diagnostics) -> None:
 
     read-only。validate の実行自体が失敗した場合（クラッシュ・タイムアウト等）も
     WARN に留め、FAIL にしない（doctor の green を壊さない）。
+    proposal.md / tasks.md を欠くディレクトリは CLI の validate 対象から漏れる
+    （fail-open）ため、probe 側で WARN として検出し、その場合は OK と断定しない。
     """
     changes_dir = REPO_ROOT / "openspec" / "changes"
     if not changes_dir.is_dir():
         return
-    has_changes = any(
-        entry.is_dir() and entry.name != "archive" for entry in changes_dir.iterdir()
-    )
-    if not has_changes:
+    change_dirs = [
+        entry
+        for entry in changes_dir.iterdir()
+        if entry.is_dir() and entry.name != "archive" and not entry.name.startswith(".")
+    ]
+    if not change_dirs:
         return
+    broken = sorted(
+        entry.name
+        for entry in change_dirs
+        if not ((entry / "proposal.md").is_file() and (entry / "tasks.md").is_file())
+    )
+    for name in broken:
+        diag.warn_(
+            f"change {name} に proposal.md / tasks.md がありません（必須構成・"
+            "docs/agents/workflow.md。openspec validate の対象から漏れます）"
+        )
     rc, out = _run(["openspec", "validate", "--changes", "--no-interactive"])
-    if rc == 0:
-        diag.ok("openspec validate: 全 change が valid です")
-    else:
+    if rc != 0:
         summary = out.splitlines()[-1] if out else ""
         diag.warn_(
             f"openspec validate が失敗しました（invalid の可能性）: {summary}。"
             "詳細は task openspec:validate で確認してください"
         )
+    elif not broken:
+        diag.ok("openspec validate: 全 change が valid です")
 
 
 def check_optional(diag: Diagnostics) -> None:

@@ -5,3 +5,4 @@
 - [x] 3. `Taskfile.yml`: `openspec:validate` task を新設する（engine 不在は導入案内＋非ゼロ終了・invalid で FAIL・changes 空は exit 0）
 - [x] 4. `docs/agents/workflow.md`: `openspec validate` 導線に PR 前チェックとして `task openspec:validate` を 1 行追記する
 - [x] 5. `task check` と verify-change（doctor 実行で WARN / exit code を実機確認）を実施する
+- [x] 6. Codex adversarial-review 反映: `proposal.md` / `tasks.md` を欠く change の preflight（doctor は WARN・gate は非ゼロ FAIL）と回帰テストを追加する

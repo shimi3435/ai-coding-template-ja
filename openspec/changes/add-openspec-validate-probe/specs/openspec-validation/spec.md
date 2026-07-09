@@ -9,8 +9,11 @@
 probe は read-only であり、リポジトリのファイルを変更しない。validate の実行自体が
 失敗した場合（クラッシュ・タイムアウト等）も WARN に留め、FAIL にしない。
 `openspec/changes/` ディレクトリ自体が存在しない場合も「change ゼロ」と同様に skip する。
-`changes/archive/`（openspec の archive 規約ディレクトリ）は change として数えない。
-invalid 時の WARN は要約に留め、詳細確認の導線として `task openspec:validate` を案内する。
+`changes/archive/`（openspec の archive 規約ディレクトリ）と dot ディレクトリは change として
+数えない。invalid 時の WARN は要約に留め、詳細確認の導線として `task openspec:validate` を
+案内する。`proposal.md` / `tasks.md` を欠く change ディレクトリは CLI の validate 対象から
+漏れる（fail-open）ため、probe が WARN で検出し、その場合は「全 change valid」の OK を
+出さない。
 
 #### Scenario: CLI 在席・changes 非空・全 change valid
 
@@ -36,6 +39,11 @@ invalid 時の WARN は要約に留め、詳細確認の導線として `task op
 
 - **WHEN** validate の子プロセスがクラッシュまたはタイムアウトする
 - **THEN** WARN に留め、FAIL にしない（exit code 0 を維持する）
+
+#### Scenario: 必須ファイルを欠く change ディレクトリ
+
+- **WHEN** `proposal.md` または `tasks.md` を欠く change ディレクトリがある状態で `task doctor` を実行する
+- **THEN** 当該ディレクトリごとに WARN が報告され（exit code 0 維持）、「全 change が valid」の OK は出ない
 
 ### Requirement: doctor 出力の openspec init 不含
 
@@ -70,6 +78,11 @@ validate 対象ゼロとして正常終了（exit 0）する。ゲートは read
 fail-closed（非ゼロのまま伝播）とする。`openspec/` ディレクトリ自体の不在は
 テンプレート構成の前提外でありスコープ外（CLI のエラーに委ねる）。
 
+`openspec validate --changes` は `proposal.md` を欠くディレクトリを検証対象から除外する
+（fail-open）ため、ゲートは CLI 実行前に preflight として `openspec/changes/*`
+（archive・dot ディレクトリを除く）に `proposal.md` / `tasks.md` が揃っていることを検査し、
+欠落があれば非ゼロ終了する。
+
 #### Scenario: engine 在席・全 change valid
 
 - **WHEN** openspec CLI 在席・全 change が valid の状態で `task openspec:validate` を実行する
@@ -89,3 +102,8 @@ fail-closed（非ゼロのまま伝播）とする。`openspec/` ディレクト
 
 - **WHEN** `openspec/changes/` に change ディレクトリが無い状態で `task openspec:validate` を実行する
 - **THEN** validate 対象ゼロとして exit 0 で終了する
+
+#### Scenario: 必須ファイルを欠く change ディレクトリ（preflight）
+
+- **WHEN** `proposal.md` または `tasks.md` を欠く change ディレクトリがある状態で `task openspec:validate` を実行する
+- **THEN** preflight が欠落を報告して非ゼロ終了する（CLI が対象外として skip しても green にしない）

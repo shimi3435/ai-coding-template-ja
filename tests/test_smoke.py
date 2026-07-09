@@ -149,6 +149,15 @@ def test_doctor_gh_missing_is_fail_only_with_optin(
     assert opted_in.fail == 1, "opt-in 時は gh 不在を FAIL とすること"
 
 
+def _make_change_dir(tmp_path: Path, name: str) -> Path:
+    """proposal.md / tasks.md を備えた完全な change ディレクトリを tmp に作る。"""
+    change = tmp_path / "openspec" / "changes" / name
+    change.mkdir(parents=True)
+    (change / "proposal.md").write_text("# Change\n", encoding="utf-8")
+    (change / "tasks.md").write_text("- [ ] 1. task\n", encoding="utf-8")
+    return change
+
+
 def test_doctor_openspec_output_never_mentions_openspec_init(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -162,7 +171,7 @@ def test_doctor_openspec_output_never_mentions_openspec_init(
 
     # engine 在席経路（probe の invalid WARN 文言まで捕捉）
     monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/openspec")
-    (tmp_path / "openspec" / "changes" / "some-change").mkdir(parents=True)
+    _make_change_dir(tmp_path, "some-change")
     monkeypatch.setattr(doctor, "_run", lambda _cmd: (1, "invalid change"))
     doctor.check_openspec(doctor.Diagnostics())
 
@@ -204,7 +213,7 @@ def test_doctor_openspec_probe_invalid_is_warn_not_fail(
     """validate 非ゼロ（invalid）は WARN 1 件・FAIL ゼロで exit 0 を維持すること。"""
     doctor = _load_doctor_module()
     monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
-    (tmp_path / "openspec" / "changes" / "some-change").mkdir(parents=True)
+    _make_change_dir(tmp_path, "some-change")
     monkeypatch.setattr(doctor, "_run", lambda _cmd: (1, "invalid change"))
     diag = doctor.Diagnostics()
     doctor._check_openspec_validate(diag)
@@ -218,11 +227,48 @@ def test_doctor_openspec_probe_valid_is_ok(
     """validate 0（全 change valid）では WARN/FAIL を増やさないこと。"""
     doctor = _load_doctor_module()
     monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
-    (tmp_path / "openspec" / "changes" / "some-change").mkdir(parents=True)
+    _make_change_dir(tmp_path, "some-change")
     monkeypatch.setattr(doctor, "_run", lambda _cmd: (0, "ok"))
     diag = doctor.Diagnostics()
     doctor._check_openspec_validate(diag)
     assert (diag.fail, diag.warn) == (0, 0), "valid は OK のみ（WARN/FAIL ゼロ）"
+
+
+def test_doctor_openspec_probe_warns_on_incomplete_change_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """proposal.md / tasks.md を欠く change は WARN とし、CLI が対象外として rc 0 を
+    返しても「全 change が valid」と断定しないこと（fail-open 検出）。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    (tmp_path / "openspec" / "changes" / "broken-change").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (0, "No items found to validate."))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    out = capsys.readouterr().out
+    assert (diag.fail, diag.warn) == (0, 1), "必須ファイル欠落は WARN（非ゲート）"
+    assert diag.exit_code() == 0, "doctor の green（exit 0）を壊さないこと"
+    assert "全 change が valid" not in out, "壊れた change があるとき OK と断定しない"
+
+
+@pytest.mark.skipif(
+    shutil.which("task") is None or shutil.which("openspec") is None,
+    reason="task / openspec 未導入のためスキップ",
+)
+def test_openspec_validate_gate_fails_on_incomplete_change_dir(tmp_path: Path) -> None:
+    """proposal.md / tasks.md を欠く change があると task openspec:validate が
+    preflight で非ゼロ終了すること（CLI の fail-open を gate で塞ぐ）。"""
+    shutil.copy2(REPO_ROOT / "Taskfile.yml", tmp_path / "Taskfile.yml")
+    (tmp_path / "openspec" / "changes" / "broken-change").mkdir(parents=True)
+    result = subprocess.run(
+        ["task", "openspec:validate"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+    )
+    assert result.returncode != 0, "必須ファイル欠落 change で green にしてはならない"
+    assert "proposal.md" in result.stdout + result.stderr
 
 
 def _make_prune_fixture(tmp_path: Path) -> Path:
