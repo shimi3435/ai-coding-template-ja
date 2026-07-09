@@ -14,9 +14,9 @@
 - [x] 6. `docs/template/adr/0007-*.md` を作成する（下流ユーザガイド出荷の判断・SoT 境界＝文脈は
        重複可 / 事実は owner 参照・依存方向 ADR→guide・guide は prune 耐性）。ADR-0006 と同型の
        「機能依存しない」注記を含める。
-- [ ] 7. 検査: `grep -n 'docs/template' docs/guide.md` が空・guide 内相対リンク実在・
+- [x] 7. 検査: `grep -n 'docs/template' docs/guide.md` が空・guide 内相対リンク実在・
        `task prune-template-docs -- --apply` 後もリンク切れゼロ（verify-change で確認）。
-- [ ] 8. `task check` と `openspec validate add-downstream-usage-guide` が green であることを確認する。
-- [ ] 9. self-review で spec-holes の穴リスト（#1/#3/#4/#6/#12）と本文の突き合わせを行う。
+- [x] 8. `task check` と `openspec validate add-downstream-usage-guide` が green であることを確認する。
+- [x] 9. self-review で spec-holes の穴リスト（#1/#3/#4/#6/#12）と本文の突き合わせを行う。
 - [ ] 10. close: マージ前の最終コミットで本 change ディレクトリを削除する（main に change
        ディレクトリを載せない・経緯は PR とブランチ履歴が保持）。

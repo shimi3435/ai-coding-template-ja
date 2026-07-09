@@ -106,11 +106,11 @@ README の「研究成果物の扱い」節を参照。
 プロジェクトの Python 環境に依存パッケージ群を足す。導入タスクと内訳は README
 （構成節・タスク表）が正。
 
-| 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方・詳細 |
-| --- | --- | --- | --- |
-| 科学計算スタック | 数値計算・データ処理・可視化のライブラリ群 | 数値実験・データ解析を始めるとき。書き捨ての検証段階では依存を増やさない選択も妥当 | [README](../README.md)（構成・タスク表） |
-| notebook 管理 | notebook 実行環境と運用ツール（出力除去・ペア管理・lint） | Jupyter notebook を研究に使うとき。使わないなら不要 | [docs/optional/notebook.md](optional/notebook.md) |
-| 実験管理 | 実験設定・実験追跡・データ版管理のツール群 | 実験本数が増えて手動管理が破綻し始めたとき。外部へ送信する面を持つツールを含むため、送信先と認証情報の管理は自分の責任になる | [README](../README.md)（構成・タスク表） |
+| 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方 | 詳細リンク |
+| --- | --- | --- | --- | --- |
+| 科学計算スタック | 数値計算・データ処理・可視化のライブラリ群 | 数値実験・データ解析を始めるとき。書き捨ての検証段階では依存を増やさない選択も妥当 | README のタスク表にある導入タスク | [README](../README.md)（構成節） |
+| notebook 管理 | notebook 実行環境と運用ツール（出力除去・ペア管理・lint） | Jupyter notebook を研究に使うとき。使わないなら不要 | 同上 | [docs/optional/notebook.md](optional/notebook.md) |
+| 実験管理 | 実験設定・実験追跡・データ版管理のツール群 | 実験本数が増えて手動管理が破綻し始めたとき。外部へ送信する面を持つツールを含むため、送信先と認証情報の管理は自分の責任になる | 同上 | [README](../README.md)（構成節） |
 
 > 付随注: extras はコアの依存監査ゲートの対象外（コア CI を extras 起因の赤で汚さない
 > ための線引きで、「監査しなくてよい」ではない）。extras を導入したら extras 込みの監査を
@@ -121,20 +121,20 @@ README の「研究成果物の扱い」節を参照。
 リポジトリにはコミットされず、各自のエージェント環境に入る。チームで使う場合も
 導入は各メンバーごとになる。
 
-| 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方・詳細 |
-| --- | --- | --- | --- |
-| GSD | 複数 change を横断するロードマップ / フェーズ管理 | change が複数並走して長期の順序管理が要るとき。**要 Node.js**。単発の change 中心なら OpenSpec 側のタスク管理で足りる | [docs/optional/gsd.md](optional/gsd.md) |
-| Codex クロス AI レビュー | 別 AI（Codex）によるレビューの脚を足す | 自己レビューに別視点を足したいとき。**要 Node.js ＋ ChatGPT サブスクリプション or OpenAI API key**。コードを外部（OpenAI）へ送るため、送信できないプロジェクトでは使わない。トリガは常に人起点 | [docs/optional/codex-review.md](optional/codex-review.md) |
-| caveman hook 自動発火 | 簡素化モードの毎ターン自動適用 | 明示起動では足りないほど常時かけたいとき。**Claude Code 限定**（hook 機構依存）。簡素化原則自体は AGENTS.md に内包済みで、hook 無しでも方針としては効く | [docs/optional/caveman-hook.md](optional/caveman-hook.md) |
+| 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方 | 詳細リンク |
+| --- | --- | --- | --- | --- |
+| GSD | 複数 change を横断するロードマップ / フェーズ管理 | change が複数並走して長期の順序管理が要るとき。**要 Node.js**。単発の change 中心なら OpenSpec 側のタスク管理で足りる | installer を各自の環境で実行 | [docs/optional/gsd.md](optional/gsd.md) |
+| Codex クロス AI レビュー | 別 AI（Codex）によるレビューの脚を足す | 自己レビューに別視点を足したいとき。**要 Node.js ＋ ChatGPT サブスクリプション or OpenAI API key**。コードを外部（OpenAI）へ送るため、送信できないプロジェクトでは使わない。トリガは常に人起点 | Claude Code へ plugin として導入 | [docs/optional/codex-review.md](optional/codex-review.md) |
+| caveman hook 自動発火 | 簡素化モードの毎ターン自動適用 | 明示起動では足りないほど常時かけたいとき。**Claude Code 限定**（hook 機構依存）。簡素化原則自体は AGENTS.md に内包済みで、hook 無しでも方針としては効く | hook を各自の設定に登録 | [docs/optional/caveman-hook.md](optional/caveman-hook.md) |
 
 ### (c) MCP server — エージェントの外部接続を足す
 
 コアの MCP は Context7（ドキュメント参照）のみ。以下は設定への各自追記で足す。
 
-| 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方・詳細 |
-| --- | --- | --- | --- |
-| Serena MCP | セマンティックなコード理解・symbol 単位編集 | 既存コードが育って大規模リファクタリングをするとき。初期の短い修正が主体のうちは過剰 | [docs/optional/serena.md](optional/serena.md) |
-| GitHub MCP | 構造化された Issue / PR / Actions 参照 | コアの gh CLI で足りないとき（構造化出力が要る等）。read-only 既定・token の扱いに注意 | [docs/agents/mcp.md](agents/mcp.md) |
+| 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方 | 詳細リンク |
+| --- | --- | --- | --- | --- |
+| Serena MCP | セマンティックなコード理解・symbol 単位編集 | 既存コードが育って大規模リファクタリングをするとき。初期の短い修正が主体のうちは過剰 | 設定 template へ snippet を各自追記 | [docs/optional/serena.md](optional/serena.md) |
+| GitHub MCP | 構造化された Issue / PR / Actions 参照 | コアの gh CLI で足りないとき（構造化出力が要る等）。read-only 既定・token の扱いに注意 | 3 形態から選んで設定へ各自追記 | [docs/agents/mcp.md](agents/mcp.md) |
 
 ## 7. 詰まったとき
 
