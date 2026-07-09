@@ -149,6 +149,166 @@ def test_doctor_gh_missing_is_fail_only_with_optin(
     assert opted_in.fail == 1, "opt-in 時は gh 不在を FAIL とすること"
 
 
+def _make_change_dir(tmp_path: Path, name: str) -> Path:
+    """proposal.md / tasks.md を備えた完全な change ディレクトリを tmp に作る。"""
+    change = tmp_path / "openspec" / "changes" / name
+    change.mkdir(parents=True)
+    (change / "proposal.md").write_text("# Change\n", encoding="utf-8")
+    (change / "tasks.md").write_text("- [ ] 1. task\n", encoding="utf-8")
+    return change
+
+
+def test_doctor_openspec_output_never_mentions_openspec_init(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """doctor 出力は engine 不在・在席の両経路で `openspec init` を含まないこと。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+
+    # engine 不在経路（未導入案内の WARN 文言を捕捉）
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
+    doctor.check_openspec(doctor.Diagnostics())
+
+    # engine 在席経路（probe の invalid WARN 文言まで捕捉）
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/openspec")
+    _make_change_dir(tmp_path, "some-change")
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (1, "invalid change"))
+    doctor.check_openspec(doctor.Diagnostics())
+
+    out = capsys.readouterr().out
+    assert "openspec init" not in out, "doctor は openspec init を案内しないこと"
+
+
+def test_doctor_openspec_probe_skips_when_no_changes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """changes 空（dir 不在 / .gitkeep のみ）では validate を実行せず出力も無いこと。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        return 0, ""
+
+    monkeypatch.setattr(doctor, "_run", _fake_run)
+
+    doctor._check_openspec_validate(doctor.Diagnostics())  # changes dir 不在
+
+    changes = tmp_path / "openspec" / "changes"
+    changes.mkdir(parents=True)
+    (changes / ".gitkeep").write_text("", encoding="utf-8")
+    doctor._check_openspec_validate(doctor.Diagnostics())  # .gitkeep のみ
+
+    (changes / "archive").mkdir()
+    doctor._check_openspec_validate(doctor.Diagnostics())  # archive/ は change でない
+
+    assert calls == [], "changes 空では validate を実行しないこと"
+    assert capsys.readouterr().out == "", "probe 由来の出力を出さないこと"
+
+
+def test_doctor_openspec_probe_invalid_is_warn_not_fail(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """validate 非ゼロ（invalid）は WARN 1 件・FAIL ゼロで exit 0 を維持すること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    _make_change_dir(tmp_path, "some-change")
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (1, "invalid change"))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    assert (diag.fail, diag.warn) == (0, 1), "invalid は WARN 止まり（非ゲート）"
+    assert diag.exit_code() == 0, "doctor の green（exit 0）を壊さないこと"
+
+
+def test_doctor_openspec_probe_valid_is_ok(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """validate 0（全 change valid）では WARN/FAIL を増やさないこと。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    _make_change_dir(tmp_path, "some-change")
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (0, "ok"))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    assert (diag.fail, diag.warn) == (0, 0), "valid は OK のみ（WARN/FAIL ゼロ）"
+
+
+def test_doctor_openspec_probe_warns_on_incomplete_change_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """proposal.md / tasks.md を欠く change は WARN とし、CLI が対象外として rc 0 を
+    返しても「全 change が valid」と断定しないこと（fail-open 検出）。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    (tmp_path / "openspec" / "changes" / "broken-change").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (0, "No items found to validate."))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    out = capsys.readouterr().out
+    assert (diag.fail, diag.warn) == (0, 1), "必須ファイル欠落は WARN（非ゲート）"
+    assert diag.exit_code() == 0, "doctor の green（exit 0）を壊さないこと"
+    assert "全 change が valid" not in out, "壊れた change があるとき OK と断定しない"
+
+
+def _load_gate_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "gate_under_test", REPO_ROOT / "scripts" / "openspec-validate-gate.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_openspec_validate_gate_fails_without_engine(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """engine 不在時は導入案内を出して非ゼロ終了すること（silent pass しない）。"""
+    gate = _load_gate_module()
+    monkeypatch.setattr(gate.shutil, "which", lambda _name: None)
+    assert gate.main() == 1, "engine 不在で green にしてはならない"
+    out = capsys.readouterr().out
+    assert "npm install -g @fission-ai/openspec" in out
+    assert "docs/agents/workflow.md" in out
+
+
+def test_openspec_validate_gate_fails_on_incomplete_change_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """proposal.md / tasks.md を欠く change は preflight で非ゼロ終了し、
+    CLI を実行しないこと（CLI の fail-open を gate で塞ぐ）。"""
+    gate = _load_gate_module()
+    monkeypatch.setattr(gate, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(gate.shutil, "which", lambda _name: "/usr/bin/openspec")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(gate.subprocess, "run", lambda cmd, **_kw: calls.append(cmd))
+    (tmp_path / "openspec" / "changes" / "broken-change").mkdir(parents=True)
+    assert gate.main() == 1, "必須ファイル欠落 change で green にしてはならない"
+    assert "proposal.md" in capsys.readouterr().out
+    assert calls == [], "preflight FAIL 時は CLI を実行しないこと"
+
+
+def test_openspec_validate_gate_propagates_cli_exit_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """完全な change のみのとき CLI を実行し、exit code をそのまま伝播すること。"""
+    gate = _load_gate_module()
+    monkeypatch.setattr(gate, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(gate.shutil, "which", lambda _name: "/usr/bin/openspec")
+    _make_change_dir(tmp_path, "some-change")
+
+    class _Proc:
+        def __init__(self, returncode: int) -> None:
+            self.returncode = returncode
+
+    for cli_rc in (0, 1):
+        monkeypatch.setattr(
+            gate.subprocess, "run", lambda _cmd, _rc=cli_rc, **_kw: _Proc(_rc)
+        )
+        assert gate.main() == cli_rc, "CLI の exit code を fail-closed で伝播すること"
+
+
 def _make_prune_fixture(tmp_path: Path) -> Path:
     """prune-template-docs.py を tmp へコピーした最小リポジトリ木を作る。
 

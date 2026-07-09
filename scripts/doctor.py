@@ -7,7 +7,8 @@
   ＋ GitHub ワークフロー文脈を **明示 opt-in**（--github / DOCTOR_REQUIRE_GH=1）した
   ときのみ gh コマンド不在を FAIL（ADR-0004 訂正・既定 green を壊さない）。
 - WARN (exit 0) = 未設定・オプション未導入（.env 無し / CONTEXT7_API_KEY 無し /
-  key drift / gh 未認証・未導入（既定）/ OpenSpec engine 不在 / 既定パッケージ名のまま /
+  key drift / gh 未認証・未導入（既定）/ OpenSpec engine 不在・validate invalid /
+  既定パッケージ名のまま /
   Node 未導入 / Task・Git 不在 / skills symlink 壊れ / lock の blocked 在席）。
 - INFO (exit 0) = TEMPLATE_VERSION 表示 / caveman hook 未登録 /
   テンプレ ADR・grill 残存 / オプション層の在席・不在（codex CLI / docker /
@@ -397,13 +398,65 @@ def check_openspec(diag: Diagnostics) -> None:
     else:
         diag.warn_("openspec/project.md が存在しません")
 
-    if shutil.which("openspec") is not None:
-        diag.ok("OpenSpec engine（openspec）が利用可能です")
-    else:
+    if shutil.which("openspec") is None:
         diag.warn_(
             "OpenSpec engine（openspec）が未導入です。Markdown fallback で運用できます"
-            "（docs/agents/workflow.md）。導入する場合は openspec init を各自で実行"
+            "（docs/agents/workflow.md）"
         )
+        return
+    diag.ok("OpenSpec engine（openspec）が利用可能です")
+    _check_openspec_validate(diag)
+
+
+def list_change_dirs(changes_dir: Path) -> list[Path]:
+    """change として数えるディレクトリを列挙する（archive・dot ディレクトリ除外）。
+
+    scripts/openspec-validate-gate.py（FAIL 側ゲート）と共有する単一の正。
+    """
+    if not changes_dir.is_dir():
+        return []
+    return [
+        entry
+        for entry in changes_dir.iterdir()
+        if entry.is_dir() and entry.name != "archive" and not entry.name.startswith(".")
+    ]
+
+
+def broken_change_dirs(change_dirs: list[Path]) -> list[str]:
+    """proposal.md / tasks.md を欠く change 名を返す（validate 対象から漏れる）。"""
+    return sorted(
+        entry.name
+        for entry in change_dirs
+        if not ((entry / "proposal.md").is_file() and (entry / "tasks.md").is_file())
+    )
+
+
+def _check_openspec_validate(diag: Diagnostics) -> None:
+    """change があるときだけ validate probe を実行する（invalid は WARN・非ゲート）。
+
+    read-only。validate の実行自体が失敗した場合（クラッシュ・タイムアウト等）も
+    WARN に留め、FAIL にしない（doctor の green を壊さない）。
+    proposal.md / tasks.md を欠くディレクトリは CLI の validate 対象から漏れる
+    （fail-open）ため、probe 側で WARN として検出し、その場合は OK と断定しない。
+    """
+    change_dirs = list_change_dirs(REPO_ROOT / "openspec" / "changes")
+    if not change_dirs:
+        return
+    broken = broken_change_dirs(change_dirs)
+    for name in broken:
+        diag.warn_(
+            f"change {name} に proposal.md / tasks.md がありません（必須構成・"
+            "docs/agents/workflow.md。openspec validate の対象から漏れます）"
+        )
+    rc, out = _run(["openspec", "validate", "--changes", "--no-interactive"])
+    if rc != 0:
+        summary = out.splitlines()[-1] if out else ""
+        diag.warn_(
+            f"openspec validate が失敗しました（invalid の可能性）: {summary}。"
+            "詳細は task openspec:validate で確認してください"
+        )
+    elif not broken:
+        diag.ok("openspec validate: 全 change が valid です")
 
 
 def check_optional(diag: Diagnostics) -> None:

@@ -74,6 +74,16 @@ tasks:
     cmds:
       - uv run --no-sync python scripts/doctor.py {{.CLI_ARGS}}
 
+  openspec:validate:
+    desc: |
+      OpenSpec change の validate ゲート（invalid で FAIL・非ゼロ終了）。opt-in であり
+      CI / task check / pre-commit には組み込まない（ADR-0002: Node 非コア依存）。
+      engine 必須（不在は導入案内＋非ゼロ終了）。changes 空は対象ゼロで exit 0。
+      preflight: proposal.md / tasks.md を欠く change は CLI の validate 対象から
+      漏れる（fail-open）ため、CLI 実行前に検査して FAIL にする。
+    cmds:
+      - uv run --no-sync python scripts/openspec-validate-gate.py
+
   rename:
     desc: |
       パッケージ改名。既定は --dry-run（差分表示のみ）。適用は --apply を付ける。
