@@ -76,6 +76,28 @@ CLI は tasks の**自動チェックマークを付けない**。各タスク�
 実装に init は不要（CLI は init 無しで `instructions apply` / `status` / `validate` が機能する）。
 engine の生成物もこのテンプレートにはコミットしない（Node 依存・engine version 結合を避けるため）。
 
+## 初めての change（quickstart）
+
+初めて change を切るときの最小手順。各制約の定義本文は上記「OpenSpec engine のアクセス形態と
+Markdown fallback」節（以下 fallback 節）と [openspec/project.md](../../openspec/project.md) が
+owner のままで、ここでは順序だけを示す。
+
+1. **proposal 作成** — `openspec/changes/<id>/proposal.md` に何を・なぜを書く。change
+   ディレクトリは `proposal.md` / `tasks.md` が必須で、振る舞いが変わる場合のみ
+   `specs/<capability>/spec.md` を持つ（構成は上記 fallback 節）。proposal 確定前に
+   `spec-holes` フェーズ 1 で未定義の振る舞いを列挙して潰す（[AGENTS.md](../../AGENTS.md)）。
+2. **spec delta 作成（振る舞い変更時のみ）** — 各 requirement 本文の 1 行目に SHALL / MUST
+   を置く（制約の詳細は上記 fallback 節）。
+3. **tasks 作成** — `tasks.md` をチェックボックス形式の番号付きリストで書く（形式は上記
+   fallback 節）。
+4. **実装** — `openspec instructions apply --change <id>` の指示に沿って進める。engine 不在
+   なら上記 fallback 節の手書き運用で同じ手順を辿る。各タスク完了時に実行主体が `tasks.md`
+   のチェックを `- [x]` へ更新する（チェックボックス規律）。
+5. **PR 前チェック** — `task openspec:validate` で全 change の validate green を確認する。
+   `proposal.md` / `tasks.md` を欠く change は preflight で FAIL する。
+6. **pre-merge close** — マージ前の最終コミットで change ディレクトリを削除し、main に
+   change ディレクトリを載せない（規約は [openspec/project.md](../../openspec/project.md)）。
+
 ## task 単位のサブエージェント委譲
 
 長い change の実行で main のコンテキストが実装詳細（diff・テスト出力・試行錯誤）で埋まり、
