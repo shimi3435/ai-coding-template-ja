@@ -96,7 +96,7 @@ owner のままで、ここでは順序だけを示す。
 5. **PR 前チェック** — `task openspec:validate` で全 change の validate green を確認する
    （engine 必須・CLI 不在時は導入案内を出して FAIL する）。`proposal.md` / `tasks.md` を
    欠く change は preflight で FAIL する。engine を導入しない運用では、上記 fallback 節の
-   最小形式（必須ファイル・SHALL / MUST 1 行目）を手動で確認する。
+   最小形式（全項目）を手動で確認する。
 6. **pre-merge close** — マージ前の最終コミットで change ディレクトリを削除し、main に
    change ディレクトリを載せない（規約は [openspec/project.md](../../openspec/project.md)）。
 
