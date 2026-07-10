@@ -75,12 +75,15 @@ ls -A openspec/changes/   # .gitkeep のみであること
    test -n "${VERSION:-}" && test -n "${RELEASE_COMMIT:-}" \
      && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
      && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
+     && test "$(git ls-remote origin refs/heads/main | cut -f1)" = "${RELEASE_COMMIT}" \
      && git tag -a "v${VERSION}" -m "Release v${VERSION}" "${RELEASE_COMMIT}" \
      && git push origin "v${VERSION}" \
      && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
    # - ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に存在）や
    #   128（remote 不在・認証・ネットワークエラー）は中断する（! での反転は
    #   fatal エラーまで成功扱いにするため使わない）。
+   # - refs/heads/main の live 照合は、step 2 以降に main が進んでいた場合に古い
+   #   commit へ公開 tag を打つのを防ぐ（進んでいたら step 2 からやり直す）。
    # - gh release create の --verify-tag は省略しない（省略すると tag 不在時に gh が
    #   既定 branch から非 annotated tag を自動作成し、上のガードを迂回できるため）。
    ```
