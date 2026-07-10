@@ -62,28 +62,24 @@ ls -A openspec/changes/   # .gitkeep のみであること
    # 公開を防ぐため。echo が出なければ中断し、原因を解消してからやり直す。
    ```
 
-3. annotated tag を作成して push する。`git push --tags` は使わない（ローカルに残る
-   無関係な tag までまとめて公開してしまうため、対象 tag だけを指定して push する）。
-   同名 tag がローカル / リモートに既に無いことの確認を含む（fail-closed）。
+3. annotated tag の作成 → push → GitHub Release の作成を**単一の `&&` ブロック**で行う
+   （途中で失敗すると Release 作成まで進まない fail-closed。tag と Release を別々に
+   実行すると「tag 側のガード失敗後に Release だけ作成」の事故が可能になるため
+   分割しない）。`git push --tags` は使わない（ローカルに残る無関係な tag まで
+   まとめて公開してしまうため、対象 tag だけを指定して push する）。
 
    ```bash
    test -n "${VERSION:-}" \
      && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
      && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
      && git tag -a "v${VERSION}" -m "Release v${VERSION}" \
-     && git push origin "v${VERSION}"
-   # ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に存在）や
-   # 128（remote 不在・認証・ネットワークエラー）は中断する（! での反転は
-   # fatal エラーまで成功扱いにするため使わない）。
-   ```
-
-4. GitHub Release を作成する。`--verify-tag` を必ず付ける（省略すると tag 不在時に
-   gh が既定 branch から非 annotated tag を自動作成し、step 3 のガードを迂回するため。
-   step 3 の push が失敗していればここで中断される）。
-
-   ```bash
-   test -n "${VERSION:-}" \
+     && git push origin "v${VERSION}" \
      && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
+   # - ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に存在）や
+   #   128（remote 不在・認証・ネットワークエラー）は中断する（! での反転は
+   #   fatal エラーまで成功扱いにするため使わない）。
+   # - gh release create の --verify-tag は省略しない（省略すると tag 不在時に gh が
+   #   既定 branch から非 annotated tag を自動作成し、上のガードを迂回できるため）。
    ```
 
 ## スコープ外
