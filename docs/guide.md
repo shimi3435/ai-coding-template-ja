@@ -72,6 +72,9 @@ README の「研究成果物の扱い」節を参照。
 - テストだけ・lint だけの個別実行や、extras / notebook / セキュリティ系のタスクは
   README のタスク表を参照。
 
+初めて OpenSpec change を切るときの最小手順は [docs/agents/workflow.md](agents/workflow.md) の
+「初めての change（quickstart）」節を参照。
+
 ## 5. エージェントに渡す入口
 
 エージェント（Codex / Claude Code）は [AGENTS.md](../AGENTS.md) を作業方針の正として読む。
