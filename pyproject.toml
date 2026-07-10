@@ -81,6 +81,9 @@ testpaths = ["tests"]
 # rename 対象（module 形）: --cov=<module>
 addopts = "--cov=ai_coding_template_ja --cov-report=term-missing"
 
+# fail-under 閾値は意図的に置かない: 研究テンプレでは閾値ゲートが探索的コードの
+# コミットを阻害するため、coverage は term-missing による可視化（情報提供）に徹する。
+# 閾値が要る下流は [tool.coverage.report] の fail_under を自分で足す。
 [tool.coverage.run]
 # rename 対象（module 形）
 source = ["ai_coding_template_ja"]

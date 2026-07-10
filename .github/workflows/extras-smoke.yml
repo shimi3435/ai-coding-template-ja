@@ -10,14 +10,19 @@ on:
 
 jobs:
   extras-smoke:
-    name: extras-smoke (uv sync --all-extras + import)
+    name: extras-smoke (uv sync --all-extras + import) (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      # 片方の version の失敗でもう片方の結果が見えなくなるのを防ぐ。
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Sync (all extras)
         run: uv sync --all-extras
       - name: import smoke (numpy / pandas / jupytext)
