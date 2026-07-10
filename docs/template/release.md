@@ -45,11 +45,16 @@ ls -A openspec/changes/   # .gitkeep のみであること
 ## リリース手順
 
 1. リリース PR で `TEMPLATE_VERSION` を bump し（semver 規律で判定）、main へマージする。
-2. main を最新化し、`TEMPLATE_VERSION` の値を確認する。**tag 名 = `v` +
-   `TEMPLATE_VERSION`** の一致がここで担保される（値をファイルから読んで tag 名に使う）。
+2. main を最新化し、tag を打つ対象が **origin/main と一致した清潔な状態**であることを
+   確認してから、`TEMPLATE_VERSION` の値を読む。**tag 名 = `v` + `TEMPLATE_VERSION`**
+   の一致がここで担保される（値をファイルから読んで tag 名に使う）。
 
    ```bash
-   git switch main && git pull
+   git switch main && git pull --ff-only
+   test -z "$(git status --porcelain)" && echo clean          # 作業ツリーが清潔
+   test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" && echo synced
+   # ↑ ローカル main に未 push commit があると tag がそれを指してしまうため一致必須
+
    VERSION=$(cat TEMPLATE_VERSION)
    echo "tag 名: v${VERSION}"   # TEMPLATE_VERSION と一致していることを確認
    ```
