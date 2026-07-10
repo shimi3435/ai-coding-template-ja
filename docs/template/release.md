@@ -112,8 +112,10 @@ ls -A openspec/changes/   # .gitkeep のみであること
      ```bash
      unset VERSION
      VERSION=$(cat TEMPLATE_VERSION) \
-       && test "$(git ls-remote origin "refs/tags/v${VERSION}" | cut -f1)" = "$(git rev-parse "v${VERSION}")" \
+       && test "$(git ls-remote --refs origin "refs/tags/v${VERSION}" | cut -f1)" = "$(git rev-parse "v${VERSION}")" \
        && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
+     # ls-remote の --refs は annotated tag の peeled（^{}）行を確実に除外する
+     # （出力が複数行になると比較が常に失敗し、再開が dead-end になるため）。
      ```
 
 ## スコープ外
