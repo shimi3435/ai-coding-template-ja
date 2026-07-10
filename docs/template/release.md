@@ -57,9 +57,12 @@ ls -A openspec/changes/   # .gitkeep のみであること
      && test -z "$(git status --porcelain)" \
      && test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" \
      && VERSION=$(cat TEMPLATE_VERSION) \
-     && echo "tag 名: v${VERSION}"
+     && RELEASE_COMMIT=$(git rev-parse HEAD) \
+     && echo "tag 名: v${VERSION} → ${RELEASE_COMMIT}"
    # 清潔・origin/main 一致の確認は、未 push commit や作業中の変更を指す tag の
    # 公開を防ぐため。echo が出なければ中断し、原因を解消してからやり直す。
+   # RELEASE_COMMIT はここで検証した commit の固定値。step 3 はこの値に tag を
+   # 付けるため、step 2〜3 の間に HEAD が動いても検証済み commit だけが対象になる。
    ```
 
 3. annotated tag の作成 → push → GitHub Release の作成を**単一の `&&` ブロック**で行う
@@ -69,10 +72,10 @@ ls -A openspec/changes/   # .gitkeep のみであること
    まとめて公開してしまうため、対象 tag だけを指定して push する）。
 
    ```bash
-   test -n "${VERSION:-}" \
+   test -n "${VERSION:-}" && test -n "${RELEASE_COMMIT:-}" \
      && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
      && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
-     && git tag -a "v${VERSION}" -m "Release v${VERSION}" \
+     && git tag -a "v${VERSION}" -m "Release v${VERSION}" "${RELEASE_COMMIT}" \
      && git push origin "v${VERSION}" \
      && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
    # - ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に存在）や
@@ -84,12 +87,14 @@ ls -A openspec/changes/   # .gitkeep のみであること
 
    **部分完了からの再開**: tag の push までは成功したが `gh release create` が失敗した
    （認証・ネットワーク等）場合、上のブロックを再実行しても tag 存在ガードで止まる。
-   その場合は tag が意図した commit（origin/main の先頭）を指すことを確認してから、
-   Release 作成のみを再実行する（Release が既に存在すれば create がエラーで止まる=安全側）。
+   その場合は**公開済み tag = 手元で作った tag** であることを remote への実問い合わせ
+   （`ls-remote`・ローカルの remote-tracking ref を信用しない）で確認してから、Release
+   作成のみを再実行する（Release が既に存在すれば create がエラーで止まる=安全側。
+   remote 問い合わせが失敗した場合は比較が空文字になり中断する=fail-closed）。
 
    ```bash
    test -n "${VERSION:-}" \
-     && test "$(git rev-parse "v${VERSION}^{commit}")" = "$(git rev-parse origin/main)" \
+     && test "$(git ls-remote origin "refs/tags/v${VERSION}" | cut -f1)" = "$(git rev-parse "v${VERSION}")" \
      && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
    ```
 
