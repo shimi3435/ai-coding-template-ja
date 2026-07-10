@@ -44,6 +44,10 @@ ls -A openspec/changes/   # .gitkeep のみであること
 
 ## リリース手順
 
+**前提: step 2〜3 の間は main へ他の変更をマージ・push しない**（照合済み commit と
+公開 tag の対象がずれる TOCTOU を運用で閉じる。単独保守者の直列作業を前提とし、
+複数人が同時に main を動かす体制になったら freeze / lock 手順の導入を検討する）。
+
 1. リリース PR で `TEMPLATE_VERSION` を bump し（semver 規律で判定）、main へマージする。
 2. main を最新化し、tag を打つ対象が **origin/main と一致した清潔な状態**であることを
    確認してから、`TEMPLATE_VERSION` の値を読む。**tag 名 = `v` + `TEMPLATE_VERSION`**
