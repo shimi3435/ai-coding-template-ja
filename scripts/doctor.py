@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -431,13 +432,59 @@ def broken_change_dirs(change_dirs: list[Path]) -> list[str]:
     )
 
 
+# 整形式 checkbox 行（インデント可・大文字 X 可）。tasks.md の必須形式は
+# docs/agents/workflow.md（fallback 節）。
+_TASKS_CHECKBOX_RE = re.compile(r"^ *- \[[ xX]\] ")
+# checkbox を意図したと見える崩れ形（`- []`・`- [x]foo`・`- [-]`/`- [o]` 等の不正状態・
+# tab インデント等）。括弧内は 0〜1 文字の任意文字を対象にする（Codex P2: x/space 以外の
+# 1 文字状態も検出する）。markdown リンク（`- [text](url)`）は括弧内 2 文字以上のため
+# 一致しない（誤検知防止）。
+_TASKS_CHECKBOX_LIKE_RE = re.compile(r"^\s*-\s*\[[^\]]?\]")
+
+
+def malformed_tasks_changes(change_dirs: list[Path]) -> list[str]:
+    """tasks.md の checkbox 形式不備を change 名・行番号付きメッセージで返す。
+
+    scripts/openspec-validate-gate.py（FAIL 側）と doctor probe（WARN 側）で共有する
+    単一の正。tasks.md を持つ change のみ対象（欠落は broken_change_dirs が担当）。
+    openspec validate は tasks.md の checkbox 形式を検証しないため、engine 有無に
+    関わらずこの検査が唯一の機械検出線になる。
+    """
+    problems: list[str] = []
+    for entry in sorted(change_dirs):
+        tasks_path = entry / "tasks.md"
+        if not tasks_path.is_file():
+            continue
+        try:
+            lines = tasks_path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            problems.append(f"change {entry.name}: tasks.md を UTF-8 で読めません")
+            continue
+        well_formed = 0
+        for lineno, line in enumerate(lines, start=1):
+            if _TASKS_CHECKBOX_RE.match(line):
+                well_formed += 1
+            elif _TASKS_CHECKBOX_LIKE_RE.match(line):
+                problems.append(
+                    f"change {entry.name}: tasks.md:{lineno} の checkbox 形式が"
+                    f"崩れています（{line.strip()!r}・形式は docs/agents/workflow.md）"
+                )
+        if well_formed == 0:
+            problems.append(
+                f"change {entry.name}: tasks.md に整形式の checkbox 行"
+                "（`- [ ] ` / `- [x] `）がありません（docs/agents/workflow.md）"
+            )
+    return problems
+
+
 def _check_openspec_validate(diag: Diagnostics) -> None:
     """change があるときだけ validate probe を実行する（invalid は WARN・非ゲート）。
 
     read-only。validate の実行自体が失敗した場合（クラッシュ・タイムアウト等）も
     WARN に留め、FAIL にしない（doctor の green を壊さない）。
-    proposal.md / tasks.md を欠くディレクトリは CLI の validate 対象から漏れる
-    （fail-open）ため、probe 側で WARN として検出し、その場合は OK と断定しない。
+    proposal.md / tasks.md を欠くディレクトリは CLI の validate 対象から漏れ
+    （fail-open）、tasks.md の checkbox 形式は CLI が検証しないため、いずれも
+    probe 側で WARN として検出し、その場合は OK と断定しない。
     """
     change_dirs = list_change_dirs(REPO_ROOT / "openspec" / "changes")
     if not change_dirs:
@@ -448,6 +495,9 @@ def _check_openspec_validate(diag: Diagnostics) -> None:
             f"change {name} に proposal.md / tasks.md がありません（必須構成・"
             "docs/agents/workflow.md。openspec validate の対象から漏れます）"
         )
+    malformed = malformed_tasks_changes(change_dirs)
+    for message in malformed:
+        diag.warn_(message)
     rc, out = _run(["openspec", "validate", "--changes", "--no-interactive"])
     if rc != 0:
         summary = out.splitlines()[-1] if out else ""
@@ -455,7 +505,7 @@ def _check_openspec_validate(diag: Diagnostics) -> None:
             f"openspec validate が失敗しました（invalid の可能性）: {summary}。"
             "詳細は task openspec:validate で確認してください"
         )
-    elif not broken:
+    elif not broken and not malformed:
         diag.ok("openspec validate: 全 change が valid です")
 
 
