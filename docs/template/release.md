@@ -27,7 +27,8 @@
 先に解消する）。
 
 1. `task check` が green。
-2. `task openspec:validate` が green（engine 必須の opt-in ゲート）。
+2. `task openspec:validate` が green（engine 必須のゲート。CI の `openspec-validate`
+   ジョブでも同じ gate が走る）。
 3. `openspec/changes/` が `.gitkeep` のみ（pre-merge close 規約の帰結。規約本文は
    [openspec/project.md](../../openspec/project.md)）。
 

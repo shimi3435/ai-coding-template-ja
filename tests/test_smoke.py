@@ -261,6 +261,69 @@ def test_doctor_openspec_probe_warns_on_incomplete_change_dir(
     assert "全 change が valid" not in out, "壊れた change があるとき OK と断定しない"
 
 
+def test_malformed_tasks_changes_detection(tmp_path: Path) -> None:
+    """checkbox ゼロ・もどき行・非 UTF-8 を検出し、整形式・リンク・CRLF・大文字 X・
+    インデントは誤検知しないこと。"""
+    doctor = _load_doctor_module()
+    changes = tmp_path / "openspec" / "changes"
+
+    ok = changes / "ok-change"
+    ok.mkdir(parents=True)
+    (ok / "tasks.md").write_text(
+        "# Tasks\r\n"
+        "- [x] 1. done\r\n"
+        "- [X] 2. 大文字 X\r\n"
+        "  - [ ] 2-1. インデント\r\n"
+        "- [workflow.md](../../docs/agents/workflow.md) を参照\r\n",
+        encoding="utf-8",
+    )
+
+    no_checkbox = changes / "no-checkbox"
+    no_checkbox.mkdir(parents=True)
+    (no_checkbox / "tasks.md").write_text(
+        "# Tasks\n- 1. checkbox なし\n", encoding="utf-8"
+    )
+
+    mangled = changes / "mangled"
+    mangled.mkdir(parents=True)
+    (mangled / "tasks.md").write_text(
+        "- [ ] 1. ok\n- [] 2. 空括弧\n- [x]3. 空白なし\n", encoding="utf-8"
+    )
+
+    not_utf8 = changes / "not-utf8"
+    not_utf8.mkdir(parents=True)
+    (not_utf8 / "tasks.md").write_bytes(b"\xff\xfe- [ ] 1. task\n")
+
+    problems = doctor.malformed_tasks_changes(doctor.list_change_dirs(changes))
+    text = "\n".join(problems)
+    assert "ok-change" not in text, "整形式・リンク・CRLF を誤検知しないこと"
+    assert "no-checkbox" in text, "checkbox 行ゼロを検出すること"
+    assert "mangled" in text and "tasks.md:2" in text and "tasks.md:3" in text, (
+        "もどき行を行番号付きで検出すること"
+    )
+    assert "not-utf8" in text, "非 UTF-8 を fail-closed で検出すること"
+
+
+def test_doctor_openspec_probe_warns_on_malformed_tasks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """malformed tasks.md は WARN とし、CLI rc 0 でも「全 change が valid」と
+    断定しないこと（CLI は tasks.md 形式を検証しないため）。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    change = tmp_path / "openspec" / "changes" / "no-checkbox"
+    change.mkdir(parents=True)
+    (change / "proposal.md").write_text("# Change\n", encoding="utf-8")
+    (change / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "_run", lambda _cmd: (0, "ok"))
+    diag = doctor.Diagnostics()
+    doctor._check_openspec_validate(diag)
+    out = capsys.readouterr().out
+    assert (diag.fail, diag.warn) == (0, 1), "形式不備は WARN 止まり（非ゲート）"
+    assert diag.exit_code() == 0, "doctor の green（exit 0）を壊さないこと"
+    assert "全 change が valid" not in out, "形式不備があるとき OK と断定しない"
+
+
 def _load_gate_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "gate_under_test", REPO_ROOT / "scripts" / "openspec-validate-gate.py"
@@ -296,6 +359,25 @@ def test_openspec_validate_gate_fails_on_incomplete_change_dir(
     (tmp_path / "openspec" / "changes" / "broken-change").mkdir(parents=True)
     assert gate.main() == 1, "必須ファイル欠落 change で green にしてはならない"
     assert "proposal.md" in capsys.readouterr().out
+    assert calls == [], "preflight FAIL 時は CLI を実行しないこと"
+
+
+def test_openspec_validate_gate_fails_on_malformed_tasks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """tasks.md の checkbox 形式不備は preflight で非ゼロ終了し、CLI を実行しない
+    こと（CLI は形式を検証しないため gate 側で塞ぐ）。"""
+    gate = _load_gate_module()
+    monkeypatch.setattr(gate, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(gate.shutil, "which", lambda _name: "/usr/bin/openspec")
+    calls: list[list[str]] = []
+    monkeypatch.setattr(gate.subprocess, "run", lambda cmd, **_kw: calls.append(cmd))
+    change = tmp_path / "openspec" / "changes" / "no-checkbox"
+    change.mkdir(parents=True)
+    (change / "proposal.md").write_text("# Change\n", encoding="utf-8")
+    (change / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
+    assert gate.main() == 1, "checkbox 行ゼロの change で green にしてはならない"
+    assert "checkbox" in capsys.readouterr().out
     assert calls == [], "preflight FAIL 時は CLI を実行しないこと"
 
 

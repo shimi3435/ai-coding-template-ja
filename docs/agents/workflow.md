@@ -37,7 +37,8 @@ OpenSpec engine には **2 つのアクセス形態**があり、両者は別物
   の `Progress` で確認する**（status では見落とす）。
 - `openspec validate <id>` … proposal / spec delta の形式検証（SHALL 1 行目制約など）。
   PR 前チェック: change を含むブランチでは `task openspec:validate`（invalid で FAIL する
-  opt-in ゲート・engine 必須）で全 change の validate green を確認する。
+  ゲート・engine 必須）で全 change の validate green を確認する。CI（ci.yml の
+  `openspec-validate` ジョブ）でも同じ gate が走る（空の changes/ では trivially green）。
 - `openspec archive <id>` … change を確定し `specs/` へマージする。ただし**このテンプレートは
   archive せずマージ前の削除で close する**（テンプレ自身の change 運用は
   [openspec/project.md](../../openspec/project.md)）。
@@ -95,8 +96,9 @@ owner のままで、ここでは順序だけを示す。
    のチェックを `- [x]` へ更新する（チェックボックス規律）。
 5. **PR 前チェック** — `task openspec:validate` で全 change の validate green を確認する
    （engine 必須・CLI 不在時は導入案内を出して FAIL する）。`proposal.md` / `tasks.md` を
-   欠く change は preflight で FAIL する。engine を導入しない運用では、上記 fallback 節の
-   最小形式（全項目）を手動で確認する。
+   欠く change と、`tasks.md` に整形式の checkbox 行（`- [ ] ` / `- [x] `）が無い・
+   checkbox が崩れている change は preflight で FAIL する。engine を導入しない運用では、
+   上記 fallback 節の最小形式（全項目）を手動で確認する。
 6. **pre-merge close** — マージ前の最終コミットで change ディレクトリを削除し、main に
    change ディレクトリを載せない（規約は [openspec/project.md](../../openspec/project.md)）。
 
