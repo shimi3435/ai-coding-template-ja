@@ -10,7 +10,7 @@
 ## 取り込み対象を特定する
 
 - テンプレの GitHub リポジトリの **Releases** を見る（`vX.Y.Z` tag ごとの変更一覧。
-  `v` 以下は `TEMPLATE_VERSION` と対応する）。
+  `v` に続く部分は `TEMPLATE_VERSION` と対応する）。
 - より細かい単位では **PR 履歴**（merged PR）を見る。取り込みたい PR の
   merge commit SHA（または個別コミット SHA）を控える。
 - 自分のリポジトリの由来版はルートの `TEMPLATE_VERSION` で分かる（`task doctor` も
