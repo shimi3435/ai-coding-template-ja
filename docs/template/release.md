@@ -82,6 +82,17 @@ ls -A openspec/changes/   # .gitkeep のみであること
    #   既定 branch から非 annotated tag を自動作成し、上のガードを迂回できるため）。
    ```
 
+   **部分完了からの再開**: tag の push までは成功したが `gh release create` が失敗した
+   （認証・ネットワーク等）場合、上のブロックを再実行しても tag 存在ガードで止まる。
+   その場合は tag が意図した commit（origin/main の先頭）を指すことを確認してから、
+   Release 作成のみを再実行する（Release が既に存在すれば create がエラーで止まる=安全側）。
+
+   ```bash
+   test -n "${VERSION:-}" \
+     && test "$(git rev-parse "v${VERSION}^{commit}")" = "$(git rev-parse origin/main)" \
+     && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
+   ```
+
 ## スコープ外
 
 - tag の削除・打ち直しはスコープ外（通常の git 運用として扱う）。
