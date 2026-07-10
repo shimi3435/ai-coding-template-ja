@@ -49,45 +49,40 @@ ls -A openspec/changes/   # .gitkeep のみであること
 複数人が同時に main を動かす体制になったら freeze / lock 手順の導入を検討する）。
 
 1. リリース PR で `TEMPLATE_VERSION` を bump し（semver 規律で判定）、main へマージする。
-2. main を最新化し、tag を打つ対象が **origin/main と一致した清潔な状態**であることを
-   確認してから、`TEMPLATE_VERSION` の値を読む。**tag 名 = `v` + `TEMPLATE_VERSION`**
-   の一致がここで担保される（値をファイルから読んで tag 名に使う）。ブロック全体を
-   `&&` で連結してあり、**途中のチェックが失敗すると後続は実行されない**（fail-closed。
-   `VERSION` も設定されないため後続ステップも進まない）。
+2. main を最新化する（検証と変数設定はすべて step 3 のブロック内で行う。ブロックの
+   外で設定した変数を step 3 は使わない）。
 
    ```bash
-   git switch main \
-     && git pull --ff-only \
-     && test -z "$(git status --porcelain)" \
-     && test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" \
-     && VERSION=$(cat TEMPLATE_VERSION) \
-     && RELEASE_COMMIT=$(git rev-parse HEAD) \
-     && echo "tag 名: v${VERSION} → ${RELEASE_COMMIT}"
-   # 清潔・origin/main 一致の確認は、未 push commit や作業中の変更を指す tag の
-   # 公開を防ぐため。echo が出なければ中断し、原因を解消してからやり直す。
-   # RELEASE_COMMIT はここで検証した commit の固定値。step 3 はこの値に tag を
-   # 付けるため、step 2〜3 の間に HEAD が動いても検証済み commit だけが対象になる。
+   git switch main && git pull --ff-only
    ```
 
-3. annotated tag の作成 → push → GitHub Release の作成を**単一の `&&` ブロック**で行う
-   （途中で失敗すると Release 作成まで進まない fail-closed。tag と Release を別々に
-   実行すると「tag 側のガード失敗後に Release だけ作成」の事故が可能になるため
-   分割しない）。`git push --tags` は使わない（ローカルに残る無関係な tag まで
-   まとめて公開してしまうため、対象 tag だけを指定して push する）。
+3. 検証（清潔・live main 一致・同名 tag 不在）→ annotated tag の作成 → push →
+   GitHub Release の作成を**単一の `&&` ブロック**で行う（途中で失敗すると後続は
+   実行されない fail-closed。分割すると「前段の失敗後に後段だけ実行」の事故が可能に
+   なるため分割しない）。冒頭の `unset` で同じ shell に残った古い変数を拒否し、
+   `VERSION` / `RELEASE_COMMIT` は必ずこのブロック内で導出する。`git push --tags` は
+   使わない（ローカルに残る無関係な tag までまとめて公開してしまうため、対象 tag
+   だけを指定して push する）。
 
    ```bash
-   test -n "${VERSION:-}" && test -n "${RELEASE_COMMIT:-}" \
+   unset VERSION RELEASE_COMMIT
+   test -z "$(git status --porcelain)" \
+     && VERSION=$(cat TEMPLATE_VERSION) \
+     && RELEASE_COMMIT=$(git rev-parse HEAD) \
+     && test "$(git ls-remote origin refs/heads/main | cut -f1)" = "${RELEASE_COMMIT}" \
      && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
      && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
-     && test "$(git ls-remote origin refs/heads/main | cut -f1)" = "${RELEASE_COMMIT}" \
      && git tag -a "v${VERSION}" -m "Release v${VERSION}" "${RELEASE_COMMIT}" \
      && git push origin "v${VERSION}" \
      && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
-   # - ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に存在）や
-   #   128（remote 不在・認証・ネットワークエラー）は中断する（! での反転は
+   # - tag 名 = `v` + TEMPLATE_VERSION の一致は、値をファイルから読んで tag 名に
+   #   使うことで担保される。
+   # - refs/heads/main の live 照合は、HEAD が remote の最新 main でない（未 push
+   #   commit・同期漏れ・step 2 以降に main が進んだ）場合に古い commit へ公開 tag を
+   #   打つのを防ぐ（照合に失敗したら step 2 からやり直す）。
+   # - tag の ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に
+   #   存在）や 128（remote 不在・認証・ネットワークエラー）は中断する（! での反転は
    #   fatal エラーまで成功扱いにするため使わない）。
-   # - refs/heads/main の live 照合は、step 2 以降に main が進んでいた場合に古い
-   #   commit へ公開 tag を打つのを防ぐ（進んでいたら step 2 からやり直す）。
    # - gh release create の --verify-tag は省略しない（省略すると tag 不在時に gh が
    #   既定 branch から非 annotated tag を自動作成し、上のガードを迂回できるため）。
    ```
@@ -99,7 +94,8 @@ ls -A openspec/changes/   # .gitkeep のみであること
      再実行すればよい。
 
      ```bash
-     test -n "${VERSION:-}" \
+     unset VERSION
+     VERSION=$(cat TEMPLATE_VERSION) \
        && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
        && git tag -d "v${VERSION}"
      # 削除できたら step 3 のブロックを再実行する。remote に tag が既にある場合は
@@ -114,7 +110,8 @@ ls -A openspec/changes/   # .gitkeep のみであること
      中断する=fail-closed）。
 
      ```bash
-     test -n "${VERSION:-}" \
+     unset VERSION
+     VERSION=$(cat TEMPLATE_VERSION) \
        && test "$(git ls-remote origin "refs/tags/v${VERSION}" | cut -f1)" = "$(git rev-parse "v${VERSION}")" \
        && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
      ```
