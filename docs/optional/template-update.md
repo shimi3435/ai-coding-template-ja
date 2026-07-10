@@ -18,7 +18,17 @@
 
 ## cherry-pick 手順（最小形）
 
+コンフリクト解決・prune 済み分岐（後述）を含め、全手順は手順 0 の clean preflight を
+通した作業ブランチ上で行うことが共通前提。
+
 ```bash
+# 0. 作業ツリー・index が清潔なことを確認してから作業ブランチを切る（fail-closed。
+#    汚れたまま進めると WIP がテンプレ更新コミットへ混入し、TEMPLATE_VERSION の
+#    未コミット編集が手順 4 の restore で破棄される。汚れていたら先に
+#    commit / stash してから再実行する）
+test -z "$(git status --porcelain)" \
+  && git switch -c template-update
+
 # 1. テンプレを remote として追加（初回のみ）
 git remote add template <template-repo-url>
 
