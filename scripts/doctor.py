@@ -435,9 +435,11 @@ def broken_change_dirs(change_dirs: list[Path]) -> list[str]:
 # 整形式 checkbox 行（インデント可・大文字 X 可）。tasks.md の必須形式は
 # docs/agents/workflow.md（fallback 節）。
 _TASKS_CHECKBOX_RE = re.compile(r"^ *- \[[ xX]\] ")
-# checkbox を意図したと見える崩れ形（`- []`・`- [x]foo`・tab インデント等）。
-# markdown リンク（`- [text](url)`）は括弧内 2 文字以上のため一致しない（誤検知防止）。
-_TASKS_CHECKBOX_LIKE_RE = re.compile(r"^\s*-\s*\[[ xX]?\]")
+# checkbox を意図したと見える崩れ形（`- []`・`- [x]foo`・`- [-]`/`- [o]` 等の不正状態・
+# tab インデント等）。括弧内は 0〜1 文字の任意文字を対象にする（Codex P2: x/space 以外の
+# 1 文字状態も検出する）。markdown リンク（`- [text](url)`）は括弧内 2 文字以上のため
+# 一致しない（誤検知防止）。
+_TASKS_CHECKBOX_LIKE_RE = re.compile(r"^\s*-\s*\[[^\]]?\]")
 
 
 def malformed_tasks_changes(change_dirs: list[Path]) -> list[str]:

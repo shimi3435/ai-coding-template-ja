@@ -287,7 +287,9 @@ def test_malformed_tasks_changes_detection(tmp_path: Path) -> None:
     mangled = changes / "mangled"
     mangled.mkdir(parents=True)
     (mangled / "tasks.md").write_text(
-        "- [ ] 1. ok\n- [] 2. 空括弧\n- [x]3. 空白なし\n", encoding="utf-8"
+        "- [ ] 1. ok\n- [] 2. 空括弧\n- [x]3. 空白なし\n"
+        "- [-] 4. 不正状態\n- [o] 5. 不正状態\n",
+        encoding="utf-8",
     )
 
     not_utf8 = changes / "not-utf8"
@@ -300,6 +302,9 @@ def test_malformed_tasks_changes_detection(tmp_path: Path) -> None:
     assert "no-checkbox" in text, "checkbox 行ゼロを検出すること"
     assert "mangled" in text and "tasks.md:2" in text and "tasks.md:3" in text, (
         "もどき行を行番号付きで検出すること"
+    )
+    assert "tasks.md:4" in text and "tasks.md:5" in text, (
+        "x/space 以外の 1 文字不正状態も検出すること（Codex P2）"
     )
     assert "not-utf8" in text, "非 UTF-8 を fail-closed で検出すること"
 
