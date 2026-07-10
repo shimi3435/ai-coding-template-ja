@@ -22,10 +22,11 @@ repos:
         require_serial: true
 
   # tag pin（SHA pin でなく v5.0.0・dependabot 監視外）は意図的（CI action の SHA pin
-  # 方針との非対称）: pre-commit hooks は CI で実行されず（CI は ruff 等を直接実行）
-  # secrets への曝露面が無い。dependabot に pre-commit ecosystem サポートが無く、
-  # SHA pin にすると更新追跡手段を失う。tag pin は pre-commit の慣行で
-  # `pre-commit autoupdate` が機能する。
+  # 方針との非対称）: pre-commit hooks はローカル実行のみで CI では実行されず
+  # （CI は ruff 等を直接実行）、CI secrets への曝露面が無い低リスク面。tag pin は
+  # pre-commit の慣行で `pre-commit autoupdate` が機能する。dependabot は pre-commit
+  # ecosystem に対応済み（2026-03）だが、現 dependabot.yml は github-actions のみを
+  # 対象とし、この非対称は許容する（要るなら ecosystem 追加で監視可能）。
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

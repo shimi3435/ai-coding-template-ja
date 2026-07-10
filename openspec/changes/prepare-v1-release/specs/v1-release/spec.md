@@ -81,7 +81,8 @@ minor=機能 / skill / docs 追加・patch=修正）・`TEMPLATE_VERSION` の bu
 （リリース単位・リリース PR に含める）・リリース前提チェック（`task check` green・
 `task openspec:validate` green・`openspec/changes/` が `.gitkeep` のみ）・
 pyproject.toml の `version` は 0.1.0 のまま非同期とする理由（下流所有物）・
-annotated tag（tag 名 = `v` + `TEMPLATE_VERSION` の一致確認）→ GitHub Release の手順。
+annotated tag（tag 名 = `v` + `TEMPLATE_VERSION` の一致確認）→ GitHub Release の手順・
+`extras-smoke.yml` のリリース前手動実行の推奨（コアゲート対象外のため必須にしない）。
 
 #### Scenario: リリース前に validate red
 

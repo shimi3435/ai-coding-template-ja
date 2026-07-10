@@ -28,10 +28,12 @@ fail-under なし）を 1.0 前に解消する（backlog #2 / #3 / #4 / #5 / #9 
      このゲートの意図）。ローカルでの 3.13 実行確認は行わず CI に委ねる（後述の検証方針）。
 2. **(b) pin 非対称の意図記録**: `.pre-commit-config.yaml` の `pre-commit-hooks` repo が
    tag pin（v5.0.0）で dependabot 監視外である非対称を、**意図的**として同ファイルの
-   当該 repo 直上コメントに記録する（修正しない）。根拠: pre-commit hooks は CI で実行
-   されず（CI は ruff 等を直接実行）secrets 曝露面が無い・dependabot に pre-commit
-   ecosystem サポートが無く SHA pin にすると更新追跡手段を失う・tag pin は pre-commit
-   慣行（`pre-commit autoupdate` が機能する）。
+   当該 repo 直上コメントに記録する（修正しない）。根拠: pre-commit hooks はローカル
+   実行のみで CI では実行されず（CI は ruff 等を直接実行）CI secrets への曝露面が無い
+   低リスク面・tag pin は pre-commit 慣行（`pre-commit autoupdate` が機能する）。
+   dependabot は pre-commit ecosystem に対応済み（2026-03・Codex R1 指摘で事実確認）
+   だが、現 dependabot.yml は github-actions のみを対象とし非対称を許容する
+   （ecosystem 追加は post-1.0 の backlog）。
 3. **(c) coverage fail-under なしの意図記録**: pyproject.toml の coverage 設定
    （`[tool.coverage.run]` 付近）に、fail-under 閾値を置かないことを**意図的**として
    コメント記録する（修正しない）。根拠: 研究テンプレで閾値ゲートは探索的コードの
@@ -55,8 +57,9 @@ fail-under なし）を 1.0 前に解消する（backlog #2 / #3 / #4 / #5 / #9 
    リリース前提チェック（`task check` green・`task openspec:validate` green 必須・
    `openspec/changes/` が `.gitkeep` のみ）・pyproject version は 0.1.0 のまま非同期
    （下流所有物のため触らない・理由 1 行）・annotated tag（tag 名 = `v` +
-   TEMPLATE_VERSION の一致確認を含む）→ GitHub Release の手順。
-   tag の削除・打ち直しはスコープ外（通常の git 運用）。
+   TEMPLATE_VERSION の一致確認を含む）→ GitHub Release の手順・extras-smoke.yml の
+   リリース前手動実行の推奨（extras はコアゲート対象外のため必須にしない。Codex R1
+   指摘の反映）。tag の削除・打ち直しはスコープ外（通常の git 運用）。
 7. **TEMPLATE_VERSION bump**: ルートの `TEMPLATE_VERSION` を `0.1.0` → `1.0.0` へ更新する。
    1.0.0 とする根拠は v1.0 宣言の操作的定義そのもの。pyproject.toml の `version` は
    触らない。既存テスト（tests/test_smoke.py）は単一行 semver 形式のみ検査するため
@@ -67,8 +70,11 @@ fail-under なし）を 1.0 前に解消する（backlog #2 / #3 / #4 / #5 / #9 
 
 ## Non-goals / スコープ外（spec-holes フェーズ 1 反映）
 
-- **Python 3.14+ の matrix 追加**: grill 合意（Q4）は 3.13 まで。3.14 追加の是非は
-  post-1.0 で判断する（backlog 記録）。
+- **Python 3.14+ の matrix 追加**: grill 合意（Q4）は 3.13 まで。3.14 追加（または
+  requires-python の上限明示）の是非は post-1.0 で判断する（backlog 記録。
+  Codex R1 も指摘・スコープ外維持）。
+- **dependabot への pre-commit ecosystem 追加**: dependabot は対応済み（2026-03）だが
+  監視対象の拡張は記録消化のスコープを超えるため post-1.0 で判断する（backlog 記録）。
 - **pin 非対称・coverage fail-under の「修正」**: 記録のみで消化（grill Q4）。
 - **codex plugin の将来仕様変更への継続追随**: 今回の点検は v1.0.5 時点のスナップショット。
 - **guide.md への template-update 配線**: guide §6 は「導入するオプション」3 グループの
