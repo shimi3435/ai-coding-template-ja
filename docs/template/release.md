@@ -38,7 +38,7 @@ ls -A openspec/changes/   # .gitkeep のみであること
 ```
 
 加えて、extras の導入手順検証線 `extras-smoke.yml`（workflow_dispatch 専用・
-3.12 / 3.13 matrix）のリリース前の手動実行を**推奨**する。extras はコアゲート対象外
+Python matrix の対象版は同ファイルが正）のリリース前の手動実行を**推奨**する。extras はコアゲート対象外
 （コア CI を extras 上流起因の赤で汚さない分離設計）のため必須にはしないが、赤の
 まま出す場合はその旨と理由を Release notes に記す。
 
