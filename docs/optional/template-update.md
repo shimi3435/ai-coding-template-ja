@@ -25,15 +25,23 @@ git remote add template <template-repo-url>
 # 2. テンプレの履歴を取得
 git fetch template
 
-# 3. 取り込みたいコミットを cherry-pick
-git cherry-pick <commit-sha>
+# 3. 取り込みたいコミットを cherry-pick（--no-commit でコミット前に一旦止める。
+#    clean apply でも TEMPLATE_VERSION の bump 等の不要な変更が自動コミットされる
+#    のを防ぐため）
+git cherry-pick --no-commit <commit-sha>
 
 # PR の merge commit を取り込む場合は親を指定する
-git cherry-pick -m 1 <merge-commit-sha>
+git cherry-pick --no-commit -m 1 <merge-commit-sha>
+
+# 4. TEMPLATE_VERSION の変更が紛れていたら除外し（由来スタンプは据え置き・後述）、
+#    取り込み内容を確認してからコミットする
+git restore --staged --worktree TEMPLATE_VERSION
+git status
+git commit
 ```
 
-コンフリクトが出たら手動で解決し、`git add` → `git cherry-pick --continue` で続行する
-（やめる場合は `git cherry-pick --abort`）。
+コンフリクトが出たら手動で解決し、`git add` の後、`--no-commit` 運用ではそのまま
+上記 4 の確認 → `git commit` に進む（やめる場合は `git cherry-pick --abort`）。
 
 ## rename 済み下流の注意（コンフリクト前提）
 
