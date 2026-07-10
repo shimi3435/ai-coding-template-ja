@@ -77,11 +77,13 @@ ls -A openspec/changes/   # .gitkeep のみであること
    # fatal エラーまで成功扱いにするため使わない）。
    ```
 
-4. GitHub Release を作成する。
+4. GitHub Release を作成する。`--verify-tag` を必ず付ける（省略すると tag 不在時に
+   gh が既定 branch から非 annotated tag を自動作成し、step 3 のガードを迂回するため。
+   step 3 の push が失敗していればここで中断される）。
 
    ```bash
    test -n "${VERSION:-}" \
-     && gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
+     && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
    ```
 
 ## スコープ外
