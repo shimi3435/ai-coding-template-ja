@@ -3,6 +3,8 @@ name = "ai-coding-template-ja"
 version = "0.1.0"
 description = "日本語で AI コーディングエージェントを使う研究用 Python プロジェクトのテンプレート"
 readme = "README.md"
+# CI で検証しているのは 3.12 / 3.13（ci.yml の matrix）。3.14+ は範囲上は許容するが
+# 未検証（検証範囲の拡張・上限明示の是非は post-1.0 判断）。
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = []
@@ -81,6 +83,9 @@ testpaths = ["tests"]
 # rename 対象（module 形）: --cov=<module>
 addopts = "--cov=ai_coding_template_ja --cov-report=term-missing"
 
+# fail-under 閾値は意図的に置かない: 研究テンプレでは閾値ゲートが探索的コードの
+# コミットを阻害するため、coverage は term-missing による可視化（情報提供）に徹する。
+# 閾値が要る下流は [tool.coverage.report] の fail_under を自分で足す。
 [tool.coverage.run]
 # rename 対象（module 形）
 source = ["ai_coding_template_ja"]

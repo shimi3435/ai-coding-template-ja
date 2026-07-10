@@ -100,11 +100,12 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 - [docs/guide.md](docs/guide.md) … **人間の下流ユーザ向け通し読みガイド**（全体像・
   立ち上げの「なぜ」・オプションの選び方・詰まったとき）。
 - `docs/adr/` … **下流の研究 ADR 用**（出荷時は `0000-template.md` の道標 1 枚のみ）。
-- `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0006・grill 記録）。
-  下流では不要なら `task prune-template-docs -- --apply` で削除できる（ADR-0006）。
+- `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0007・grill 記録・
+  リリース手順）。下流では不要なら `task prune-template-docs -- --apply` で削除できる
+  （ADR-0006）。
 - `docs/agents/` … エージェント向けの workflow / safety / mcp 詳細。
 - `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査・
-  GSD・Serena MCP・クロス AI レビュー）。
+  GSD・Serena MCP・クロス AI レビュー・テンプレ更新の取り込み）。
 
 ## 研究成果物の扱い
 

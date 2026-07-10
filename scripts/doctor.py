@@ -95,7 +95,7 @@ def check_python(diag: Diagnostics) -> None:
     else:
         diag.fail_(
             f"Python バージョン不一致: 実行={running} / .python-version={pinned}。"
-            " uv で 3.12 を用意してください"
+            f" uv で {pinned_majmin} を用意してください"
         )
 
 
