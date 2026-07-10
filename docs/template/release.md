@@ -69,9 +69,12 @@ ls -A openspec/changes/   # .gitkeep のみであること
    ```bash
    test -n "${VERSION:-}" \
      && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
-     && ! git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null \
+     && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
      && git tag -a "v${VERSION}" -m "Release v${VERSION}" \
      && git push origin "v${VERSION}"
+   # ls-remote は exit 2（tag 不在）のときだけ続行する。0（同名 tag が既に存在）や
+   # 128（remote 不在・認証・ネットワークエラー）は中断する（! での反転は
+   # fatal エラーまで成功扱いにするため使わない）。
    ```
 
 4. GitHub Release を作成する。
