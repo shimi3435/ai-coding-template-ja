@@ -28,7 +28,7 @@ minor の影響が実質なし）は 3.12 単独のままとする。3.14+ の�
 #### Scenario: 読者が非対称の意図を判別できる
 
 - **WHEN** 読者が CI action の SHA pin 方針と `.pre-commit-config.yaml` の tag pin を突き合わせる
-- **THEN** tag pin が意図的であることと根拠（CI 非実行で secrets 非曝露・dependabot 非サポート・pre-commit 慣行）がコメントで分かる
+- **THEN** tag pin が意図的であることと根拠（CI 非実行で secrets 非曝露・pre-commit 慣行・dependabot は pre-commit ecosystem 対応済みだが現 dependabot.yml の対象外として非対称を許容）がコメントで分かる
 
 ### Requirement: coverage fail-under なしの意図記録
 

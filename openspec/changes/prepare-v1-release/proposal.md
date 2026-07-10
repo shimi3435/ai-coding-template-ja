@@ -26,6 +26,10 @@ fail-under なし）を 1.0 前に解消する（backlog #2 / #3 / #4 / #5 / #9 
      コスト増を避ける。
    - uv.lock が 3.13 で解決不能・テスト赤の場合に CI が落ちるのは検出=正常動作（それが
      このゲートの意図）。ローカルでの 3.13 実行確認は行わず CI に委ねる（後述の検証方針）。
+   - pyproject.toml の `requires-python` 直上に「CI 検証済みは 3.12 / 3.13・3.14+ は
+     範囲上許容するが未検証（post-1.0 判断）」のコメントを記録する（暗黙の未検証を
+     明示の意図記録に変える。Codex R2 指摘の反映・matrix 追加や上限明示はスコープ外の
+     まま）。
 2. **(b) pin 非対称の意図記録**: `.pre-commit-config.yaml` の `pre-commit-hooks` repo が
    tag pin（v5.0.0）で dependabot 監視外である非対称を、**意図的**として同ファイルの
    当該 repo 直上コメントに記録する（修正しない）。根拠: pre-commit hooks はローカル

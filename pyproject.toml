@@ -3,6 +3,8 @@ name = "ai-coding-template-ja"
 version = "0.1.0"
 description = "日本語で AI コーディングエージェントを使う研究用 Python プロジェクトのテンプレート"
 readme = "README.md"
+# CI で検証しているのは 3.12 / 3.13（ci.yml の matrix）。3.14+ は範囲上は許容するが
+# 未検証（検証範囲の拡張・上限明示の是非は post-1.0 判断）。
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = []
