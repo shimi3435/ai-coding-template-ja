@@ -2,11 +2,16 @@
 # .github/workflows/ 配下の action（ci.yml / extras-smoke.yml）は SHA でピンして
 # いる（各 workflow 冒頭コメント）。新版検出時に SHA とタグ併記コメントを更新する
 # PR を weekly で自動生成し、ピンが古くなるのを防ぐ。
-# 対象は github-actions ecosystem のみ。Python 依存は uv.lock ＋ pip-audit の既存
-# 方針で管理するため pip / uv ecosystem は追加しない（proposal Non-goals 参照）。
+# 対象は github-actions ＋ pre-commit ecosystem（.pre-commit-config.yaml の rev 付き
+# repo。rev を持たない repo: local は対象外）。Python 依存は uv.lock ＋ pip-audit の
+# 既存方針で管理するため pip / uv ecosystem は追加しない（proposal Non-goals 参照）。
 version: 2
 updates:
   - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "pre-commit"
     directory: "/"
     schedule:
       interval: "weekly"
