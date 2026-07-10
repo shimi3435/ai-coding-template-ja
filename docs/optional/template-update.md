@@ -55,7 +55,9 @@ git commit
 - `task prune-template-docs` 実行後は `docs/template/` が存在しないため、同配下への hunk は
   当たらない（削除済みパスへの変更としてコンフリクトになり得る）。
 - 不要な hunk はスキップ / 削除でよい。cherry-pick 全体を諦める必要はなく、該当ファイルを
-  `git rm` で外して `git cherry-pick --continue` で続行する。
+  `git rm` で外したら、上記手順 4 の流れ（`TEMPLATE_VERSION` の restore と `git status`
+  確認 → `git commit`）に合流する。`git cherry-pick --continue` は使わない（コミット前の
+  確認を迂回して自動コミットされるため。コンフリクト解決後も必ず手順 4 を通す）。
 
 ## TEMPLATE_VERSION は更新しない
 
