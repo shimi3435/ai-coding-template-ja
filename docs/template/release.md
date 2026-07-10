@@ -47,30 +47,38 @@ ls -A openspec/changes/   # .gitkeep のみであること
 1. リリース PR で `TEMPLATE_VERSION` を bump し（semver 規律で判定）、main へマージする。
 2. main を最新化し、tag を打つ対象が **origin/main と一致した清潔な状態**であることを
    確認してから、`TEMPLATE_VERSION` の値を読む。**tag 名 = `v` + `TEMPLATE_VERSION`**
-   の一致がここで担保される（値をファイルから読んで tag 名に使う）。
+   の一致がここで担保される（値をファイルから読んで tag 名に使う）。ブロック全体を
+   `&&` で連結してあり、**途中のチェックが失敗すると後続は実行されない**（fail-closed。
+   `VERSION` も設定されないため後続ステップも進まない）。
 
    ```bash
-   git switch main && git pull --ff-only
-   test -z "$(git status --porcelain)" && echo clean          # 作業ツリーが清潔
-   test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" && echo synced
-   # ↑ ローカル main に未 push commit があると tag がそれを指してしまうため一致必須
-
-   VERSION=$(cat TEMPLATE_VERSION)
-   echo "tag 名: v${VERSION}"   # TEMPLATE_VERSION と一致していることを確認
+   git switch main \
+     && git pull --ff-only \
+     && test -z "$(git status --porcelain)" \
+     && test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" \
+     && VERSION=$(cat TEMPLATE_VERSION) \
+     && echo "tag 名: v${VERSION}"
+   # 清潔・origin/main 一致の確認は、未 push commit や作業中の変更を指す tag の
+   # 公開を防ぐため。echo が出なければ中断し、原因を解消してからやり直す。
    ```
 
 3. annotated tag を作成して push する。`git push --tags` は使わない（ローカルに残る
    無関係な tag までまとめて公開してしまうため、対象 tag だけを指定して push する）。
+   同名 tag がローカル / リモートに既に無いことの確認を含む（fail-closed）。
 
    ```bash
-   git tag -a "v${VERSION}" -m "Release v${VERSION}"
-   git push origin "v${VERSION}"
+   test -n "${VERSION:-}" \
+     && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
+     && ! git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null \
+     && git tag -a "v${VERSION}" -m "Release v${VERSION}" \
+     && git push origin "v${VERSION}"
    ```
 
 4. GitHub Release を作成する。
 
    ```bash
-   gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
+   test -n "${VERSION:-}" \
+     && gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
    ```
 
 ## スコープ外
