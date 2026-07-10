@@ -54,11 +54,12 @@ ls -A openspec/changes/   # .gitkeep のみであること
    echo "tag 名: v${VERSION}"   # TEMPLATE_VERSION と一致していることを確認
    ```
 
-3. annotated tag を作成して push する。
+3. annotated tag を作成して push する。`git push --tags` は使わない（ローカルに残る
+   無関係な tag までまとめて公開してしまうため、対象 tag だけを指定して push する）。
 
    ```bash
    git tag -a "v${VERSION}" -m "Release v${VERSION}"
-   git push --tags
+   git push origin "v${VERSION}"
    ```
 
 4. GitHub Release を作成する。
