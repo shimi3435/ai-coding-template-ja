@@ -92,18 +92,32 @@ ls -A openspec/changes/   # .gitkeep のみであること
    #   既定 branch から非 annotated tag を自動作成し、上のガードを迂回できるため）。
    ```
 
-   **部分完了からの再開**: tag の push までは成功したが `gh release create` が失敗した
-   （認証・ネットワーク等）場合、上のブロックを再実行しても tag 存在ガードで止まる。
-   その場合は**公開済み tag = 手元で作った tag** であることを remote への実問い合わせ
-   （`ls-remote`・ローカルの remote-tracking ref を信用しない）で確認してから、Release
-   作成のみを再実行する（Release が既に存在すれば create がエラーで止まる=安全側。
-   remote 問い合わせが失敗した場合は比較が空文字になり中断する=fail-closed）。
+   **部分完了からの再開**（途中失敗時。どちらも再実行前に失敗原因を解消しておく）:
 
-   ```bash
-   test -n "${VERSION:-}" \
-     && test "$(git ls-remote origin "refs/tags/v${VERSION}" | cut -f1)" = "$(git rev-parse "v${VERSION}")" \
-     && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
-   ```
+   - **local tag は作成済みだが push が失敗した場合**: remote に tag が無いことを確認
+     できれば、local tag はまだ非公開なので安全に削除でき、step 3 のブロックを最初から
+     再実行すればよい。
+
+     ```bash
+     test -n "${VERSION:-}" \
+       && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
+       && git tag -d "v${VERSION}"
+     # 削除できたら step 3 のブロックを再実行する。remote に tag が既にある場合は
+     # このブロックでは削除されない（次の「push まで成功」のケースへ）。
+     ```
+
+   - **tag の push までは成功したが `gh release create` が失敗した場合**: 上のブロックを
+     再実行しても tag 存在ガードで止まる。**公開済み tag = 手元で作った tag** であることを
+     remote への実問い合わせ（`ls-remote`・ローカルの remote-tracking ref を信用しない）で
+     確認してから、Release 作成のみを再実行する（Release が既に存在すれば create が
+     エラーで止まる=安全側。remote 問い合わせが失敗した場合は比較が空文字になり
+     中断する=fail-closed）。
+
+     ```bash
+     test -n "${VERSION:-}" \
+       && test "$(git ls-remote origin "refs/tags/v${VERSION}" | cut -f1)" = "$(git rev-parse "v${VERSION}")" \
+       && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
+     ```
 
 ## スコープ外
 
