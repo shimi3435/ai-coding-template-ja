@@ -25,6 +25,11 @@ jobs:
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
+      # matrix は「その版を .python-version に pin した下流」を再現する。pin を
+      # 揃えないと doctor の pin / 実行系整合チェック（と対応する smoke テスト）が
+      # 意図どおり FAIL する。
+      - name: Align .python-version to matrix
+        run: echo "${{ matrix.python-version }}" > .python-version
       - name: Sync (locked)
         run: uv sync --locked
       - name: ruff format --check

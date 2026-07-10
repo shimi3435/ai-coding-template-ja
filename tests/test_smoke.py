@@ -61,9 +61,19 @@ def test_template_version_is_single_semver_line() -> None:
     assert re.fullmatch(r"\d+\.\d+\.\d+", lines[0]), "semver 形式であること"
 
 
-def test_python_version_pinned_to_312() -> None:
+def test_python_version_pin_matches_running_interpreter() -> None:
+    # pin の固定値（3.12）ではなく「pin と実行系の整合」を検証する。CI の Python
+    # matrix は「その版を pin した下流」を再現するため job 側で .python-version を
+    # matrix 値に揃えており、固定値 assert だと 3.12 以外の matrix で偽陽性になる。
     raw = (REPO_ROOT / ".python-version").read_text(encoding="utf-8").strip()
-    assert raw.startswith("3.12"), f".python-version は 3.12 系であること: {raw!r}"
+    assert re.fullmatch(r"3\.\d+(\.\d+)?", raw), (
+        f".python-version が version 形式であること: {raw!r}"
+    )
+    running = f"{sys.version_info.major}.{sys.version_info.minor}"
+    pinned_majmin = ".".join(raw.split(".")[:2])
+    assert pinned_majmin == running, (
+        f".python-version={raw} と実行系 {running} の major.minor が一致すること"
+    )
 
 
 def _run_doctor() -> subprocess.CompletedProcess[str]:
