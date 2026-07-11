@@ -27,6 +27,9 @@
 - spec delta は `changes/<id>/specs/` に置く（`openspec validate` green と `specs/` の出荷時空が両立）。
 - close は archive ではなくマージ前の最終コミットでのディレクトリ削除で行う（main に change ディレクトリを載せない）。
 - これにより `specs/` / `changes/` の出荷時空と validate green を維持する。経緯は PR とブランチ履歴が保持する。
+- close までに軽量ふりかえり（逃した欠陥の件数と発見経路）を 1 行記録する
+  （記録先・形式は [docs/agents/workflow.md](../docs/agents/workflow.md) の
+  「change close 時の軽量ふりかえり」節）。
 
 ## エンジン（任意）
 
