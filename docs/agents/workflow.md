@@ -200,7 +200,8 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 - `caveman` の自動発火（hook）は Claude 固有のオプション。手順は
   [docs/optional/caveman-hook.md](../optional/caveman-hook.md)（自動登録しない）。
 - 外部 skill は自動で latest 更新しない。symlink の修復は `task skills:update`、整合検証は
-  `task skills:doctor`（`tests/test_skills_lock.py` がハードゲート）。
+  `task skills:doctor`（`tests/test_skills_lock.py` がハードゲート）。上流乖離の可視化は
+  `task skills:upstream`（opt-in・ネットワーク使用・gh 必須・報告のみで更新は人起点）。
 - `caveman` と AGENTS.md の「最小変更」ルールは役割が近い。caveman は**設計判断時に明示的に
   呼ぶ skill**、AGENTS.md は**常時適用される原則**と整理して重複を避ける。
 - 再配布の前提: vendored skill は各 `LICENSE` に従う（ルート LICENSE=MIT とは別。ADR-0001）。

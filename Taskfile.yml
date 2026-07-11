@@ -107,6 +107,14 @@ tasks:
     cmds:
       - uv run pytest tests/test_skills_lock.py -q
 
+  skills:upstream:
+    desc: |
+      vendored skill の上流乖離チェック（opt-in・ネットワーク使用・gh 必須・報告のみ）。
+      lock の commit と上流 HEAD を比較し OK/INFO/WARN で報告する（WARN でも exit 0・
+      更新は人起点。skill の自動更新や lock の変更はしない）。
+    cmds:
+      - uv run --no-sync python scripts/skills-upstream-check.py
+
   security:
     desc: |
       secret / 依存監査 / SAST。gitleaks（在席時・secret 検出で失敗）＋ pip-audit（コア
