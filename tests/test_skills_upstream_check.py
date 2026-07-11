@@ -283,14 +283,37 @@ def test_missing_gh_exits_nonzero(
 def test_unauthenticated_gh_exits_nonzero(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """gh 未認証（gh auth status 非ゼロ）は認証案内を表示して非ゼロ終了する（H8）。"""
+    """gh 未認証（gh auth token 非ゼロ＝資格情報なし）は案内して exit 1（H8）。"""
     monkeypatch.setattr(upstream.shutil, "which", lambda _name: "/usr/bin/gh")
     monkeypatch.setattr(
-        upstream, "_run", lambda _cmd, timeout=60: (1, "", "not logged in")
+        upstream, "_run", lambda _cmd, timeout=60: (1, "", "no oauth token")
     )
     assert upstream.main([]) == 1
     out = capsys.readouterr().out
     assert "未認証" in out
+
+
+def test_offline_compare_failures_warn_and_exit_zero(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """資格情報があればオフラインでも WARN 報告で exit 0（hard fail しない・P2）。"""
+    lock = tmp_path / "skills.lock.json"
+    lock.write_text(
+        json.dumps({"version": 1, "skills": [_entry("tdd"), _entry("caveman")]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(upstream.shutil, "which", lambda _name: "/usr/bin/gh")
+    # gh auth token はローカル判定で成功する（ネットワーク不要）。
+    monkeypatch.setattr(upstream, "_run", lambda _cmd, timeout=60: (0, "", ""))
+    monkeypatch.setattr(upstream, "SKILLS_LOCK", lock)
+    monkeypatch.setattr(
+        upstream,
+        "_fetch_compare",
+        lambda _owner, _repo, _commit: (1, "error connecting to api.github.com"),
+    )
+    assert upstream.main([]) == 0
+    out = capsys.readouterr().out
+    assert out.count("[WARN]") == 2
 
 
 def test_missing_lock_exits_nonzero(

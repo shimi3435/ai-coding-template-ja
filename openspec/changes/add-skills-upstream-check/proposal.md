@@ -41,9 +41,12 @@ spec delta は `changes/add-skills-upstream-check/specs/skills-upstream-check/sp
    リポジトリ直下のファイル変更も skill 本体変更とみなす（SKILL.md を直下に置く形態の
    見逃し防止。現 lock は実データ上ディレクトリ成分一致で足りることを lock commit 時点の
    git tree で確認済みだが、将来のエントリへの予防として採用・見逃しより誤検知に倒す）。
-3. **`gh` CLI 必須**（`gh api`）。認証・レート制限の扱いを gh に委譲し、token を
+3. **`gh` CLI 必須**（`gh api`）。認証・レート制限の扱いを gh に委譲し、token の値を
    スクリプトで扱わない（safety: secret を出力・保存しない）。gh はコアで既に
-   「GitHub read の標準」（AGENTS.md Tools）。
+   「GitHub read の標準」（AGENTS.md Tools）。**Codex レビュー P2（2 巡目）反映**:
+   前提の認証確認は `gh auth token` の exit code によるローカル判定とする
+   （`gh auth status` は API を叩くためオフラインで前提チェックが hard fail し
+   「到達性問題は WARN 続行」の設計と矛盾する）。
 4. **compare は `{lock commit}...HEAD`**。`HEAD` は上流既定ブランチに解決される
    （実機確認済み）。`status` が `identical` → OK / `ahead` → ファイル判定 /
    それ以外（`behind` / `diverged`）→ 履歴書き換えの可能性として WARN。

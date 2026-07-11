@@ -11,7 +11,8 @@ read）で比較し、lock 記載順に分類報告する。
 - WARN = ahead かつ skill 本体の変更あり / behind・diverged 等（履歴書き換えの
   可能性）/ 不正エントリ / エントリ単位の API エラー / files 切り詰めで判定不能
 - WARN があっても exit 0（ゲートにしない・更新判断は人起点）。
-- 非ゼロ終了は前提不成立のみ: gh 不在・gh 未認証・lock 不在または解析不能。
+- 非ゼロ終了は前提不成立のみ: gh 不在・gh 未認証（ローカル資格情報なし）・lock 不在
+  または解析不能。オフライン等の到達性問題は前提不成立にせずエントリ単位の WARN。
 
 skill 本体変更の判定: 変更ファイルパスのディレクトリ成分（ファイル名を除く部分）に
 skill 名が完全一致で含まれるか（位置不問・上流の再配置に追随）。ファイル名部分の
@@ -261,7 +262,14 @@ def _fail(msg: str, *hints: str) -> None:
 
 
 def check_gh_available() -> bool:
-    """gh CLI の在席と認証を確認する（不成立は案内を表示して False）。"""
+    """gh CLI の在席とローカル資格情報の有無を確認する（不成立は案内して False）。
+
+    認証確認は `gh auth token` の exit code のみで行う（ローカル判定・ネットワーク
+    不使用。`gh auth status` は token 検証で API を叩くため、オフライン / GitHub 障害
+    で前提チェックが hard fail してしまう＝報告のみ方針と矛盾する。Codex レビュー
+    P2 反映）。到達性の問題は compare 呼び出し側のエントリ単位 WARN に委ねる。
+    token の値そのものは扱わない（成功時の stdout は表示・保存しない）。
+    """
     if shutil.which("gh") is None:
         _fail(
             "gh CLI が見つかりません（本タスクは gh api を使うため gh 必須）",
@@ -269,12 +277,12 @@ def check_gh_available() -> bool:
             "導入後に gh auth login で認証してください",
         )
         return False
-    rc, stdout, stderr = _run(["gh", "auth", "status"])
+    rc, _stdout, stderr = _run(["gh", "auth", "token"])
     if rc != 0:
-        lines = (stderr.strip() or stdout.strip()).splitlines()
+        lines = stderr.strip().splitlines()
         detail = lines[0] if lines else "詳細なし"
         _fail(
-            f"gh が未認証です（gh auth status: {detail}）",
+            f"gh の資格情報がありません（未認証・gh auth token: {detail}）",
             "認証: gh auth login（または GH_TOKEN を設定）",
         )
         return False

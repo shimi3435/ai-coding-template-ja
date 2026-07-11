@@ -25,15 +25,19 @@
 - **THEN** そのエントリを WARN で報告し、残りのエントリは処理を続行する
 
 ### Requirement: opt-in・報告のみ・read-only
-本タスクはネットワークを要する opt-in の報告タスクであり、task check / CI / task doctor の既定経路に組み込んではならず（SHALL NOT）、乖離や API エラーの WARN で非ゼロ終了してはならない（SHALL NOT）。非ゼロ終了は前提不成立（gh CLI 不在・gh 未認証・lock 不在または解析不能）の場合のみとし、その際は導入・復旧の案内を表示する（SHALL）。実行は read のみで、lock・vendored skill・リポジトリの状態を一切変更しない（SHALL）。
+本タスクはネットワークを要する opt-in の報告タスクであり、task check / CI / task doctor の既定経路に組み込んではならず（SHALL NOT）、乖離や API エラーの WARN で非ゼロ終了してはならない（SHALL NOT）。非ゼロ終了は前提不成立（gh CLI 不在・gh 未認証＝ローカルに資格情報が無い・lock 不在または解析不能）の場合のみとし、その際は導入・復旧の案内を表示する（SHALL）。前提の認証確認はネットワークを使わずローカルに判定し、オフライン・GitHub 側障害等の到達性問題を前提不成立として扱ってはならない（SHALL NOT・エントリ単位の WARN として報告する）。実行は read のみで、lock・vendored skill・リポジトリの状態を一切変更しない（SHALL）。
 
 #### Scenario: 乖離 WARN のみで終了する
 - **WHEN** 複数エントリが WARN（上流乖離）と報告される
 - **THEN** exit 0 で終了する（ゲートではない・更新判断は人起点）
 
 #### Scenario: gh が使えない
-- **WHEN** gh CLI が未導入、または未認証で API を呼べない
+- **WHEN** gh CLI が未導入、またはローカルに資格情報が無い（未認証）
 - **THEN** 導入 / 認証の案内を表示して非ゼロ終了する（黙って成功扱いにしない）
+
+#### Scenario: オフラインで実行した
+- **WHEN** gh と資格情報は揃っているがネットワークに到達できない
+- **THEN** 前提チェックは通過し、各エントリの compare 失敗を WARN として報告して exit 0 で終了する（到達性問題で hard fail しない）
 
 #### Scenario: 再実行
 - **WHEN** 同じ環境で本タスクを連続して 2 回実行する
