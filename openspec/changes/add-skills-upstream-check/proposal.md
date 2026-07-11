@@ -37,6 +37,10 @@ spec delta は `changes/add-skills-upstream-check/specs/skills-upstream-check/sp
    上流は `skills/grilling` → `skills/productivity/grilling` の再配置があり、パス prefix
    固定では追えないが、ディレクトリ成分一致なら再配置後も検知できる
    （`docs/productivity/grilling.md` のようなファイル名一致は誤検知しない）。
+   **Codex レビュー P2 反映**: リポジトリ名 = skill 名（単一 skill リポジトリ）の場合は
+   リポジトリ直下のファイル変更も skill 本体変更とみなす（SKILL.md を直下に置く形態の
+   見逃し防止。現 lock は実データ上ディレクトリ成分一致で足りることを lock commit 時点の
+   git tree で確認済みだが、将来のエントリへの予防として採用・見逃しより誤検知に倒す）。
 3. **`gh` CLI 必須**（`gh api`）。認証・レート制限の扱いを gh に委譲し、token を
    スクリプトで扱わない（safety: secret を出力・保存しない）。gh はコアで既に
    「GitHub read の標準」（AGENTS.md Tools）。

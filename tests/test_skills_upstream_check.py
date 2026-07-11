@@ -128,6 +128,20 @@ def test_skill_path_match_requires_exact_component() -> None:
     )
 
 
+def test_skill_path_match_repo_root_for_single_skill_repo() -> None:
+    """repo 名 = skill 名では直下ファイルの変更も skill 変更とみなす（Codex P2）。"""
+    assert upstream.skill_files_changed("caveman", ["SKILL.md"], include_repo_root=True)
+    assert upstream.skill_files_changed(
+        "caveman", ["README.md"], include_repo_root=True
+    )
+    # 直下でないファイルは従来どおりディレクトリ成分一致のみで判定する。
+    assert not upstream.skill_files_changed(
+        "caveman", ["docs/README.md"], include_repo_root=True
+    )
+    # 単一 skill リポジトリでなければ直下ファイルは変更とみなさない。
+    assert not upstream.skill_files_changed("caveman", ["SKILL.md"])
+
+
 # --- classify_compare（H4 / H9 / H11） ---
 
 
@@ -216,6 +230,16 @@ def test_api_error_warns() -> None:
     upstream.check_entries(skills, fetch, reporter)
     assert [level for level, _ in reporter.results] == [upstream.WARN, upstream.OK]
     assert "404" in reporter.results[0][1]
+
+
+def test_single_skill_repo_root_change_warns_via_check_entries() -> None:
+    """repo 名 = skill 名のエントリは直下ファイル変更で WARN になる（Codex P2）。"""
+    skills = [_entry("caveman", source="https://github.com/JuliusBrussee/caveman")]
+    fetch = FakeFetch([(0, _compare_json("ahead", ["SKILL.md", "README.md"]))])
+    reporter = upstream.Reporter()
+    upstream.check_entries(skills, fetch, reporter)
+    assert [level for level, _ in reporter.results] == [upstream.WARN]
+    assert "更新されています" in reporter.results[0][1]
 
 
 def test_entries_compared_independently() -> None:

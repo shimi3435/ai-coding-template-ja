@@ -15,7 +15,9 @@ read）で比較し、lock 記載順に分類報告する。
 
 skill 本体変更の判定: 変更ファイルパスのディレクトリ成分（ファイル名を除く部分）に
 skill 名が完全一致で含まれるか（位置不問・上流の再配置に追随）。ファイル名部分の
-一致（例: docs/grilling.md と skill `grilling`）は変更とみなさない。
+一致（例: docs/grilling.md と skill `grilling`）は変更とみなさない。ただし
+リポジトリ名 = skill 名（単一 skill リポジトリ）の場合は、リポジトリ直下の
+ファイル変更も skill 本体の変更とみなす（SKILL.md を直下に置く形態の見逃し防止）。
 
 read-only 方針: lock・vendored skill・リポジトリの状態を一切変更しない。認証・
 レート制限は gh に委譲し、token をスクリプトで扱わない。
@@ -93,19 +95,32 @@ def parse_github_repo(source: str) -> tuple[str, str] | None:
     return match.group("owner"), match.group("repo")
 
 
-def skill_files_changed(skill_name: str, filenames: list[str]) -> bool:
+def skill_files_changed(
+    skill_name: str, filenames: list[str], *, include_repo_root: bool = False
+) -> bool:
     """変更ファイルパスのディレクトリ成分に skill 名が完全一致で含まれるか。
 
     位置は問わない（上流の再配置に追随する）。最終要素（ファイル名）の一致は
     変更とみなさない（例: docs/productivity/grilling.md と skill `grilling`）。
+    include_repo_root=True（リポジトリ名 = skill 名の単一 skill リポジトリ）では、
+    リポジトリ直下のファイル変更も skill 本体の変更とみなす（SKILL.md を直下に
+    置く形態を見逃さない・見逃しより誤検知に倒す）。
     """
-    return any(
-        skill_name in PurePosixPath(filename).parts[:-1] for filename in filenames
-    )
+    for filename in filenames:
+        parts = PurePosixPath(filename).parts
+        if skill_name in parts[:-1]:
+            return True
+        if include_repo_root and len(parts) == 1:
+            return True
+    return False
 
 
 def classify_compare(
-    skill_name: str, status: str, filenames: list[str]
+    skill_name: str,
+    status: str,
+    filenames: list[str],
+    *,
+    include_repo_root: bool = False,
 ) -> tuple[str, str]:
     """compare 結果を (分類レベル, 理由) に分類する純関数。
 
@@ -118,7 +133,7 @@ def classify_compare(
         return OK, "上流と一致しています"
     if status != "ahead":
         return WARN, f"compare status={status}（履歴書き換え等の可能性・要手動確認）"
-    if skill_files_changed(skill_name, filenames):
+    if skill_files_changed(skill_name, filenames, include_repo_root=include_repo_root):
         return WARN, "上流で skill 本体が更新されています（更新するかは人の判断）"
     if len(filenames) >= COMPARE_FILES_LIMIT:
         return WARN, (
@@ -208,7 +223,14 @@ def check_entries(
             reporter.report(WARN, f"{name}: compare 応答がオブジェクトではありません")
             continue
         status = str(data.get("status") or "(status 欠落)")
-        level, reason = classify_compare(name, status, extract_filenames(data))
+        level, reason = classify_compare(
+            name,
+            status,
+            extract_filenames(data),
+            # リポジトリ名 = skill 名なら単一 skill リポジトリとみなし、直下の
+            # ファイル変更も skill 本体変更として扱う（Codex レビュー P2 反映）。
+            include_repo_root=repo.casefold() == name.casefold(),
+        )
         reporter.report(level, f"{name}: {reason}")
     if github_count == 0:
         reporter.report(

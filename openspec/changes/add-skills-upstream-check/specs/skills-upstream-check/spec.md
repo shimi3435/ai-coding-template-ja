@@ -40,7 +40,11 @@
 - **THEN** どちらも同じ報告を返し、lock やリポジトリの状態は変化しない
 
 ### Requirement: skill 本体変更の判定規則
-skill 本体の変更有無は、compare API の変更ファイル一覧のパスに skill 名が**ディレクトリ成分として完全一致**で含まれるか（位置は問わない）で判定しなければならない（SHALL）。ファイル名部分の一致（例: `docs/productivity/grilling.md` と skill `grilling`）は変更とみなさない。変更ファイル一覧が API の上限（300 件）で切り詰められている可能性がある場合、skill 変更を検出済みなら WARN（変更あり）を優先し、未検出なら判定不能として WARN で報告する（見逃しを黙殺しない）。
+skill 本体の変更有無は、compare API の変更ファイル一覧のパスに skill 名が**ディレクトリ成分として完全一致**で含まれるか（位置は問わない）で判定しなければならない（SHALL）。ファイル名部分の一致（例: `docs/productivity/grilling.md` と skill `grilling`）は変更とみなさない。ただし上流リポジトリ名が skill 名と一致する場合（単一 skill リポジトリ・大文字小文字は区別しない）は、リポジトリ直下のファイル変更も skill 本体の変更とみなす（SKILL.md を直下に置く形態の見逃しを防ぐ・見逃しより誤検知に倒す）。変更ファイル一覧が API の上限（300 件）で切り詰められている可能性がある場合、skill 変更を検出済みなら WARN（変更あり）を優先し、未検出なら判定不能として WARN で報告する（見逃しを黙殺しない）。
+
+#### Scenario: 単一 skill リポジトリの直下ファイルが更新された
+- **WHEN** 上流リポジトリ名が skill 名と一致し（例: skill `caveman` と repo `JuliusBrussee/caveman`）、リポジトリ直下のファイル（SKILL.md / README.md 等）が変更一覧に現れる
+- **THEN** skill 本体の変更として WARN と判定する（ディレクトリ成分一致だけでは直下配置を見逃すため）
 
 #### Scenario: 上流で skill が再配置された
 - **WHEN** 上流が skill ディレクトリを再配置し（例: `skills/grilling` → `skills/productivity/grilling`）、その配下のファイルが変更一覧に現れる
