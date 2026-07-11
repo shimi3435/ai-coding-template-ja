@@ -122,6 +122,7 @@ def classify_compare(
     filenames: list[str],
     *,
     include_repo_root: bool = False,
+    entry_count: int | None = None,
 ) -> tuple[str, str]:
     """compare 結果を (分類レベル, 理由) に分類する純関数。
 
@@ -129,6 +130,8 @@ def classify_compare(
     status（behind / diverged 等）は履歴書き換えの可能性として WARN。files が
     上限（300 件）で切り詰められている可能性がある場合、skill 変更を検出済みなら
     WARN（変更あり）を優先し、未検出なら判定不能 WARN に倒す（見逃しを黙殺しない）。
+    切り詰め判定は API の files エントリ数（entry_count・rename 元パスの追加で
+    filenames が膨らむため別引数。None なら len(filenames)）で行う。
     """
     if status == "identical":
         return OK, "上流と一致しています"
@@ -136,7 +139,8 @@ def classify_compare(
         return WARN, f"compare status={status}（履歴書き換え等の可能性・要手動確認）"
     if skill_files_changed(skill_name, filenames, include_repo_root=include_repo_root):
         return WARN, "上流で skill 本体が更新されています（更新するかは人の判断）"
-    if len(filenames) >= COMPARE_FILES_LIMIT:
+    count = entry_count if entry_count is not None else len(filenames)
+    if count >= COMPARE_FILES_LIMIT:
         return WARN, (
             f"変更ファイル一覧が {COMPARE_FILES_LIMIT} 件で切り詰められている"
             "可能性があり、skill 変更の有無を判定できません（要手動確認）"
@@ -145,15 +149,29 @@ def classify_compare(
 
 
 def extract_filenames(compare_response: dict[str, object]) -> list[str]:
-    """compare 応答の files から filename を取り出す（欠落・型不一致は無視）。"""
+    """compare 応答の files から変更パスを取り出す（欠落・型不一致は無視）。
+
+    rename 時は新パスが `filename`・元パスが `previous_filename` に入るため、
+    両方を判定対象にする（skill の改名・移動による見逃し防止。Codex レビュー
+    P2 反映）。
+    """
     files = compare_response.get("files")
     if not isinstance(files, list):
         return []
-    return [
-        str(item["filename"])
-        for item in files
-        if isinstance(item, dict) and "filename" in item
-    ]
+    paths: list[str] = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        for key in ("filename", "previous_filename"):
+            if key in item and item[key]:
+                paths.append(str(item[key]))
+    return paths
+
+
+def count_file_entries(compare_response: dict[str, object]) -> int:
+    """compare 応答の files エントリ数（切り詰め判定用・rename で膨らまない）。"""
+    files = compare_response.get("files")
+    return len(files) if isinstance(files, list) else 0
 
 
 def check_entries(
@@ -231,6 +249,7 @@ def check_entries(
             # リポジトリ名 = skill 名なら単一 skill リポジトリとみなし、直下の
             # ファイル変更も skill 本体変更として扱う（Codex レビュー P2 反映）。
             include_repo_root=repo.casefold() == name.casefold(),
+            entry_count=count_file_entries(data),
         )
         reporter.report(level, f"{name}: {reason}")
     if github_count == 0:

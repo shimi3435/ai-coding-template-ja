@@ -232,6 +232,37 @@ def test_api_error_warns() -> None:
     assert "404" in reporter.results[0][1]
 
 
+def test_renamed_skill_path_detected_via_previous_filename() -> None:
+    """rename の元パス（previous_filename）も判定対象にする（Codex P2・移動の検知）。"""
+    payload = json.dumps(
+        {
+            "status": "ahead",
+            "files": [
+                {
+                    "filename": "skills/testing/SKILL.md",
+                    "previous_filename": "skills/tdd/SKILL.md",
+                }
+            ],
+        }
+    )
+    skills = [_entry("tdd")]
+    fetch = FakeFetch([(0, payload)])
+    reporter = upstream.Reporter()
+    upstream.check_entries(skills, fetch, reporter)
+    assert [level for level, _ in reporter.results] == [upstream.WARN]
+    assert "更新されています" in reporter.results[0][1]
+
+
+def test_truncation_uses_entry_count_not_expanded_paths() -> None:
+    """切り詰め判定は files エントリ数基準（rename で膨らんでも誤 WARN しない）。"""
+    # エントリ 200 件・全 rename でパスは 400 本 → 300 未満扱いで INFO のまま。
+    paths = [f"docs/new{i}.md" for i in range(200)] + [
+        f"docs/old{i}.md" for i in range(200)
+    ]
+    level, _ = upstream.classify_compare("tdd", "ahead", paths, entry_count=200)
+    assert level == upstream.INFO
+
+
 def test_single_skill_repo_root_change_warns_via_check_entries() -> None:
     """repo 名 = skill 名のエントリは直下ファイル変更で WARN になる（Codex P2）。"""
     skills = [_entry("caveman", source="https://github.com/JuliusBrussee/caveman")]

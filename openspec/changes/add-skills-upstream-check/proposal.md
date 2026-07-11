@@ -41,6 +41,10 @@ spec delta は `changes/add-skills-upstream-check/specs/skills-upstream-check/sp
    リポジトリ直下のファイル変更も skill 本体変更とみなす（SKILL.md を直下に置く形態の
    見逃し防止。現 lock は実データ上ディレクトリ成分一致で足りることを lock commit 時点の
    git tree で確認済みだが、将来のエントリへの予防として採用・見逃しより誤検知に倒す）。
+   **Codex レビュー P2（3 巡目）反映**: rename 時は新パスが `filename`・元パスが
+   `previous_filename` に入るため両方を判定対象にする（skill の改名・移動・削除相当の
+   見逃し防止）。切り詰め判定（300 件）は rename でパス数が膨らまないよう files の
+   エントリ数基準で行う。
 3. **`gh` CLI 必須**（`gh api`）。認証・レート制限の扱いを gh に委譲し、token の値を
    スクリプトで扱わない（safety: secret を出力・保存しない）。gh はコアで既に
    「GitHub read の標準」（AGENTS.md Tools）。**Codex レビュー P2（2 巡目）反映**:
