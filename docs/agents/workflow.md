@@ -109,9 +109,10 @@ owner のままで、ここでは順序だけを示す。
 採用する場合は自リポジトリの記録先を定める）。機械検査・集計自動化は持たず、backstop は
 self-review の規約適合チェックと目視。
 
-- **記録先**: [docs/template/retrospectives.md](../template/retrospectives.md)
-  （`docs/template/` 配下＝prune-template-docs の削除対象。テンプレ運用データを下流に
-  漏らさない）。ファイルが無ければヘッダ付きで再作成してから追記する。
+- **記録先**: `docs/template/retrospectives.md`（`docs/template/` 配下＝
+  prune-template-docs の削除対象。テンプレ運用データを下流に漏らさない。prune 済み環境には
+  存在しないため意図的にリンクにしない）。ファイルが無ければヘッダ付きで再作成してから
+  追記する。
 - **タイミング**: close コミット（マージ前の最終コミット）までに末尾へ 1 行追記する。
   忘れたままマージした場合は気づいた時点で遡及追記する。マージに至らず破棄された
   change は記録対象外。
