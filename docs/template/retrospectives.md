@@ -11,3 +11,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 
 - 2026-07-11 add-change-retrospective-rule（PR #30）: 逃した欠陥 2 件（self-review=1 / review=1 / CI=0 / merge後=0）— self-review=spec-holes H10 の本文未記載を検出、review=Codex P3（prune 後のリンク切れ・境界判断で計上）
 - 2026-07-11 add-skills-upstream-check（PR #31）: 逃した欠陥 4 件（self-review=1 / review=3 / CI=0 / merge後=0）— self-review=未知 source_type の spec/実装不整合、review=Codex P2×3（単一 skill repo 直下の見逃し・オフラインで前提チェック hard fail・rename 元パスの見逃し）
+- 2026-07-12 harden-skills-update-and-pat-docs（PR #32）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— Codex adversarial-review approve・material findings なし
