@@ -17,6 +17,14 @@
 - クロス AI レビュー（openai-codex-cc 等）はコードを外部へ送信するため、CI / hook で自動送信せず、
   可用性ゲート付きの人起点手順に限定する。
 
+## 依存更新（dependabot）の処理基準
+
+- minor / patch 更新は次回作業時にまとめて確認して merge する。major 更新は
+  changelog（breaking changes）と CI 結果を確認の上で個別判断する。
+- CI が red の PR は merge しない。merge は人起点とし、自動 merge を設定しない。
+- major 判定は PR に併記されるバージョンタグ表記による（SHA ピン更新でも同様）。
+  pre-1.0（0.x）依存は minor でも breaking がありうるため個別判断側に倒す。
+
 ## 承認 / サンドボックス対応表（Codex `config.toml`）
 
 `.codex/config.toml.template` の既定は AGENTS.md Safety と整合する保守側に揃える

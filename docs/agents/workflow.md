@@ -202,6 +202,13 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 - 外部 skill は自動で latest 更新しない。symlink の修復は `task skills:update`、整合検証は
   `task skills:doctor`（`tests/test_skills_lock.py` がハードゲート）。上流乖離の可視化は
   `task skills:upstream`（opt-in・ネットワーク使用・gh 必須・報告のみで更新は人起点）。
+- 上流取り込み手順（WARN 検知後）: WARN 確認 → 上流 diff レビュー → 取り込み判断（人起点）
+  → `.agents/skills/<name>/` の実体更新（上流実体をそのまま反映）→ `skills.lock.json` の
+  `commit` / `sha256` 更新 → `task skills:doctor` green で完了判定。doctor が red の間は
+  取り込み未完として lock / 実体を修正して再実行する。取り込みは lock・skill 実体の変更を
+  伴うため軽微変更に当たらず OpenSpec change を切る。複数 skill の同時取り込みは可
+  （lock は skill ごとに更新する）。据え置きと判断した WARN は次回実行時も再表示される
+  （据え置きの記録は任意・人判断）。
 - `caveman` と AGENTS.md の「最小変更」ルールは役割が近い。caveman は**設計判断時に明示的に
   呼ぶ skill**、AGENTS.md は**常時適用される原則**と整理して重複を避ける。
 - 再配布の前提: vendored skill は各 `LICENSE` に従う（ルート LICENSE=MIT とは別。ADR-0001）。

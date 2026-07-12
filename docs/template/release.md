@@ -31,11 +31,20 @@
    ジョブでも同じ gate が走る）。
 3. `openspec/changes/` が `.gitkeep` のみ（pre-merge close 規約の帰結。規約本文は
    [openspec/project.md](../../openspec/project.md)）。
+4. バージョン結合記述の陳腐化点検を**実施済み**（必須なのは点検の実施であり、
+   乖離ゼロではない。検出された乖離への対応＝更新か据え置きかは人判断で、
+   据え置きのままのリリースを妨げない）。点検対象は次の 3 点。
+   - CI の openspec CLI exact pin（ci.yml の `@fission-ai/openspec@X.Y.Z`）が
+     現在検証済みの版と一致しているか。
+   - Codex plugin 等の実機挙動を根拠とする docs 記述が現バージョンでも成立するか。
+   - `task skills:upstream` を実行して上流乖離を確認したか。実行できない場合
+     （ネットワーク不通等）は未実施であることを認識した上で人が判断する。
 
 ```bash
 task check
 task openspec:validate
 ls -A openspec/changes/   # .gitkeep のみであること
+task skills:upstream      # 陳腐化点検（乖離の対応要否は人判断・据え置き可）
 ```
 
 加えて、extras の導入手順検証線 `extras-smoke.yml`（workflow_dispatch 専用・
