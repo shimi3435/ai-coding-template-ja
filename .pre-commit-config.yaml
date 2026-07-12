@@ -27,7 +27,7 @@ repos:
   # `pre-commit autoupdate` が機能する。rev の新版追随は dependabot の pre-commit
   # ecosystem（.github/dependabot.yml）が rev 更新 PR を weekly で自動生成する。
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       # vendored skill（.agents/skills/）は第三者の原本。整形フックで書き換えると
       # skills.lock.json の sha256 と乖離するため除外する（上流バイト一致を保つ）。
