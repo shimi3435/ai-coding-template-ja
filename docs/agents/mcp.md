@@ -75,10 +75,21 @@ task mcp:setup                # .mcp.json / .codex/config.toml を生成
 }
 ```
 
-Codex は実体 `.codex/config.toml`（gitignore 済み）へ同等の stdio エントリを追記する
-（`command` / `args` は同一・`env = { "GITHUB_PERSONAL_ACCESS_TOKEN" = "..." }`）。TOML 側は
-環境変数展開が効かないため PAT を直書きすることになる。実体は非コミットだが
-`task mcp:setup` の再生成で消える点に注意（PAT 入りのため template へは書かない）。
+Codex は実体 `.codex/config.toml`（gitignore 済み）へ同等の stdio エントリを追記する。TOML へ
+PAT は書かず、`env_vars` で親環境の変数名を指定して forward する（Codex は MCP server の
+子プロセス環境を最小集合＋ `env_vars` 指定分に限定する。codex-cli 0.142.5 で確認・2026-07-12）:
+
+```toml
+[mcp_servers.github]
+command = "github-mcp-server"
+args = ["stdio", "--read-only", "--toolsets", "repos,issues,pull_requests,actions"]
+env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]
+```
+
+環境変数は起動シェルで export してから起動する（例:
+`export GITHUB_PERSONAL_ACCESS_TOKEN=$(gh auth token)`。または各自の secret manager から供給）。
+PAT は read-only の fine-grained PAT・短い有効期限を推奨する。実体は非コミットだが
+`task mcp:setup` の再生成で消える点に注意（GitHub エントリは template に入れない）。
 
 **(2) Docker `ghcr.io/github/github-mcp-server`** — バイナリ配置を避けたい場合。
 
