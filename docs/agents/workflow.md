@@ -181,6 +181,7 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 | `grilling` | 実際の relentless インタビュー本体（上記 2 つが依存） | mattpocock/skills |
 | `domain-modeling` | ドメインモデル / ADR / 用語の整備（`grill-with-docs` が依存） | mattpocock/skills |
 | `tdd` | failing test 先行で実装暴走を防ぐ | mattpocock/skills |
+| `code-review` | 2 軸（Standards / Spec）でブランチ diff をレビュー（`tdd` のリファクタ段が参照） | mattpocock/skills |
 | `diagnosing-bugs` | bootstrap / uv sync / pre-commit / MCP 起動失敗の切り分け | mattpocock/skills |
 | `caveman` | 過度な複雑化・不要な抽象化・テンプレ肥大化を止める | JuliusBrussee/caveman |
 | `self-review` | コミット / PR 前の自己 diff 検査（明白な欠陥は修正・判断事項は報告のみ） | 自作（local） |
@@ -189,6 +190,12 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 
 > `grill-me` / `grill-with-docs` は薄いラッパーで、本体の `grilling`・`domain-modeling`
 > skill に委譲する。再現性のため依存先も同梱している（単体では機能しないため）。
+
+> `code-review` は特殊ケース。`tdd/SKILL.md` がリファクタ段の導線として名前で参照するため、
+> 上流兄弟 skill を byte-match で同梱した（名は `code-review` 固定・別名不可）。Claude Code の
+> ビルトイン `code-review` と**名前衝突するが許容**（機能重複・意味的に正参照）。本体は
+> `docs/agents/issue-tracker.md` 等のソフト依存を持つが、この repo に無くても Spec 軸は
+> degrade する（hard-stop しない）。経緯は Issue #35。
 
 > `spec-holes` は 2 フェーズ運用で強制度が非対称。**フェーズ 1（仕様時）は無条件**:
 > OpenSpec proposal / spec delta の確定前にタクソノミーを全項目当て、穴を
