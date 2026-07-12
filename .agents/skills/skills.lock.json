@@ -5,11 +5,11 @@
       "name": "caveman",
       "source": "https://github.com/JuliusBrussee/caveman",
       "source_type": "github",
-      "commit": "655b7d9c5431f822264b7732e9901c5578ac84cf",
+      "commit": "0d95a81d35a9f2d123a5e9430d1cfc43d55f1bb0",
       "license": "MIT",
       "license_file": ".agents/skills/caveman/LICENSE",
       "redistribution": "allowed",
-      "sha256": "6a93e68b5d843ab6da3290dfe81cfdf26de166be7f3feca5acb52744f63db593"
+      "sha256": "5e30bb56afbd0b01bd736f2da84180e76f18db4a64de8e124525d5c8dc2e8605"
     },
     {
       "name": "grill-me",
@@ -35,11 +35,11 @@
       "name": "grilling",
       "source": "https://github.com/mattpocock/skills",
       "source_type": "github",
-      "commit": "bc4cf903ff4855ce23199a8dd3bf98b3dbd7ad71",
+      "commit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
       "license": "MIT",
       "license_file": ".agents/skills/grilling/LICENSE",
       "redistribution": "allowed",
-      "sha256": "fe00af3e1815f97c0a7644605479328a726b5cd95ba6ef56a4be2a92fae6c20f"
+      "sha256": "5a35925d03a391bcfa46940868b649b72dba89ec9c19525e785bbb6bd3a7f478"
     },
     {
       "name": "domain-modeling",
@@ -55,11 +55,11 @@
       "name": "tdd",
       "source": "https://github.com/mattpocock/skills",
       "source_type": "github",
-      "commit": "43ea0884b07a3e67a5a07f025ce92aefa983177b",
+      "commit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
       "license": "MIT",
       "license_file": ".agents/skills/tdd/LICENSE",
       "redistribution": "allowed",
-      "sha256": "06f91f2e9cd9a6e7f13f61b13ff43241199aa70ea3b03a4d1921767c6b512424"
+      "sha256": "5363bb2775679fe9311fbb67947f95359169c6e7f1fac77c0f25e190bca6cf2f"
     },
     {
       "name": "diagnosing-bugs",
