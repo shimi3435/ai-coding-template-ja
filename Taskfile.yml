@@ -6,25 +6,25 @@ version: "3"
 
 tasks:
   setup:
-    desc: 初期セットアップ（uv sync = dev group のみ・extra なし ＋ pre-commit hooks）
+    desc: 初期・再セットアップ（導入済み extras を保持する inexact sync ＋ pre-commit hooks）
     cmds:
-      - uv sync
+      - uv sync --inexact
       - uv run pre-commit install
 
   setup:research:
-    desc: research extra（numpy / scipy / matplotlib / pandas）を導入
+    desc: research extra（numpy / scipy / matplotlib / pandas）を加算導入
     cmds:
-      - uv sync --extra research
+      - uv sync --inexact --extra research
 
   setup:notebook:
-    desc: notebook extra（jupyter / jupytext / nbstripout / nbqa）を導入
+    desc: notebook extra（jupyter / jupytext / nbstripout / nbqa）を加算導入
     cmds:
-      - uv sync --extra notebook
+      - uv sync --inexact --extra notebook
 
   setup:experiment:
-    desc: experiment extra（hydra-core / mlflow / dvc）を導入
+    desc: experiment extra（hydra-core / mlflow / dvc）を加算導入
     cmds:
-      - uv sync --extra experiment
+      - uv sync --inexact --extra experiment
 
   setup:all:
     desc: 全 extras（research / notebook / experiment）を一括導入

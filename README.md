@@ -25,7 +25,7 @@ green になる最小実用セットに、必要なものだけ opt-in で足し
 ## 2 回目以降
 
 ```bash
-task setup     # uv sync（dev のみ）＋ pre-commit install
+task setup     # uv sync --inexact（導入済み extras を保持）＋ pre-commit install
 task check     # ruff format --check / ruff check / basedpyright / pytest
 task doctor    # 環境診断（read-only・FAIL ゼロで green）
 ```
@@ -34,8 +34,8 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 
 | タスク | 内容 |
 | --- | --- |
-| `task setup` | uv sync（dev group のみ）＋ pre-commit hooks |
-| `task setup:research` ほか | extras 導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
+| `task setup` | inexact sync（初回は dev group、再実行時は導入済み extras を保持）＋ pre-commit hooks |
+| `task setup:research` ほか | extras を加算導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
 | `task check` | 品質チェック一式 |
 | `task fix` | ruff format ＋ ruff check --fix |
 | `task test` / `task lint` / `task typecheck` | 個別実行 |
@@ -52,7 +52,8 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 
 ### コア（常に有効）
 
-無印 `task setup` で入る最小実用セット。作成直後に green になる。
+初回の無印 `task setup` で入る最小実用セット。作成直後に green になる。再実行時は
+inexact sync により、導入済み extras を削除しない。
 
 - **Python 開発基盤**: uv / pyproject.toml / uv.lock / .python-version（3.12）。
 - **品質チェック**: ruff（format + lint）/ basedpyright（basic）/ pytest / pytest-cov を
@@ -84,6 +85,9 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 - **クロス AI レビュー**（Codex plugin・人起点のみ）→ [docs/optional/codex-review.md](docs/optional/codex-review.md)。
 
 オプションの在席は `task doctor` が INFO で報告するのみ（不在が正常・WARN/FAIL にしない）。
+
+個別の `task setup:<extra>` は既存 extras を保持して加算導入する。その代わり inexact sync は
+手動導入した余剰パッケージも保持する。コア環境だけへ戻す場合は exact な `uv sync` を実行する。
 
 ## ドキュメント構成
 

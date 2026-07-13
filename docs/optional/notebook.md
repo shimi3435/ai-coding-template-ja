@@ -14,12 +14,17 @@ Jupyter notebook を研究で使う場合の opt-in 手順。コアは notebook 
 ## 導入
 
 ```bash
-task setup:notebook        # uv sync --extra notebook
+task setup:notebook        # uv sync --inexact --extra notebook
 # research extra と併用する場合
-uv sync --extra notebook --extra research
+task setup:research
+task setup:notebook        # 個別 task は既存 extras を保持して加算導入
 # 全部入り
 task setup:all             # uv sync --all-extras
 ```
+
+`task setup` と個別の `task setup:<extra>` は `uv sync --inexact` を使うため、後から別 task を
+実行しても導入済み extras を削除しない。一方で手動導入した余剰パッケージも保持される。
+extras と余剰パッケージを外してコア環境だけへ戻す場合は、exact な `uv sync` を実行する。
 
 導入後の確認:
 
