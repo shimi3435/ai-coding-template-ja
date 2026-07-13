@@ -195,7 +195,10 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 > 上流兄弟 skill を byte-match で同梱した（名は `code-review` 固定・別名不可）。Claude Code の
 > ビルトイン `code-review` と**名前衝突するが許容**（機能重複・意味的に正参照）。本体は
 > `docs/agents/issue-tracker.md` 等のソフト依存を持つが、この repo に無くても Spec 軸は
-> degrade する（hard-stop しない）。経緯は Issue #35。
+> degrade する（hard-stop しない）。また Spec 軸の spec 自動探索は OpenSpec レイアウト
+> （`openspec/changes/*/`）を含まない（byte-match 維持のため上流のまま）。この repo で Spec
+> 軸を使う時は spec 引数に `openspec/changes/<id>/` を明示すれば回復する（spec 適合自体は
+> `spec-holes`＋`openspec validate` が別途担うため劣化の実害は小さい）。経緯は Issue #35。
 
 > `spec-holes` は 2 フェーズ運用で強制度が非対称。**フェーズ 1（仕様時）は無条件**:
 > OpenSpec proposal / spec delta の確定前にタクソノミーを全項目当て、穴を

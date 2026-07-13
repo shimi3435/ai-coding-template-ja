@@ -65,6 +65,14 @@ skill 実体を byte-match で新規 vendoring し、`skills.lock.json` にエ�
    には両者とも存在しない。byte-match 規律のもとで**そのまま**取り込む（Spec 軸は graceful
    に劣化し hard-stop しない）。`issue-tracker.md` を新規作成しない（スコープ膨張であり
    mattpocock 固有の成果物のため）。
+6. **既知の限界（受容・Codex P2 で顕在化）**: `code-review/SKILL.md` の Spec 軸の spec 自動
+   探索経路（issue 参照 / 明示パス引数 / `docs/`・`specs/`・`.scratch/`）は本リポジトリの正で
+   ある OpenSpec レイアウト（`openspec/changes/*/proposal.md`・`specs/**/spec.md`）を含まない。
+   issue 番号も明示パスも無い変更では Spec 軸が「no spec available」に劣化する。これを
+   OpenSpec 対応にするには SKILL.md 本文の改変が必要で byte-match（決定 1・5）を放棄するため
+   **採らない**。本リポジトリでは (a) spec 適合を `spec-holes`＋`openspec validate` が別途担う
+   ため Spec 軸の劣化は実質的な能力欠損でない、(b) 必要時は spec 引数に
+   `openspec/changes/<id>/` を明示すれば Spec 軸が回復する（skill step-2 経路②）。
 
 ## spec-holes フェーズ 1 結果
 
