@@ -5,7 +5,8 @@
 ## 原則
 
 - `.env` はコミットしない。
-- API key / token / private key を出力・保存・コミットしない。
+- API key / token / private key を追跡対象ファイルやログへ保存・出力しない。必要な secret は
+  `.env` と gitignore 済みのローカル生成設定にのみ保存し、mode `0600` で保護する。
 - bootstrap で secret を生成・保存しない。AI サービスへ自動ログインしない。
 - GitHub MCP の権限は read を既定とし toolset を最小化する。
 - MCP server の write 操作はデフォルトで慎重に扱う。

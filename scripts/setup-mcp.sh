@@ -3,8 +3,9 @@
 #
 # .env が値の単一ソース（source of record）。実体（.mcp.json / .codex/config.toml）は
 # 毎回 template ＋ .env から決定的に再生成する生成物で gitignore 済み。古い値は残さない。
-# secret は .env にのみ置き、生成物・template にハードコードしない。
+# secret は .env と gitignore 済みの生成物にのみ置き、template にハードコードしない。
 set -euo pipefail
+umask 077
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -42,6 +43,7 @@ generate() {
   content="$(cat "$tpl")"
   content="${content//$PLACEHOLDER/$key}"
   printf '%s\n' "$content" > "$dest"
+  chmod 600 "$dest"
   info "生成: $dest（source of record=$ENV_FILE）"
 }
 
