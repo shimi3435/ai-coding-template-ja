@@ -1,6 +1,6 @@
 # ai-coding-template-ja
 
-日本語で AI コーディングエージェント（Codex / Claude Code）を使う研究用 Python プロジェクトのテンプレート。このリポジトリで用いる中核語を定義する。
+研究者が AI コーディングを安全に始める開発基盤を提供する、日本語対応の研究用 Python プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。このリポジトリで用いる中核語を定義する。
 
 ## Language
 

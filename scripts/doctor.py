@@ -212,9 +212,9 @@ def check_gh(diag: Diagnostics, require_gh: bool) -> None:
                 "（apt: gh 公式 apt repo）"
             )
         return
-    rc, _ = _run(["gh", "auth", "status"])
+    rc, _ = _run(["gh", "auth", "token"])
     if rc == 0:
-        diag.ok("gh 利用可能・認証済みです")
+        diag.ok("gh 利用可能・資格情報あり（有効性は未検証）")
     else:
         diag.warn_("gh は導入済みですが未認証です（gh auth login / GH_TOKEN）")
 
@@ -224,12 +224,12 @@ def _read_env_key(key: str) -> str | None:
     env_file = REPO_ROOT / ".env"
     if not env_file.exists():
         return None
+    value = None
     for line in env_file.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if stripped.startswith(f"{key}="):
             value = stripped[len(key) + 1 :].strip().strip("\"'")
-            return value
-    return None
+    return value
 
 
 def check_context7(diag: Diagnostics, online: bool) -> None:

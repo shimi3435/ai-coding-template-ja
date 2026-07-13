@@ -60,6 +60,7 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 
 ## Safety
 - 破壊的変更・大量削除・依存の大規模更新は事前確認する。
-- secret / token / private key を出力・保存・コミットしない。
+- API key / token / private key を追跡対象ファイルやログへ保存・出力しない。必要な secret は
+  `.env` と gitignore 済みのローカル生成設定にのみ保存し、mode `0600` で保護する。
 - `.env` はコミットしない。MCP の write 操作は慎重に扱う。
 - 詳細は [docs/agents/safety.md](docs/agents/safety.md)。

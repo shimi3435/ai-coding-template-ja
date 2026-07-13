@@ -1,8 +1,8 @@
 # ai-coding-template-ja
 
-日本語で AI コーディングエージェント（Codex / Claude Code）を使う研究用 Python
-プロジェクトのテンプレート（Ubuntu 対象）。作成直後に `task check` / `task doctor` が
-green になる最小実用セットに、必要なものだけ opt-in で足していく。
+研究者が AI コーディングを安全に始める開発基盤を提供する、日本語対応の研究用 Python
+プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。作成直後に `task check` /
+`task doctor` が green になる最小実用セットに、必要なものだけ opt-in で足していく。
 
 > 使い方の全体像・オプションの選び方・詰まったときの導線は、通し読みガイド
 > [docs/guide.md](docs/guide.md) にまとめてある（本 README は最短手順の quickstart）。
@@ -120,8 +120,9 @@ license は `.agents/skills/skills.lock.json` に記録）。
 
 ## 注意
 
-- `.env` はコミットしない（`.env.example` をコピーして使う）。MCP 実体（`.mcp.json` /
+- `.env` はコミットしない（`.env.example` をコピーし、`chmod 600 .env` して使う）。MCP 実体（`.mcp.json` /
   `.codex/config.toml`）も生成物のため gitignore 済み（`task mcp:setup` で再生成）。
-- API key / token / private key を出力・保存・コミットしない
+- API key / token / private key を追跡対象ファイルやログへ保存・出力しない。必要な secret は
+  `.env` と gitignore 済みのローカル生成設定にのみ保存し、mode `0600` で保護する
 - GitHub の認証（`gh auth login` / `GH_TOKEN`）は各自で設定する
 - WSL 利用時は **WSL 上の Ubuntu** で `bootstrap.sh` を実行する

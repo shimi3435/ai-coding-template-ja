@@ -17,6 +17,9 @@
 - 値の単一ソース（source of record）は `.env` の `CONTEXT7_API_KEY`。
 - 実体（`.mcp.json` / `.codex/config.toml`）は `task mcp:setup`（`scripts/setup-mcp.sh`）が
   template ＋ `.env` から**冪等に再生成する生成物**。古い値は残さない（毎回上書き）。
+- API key / token / private key は追跡対象ファイルやログへ保存・出力しない。必要な secret は
+  `.env` と gitignore 済みのローカル生成設定にのみ保存し、いずれも mode `0600` で保護する。
+  `task mcp:setup` は生成設定を新規・再生成のどちらでも mode `0600` にする。
 - header 名は literal `CONTEXT7_API_KEY`（Bearer ではない）。両 template で揃える。
 - least-privilege: Claude `.mcp.json` は `tools` を `query-docs` / `resolve-library-id` に制限。
   Codex の `mcp_servers` にはツール allowlist フィールドが無いため、Codex 側は制限しない。
@@ -24,7 +27,8 @@
 ### 手順
 
 ```bash
-cp .env.example .env          # CONTEXT7_API_KEY=... を設定
+cp .env.example .env
+chmod 600 .env                # CONTEXT7_API_KEY=... を設定する前に保護
 task mcp:setup                # .mcp.json / .codex/config.toml を生成
 ```
 
