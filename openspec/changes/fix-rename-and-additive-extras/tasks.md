@@ -1,6 +1,0 @@
-- [x] 1. rename CLI の `CONTEXT.md` 更新を表す失敗テストを追加する
-- [x] 2. rename のホワイトリストへ `CONTEXT.md` を追加してテストを green にする
-- [x] 3. setup task の extras 保持契約を表す失敗テストを追加する
-- [x] 4. ローカル setup を inexact sync にし、関連文書を更新してテストを green にする
-- [x] 5. 対象テスト、実動作、`task openspec:validate`、`task check` を検証する
-- [x] 6. main が直接実装する（2点が小さく同じ Taskfile／導線に収まり、委譲分割の方が文脈重複になるためサブエージェントを見送る）
