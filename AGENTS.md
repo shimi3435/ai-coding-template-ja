@@ -24,13 +24,23 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - Codex / Claude Code の両方がこのファイルを正とする。
 - Claude Code 固有の補足のみ CLAUDE.md にある。
 
-## Workflow（OpenSpec / GSD の境界 / ADR-0003）
-- 「何を・なぜ作るか」は OpenSpec で確定する（仕様・受け入れ基準）。
-- 単一 change 内のタスク分解・順序・進捗は OpenSpec `tasks.md` / `/opsx:apply`
-  （CLI 等価: `openspec instructions apply --change <id>`・導線は workflow.md）が担う。
-- GSD（導入時のみ）は複数 change を横断するロードマップ・フェーズ順序・復帰のみを担い、
-  `openspec/changes/*/tasks.md` を二重化しない。受け入れ基準も新規定義しない。
-- GSD 未導入時も per-change タスクは OpenSpec `tasks.md` で完結する。
+## Workflow（OpenSpec / GSD の適応型実行境界 / ADR-0008）
+- 「何を・なぜ作るか」と最終完了は OpenSpec で確定する（仕様・受け入れ基準・`spec-holes`）。
+- 独立出荷可能な成果は先に OpenSpec changes へ分割する。一体の成果について、単一セッションかつ
+  単一コンテキストで安全に実装・検証でき、依存 phases や有益な隔離並列単位がなければ小規模、
+  それ以外は大規模の GSD 候補とし、経路と理由を `tasks.md` に記録する。
+- 小規模 change は OpenSpec `tasks.md` が詳細タスク・順序・進捗を所有し、
+  `openspec instructions apply --change <id>` または同じ Markdown artifacts から直接実行する。
+- 大規模 change は GSD（導入時のみ）が詳細 plan・phase 実行・phase 進捗を所有する。OpenSpec
+  `tasks.md` は handoff・全 phases 完了・原本検証・project checks・close の境界ゲートだけを持ち、
+  GSD の詳細タスクを複製しない。GSD も仕様・受け入れ基準を新規定義しない。
+- GSD への handoff は専用 branch の review 可能な commit から行い、change ID、canonical artifact
+  paths、source commit、完了済み境界ゲート、未解決事項を渡す。GSD の利用不能時や途中の経路変更は
+  自動 fallback せず、状態と再構成案を提示して承認を得る。
+- GSD phases 完了後も、OpenSpec 原本の全 requirements / scenarios / `spec-holes` と実装・検証を
+  対応付け、`task openspec:validate` と `task check` を通してから最終境界ゲートを完了にする。
+- テンプレート自身では一つの PR に一つの active change だけを置き、依存 changes は専用 branches で
+  段階的に close / merge する。main の `openspec/changes/` には blocked proposal を残さない。
 - change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
   チェックを `- [x]` に更新する。engine（`/opsx:apply`）不在の Markdown fallback でも同じ。
 - 成果物（コード / docs）を新規作成・大幅変更する task は、原則として新しいコンテキストの
