@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 from ai_coding_template_ja.openspec_gsd_handoff import (
     inspect_handoff,
@@ -134,9 +135,19 @@ def _setup_repository(tmp_path: Path) -> tuple[Path, Path, _DispatchRunner]:
     return repository, gsd_home, runner
 
 
+class _InspectArguments(TypedDict):
+    repository: Path
+    change_id: str
+    source_commit: str
+    gsd_home: Path
+    repository_policy: RepositoryPolicyVerdict
+    host_capability: HostCapabilityInput
+    runner: _DispatchRunner
+
+
 def _inspect_arguments(
     repository: Path, gsd_home: Path, runner: _DispatchRunner
-) -> dict[str, object]:
+) -> _InspectArguments:
     return {
         "repository": repository,
         "change_id": "fixture-change",
