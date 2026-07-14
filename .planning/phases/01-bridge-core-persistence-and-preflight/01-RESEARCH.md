@@ -216,11 +216,11 @@ completed = runner(
 
 No `[ASSUMED]` claims. Recommendations derive from tracked canonical files, repository code, fixtures, or local read-only probes.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Public subcommand/result field names** — CONTEXT delegates this to the planner. Keep the surface minimal and machine-readable; do not add behavior.
-2. **Exact repository-policy trackability signal beyond `git check-ignore`** — canonical policy requires a verdict but does not provide a generic downstream policy API. Model it as an explicit preflight input or repository-specific adapter; do not infer success.
-3. **Dev-tool execution** — `pytest`, Hypothesis, Ruff, basedpyright were unavailable in this worktree without sync. Test commands are unverified until the execution phase runs the existing setup.
+1. **RESOLVED — Public operation names** — expose Python operations `inspect_handoff`, `prepare_handoff`, and `mark_handoff_started`, with CLI operations `inspect`, `prepare`, and `mark-started`. `inspect_handoff` / `inspect` is read-only. `prepare_handoff` / `prepare` persists a `prepared` manifest only after every preflight succeeds. `mark_handoff_started` / `mark-started` atomically transitions `prepared` to `started` only after the caller confirms GSD entrypoint acceptance. This naming decision adds no lifecycle, retry, finalization, or other behavior.
+2. **RESOLVED — Repository-policy trackability signal** — accept a caller-supplied explicit `RepositoryPolicyVerdict`; only `tracked` succeeds. A missing, unknown, or false verdict fails closed. Do not infer repository-policy success from `git check-ignore` or any other local Git signal.
+3. **RESOLVED — Dev-tool execution** — tool availability is an execution-time gate, not a planning blocker. The execution phase must run the close-to-change pytest targets and `task check`; if either cannot run, report it as unverified and stop phase completion.
 
 ## Environment Availability
 
