@@ -33,7 +33,11 @@ canonical OpenSpec artifacts に委ねる。
   1. Phase 1 の plan、変更、検証証拠から `BRIDGE-01` の canonical path、heading、source commit へ追跡できる。
   2. Phase 1 の証拠は bridge core、persistence、preflight の境界に限定され、OpenSpec の規範本文を複製または再定義していない。
   3. Phase 1 の完了判定は canonical OpenSpec artifacts に照合でき、未承認の仕様変更を GSD artifact で補っていない。
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — functional core、bounded reader、OpenSpec discovery を TDD で固定する
+- [ ] 01-02-PLAN.md — manifest persistence、preflight adapters、thin entrypoint を TDD で接続する
 
 ### Phase 2: Approval-Gated Skill Orchestration
 **Goal**: canonical `tasks.md` heading `## 3. Skill phase` と source commit を唯一の規範として、approval-gated skill orchestration の実装・検証境界を Phase 1 の seam 上で成立させる
