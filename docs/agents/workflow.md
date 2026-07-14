@@ -2,24 +2,72 @@
 
 作業方針の単一の正は [AGENTS.md](../../AGENTS.md)。本書はその補助詳細。
 
-## OpenSpec / GSD の責務境界（ADR-0003）
+## OpenSpec / GSD の責務境界（ADR-0008）
 
-> 初版の境界（OpenSpec=何を/なぜ、GSD=順序/進捗）は誤り。OpenSpec の change は
-> `tasks.md`（実装チェックリスト）を標準内包し `/opsx:apply` がタスク分解・進捗マークまで
-> 担う。よって per-change のタスク所有は OpenSpec 側。GSD は横断ロードマップに限定する。
+OpenSpec は実行経路を問わず、change の proposal / design / spec delta / 受け入れ基準 /
+`spec-holes` と、原本に対する最終完了判定を所有する。GSD は opt-in であり、大規模な単一
+change の詳細計画、phase の実行順序・進捗、セッション跨ぎの復帰を所有できる。どちらを使う
+場合も仕様と進捗を二重管理しない。
 
-**OpenSpec（コア）= 「何を・なぜ」＋「単一 change 内のタスク」**
-- 機能仕様 / 変更仕様の記述、受け入れ基準の定義、互換性・設計判断の記録、実装前の合意形成
-- 単一 change 内の実装タスク分解・順序・進捗（`tasks.md` / `/opsx:apply`）
-- 成果物: `openspec/specs/*`、`openspec/changes/*`（proposal / tasks / 必要時 specs）
+**小規模 change（OpenSpec 直接経路）**
 
-**GSD（オプション）= 「複数 change を横断する上位管理」**
-- 複数 change にまたがるロードマップ / フェーズ順序 / マイルストーン / セッション跨ぎ復帰
-- 非責務: per-change のタスク分解（OpenSpec `tasks.md` が所有）
-- GSD は `openspec/changes/*/tasks.md` を二重化せず、横断の順序付けのみ行う
-- 受け入れ基準を GSD 側で新規定義しない（OpenSpec を参照する）
+- OpenSpec `tasks.md` が実装・検証の詳細タスク、順序、checkbox 進捗を持つ。
+- 人または agent が OpenSpec CLI の指示、もしくは同じ Markdown artifacts を読み、各 task を
+  実装・検証して checkbox を更新する。
 
-## OpenSpec engine のアクセス形態と Markdown fallback（ADR-0003 / Q12）
+**大規模 change（GSD 経路）**
+
+- OpenSpec `tasks.md` は handoff、全対応 phases 完了、OpenSpec 原本検証、project checks、close
+  の境界ゲートだけを持つ。詳細 plan / task / phase 進捗は GSD が持ち、OpenSpec へ複製しない。
+- 各 GSD phase は一つの OpenSpec change と担当範囲を参照する。一つの change を複数 phases に
+  分けることはできるが、一つの phase に複数 changes の要件を混在させない。
+- 外部動作、受け入れ基準、公開 API、永続データ、trust boundary、重要アーキテクチャ、既存 ADR
+  へ影響する判断が必要になったら GSD を停止する。OpenSpec または ADR を先に更新し、
+  `spec-holes` と validate を再実行してから影響 phases を再計画する。可逆な内部実装だけは GSD
+  側で決めてよい。
+
+### 実行経路の判定
+
+proposal / design / spec delta と `spec-holes` Phase 1 の確定後、`tasks.md` を確定する前に
+次の順で判定し、選択理由を `tasks.md` に記録する。
+
+1. 独立してレビュー・出荷できる成果が複数あれば、実行 engine を選ぶ前に OpenSpec changes を
+   分割する。
+2. 一体の成果が複数セッション、依存順を持つ複数 phases、有益な隔離並列単位、または単一
+   コンテキストで安全に完了・検証できない条件のいずれかを持つなら GSD 候補とする。
+3. 上記の大規模条件がなく、単一セッションと単一コンテキストで安全に完了・検証できるなら
+   OpenSpec 直接経路とする。
+
+直接実行中に大規模条件を満たした場合は、完了済み checkbox を保持し、未完了範囲を境界ゲートへ
+再構成する。理由と状態を提示して承認を得た後にだけ GSD へ昇格する。GSD が利用不能または安全に
+継続できない場合も直接経路へ自動で戻さず、既存 commits、完了済み phases、未完了範囲、詳細
+`tasks.md` の再構成案を提示して承認を得る。
+
+### 大規模 change の手動 handoff
+
+自動 bridge が無くても、実行主体は次の固定手順で GSD へ引き渡す。
+
+1. change ID、proposal / design / spec delta / tasks の相対パス、`spec-holes` 完了、validate 結果を
+   確認する。
+2. GSD を選ぶ理由を `tasks.md` に記録し、詳細 task の代わりに handoff / phases / 原本検証 /
+   project checks / close の境界ゲートを置く。
+3. 非デフォルトの専用 branch 上で canonical artifacts をレビュー可能な commit に固定する。
+   既存 dirty changes を自動 stash / commit しない。
+4. GSD に change ID、canonical artifact paths、source commit、完了済み境界ゲート、未解決事項を
+   渡す。必要な GSD capability を確認できなければ存在を推測して artifacts を生成せず、停止する。
+5. 各 phase に元 change と担当範囲を対応付け、一つの phase に複数 changes を混在させない。
+6. 各 phase 完了後に GSD の進捗を更新し、main 実行主体が対応する OpenSpec 境界ゲートを更新する。
+
+全 GSD phases の完了だけでは change 完了にならない。main 実行主体は OpenSpec 原本の全
+requirement / scenario / `spec-holes` を実装・テスト・理由付き未検証へ対応付け、
+`task openspec:validate`、`task check`、文書リンクを検証してから最終境界ゲートを完了にする。
+
+テンプレート自身は一つの PR に一つの active change だけを載せる。依存 changes は先行 change の
+pre-merge close / merge 後を base とする専用 branches で順番に実装し、main や OpenSpec backlog
+へ proposal を複製しない。各 PR の最終コミットで対象 change directory を削除し、main の
+`openspec/changes/` を空に保つ。
+
+## OpenSpec engine のアクセス形態と Markdown fallback（ADR-0008）
 
 OpenSpec engine には **2 つのアクセス形態**があり、両者は別物。実機は `openspec` CLI が
 入る形態のため CLI を第一線に置く。
@@ -28,9 +76,13 @@ OpenSpec engine には **2 つのアクセス形態**があり、両者は別物
 不在でも WARN に留める（FAIL にしない・自動実行しない）。既存 change を CLI で駆動する導線:
 
 - `openspec list` … change / spec の一覧を出す。
-- `openspec instructions apply --change <id>` … 対象 change の apply 指示と context ファイル
-  （proposal / tasks / spec delta）を出力する。出力の `Progress` は `tasks.md` の**チェック
-  ボックス進捗**（n/m complete）で、タスクの実際の進捗確認はここを見る。実装はこの指示に沿う。
+- `openspec instructions apply --change <id>` … 対象 change の apply 指示と context ファイルを
+  出力する。出力の `Progress` は `tasks.md` の**チェックボックス進捗**（n/m complete）で、
+  タスクの実際の進捗確認はここを見る。CLI は実装や checkbox 更新を自動実行しない。
+- `openspec instructions apply --change <id> --json` … `contextFiles` の artifact paths と、
+  `progress` / `tasks` を返す。JSON に canonical な本文は含まれないため、proposal / design /
+  spec delta / tasks の内容は必ず列挙された Markdown ファイルから読む。JSON は artifact discovery
+  と進捗取得だけに使う。
 - `openspec status --change <id>` … **artifact 単位**の完了状態（`proposal` / `tasks` / `specs`
   ファイルが存在するか）を表示する。`tasks` artifact は `tasks.md` が在れば未チェック項目が
   残っていても done 扱いになるため、**タスクのチェックボックス進捗は上の `instructions apply`
@@ -43,18 +95,21 @@ OpenSpec engine には **2 つのアクセス形態**があり、両者は別物
   archive せずマージ前の削除で close する**（テンプレ自身の change 運用は
   [openspec/project.md](../../openspec/project.md)）。
 
-CLI は tasks の**自動チェックマークを付けない**。各タスク完了時に `tasks.md` の `- [ ]` を
-`- [x]` へ更新するのは実行主体（能動規律）。task をサブエージェントへ委譲した場合の実行主体は
-オーケストレータ（main）であり、サブエージェントはマークしない（下記「task 単位のサブエージェント委譲」）。
+CLI は実装 engine ではなく、tasks の**自動チェックマークを付けない**。小規模 change では、
+各タスク完了時に `tasks.md` の `- [ ]` を `- [x]` へ更新するのは実行主体（能動規律）。大規模
+change では GSD が詳細 plan / phase 進捗を更新し、main 実行主体が OpenSpec の対応する境界ゲート
+だけを更新する。task をサブエージェントへ委譲した場合、サブエージェントはマークしない
+（下記「task 単位のサブエージェント委譲」）。
 
 **(b) スラッシュコマンド `/opsx:*`（任意・別導入）** — Claude Code のスラッシュコマンド統合で、
 上記 CLI とは**別物**。CLI をインストールしただけでは `/opsx:apply` 等は存在しない（別途導入が
 要る・このテンプレートは同梱しない）。動詞の対応は `/opsx:apply` ≈
 `openspec instructions apply --change <id>`。
 
-どちらの形態も無くても（engine 不在でも）境界は崩れない。エンジンはあくまで自動化で、
-境界の前提ではない。手書きで運用する場合の最小形式（エージェントが勝手な形式を作らない
-ための固定形式）:
+どちらの形態も無くても（engine 不在でも）境界は崩れない。JSON 契約が非互換な場合も含め、
+固定された OpenSpec directory 規約から同じ Markdown files を読み、`tasks.md` の checkbox から
+進捗を算出する。エンジンはあくまで discovery と検証の補助で、境界の前提ではない。手書きで
+運用する場合の最小形式（エージェントが勝手な形式を作らないための固定形式）:
 
 - 各 change ディレクトリは `proposal.md` / `tasks.md` を必須とし、振る舞いが変わる場合のみ
   `specs/<capability>/spec.md` を持つ。
@@ -67,10 +122,11 @@ CLI は tasks の**自動チェックマークを付けない**。各タスク�
   - [ ] 2. テスト追加 ...
   - [ ] 3. `task check` を通す
   ```
-- change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
-  チェックを `- [x]` に更新する。engine 不在の fallback では `/opsx:apply` が進捗マークを
-  担わないため、この能動規律を実行主体が肩代わりする。
-- GSD（導入時）は change ディレクトリへ**リンク**するのみで `tasks.md` の内容を複製しない。
+- 小規模 change の実行主体は各詳細 task の実装・検証後に `tasks.md` を `- [x]` へ更新する。
+  CLI 不在の fallback でも同じ能動規律を適用する。
+- 大規模 change は上記の固定手順で手動 handoff し、GSD の詳細 plan / phase 進捗と OpenSpec の
+  境界ゲートを分離する。GSD は change の canonical paths を参照し、仕様や受け入れ基準を複製・
+  再定義しない。GSD が利用不能でも直接経路へ自動 fallback しない。
 
 `openspec init` は**新規プロジェクト用**。既存テンプレでは `openspec/project.md` を
 `config.yaml` へ移行するハザードがあるため**このリポジトリでは実行しない**。既存 change の
@@ -89,18 +145,22 @@ owner のままで、ここでは順序だけを示す。
    `spec-holes` フェーズ 1 で未定義の振る舞いを列挙して潰す（[AGENTS.md](../../AGENTS.md)）。
 2. **spec delta 作成（振る舞い変更時のみ）** — 各 requirement 本文の 1 行目に SHALL / MUST
    を置く（制約の詳細は上記 fallback 節）。
-3. **tasks 作成** — `tasks.md` をチェックボックス形式の番号付きリストで書く（形式は上記
-   fallback 節）。
-4. **実装** — `openspec instructions apply --change <id>` の指示に沿って進める。engine 不在
-   なら上記 fallback 節の手書き運用で同じ手順を辿る。各タスク完了時に実行主体が `tasks.md`
-   のチェックを `- [x]` へ更新する（チェックボックス規律）。
-5. **PR 前チェック** — `task openspec:validate` で全 change の validate green を確認する
+3. **経路判定** — 独立出荷可能な成果が複数あれば changes を分割する。一体の成果は上記の
+   大規模条件を一つでも満たせば GSD 候補、それ以外は直接経路とし、理由を `tasks.md` に記録する。
+4. **tasks / handoff 準備** — 直接経路の `tasks.md` には詳細 task を置く。GSD 経路では境界ゲート
+   だけを置き、上記固定手順で専用 branch の reviewable commit から手動 handoff する。
+5. **実装** — 直接経路では `openspec instructions apply --change <id>` の指示、または engine
+   不在時の Markdown fallback に沿い、各 task の実装・検証後に checkbox を更新する。GSD 経路
+   では詳細 plan / phase 進捗を GSD で管理し、仕様変更は OpenSpec へ戻してから再計画する。
+6. **原本検証 / PR 前チェック** — 実行経路とは別に OpenSpec 原本との対応を確認し、
+   `task openspec:validate` で全 change の validate green を確認する
    （engine 必須・CLI 不在時は導入案内を出して FAIL する）。`proposal.md` / `tasks.md` を
    欠く change と、`tasks.md` に整形式の checkbox 行（`- [ ] ` / `- [x] `）が無い・
    checkbox が崩れている change は preflight で FAIL する。engine を導入しない運用では、
    上記 fallback 節の最小形式（全項目）を手動で確認する。
-6. **pre-merge close** — マージ前の最終コミットで change ディレクトリを削除し、main に
-   change ディレクトリを載せない（規約は [openspec/project.md](../../openspec/project.md)）。
+7. **pre-merge close** — 一つの PR に一つの active change だけを載せ、マージ前の最終コミットで
+   change ディレクトリを削除して main に載せない。依存 change は先行 change の merge 後を base
+   とする専用 branch で段階的に実装する（規約は [openspec/project.md](../../openspec/project.md)）。
 
 ## change close 時の軽量ふりかえり（テンプレート自身の運用）
 

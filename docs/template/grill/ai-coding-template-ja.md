@@ -1,5 +1,9 @@
 # ai-coding-template-ja 作成依頼ドキュメント（改訂版）
 
+> **歴史的設計入力:** 本文に記録された ADR-0003 の OpenSpec / GSD 境界は ADR-0008 により
+> supersede された。現行の authority は [AGENTS.md](../../../AGENTS.md) と
+> [docs/agents/workflow.md](../../agents/workflow.md) を参照する。
+
 > 改訂方針: コア層 / オプション層の 2 層構造に再編。AGENTS.md を主体とし CLAUDE.md は薄く。OpenSpec をコア・GSD をオプションとして責務を分離。対象 OS は Ubuntu (Linux) のみ。パッケージ改名・`.gitignore`・basedpyright モード等の懸念を推奨方針として反映。
 
 ---

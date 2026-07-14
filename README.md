@@ -79,7 +79,7 @@ inexact sync により、導入済み extras を削除しない。
 - **セキュリティ監査ゲート**: `security` dependency-group（pip-audit / bandit）。CI audit
   ジョブと `task security` が同一範囲を監査 → [docs/optional/extras-audit.md](docs/optional/extras-audit.md)。
 - **notebook 管理**（nbstripout の pre-commit overlay 等）→ [docs/optional/notebook.md](docs/optional/notebook.md)。
-- **GSD**（横断ロードマップ管理）→ [docs/optional/gsd.md](docs/optional/gsd.md)。
+- **GSD**（大規模 change の詳細 plan / phase 進捗＋横断管理）→ [docs/optional/gsd.md](docs/optional/gsd.md)。
 - **Serena MCP**（大規模リファクタ時のみ）→ [docs/optional/serena.md](docs/optional/serena.md)。
 - **GitHub MCP**（ローカル / Docker / リモート HTTP・read-only 既定）→ [docs/agents/mcp.md](docs/agents/mcp.md)。
 - **クロス AI レビュー**（Codex plugin・人起点のみ）→ [docs/optional/codex-review.md](docs/optional/codex-review.md)。
