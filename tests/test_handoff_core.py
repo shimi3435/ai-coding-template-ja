@@ -7,9 +7,19 @@ Contract: automate-openspec-gsd-handoff at
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from pathlib import Path
 
 import pytest
+from ai_coding_template_ja.openspec_gsd_handoff.reader import (
+    ArtifactLimits,
+    read_canonical_artifacts,
+)
+from hypothesis import given
+from hypothesis import strategies as st
+
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
+    ArtifactClaim,
+    ArtifactKind,
     Failure,
     HostCapabilityInput,
     HostDispatch,
@@ -22,8 +32,6 @@ from ai_coding_template_ja.openspec_gsd_handoff.progress import (
     parse_task_progress,
     validate_candidate_progress,
 )
-from hypothesis import given
-from hypothesis import strategies as st
 
 SOURCE_COMMIT = "5a1f78b81f546c900745328fad24f9adb073e768"
 PROGRESS_REQUIREMENT = "task progressを決定論的に算出する"
@@ -131,3 +139,105 @@ def test_progress_models_are_frozen_and_route_is_separate_from_host_verdict() ->
 def test_contract_trace_constants_are_source_pinned() -> None:
     assert len(SOURCE_COMMIT) == 40
     assert PROGRESS_REQUIREMENT in "task progressを決定論的に算出する"
+
+
+def _make_artifact(tmp_path: Path, relative: str, content: bytes) -> tuple[Path, Path]:
+    repository = tmp_path / "repository"
+    artifact = repository / "openspec" / "changes" / "fixture-change" / relative
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(content)
+    return repository, artifact
+
+
+def test_reader_returns_content_and_hash_from_the_same_bounded_bytes(
+    tmp_path: Path,
+) -> None:
+    repository, proposal = _make_artifact(tmp_path, "proposal.md", b"# Proposal\n")
+
+    result = read_canonical_artifacts(
+        repository,
+        "fixture-change",
+        [ArtifactClaim(ArtifactKind.PROPOSAL, proposal)],
+    )
+
+    assert isinstance(result, Success)
+    assert result.value[0].content == "# Proposal\n"
+    assert result.value[0].content_bytes == b"# Proposal\n"
+    assert result.value[0].sha256 == (
+        "03862585012a9c8e770ee36871f6483b00d93503a33b6f66acfd564dc1a64910"
+    )
+    assert result.value[0].path == ("openspec/changes/fixture-change/proposal.md")
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["symlink", "sibling-prefix", "duplicate", "invalid-utf8"],
+)
+def test_reader_rejects_unsafe_or_ambiguous_artifacts(
+    tmp_path: Path, case: str
+) -> None:
+    repository, proposal = _make_artifact(tmp_path, "proposal.md", b"# Proposal\n")
+    claims = [ArtifactClaim(ArtifactKind.PROPOSAL, proposal)]
+    if case == "symlink":
+        outside = tmp_path / "outside.md"
+        outside.write_text("outside\n", encoding="utf-8")
+        proposal.unlink()
+        proposal.symlink_to(outside)
+    elif case == "sibling-prefix":
+        proposal = (
+            repository / "openspec" / "changes" / "fixture-change-evil" / "proposal.md"
+        )
+        proposal.parent.mkdir(parents=True)
+        proposal.write_text("outside change\n", encoding="utf-8")
+        claims = [ArtifactClaim(ArtifactKind.PROPOSAL, proposal)]
+    elif case == "duplicate":
+        claims.append(ArtifactClaim(ArtifactKind.DESIGN, proposal))
+    else:
+        proposal.write_bytes(b"\xff")
+
+    result = read_canonical_artifacts(repository, "fixture-change", claims)
+
+    assert isinstance(result, Failure)
+    assert result.issue.category.value == "artifact"
+
+
+def test_reader_enforces_exact_file_and_aggregate_boundaries(tmp_path: Path) -> None:
+    repository, proposal = _make_artifact(tmp_path, "proposal.md", b"1234")
+    _, design = _make_artifact(tmp_path, "design.md", b"5678")
+    claims = [
+        ArtifactClaim(ArtifactKind.PROPOSAL, proposal),
+        ArtifactClaim(ArtifactKind.DESIGN, design),
+    ]
+    limits = ArtifactLimits(max_files=2, bytes_per_file=4, bytes_total=8)
+
+    boundary = read_canonical_artifacts(
+        repository, "fixture-change", claims, limits=limits
+    )
+    proposal.write_bytes(b"12345")
+    exceeded = read_canonical_artifacts(
+        repository, "fixture-change", claims, limits=limits
+    )
+
+    assert isinstance(boundary, Success)
+    assert isinstance(exceeded, Failure)
+    assert exceeded.issue.code == "artifact-file-limit-exceeded"
+
+
+def test_reader_rejects_too_many_files_without_partial_artifacts(
+    tmp_path: Path,
+) -> None:
+    repository, proposal = _make_artifact(tmp_path, "proposal.md", b"proposal")
+    _, design = _make_artifact(tmp_path, "design.md", b"design")
+
+    result = read_canonical_artifacts(
+        repository,
+        "fixture-change",
+        [
+            ArtifactClaim(ArtifactKind.PROPOSAL, proposal),
+            ArtifactClaim(ArtifactKind.DESIGN, design),
+        ],
+        limits=ArtifactLimits(max_files=1, bytes_per_file=20, bytes_total=20),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "artifact-count-limit-exceeded"
