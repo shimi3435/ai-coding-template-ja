@@ -10,7 +10,7 @@ validate、`spec-holes` Phase 1再確認、利用者承認までproduction code�
 - [x] 1.1 `revise-openspec-gsd-execution-boundary` がmerge済みであることと、参照するpolicy requirement・手動handoff・close policyの整合を確認し、そのbaseから本changeだけを載せる専用branch / PRを用意する
 - [x] 1.2 対応OpenSpec CLI version / JSON schema fixtureと、MVPに必要なGSD capabilityの具体probe signal・失敗条件を確定する
 - [x] 1.3 最小manifestのfeature-branch追跡、source commit後の別commit、ignore時の停止、テンプレートpre-merge手動削除をfixtureとworkflowへ反映し、`.planning/`をignoreする下流ではcross-session resumeを保証できない旨を`docs/optional/gsd.md`へ追記する
-- [ ] 1.4 1.1–1.3の決定をOpenSpecへ反映し、strict validateと`spec-holes` Phase 1を再実行して承認後に手動handoffする
+- [x] 1.4 1.1–1.3の決定をOpenSpecへ反映し、strict validateと`spec-holes` Phase 1を再実行して承認後に手動handoffする
 
 ## 2. Bridge MVP phase
 
