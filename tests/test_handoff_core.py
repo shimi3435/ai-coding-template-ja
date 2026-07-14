@@ -18,7 +18,10 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     KnownState,
     Success,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
+from ai_coding_template_ja.openspec_gsd_handoff.progress import (
+    parse_task_progress,
+    validate_candidate_progress,
+)
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -72,6 +75,20 @@ def test_progress_rejects_more_than_pinned_task_limit() -> None:
 
     assert isinstance(result, Failure)
     assert result.issue.code == "tasks-limit-exceeded"
+
+
+def test_candidate_progress_rejects_boolean_counts_without_partial_value() -> None:
+    canonical = parse_task_progress("- [ ] 1. task\n")
+    assert isinstance(canonical, Success)
+
+    result = validate_candidate_progress(
+        {"total": True, "complete": 0, "remaining": 1},
+        [{"id": "1", "description": "1. task", "done": False}],
+        canonical.value,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "candidate-progress-invalid"
 
 
 @given(
