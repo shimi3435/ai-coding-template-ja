@@ -10,10 +10,6 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
-from ai_coding_template_ja.openspec_gsd_handoff.reader import (
-    ArtifactLimits,
-    read_canonical_artifacts,
-)
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -31,6 +27,11 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
 from ai_coding_template_ja.openspec_gsd_handoff.progress import (
     parse_task_progress,
     validate_candidate_progress,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.reader import (
+    DEFAULT_ARTIFACT_LIMITS,
+    ArtifactLimits,
+    read_canonical_artifacts,
 )
 
 SOURCE_COMMIT = "5a1f78b81f546c900745328fad24f9adb073e768"
@@ -217,10 +218,20 @@ def test_reader_enforces_exact_file_and_aggregate_boundaries(tmp_path: Path) -> 
     exceeded = read_canonical_artifacts(
         repository, "fixture-change", claims, limits=limits
     )
+    proposal.write_bytes(b"12345")
+    design.write_bytes(b"6789")
+    aggregate_exceeded = read_canonical_artifacts(
+        repository,
+        "fixture-change",
+        claims,
+        limits=ArtifactLimits(max_files=2, bytes_per_file=5, bytes_total=8),
+    )
 
     assert isinstance(boundary, Success)
     assert isinstance(exceeded, Failure)
     assert exceeded.issue.code == "artifact-file-limit-exceeded"
+    assert isinstance(aggregate_exceeded, Failure)
+    assert aggregate_exceeded.issue.code == "artifact-total-limit-exceeded"
 
 
 def test_reader_rejects_too_many_files_without_partial_artifacts(
@@ -241,3 +252,32 @@ def test_reader_rejects_too_many_files_without_partial_artifacts(
 
     assert isinstance(result, Failure)
     assert result.issue.code == "artifact-count-limit-exceeded"
+
+
+def test_reader_uses_source_pinned_limits_and_change_id_bytes(tmp_path: Path) -> None:
+    assert DEFAULT_ARTIFACT_LIMITS == ArtifactLimits(
+        max_files=64,
+        bytes_per_file=1_048_576,
+        bytes_total=4_194_304,
+        change_id_bytes=128,
+    )
+    change_id = "a" * 128
+    repository = tmp_path / "repository"
+    artifact = repository / "openspec" / "changes" / change_id / "proposal.md"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("proposal\n", encoding="utf-8")
+
+    boundary = read_canonical_artifacts(
+        repository,
+        change_id,
+        [ArtifactClaim(ArtifactKind.PROPOSAL, artifact)],
+    )
+    exceeded = read_canonical_artifacts(
+        repository,
+        f"{change_id}a",
+        [ArtifactClaim(ArtifactKind.PROPOSAL, artifact)],
+    )
+
+    assert isinstance(boundary, Success)
+    assert isinstance(exceeded, Failure)
+    assert exceeded.issue.code == "change-id-invalid"
