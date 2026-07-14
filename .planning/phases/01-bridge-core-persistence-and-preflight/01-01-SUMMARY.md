@@ -76,12 +76,12 @@ Each task retained explicit RED and GREEN evidence:
 
 ## Files Created/Modified
 
-- `models.py` - immutable shared values, host input, routes, and classified whole-operation results.
-- `progress.py` - exact Markdown task normalization and candidate metadata parity.
-- `reader.py` - change containment, input limits, UTF-8 decoding, and same-buffer SHA-256.
-- `discovery.py` - supported candidate validation, terminal classification, and fresh fallback composition.
-- `test_handoff_core.py` - example/property coverage for progress, reader limits, and path safety.
-- `test_handoff_discovery.py` - direct fixture-table coverage for all pinned discovery routes.
+- `src/ai_coding_template_ja/openspec_gsd_handoff/models.py` - immutable shared values, host input, routes, and classified whole-operation results.
+- `src/ai_coding_template_ja/openspec_gsd_handoff/progress.py` - exact Markdown task normalization and candidate metadata parity.
+- `src/ai_coding_template_ja/openspec_gsd_handoff/reader.py` - change containment, input limits, UTF-8 decoding, and same-buffer SHA-256.
+- `src/ai_coding_template_ja/openspec_gsd_handoff/discovery.py` - supported candidate validation, terminal classification, and fresh fallback composition.
+- `tests/test_handoff_core.py` - example/property coverage for progress, reader limits, and path safety.
+- `tests/test_handoff_discovery.py` - direct fixture-table coverage for all pinned discovery routes.
 
 ## Decisions Made
 
