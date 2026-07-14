@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     CleanupOutcome,
     FailurePoint,
@@ -21,7 +22,6 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     parse_manifest_bytes,
     serialize_manifest,
 )
-
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
     HandoffState,
     HostCapabilityInput,
@@ -158,7 +158,7 @@ class _FaultOperations(ManifestFileOperations):
 
     def replace(self, source: Path, target: Path) -> None:
         self.replace_calls += 1
-        if self.fault == "replace":
+        if self.fault in {"replace", "cleanup"}:
             raise OSError("injected replace failure")
         super().replace(source, target)
 
