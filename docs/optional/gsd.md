@@ -48,6 +48,22 @@ npx @opengsd/gsd-core@latest
 5. 各 phase に元 change と担当範囲を参照させる。仕様や受け入れ基準は GSD artifacts へ転記しない。
 6. phase ごとの検証と進捗更新後、実行主体が対応する OpenSpec 境界ゲートを更新する。
 
+handoff MVPを使う場合、`.planning/openspec/<change-id>/handoff.json`はcanonical artifactsを固定した
+source commitの後続**別commit**でfeature branchへ追跡する。`.planning/`がignoreされる、または
+repository policy上追跡できない下流環境では、cross-session resumeを保証できない。永続化方針を
+明示するまでhandoff stateを`prepared` / `started`へ進めず停止する。テンプレート自身では既存close
+policyに従いpre-mergeでmanifestを手動削除し、自動cleanupは行わない。
+
+GSD 1.5.0のread-only capability probeは`init progress --raw`で初期化状態とproject root、agent配置を
+確認するところまでで、entrypointにdry-runはない。未初期化なら明示承認後に、canonical paths、source
+commit、one-change制約、仕様非複製を記したidea documentを
+`$gsd-new-project --auto @<handoff-brief>`へ渡す。初期化済みなら同じ参照を持つchange専用
+`$gsd-phase`を追加する。GSD側には仕様や受け入れ基準を転記しない。
+
+CodexではCLI probeと別にhostの`spawn_agent` schemaを検査する。`agent_type`なしのgeneric schemaでは
+対応agent `.toml`をrole-preambleとして使い、`generic-agent workaround`と明示する。typed dispatch
+またはworktree isolationが必須ならgeneric schemaで続行しない。
+
 GSD 実行中に仕様変更が必要になった場合は、GSD を止め、OpenSpec 原本または ADR を先に更新する。
 `spec-holes` と validate を再実行してから、影響する phases を再計画する。
 

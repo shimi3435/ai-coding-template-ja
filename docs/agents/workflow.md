@@ -58,6 +58,23 @@ proposal / design / spec delta と `spec-holes` Phase 1 の確定後、`tasks.md
 5. 各 phase に元 change と担当範囲を対応付け、一つの phase に複数 changes を混在させない。
 6. 各 phase 完了後に GSD の進捗を更新し、main 実行主体が対応する OpenSpec 境界ゲートを更新する。
 
+handoff自動化を使う場合も上記policyを正とし、`.planning/openspec/<change-id>/handoff.json`はcanonical
+artifactsを固定したsource commitの**次の別commit**でfeature branchへ追跡する。`git check-ignore`と
+repository policyでmanifestが追跡可能と確認できない場合、handoff stateを`prepared` / `started`へ
+進めず停止する。manifestは仕様の正本ではなく、source commit、canonical paths / hashes、progress、
+検出capabilities、handoff stateだけを持つ復帰用索引である。
+
+GSD 1.5.0の書込前probeは`init progress --raw`までをread-onlyで行う。未初期化なら明示承認後に、
+change ID、canonical artifact paths、source commit、完了済み境界ゲート、未解決事項、one-change制約、
+仕様非複製を持つhandoff briefをidea documentとして`$gsd-new-project --auto @<handoff-brief>`へ渡す。
+初期化済みなら同じ参照を持つchange専用`$gsd-phase`を追加する。どちらもGSD artifactsへ仕様や受け入れ
+基準を転記しない。
+
+CLI probeはhostのagent dispatch capabilityを証明しない。execute skillはruntimeの`spawn_agent` schemaも
+別に検査する。`agent_type`なしのgeneric schemaでは対応agent `.toml`をrole-preambleへ注入し、
+`generic-agent workaround`と明示する。typed dispatchまたはworktree isolationが正しさに必須なら
+generic schemaではfail-closedする。
+
 全 GSD phases の完了だけでは change 完了にならない。main 実行主体は OpenSpec 原本の全
 requirement / scenario / `spec-holes` を実装・テスト・理由付き未検証へ対応付け、
 `task openspec:validate`、`task check`、文書リンクを検証してから最終境界ゲートを完了にする。
@@ -65,7 +82,8 @@ requirement / scenario / `spec-holes` を実装・テスト・理由付き未検
 テンプレート自身は一つの PR に一つの active change だけを載せる。依存 changes は先行 change の
 pre-merge close / merge 後を base とする専用 branches で順番に実装し、main や OpenSpec backlog
 へ proposal を複製しない。各 PR の最終コミットで対象 change directory を削除し、main の
-`openspec/changes/` を空に保つ。
+`openspec/changes/` を空に保つ。追跡manifestも既存close policyに従いpre-mergeで人が削除し、MVPは
+自動finalize / cleanupしない。
 
 ## OpenSpec engine のアクセス形態と Markdown fallback（ADR-0008）
 
