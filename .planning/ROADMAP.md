@@ -36,12 +36,12 @@ canonical OpenSpec artifacts に委ねる。
   2. Phase 1 の証拠は bridge core、persistence、preflight の境界に限定され、OpenSpec の規範本文を複製または再定義していない。
   3. Phase 1 の完了判定は canonical OpenSpec artifacts に照合でき、未承認の仕様変更を GSD artifact で補っていない。
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — functional core、bounded reader、OpenSpec discovery を TDD で固定する
+- [x] 01-01-PLAN.md — functional core、bounded reader、OpenSpec discovery を TDD で固定する
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -79,7 +79,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Bridge Core, Persistence, and Preflight | 0/TBD | Not started | - |
+| 1. Bridge Core, Persistence, and Preflight | 1/2 | In Progress | |
 | 2. Approval-Gated Skill Orchestration | 0/TBD | Not started | - |
 | 3. Deterministic Verification and Acceptance Evidence | 0/TBD | Not started | - |
 
