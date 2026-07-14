@@ -26,37 +26,51 @@ canonical OpenSpec artifacts に委ねる。
 ## Phase Details
 
 ### Phase 1: Bridge Core, Persistence, and Preflight
+
 **Goal**: canonical `tasks.md` heading `## 2. Bridge MVP phase` と source commit を唯一の規範として、bridge core、persistence、preflight の実装・検証境界を成立させる
 **Depends on**: Nothing (first phase)
 **Requirements**: BRIDGE-01
 **Success Criteria** (what must be TRUE):
+
   1. Phase 1 の plan、変更、検証証拠から `BRIDGE-01` の canonical path、heading、source commit へ追跡できる。
   2. Phase 1 の証拠は bridge core、persistence、preflight の境界に限定され、OpenSpec の規範本文を複製または再定義していない。
   3. Phase 1 の完了判定は canonical OpenSpec artifacts に照合でき、未承認の仕様変更を GSD artifact で補っていない。
+
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 01-01-PLAN.md — functional core、bounded reader、OpenSpec discovery を TDD で固定する
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 01-02-PLAN.md — manifest persistence、preflight adapters、thin entrypoint を TDD で接続する
 
 ### Phase 2: Approval-Gated Skill Orchestration
+
 **Goal**: canonical `tasks.md` heading `## 3. Skill phase` と source commit を唯一の規範として、approval-gated skill orchestration の実装・検証境界を Phase 1 の seam 上で成立させる
 **Depends on**: Phase 1
 **Requirements**: SKILL-01
 **Success Criteria** (what must be TRUE):
+
   1. Phase 2 の plan、変更、検証証拠から `SKILL-01` の canonical path、heading、source commit へ追跡できる。
   2. Phase 2 の証拠は approval-gated skill orchestration の境界に限定され、Phase 1 の契約や OpenSpec の規範本文を再定義していない。
   3. runtime 固有の判断と検証結果は証拠として区別され、canonical scope の変更が必要なら OpenSpec gate へ戻せる。
+
 **Plans**: TBD
 
 ### Phase 3: Deterministic Verification and Acceptance Evidence
+
 **Goal**: canonical `tasks.md` heading `## 4. Test phase` と source commit を唯一の規範として、deterministic CI、opt-in smoke、OpenSpec acceptance 用 evidence の検証境界を成立させる
 **Depends on**: Phase 2
 **Requirements**: VERIFY-01
 **Success Criteria** (what must be TRUE):
+
   1. Phase 3 の plan、変更、検証証拠から `VERIFY-01` の canonical path、heading、source commit へ追跡できる。
   2. deterministic CI、opt-in smoke、理由付き未検証を含む evidence が canonical OpenSpec acceptance で照合可能な形に整理されている。
   3. Phase 3 完了は GSD の実装・検証境界の完了として記録され、OpenSpec change の最終完了を主張していない。
+
 **Plans**: TBD
 
 ## Progress
