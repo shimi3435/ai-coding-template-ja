@@ -19,7 +19,7 @@ canonical OpenSpec artifacts に委ねる。
 
 ## Phases
 
-- [ ] **Phase 1: Bridge Core, Persistence, and Preflight** - `BRIDGE-01` が指す bridge 実装境界を source-pinned な証拠とともに成立させる
+- [x] **Phase 1: Bridge Core, Persistence, and Preflight** - `BRIDGE-01` が指す bridge 実装境界を source-pinned な証拠とともに成立させる (completed 2026-07-14)
 - [ ] **Phase 2: Approval-Gated Skill Orchestration** - `SKILL-01` が指す skill 実装境界を Phase 1 の seam 上で成立させる
 - [ ] **Phase 3: Deterministic Verification and Acceptance Evidence** - `VERIFY-01` が指す検証境界から OpenSpec 最終判定用の証拠を整える
 
@@ -36,7 +36,7 @@ canonical OpenSpec artifacts に委ねる。
   2. Phase 1 の証拠は bridge core、persistence、preflight の境界に限定され、OpenSpec の規範本文を複製または再定義していない。
   3. Phase 1 の完了判定は canonical OpenSpec artifacts に照合でき、未承認の仕様変更を GSD artifact で補っていない。
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -45,7 +45,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — manifest persistence、preflight adapters、thin entrypoint を TDD で接続する
+- [x] 01-02-PLAN.md — manifest persistence、preflight adapters、thin entrypoint を TDD で接続する
 
 ### Phase 2: Approval-Gated Skill Orchestration
 
@@ -79,7 +79,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Bridge Core, Persistence, and Preflight | 1/2 | In Progress | |
+| 1. Bridge Core, Persistence, and Preflight | 2/2 | Complete   | 2026-07-14 |
 | 2. Approval-Gated Skill Orchestration | 0/TBD | Not started | - |
 | 3. Deterministic Verification and Acceptance Evidence | 0/TBD | Not started | - |
 

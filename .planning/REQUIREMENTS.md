@@ -9,7 +9,7 @@ invariant、詳細 task を定義または複製しない。仕様上の意味�
 
 ## v1 Proxy References
 
-- [ ] **BRIDGE-01**: canonical `openspec/changes/automate-openspec-gsd-handoff/tasks.md` の heading `## 2. Bridge MVP phase` at source commit `5a1f78b81f546c900745328fad24f9adb073e768` だけを指すポインターである。
+- [x] **BRIDGE-01**: canonical `openspec/changes/automate-openspec-gsd-handoff/tasks.md` の heading `## 2. Bridge MVP phase` at source commit `5a1f78b81f546c900745328fad24f9adb073e768` だけを指すポインターである。
 - [ ] **SKILL-01**: canonical `openspec/changes/automate-openspec-gsd-handoff/tasks.md` の heading `## 3. Skill phase` at source commit `5a1f78b81f546c900745328fad24f9adb073e768` だけを指すポインターである。
 - [ ] **VERIFY-01**: canonical `openspec/changes/automate-openspec-gsd-handoff/tasks.md` の heading `## 4. Test phase` at source commit `5a1f78b81f546c900745328fad24f9adb073e768` だけを指すポインターである。最終 acceptance evidence と完了判定は OpenSpec が所有する。
 
@@ -29,7 +29,7 @@ invariant、詳細 task を定義または複製しない。仕様上の意味�
 
 | Proxy Reference | Phase | Status |
 |-----------------|-------|--------|
-| BRIDGE-01 | Phase 1 | Pending |
+| BRIDGE-01 | Phase 1 | Complete |
 | SKILL-01 | Phase 2 | Pending |
 | VERIFY-01 | Phase 3 | Pending |
 

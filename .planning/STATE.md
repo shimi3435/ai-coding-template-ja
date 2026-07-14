@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 01
 current_phase_name: Bridge Core, Persistence, and Preflight
-status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-07-14T17:55:27.644Z"
+status: verifying
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-07-14T18:13:32.578Z"
 last_activity: 2026-07-14
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 50
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-15)
 
 Phase: 01 (Bridge Core, Persistence, and Preflight) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-14 — Phase 01 execution started
 
 Progress: [█████░░░░░] 50%
@@ -55,6 +55,7 @@ Progress: [█████░░░░░] 50%
 - Trend: Not started
 
 | Phase 01 P01 | 9min | 3 tasks | 6 files |
+| Phase 01 P02 | 12min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Decisions are logged in `.planning/PROJECT.md`.
 - [Roadmap]: BRIDGE-01 → Phase 1、SKILL-01 → Phase 2、VERIFY-01 → Phase 3 と一意に対応付ける。
 - [Roadmap]: 全 phase は source commit `5a1f78b81f546c900745328fad24f9adb073e768` の canonical OpenSpec artifacts を参照する。
 - [Roadmap]: Phase 3 完了は OpenSpec change の最終完了を意味しない。
+- [Phase 01]: Manifest persistence reports bounded failure evidence without recovery claims. — The MVP excludes retry, rollback, resume, fsync durability, and lifecycle hardening.
+- [Phase 01]: Repository policy and visible-host capability remain explicit caller evidence. — Local Git and GSD output cannot prove repository policy or host dispatch schema.
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-14T17:55:27.637Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-07-14T18:13:32.570Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
