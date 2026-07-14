@@ -1,0 +1,75 @@
+---
+gsd_state_version: '1.0'
+status: planning
+progress:
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
+# Project State
+
+## Project Reference
+
+See: `.planning/PROJECT.md` (updated 2026-07-15)
+
+**Core value:** OpenSpec の正本を複製・再定義せず、source commit に固定した対象範囲を安全に実装・検証できること。
+**Current focus:** Phase 1 — Bridge Core, Persistence, and Preflight
+
+## Current Position
+
+Phase: 1 of 3 (Bridge Core, Persistence, and Preflight)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-07-15 — reference-only roadmap と 3/3 proxy traceability を作成
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: 0 hours
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+**Recent Trend:**
+- Last 5 plans: none
+- Trend: Not started
+
+## Accumulated Context
+
+### Decisions
+
+Decisions are logged in `.planning/PROJECT.md`.
+
+- [Roadmap]: BRIDGE-01 → Phase 1、SKILL-01 → Phase 2、VERIFY-01 → Phase 3 と一意に対応付ける。
+- [Roadmap]: 全 phase は source commit `5a1f78b81f546c900745328fad24f9adb073e768` の canonical OpenSpec artifacts を参照する。
+- [Roadmap]: Phase 3 完了は OpenSpec change の最終完了を意味しない。
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+- 仕様上の変更が必要になった場合は GSD 内で補完せず、OpenSpec の更新・再検証・再承認へ戻る。
+
+## Deferred Items
+
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| *(none)* | | | |
+
+## Session Continuity
+
+Last session: 2026-07-15
+Stopped at: Roadmap created; Phase 1 ready to plan
+Resume file: None
