@@ -484,6 +484,79 @@ def test_snapshot_rejects_descriptor_identity_drift(
     assert result.issue.code == "repository-snapshot-unstable"
 
 
+def test_snapshot_pins_symlink_target_during_substitution_and_restore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    link = repository / "link"
+    link.symlink_to("original-target")
+    baseline = snapshot_repository(repository)
+    assert isinstance(baseline, SnapshotSuccess)
+    saved = repository / "link-original"
+    original_readlink = os.readlink
+
+    def substitute_for_path_read(
+        path: Any, *, dir_fd: int | None = None
+    ) -> str | bytes:
+        if path == "link" and dir_fd is not None:
+            link.rename(saved)
+            link.symlink_to("replacement-target")
+            try:
+                return original_readlink(path, dir_fd=dir_fd)
+            finally:
+                link.unlink()
+                saved.rename(link)
+        return original_readlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "readlink", substitute_for_path_read)
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotSuccess)
+    assert result.value.root_digest == baseline.value.root_digest
+
+
+def test_snapshot_rejects_symlink_descriptor_identity_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / "link").symlink_to("target")
+    original_open = os.open
+    original_fstat = os.fstat
+    link_descriptor: int | None = None
+    link_fstat_calls = 0
+
+    def remember_link_descriptor(
+        path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        nonlocal link_descriptor
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        if path == "link" and dir_fd is not None and flags & os.O_PATH:
+            link_descriptor = descriptor
+        return descriptor
+
+    def drifted_link_fstat(descriptor: int) -> os.stat_result:
+        nonlocal link_fstat_calls
+        result = original_fstat(descriptor)
+        if descriptor == link_descriptor:
+            link_fstat_calls += 1
+            if link_fstat_calls > 1:
+                values = list(result)
+                values[6] += 1
+                return os.stat_result(values)
+        return result
+
+    monkeypatch.setattr(os, "open", remember_link_descriptor)
+    monkeypatch.setattr(os, "fstat", drifted_link_fstat)
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotFailure)
+    assert result.issue.code == "repository-snapshot-unstable"
+
+
 def test_snapshot_distinguishes_safe_special_entry_types(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
