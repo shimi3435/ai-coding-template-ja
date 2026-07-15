@@ -45,6 +45,7 @@ EXPECTED = (
     / "manifest"
     / "expected-prepared.json"
 ).read_bytes()
+MANIFEST_BYTE_LIMIT = 8_388_608
 
 
 def _manifest(*, state: HandoffState = HandoffState.PREPARED) -> HandoffManifest:
@@ -210,6 +211,56 @@ def test_parser_and_transition_reject_lexical_path_aliases(
 
     assert isinstance(transitioned, Failure)
     assert transitioned.issue.code == "manifest-value-invalid"
+    assert operations.mutations == 0
+    assert target.read_bytes() == before
+
+
+def test_manifest_parser_enforces_exact_derived_byte_boundary() -> None:
+    boundary = parse_manifest_bytes(b" " * MANIFEST_BYTE_LIMIT)
+    exceeded = parse_manifest_bytes(b" " * (MANIFEST_BYTE_LIMIT + 1))
+
+    assert isinstance(boundary, Failure)
+    assert boundary.issue.code == "manifest-json-invalid"
+    assert isinstance(exceeded, Failure)
+    assert exceeded.issue.code == "manifest-size-limit-exceeded"
+
+
+def test_manifest_parser_rejects_description_larger_than_canonical_tasks_file() -> None:
+    raw = json.loads(EXPECTED)
+    raw["progress"]["tasks"][0]["description"] = "x" * 1_048_577
+
+    result = parse_manifest_bytes(json.dumps(raw).encode())
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-value-invalid"
+
+
+@pytest.mark.parametrize("operation", ["repository", "mark-started"])
+def test_existing_oversized_manifest_stops_before_mutation(
+    tmp_path: Path, operation: str
+) -> None:
+    target = tmp_path / ".planning" / "openspec" / "fixture-change" / "handoff.json"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b" " * (MANIFEST_BYTE_LIMIT + 1))
+    before = target.read_bytes()
+    operations = _MutationCountingOperations()
+
+    if operation == "repository":
+        result = ManifestRepository(target, operations=operations).persist(_manifest())
+    else:
+        result = mark_handoff_started(
+            tmp_path,
+            "fixture-change",
+            gsd_accepted=True,
+            operations=operations,
+        )
+
+    if isinstance(result, ManifestPersistenceFailure):
+        code = result.issue.code
+    else:
+        assert isinstance(result, Failure)
+        code = result.issue.code
+    assert code == "manifest-size-limit-exceeded"
     assert operations.mutations == 0
     assert target.read_bytes() == before
 
