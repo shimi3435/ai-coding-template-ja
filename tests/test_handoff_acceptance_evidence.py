@@ -361,6 +361,52 @@ def test_cross_platform_user_profile_paths_are_rejected(path: str) -> None:
     assert verdict.code == "absolute-path-leak"
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "~~~json",
+        '```json\n{"ok":true}\n```',
+        '{"project_exists":true,"roadmap_exists":true,"state_exists":true}',
+        "project_exists=true roadmap_exists=true state_exists=true",
+    ],
+)
+def test_fenced_and_raw_probe_shaped_blocks_are_rejected(payload: str) -> None:
+    evidence = f"{valid_evidence().decode()}\n{payload}\n".encode()
+
+    verdict, _ = _validate(evidence)
+
+    assert verdict.code == "raw-output-forbidden"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/srv/private/repository",
+        "/tmp/openspec-probe.json",
+        "~/private/repository",
+        r"C:\work\repository",
+        "D:/work/repository",
+    ],
+)
+def test_arbitrary_local_absolute_paths_are_rejected(path: str) -> None:
+    verdict, _ = _validate(_replace(valid_evidence(), "tests/test_named.py", path))
+    assert verdict.code == "absolute-path-leak"
+
+
+def test_relative_paths_placeholders_and_ordinary_slash_prose_are_allowed() -> None:
+    replacement = (
+        "tests/test_named.py and openspec/changes/example/tasks.md via "
+        "${GSD_HOME}/gsd-core/bin/gsd-tools.cjs in <repository>/; "
+        "OpenSpec/GSD comparison"
+    )
+
+    verdict, _ = _validate(
+        _replace(valid_evidence(), "tests/test_named.py", replacement)
+    )
+
+    assert verdict.ok is True
+
+
 def test_pinned_canonical_body_line_is_rejected_but_worktree_drift_is_not_authority(
     tmp_path: Path,
 ) -> None:
