@@ -154,10 +154,15 @@ def _candidate_claims(
         for path in resolved_specs
     ):
         return None
+    repository_resolved = repository.resolve(strict=True)
+    sorted_specs = sorted(
+        zip((Path(path) for path in specs), resolved_specs, strict=True),
+        key=lambda pair: pair[1].relative_to(repository_resolved).as_posix(),
+    )
     return [
         ArtifactClaim(ArtifactKind.PROPOSAL, Path(proposal[0])),
         ArtifactClaim(ArtifactKind.DESIGN, Path(design[0])),
-        *(ArtifactClaim(ArtifactKind.SPEC, Path(path)) for path in specs),
+        *(ArtifactClaim(ArtifactKind.SPEC, path) for path, _resolved in sorted_specs),
         ArtifactClaim(ArtifactKind.TASKS, Path(tasks[0])),
     ]
 
