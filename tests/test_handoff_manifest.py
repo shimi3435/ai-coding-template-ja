@@ -168,6 +168,41 @@ class _FaultOperations(ManifestFileOperations):
         super().unlink(path)
 
 
+class _MutationCountingOperations(ManifestFileOperations):
+    def __init__(self) -> None:
+        self.mutations = 0
+
+    def make_parent(self, path: Path) -> None:
+        self.mutations += 1
+        super().make_parent(path)
+
+    def create_staging(self, parent: Path) -> Path:
+        self.mutations += 1
+        return super().create_staging(parent)
+
+
+def test_repository_rejects_static_parent_symlink_escape_before_mutation(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repository"
+    outside = tmp_path / "outside"
+    repository_root.mkdir()
+    outside.mkdir()
+    (repository_root / ".planning").symlink_to(outside, target_is_directory=True)
+    target = (
+        repository_root / ".planning" / "openspec" / "fixture-change" / "handoff.json"
+    )
+    operations = _MutationCountingOperations()
+
+    result = ManifestRepository(target, operations=operations).persist(_manifest())
+
+    assert isinstance(result, ManifestPersistenceFailure)
+    assert result.issue.code == "manifest-target-unsafe"
+    assert result.issue.failure_point is FailurePoint.STATE_GUARD
+    assert operations.mutations == 0
+    assert not (outside / "openspec" / "fixture-change" / "handoff.json").exists()
+
+
 @pytest.mark.parametrize(
     ("fault", "point", "staging", "cleanup"),
     [
