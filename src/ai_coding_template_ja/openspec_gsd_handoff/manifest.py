@@ -167,6 +167,7 @@ def _parse_artifacts(
         return None
     expected_root = PurePosixPath("openspec", "changes", change_id)
     artifacts: list[ManifestArtifact] = []
+    canonical_paths: set[PurePosixPath] = set()
     for raw in value:
         item = _exact_fields(raw, {"kind", "path", "sha256"})
         if item is None:
@@ -182,19 +183,20 @@ def _parse_artifacts(
             return None
         pure_path = PurePosixPath(path)
         if (
-            pure_path.is_absolute()
+            path != pure_path.as_posix()
+            or pure_path.is_absolute()
             or ".." in pure_path.parts
             or not pure_path.is_relative_to(expected_root)
             or pure_path.suffix != ".md"
         ):
             return None
         relative = pure_path.relative_to(expected_root)
-        canonical_path = {
+        singleton_path = {
             "proposal": PurePosixPath("proposal.md"),
             "design": PurePosixPath("design.md"),
             "tasks": PurePosixPath("tasks.md"),
         }.get(kind)
-        if canonical_path is not None and relative != canonical_path:
+        if singleton_path is not None and relative != singleton_path:
             return None
         if kind == "spec" and not (
             len(relative.parts) == 3
@@ -202,12 +204,16 @@ def _parse_artifacts(
             and relative.parts[2] == "spec.md"
         ):
             return None
-        artifacts.append(ManifestArtifact(kind, path, sha256))
+        if pure_path in canonical_paths:
+            return None
+        canonical_paths.add(pure_path)
+        artifacts.append(ManifestArtifact(kind, pure_path.as_posix(), sha256))
     result = tuple(artifacts)
-    if len({artifact.path for artifact in result}) != len(result):
-        return None
     if result != tuple(
-        sorted(result, key=lambda artifact: (artifact.kind, artifact.path))
+        sorted(
+            result,
+            key=lambda artifact: (artifact.kind, PurePosixPath(artifact.path)),
+        )
     ):
         return None
     kinds = [artifact.kind for artifact in result]
