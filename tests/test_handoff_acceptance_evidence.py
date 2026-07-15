@@ -256,7 +256,14 @@ def test_pinned_blob_failures_are_closed(runner: FakeRunner, expected: str) -> N
         (("| R1-S01 |", "| REMOVED |"), "coordinate-unknown"),
         (("| R1-S01 |", "| R1-S99 |"), "coordinate-unknown"),
         (("| production-test |", "| magic-proof |"), "evidence-kind-invalid"),
-        (("| production-test | tests/", "| production-test |  "), "evidence-empty"),
+        (
+            (
+                "| R1 | production-test | tests/test_named.py::test_r1 | "
+                "verified by named test |",
+                "| R1 | production-test | | verified by named test |",
+            ),
+            "evidence-empty",
+        ),
         (("verified by named test", "covered"), "bare-covered"),
         (("tests/test_named.py", "/home/alice/project"), "absolute-path-leak"),
         (("verified by named test", "```json"), "raw-output-forbidden"),
