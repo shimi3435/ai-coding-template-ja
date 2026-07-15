@@ -81,7 +81,8 @@ None - plan executed exactly as written.
 
 ## Issues Encountered
 
-None.
+- `roadmap.update-plan-progress 01` updated Phase 1 counts but also transiently checked the untouched Phase 2 roadmap item. The generated metadata was inspected, Phase 2 was restored to `Not started`, and `state.validate`, `roadmap.validate`, and Phase 1 completeness checks passed afterward.
+- Initial state metric/decision calls used obsolete positional examples and returned explicit no-op errors; they were rerun with the current named-argument contract before metadata commit.
 
 ## User Setup Required
 
