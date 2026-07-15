@@ -151,6 +151,9 @@ tasks:
       vars:
         - CHANGE_ID
         - GSD_HOME
+    env:
+      HANDOFF_CHANGE_ID: "{{.CHANGE_ID}}"
+      HANDOFF_GSD_HOME: "{{.GSD_HOME}}"
     cmds:
       - |
         set -eu
@@ -165,9 +168,9 @@ tasks:
         UV_CONFIG_FILE="$cache_root/uv.toml" \
         XDG_CACHE_HOME="$cache_root/xdg-cache" \
         XDG_CONFIG_HOME="$cache_root/xdg-config" \
-        XDG_DATA_HOME="$cache_root/xdg-data" \
+          XDG_DATA_HOME="$cache_root/xdg-data" \
           uv run --no-sync python scripts/openspec-gsd-handoff-smoke.py \
-            --repository . --change "{{.CHANGE_ID}}" --gsd-home "{{.GSD_HOME}}"
+            --repository . --change "$HANDOFF_CHANGE_ID" --gsd-home "$HANDOFF_GSD_HOME"
 
   rename:
     desc: |
