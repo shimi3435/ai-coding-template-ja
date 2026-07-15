@@ -42,6 +42,7 @@ def test_handoff_smoke_is_explicit_and_isolated_from_normal_check() -> None:
     check = _task_body("check")
 
     assert "requires:" in smoke
+    assert "silent: true" in smoke
     assert "CHANGE_ID" in smoke
     assert "GSD_HOME" in smoke
     assert "PYTHONDONTWRITEBYTECODE=1" in smoke

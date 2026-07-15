@@ -39,6 +39,66 @@ tasks:
       - uv run basedpyright
       - uv run pytest
 
+  check:without-gsd:
+    desc: 通常 check が Node / OpenSpec / GSD とネットワークに依存しないことを隔離環境で検証
+    cmds:
+      - |
+        set -eu
+        isolation_root="$(mktemp -d)"
+        trap 'rm -rf "$isolation_root"' EXIT
+        bin="$isolation_root/bin"
+        home="$isolation_root/home"
+        codex_home="$isolation_root/codex-home"
+        gsd_home="$isolation_root/gsd-home"
+        xdg_cache="$isolation_root/xdg-cache"
+        xdg_config="$isolation_root/xdg-config"
+        xdg_data="$isolation_root/xdg-data"
+        uv_cache="$isolation_root/uv-cache"
+        mkdir -p "$bin" "$home" "$codex_home" "$gsd_home" \
+          "$xdg_cache" "$xdg_config" "$xdg_data" "$uv_cache"
+
+        link_tool() {
+          tool="$1"
+          target="$(command -v "$tool" 2>/dev/null || true)"
+          if [ -n "$target" ]; then
+            ln -s "$(readlink -f "$target")" "$bin/$tool"
+          fi
+        }
+        for tool in task uv bash sh git env find ln readlink dirname rm mkdir mktemp \
+          uname sed grep sort head tail xargs realpath chmod cp mv tr cut awk basename \
+          cat touch; do
+          link_tool "$tool"
+        done
+        ln -s "$(readlink -f .venv/bin/python)" "$bin/python"
+        ln -s "$(readlink -f .venv/bin/python)" "$bin/python3"
+
+        env -i \
+          HOME="$home" \
+          CODEX_HOME="$codex_home" \
+          GSD_HOME="$gsd_home" \
+          XDG_CACHE_HOME="$xdg_cache" \
+          XDG_CONFIG_HOME="$xdg_config" \
+          XDG_DATA_HOME="$xdg_data" \
+          UV_CACHE_DIR="$uv_cache" \
+          UV_OFFLINE=1 \
+          PATH="$bin" \
+          REPOSITORY="$PWD" \
+          sh -eu -c '
+            ! command -v node >/dev/null 2>&1
+            ! command -v openspec >/dev/null 2>&1
+            ! command -v npm >/dev/null 2>&1
+            ! command -v npx >/dev/null 2>&1
+            ! command -v gsd >/dev/null 2>&1
+            ! command -v gsd-phase >/dev/null 2>&1
+            ! command -v gsd-new-project >/dev/null 2>&1
+            if [ -n "$(find "$HOME" "$CODEX_HOME" "$GSD_HOME" -mindepth 1 -print -quit)" ]; then
+              echo "[FAIL] isolated HOME/CODEX_HOME/GSD_HOME is not empty" >&2
+              exit 1
+            fi
+            cd "$REPOSITORY"
+            exec task check
+          '
+
   fix:
     desc: 自動修正（ruff format ＋ ruff check --fix）
     cmds:
@@ -83,6 +143,31 @@ tasks:
       漏れる（fail-open）ため、CLI 実行前に検査して FAIL にする。
     cmds:
       - uv run --no-sync python scripts/openspec-validate-gate.py
+
+  openspec:gsd-handoff:smoke:
+    desc: 実 OpenSpec 1.3.1 / GSD 1.5.0 の strictly read-only opt-in smoke
+    silent: true
+    requires:
+      vars:
+        - CHANGE_ID
+        - GSD_HOME
+    cmds:
+      - |
+        set -eu
+        cache_root="$(mktemp -d)"
+        trap 'rm -rf "$cache_root"' EXIT
+        mkdir -p "$cache_root/pycache" "$cache_root/uv-cache" "$cache_root/xdg-cache" \
+          "$cache_root/xdg-config" "$cache_root/xdg-data"
+        : > "$cache_root/uv.toml"
+        PYTHONDONTWRITEBYTECODE=1 \
+        PYTHONPYCACHEPREFIX="$cache_root/pycache" \
+        UV_CACHE_DIR="$cache_root/uv-cache" \
+        UV_CONFIG_FILE="$cache_root/uv.toml" \
+        XDG_CACHE_HOME="$cache_root/xdg-cache" \
+        XDG_CONFIG_HOME="$cache_root/xdg-config" \
+        XDG_DATA_HOME="$cache_root/xdg-data" \
+          uv run --no-sync python scripts/openspec-gsd-handoff-smoke.py \
+            --repository . --change "{{.CHANGE_ID}}" --gsd-home "{{.GSD_HOME}}"
 
   rename:
     desc: |
