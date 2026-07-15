@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import TypedDict
 
+import pytest
+
 from ai_coding_template_ja.openspec_gsd_handoff import (
     inspect_handoff,
     mark_handoff_started,
@@ -275,3 +277,56 @@ def test_invalid_prepare_request_returns_one_machine_readable_failure() -> None:
         "known_state": "manifest-absent",
     }
     assert "Traceback" not in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("arguments", "operation"),
+    [
+        (["inspect"], "inspect"),
+        (["unknown-operation"], "unknown"),
+        (
+            [
+                "inspect",
+                "--repository",
+                str(REPO_ROOT),
+                "--change",
+                "fixture-change",
+                "--source-commit",
+                SOURCE_COMMIT,
+                "--gsd-home",
+                str(REPO_ROOT),
+                "--repository-policy",
+                "invalid",
+            ],
+            "inspect",
+        ),
+    ],
+    ids=["missing-option", "unknown-operation", "invalid-value"],
+)
+def test_argv_errors_return_one_structured_input_failure(
+    arguments: list[str], operation: str
+) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ai_coding_template_ja.openspec_gsd_handoff",
+            *arguments,
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stderr == ""
+    assert len(completed.stdout.splitlines()) == 1
+    assert json.loads(completed.stdout) == {
+        "ok": False,
+        "operation": operation,
+        "category": "input",
+        "code": "request-invalid",
+        "known_state": "manifest-absent",
+    }
