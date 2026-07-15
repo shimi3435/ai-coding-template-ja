@@ -100,12 +100,17 @@ def _fallback(repository: Path, change_id: str) -> Result[Discovery]:
     return _read_discovery(repository, change_id, claims, InputRoute.MARKDOWN_FALLBACK)
 
 
-def _string_list(value: object, *, size: int | None = None) -> list[str] | None:
+def _string_list(
+    value: object,
+    *,
+    size: int | None = None,
+    allow_empty: bool = False,
+) -> list[str] | None:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return None
     if size is not None and len(value) != size:
         return None
-    if not value or any(type(item) is not str for item in value):
+    if (not allow_empty and not value) or any(type(item) is not str for item in value):
         return None
     return list(value)
 
@@ -192,7 +197,7 @@ def _candidate_shape(
     ):
         return None
     if "missingArtifacts" in raw:
-        missing = _string_list(raw.get("missingArtifacts"))
+        missing = _string_list(raw.get("missingArtifacts"), allow_empty=True)
         if missing is None:
             return None
     claims = _candidate_claims(raw, repository, change_id)
@@ -220,8 +225,7 @@ def _candidate_discovery(
         return None
 
     state = candidate["state"]
-    missing = candidate.get("missingArtifacts")
-    if state == "blocked" or missing:
+    if state == "blocked" or "missingArtifacts" in candidate:
         return _issue("openspec-unprepared", InputRoute.JSON)
     if state == "all_done":
         if discovery_result.value.progress.remaining != 0:
