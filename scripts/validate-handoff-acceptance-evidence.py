@@ -46,6 +46,7 @@ HOST_LOCATORS = (
     "real GSD mutation",
     "route-specific postconditions",
 )
+REQUIRED_SECTIONS = ("Requirements", "Scenarios", "Spec holes", "Host unverified")
 
 
 class Verdict(NamedTuple):
@@ -167,6 +168,23 @@ def _metadata(text: str) -> tuple[dict[str, str], str | None]:
                 return found, duplicate_code
             found[key] = match.group(2)
     return found, None
+
+
+def _validate_section_structure(text: str) -> str | None:
+    headings = [
+        line.removeprefix("## ")
+        for line in text.splitlines()
+        if line.startswith("## ") and not line.startswith("### ")
+    ]
+    if any(headings.count(required) != 1 for required in REQUIRED_SECTIONS):
+        return "evidence-section-invalid"
+    if any(
+        re.match(r"host(?:\s|$)", heading, re.IGNORECASE)
+        and heading != "Host unverified"
+        for heading in headings
+    ):
+        return "evidence-section-invalid"
+    return None
 
 
 def _read_pinned_blobs(
@@ -382,6 +400,9 @@ def validate_evidence(
         text = evidence.decode("utf-8")
     except UnicodeDecodeError:
         return _failure("evidence-empty")
+    section_error = _validate_section_structure(text)
+    if section_error:
+        return _failure(section_error)
     metadata, metadata_error = _metadata(text)
     if metadata_error:
         return _failure(metadata_error)
