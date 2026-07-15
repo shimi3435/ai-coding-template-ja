@@ -359,6 +359,141 @@ def test_snapshot_detects_file_instability_during_streaming(
     assert result.issue.code == "repository-snapshot-unstable"
 
 
+def test_snapshot_rejects_regular_file_swapped_to_outside_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    victim = repository / "victim"
+    victim.write_bytes(b"inside")
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside-secret")
+    saved = repository / "victim-original"
+    original_open = os.open
+
+    def swap_for_descriptor(
+        path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        if path == "victim" and dir_fd is not None and flags & os.O_PATH:
+            victim.rename(saved)
+            victim.symlink_to(outside)
+            try:
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+            finally:
+                victim.unlink()
+                saved.rename(victim)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", swap_for_descriptor)
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotFailure)
+    assert result.issue.code == "repository-snapshot-unstable"
+
+
+def test_snapshot_rejects_regular_file_swapped_to_fifo_without_opening_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    victim = repository / "victim"
+    victim.write_bytes(b"inside")
+    saved = repository / "victim-original"
+    original_open = os.open
+
+    def swap_for_descriptor(
+        path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        if path == "victim" and dir_fd is not None and flags & os.O_PATH:
+            victim.rename(saved)
+            os.mkfifo(victim)
+            try:
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+            finally:
+                victim.unlink()
+                saved.rename(victim)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", swap_for_descriptor)
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotFailure)
+    assert result.issue.code == "repository-snapshot-unstable"
+
+
+def test_snapshot_rejects_directory_swapped_to_outside_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    nested = repository / "nested"
+    nested.mkdir()
+    (nested / "inside").write_text("inside", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret").write_text("outside-secret", encoding="utf-8")
+    saved = repository / "nested-original"
+    original_open = os.open
+
+    def swap_for_directory(
+        path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        if path == "nested" and dir_fd is not None and flags & os.O_DIRECTORY:
+            nested.rename(saved)
+            nested.symlink_to(outside, target_is_directory=True)
+            try:
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+            finally:
+                nested.unlink()
+                saved.rename(nested)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", swap_for_directory)
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotFailure)
+    assert result.issue.code == "repository-snapshot-unstable"
+
+
+def test_snapshot_rejects_descriptor_identity_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / "victim").write_bytes(b"inside")
+    original_open = os.open
+    original_fstat = os.fstat
+    victim_descriptor: int | None = None
+
+    def remember_descriptor(
+        path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        nonlocal victim_descriptor
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        if path == "victim" and dir_fd is not None and flags & os.O_PATH:
+            victim_descriptor = descriptor
+        return descriptor
+
+    def drifted_fstat(descriptor: int) -> os.stat_result:
+        result = original_fstat(descriptor)
+        if descriptor == victim_descriptor:
+            values = list(result)
+            values[6] += 1
+            return os.stat_result(values)
+        return result
+
+    monkeypatch.setattr(os, "open", remember_descriptor)
+    monkeypatch.setattr(os, "fstat", drifted_fstat)
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotFailure)
+    assert result.issue.code == "repository-snapshot-unstable"
+
+
 def test_snapshot_distinguishes_safe_special_entry_types(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
