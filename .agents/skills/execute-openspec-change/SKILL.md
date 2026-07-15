@@ -95,3 +95,45 @@ Treat `inspect-failure`, `refusal`, and `no-answer` as terminal outcomes with **
 In each case stop before `prepare`, `brief-create`, `gsd-dispatch`,
 or `mark-started`; report `classified-gaps` where present and
 `manual-handoff-guidance`. Never reinterpret silence as approval.
+
+## Stage: prepare
+
+After fresh approval only, replay `preview_tuple` unchanged to the Phase 1 public
+`prepare_handoff` operation with `approved=True`. Require one **structured prepared success**
+with all of the following values before continuing:
+
+- `ok` is exactly `true`
+- `operation` is exactly `prepare`
+- `known_state` is exactly `prepared`
+
+Do not branch on exit 0 or prose. Any classified or persistence failure stops with
+the returned known state. No GSD entrypoint is reachable until this entire gate
+passes.
+
+Construct exactly one immutable object named `PARITY_PAYLOAD` from the frozen and
+prepared values. It contains these fields once, without copied specification text:
+
+1. `change_id`
+2. `canonical_paths` with every sorted canonical artifact path
+3. `source_commit`
+4. `completed_boundary_gates`
+5. `unresolved_items`
+6. `one_phase_one_change`, constraining this phase to this change only
+7. `specification_nonduplication`, stating that GSD must reference the canonical
+   OpenSpec paths and source commit without copying or redefining specifications or
+   acceptance criteria
+
+## Stage: dispatch
+
+Select only the route already reported by the structured prepared value:
+
+- When GSD is uninitialized, render the complete `PARITY_PAYLOAD` deterministically
+  into one source-pinned idea document, then invoke
+  `$gsd-new-project --auto @<brief>`. The brief contains no independently authored
+  requirement or acceptance text.
+- When GSD is initialized, pass the complete `PARITY_PAYLOAD` inline to one
+  change-specific `$gsd-phase`. Do not summarize, rename, omit, or add payload fields.
+
+If the project, roadmap, and state signals show partial initialization, stop before
+either entrypoint. Do not repair initialization, choose another route, or dispatch a
+partial payload.
