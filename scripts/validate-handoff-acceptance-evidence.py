@@ -47,6 +47,13 @@ HOST_LOCATORS = (
     "route-specific postconditions",
 )
 REQUIRED_SECTIONS = ("Requirements", "Scenarios", "Spec holes", "Host unverified")
+PROBE_OUTPUT_KEYS = (
+    "project_exists",
+    "roadmap_exists",
+    "state_exists",
+    "agents_installed",
+    "missing_agents",
+)
 
 
 class Verdict(NamedTuple):
@@ -355,10 +362,33 @@ def _validate_evidence_content(
     rows: Sequence[EvidenceRow],
     canonical_body: frozenset[str],
 ) -> str | None:
-    if re.search(r"(?:^|/)home/|(?:^|/)Users/|[A-Za-z]:\\Users\\", text):
-        return "absolute-path-leak"
-    if "```" in text:
+    if "```" in text or "~~~" in text:
         return "raw-output-forbidden"
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if (stripped.startswith("{") and stripped.endswith("}")) or (
+            stripped.startswith("[") and stripped.endswith("]")
+        ):
+            try:
+                decoded = json.loads(stripped)
+            except json.JSONDecodeError:
+                pass
+            else:
+                if isinstance(decoded, dict | list):
+                    return "raw-output-forbidden"
+    probe_fields = sum(
+        bool(re.search(rf"\b{re.escape(key)}\b\s*[:=]", text))
+        for key in PROBE_OUTPUT_KEYS
+    )
+    if probe_fields >= 2:
+        return "raw-output-forbidden"
+    if (
+        re.search(r"(?<![A-Za-z0-9_$}{<>./~+\-])/(?!/)[^\s|`]+", text)
+        or re.search(r"(?<![A-Za-z0-9_$}{<>./~+\-])~/[^\s|`]+", text)
+        or re.search(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s|`]+", text)
+        or re.search(r"(?<!\\)\\\\[^\\\s]+\\[^\s|`]+", text)
+    ):
+        return "absolute-path-leak"
     if re.search(r"\bcovered\b", text, re.IGNORECASE):
         return "bare-covered"
     metadata_prefixes = (
