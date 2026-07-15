@@ -36,9 +36,10 @@ canonical OpenSpec artifacts に委ねる。
   2. Phase 1 の証拠は bridge core、persistence、preflight の境界に限定され、OpenSpec の規範本文を複製または再定義していない。
   3. Phase 1 の完了判定は canonical OpenSpec artifacts に照合でき、未承認の仕様変更を GSD artifact で補っていない。
 
-**Plans**: 2/2 plans complete
+**Plans**: 3/3 plans complete
 
 Plans:
+
 **Wave 1**
 
 - [x] 01-01-PLAN.md — functional core、bounded reader、OpenSpec discovery を TDD で固定する
@@ -46,6 +47,10 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 01-02-PLAN.md — manifest persistence、preflight adapters、thin entrypoint を TDD で接続する
+
+**Wave 3** *(gap closure after Phase 1 verification)*
+
+- [x] 01-03-PLAN.md — `missingArtifacts` field-presence terminal gate を TDD で閉じる
 
 ### Phase 2: Approval-Gated Skill Orchestration
 
@@ -79,7 +84,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Bridge Core, Persistence, and Preflight | 2/2 | Complete   | 2026-07-14 |
+| 1. Bridge Core, Persistence, and Preflight | 3/3 | Complete   | 2026-07-14 |
 | 2. Approval-Gated Skill Orchestration | 0/TBD | Not started | - |
 | 3. Deterministic Verification and Acceptance Evidence | 0/TBD | Not started | - |
 
