@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from ai_coding_template_ja.openspec_gsd_handoff.discovery import (
     OpenSpecProbe,
     discover_openspec_artifacts,
 )
-
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
     Failure,
     InputRoute,
@@ -122,6 +122,31 @@ def test_positive_json_and_fallback_share_values_but_keep_distinct_routes(
     assert json_result.value == fallback_result.value
     assert json_result.route is InputRoute.JSON
     assert fallback_result.route is InputRoute.MARKDOWN_FALLBACK
+
+
+def test_multi_spec_json_order_has_exact_fallback_parity(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    positive_case = CONTRACT["positive"]
+    apply_output = _load_apply(positive_case["apply_stdout_fixture"], repository)
+    _make_change(repository, apply_output)
+    change = repository / "openspec" / "changes" / "fixture-change"
+    first_spec = change / "specs" / "another-capability" / "spec.md"
+    first_spec.parent.mkdir(parents=True)
+    first_spec.write_text("# another spec\n", encoding="utf-8")
+    raw = json.loads(apply_output)
+    existing_spec = Path(raw["contextFiles"]["specs"][0])
+    raw["contextFiles"]["specs"] = [str(existing_spec), str(first_spec.resolve())]
+    json_probe = OpenSpecProbe(0, "1.3.1\n", 0, json.dumps(raw))
+    fallback_probe = OpenSpecProbe(0, "unsupported\n", 0, json.dumps(raw))
+
+    json_result = discover_openspec_artifacts(repository, "fixture-change", json_probe)
+    fallback_result = discover_openspec_artifacts(
+        repository, "fixture-change", fallback_probe
+    )
+
+    assert isinstance(json_result, Success)
+    assert isinstance(fallback_result, Success)
+    assert json_result.value == fallback_result.value
 
 
 def test_invalid_candidate_values_do_not_poison_fresh_fallback(tmp_path: Path) -> None:
