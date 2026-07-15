@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+import ai_coding_template_ja.openspec_gsd_handoff.discovery as discovery_module
 from ai_coding_template_ja.openspec_gsd_handoff.discovery import (
     OpenSpecProbe,
     discover_openspec_artifacts,
@@ -165,6 +166,55 @@ def test_invalid_candidate_values_do_not_poison_fresh_fallback(tmp_path: Path) -
         artifact.path.startswith("openspec/changes/fixture-change/")
         for artifact in result.value.artifacts
     )
+
+
+@pytest.mark.parametrize("state", ["ready", "blocked"])
+def test_missing_artifacts_field_is_terminal_even_when_empty(
+    tmp_path: Path, state: str
+) -> None:
+    repository = tmp_path / "repository"
+    apply_output = _load_apply("apply-positive.json", repository)
+    _make_change(repository, apply_output)
+    raw = json.loads(apply_output)
+    raw["state"] = state
+    raw["missingArtifacts"] = []
+    probe = OpenSpecProbe(0, "1.3.1\n", 0, json.dumps(raw))
+
+    result = discover_openspec_artifacts(repository, "fixture-change", probe)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "openspec-unprepared"
+    assert result.route is InputRoute.JSON
+
+
+@pytest.mark.parametrize("state", ["ready", "blocked"])
+def test_missing_artifacts_field_never_starts_markdown_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+) -> None:
+    repository = tmp_path / "repository"
+    apply_output = _load_apply("apply-positive.json", repository)
+    _make_change(repository, apply_output)
+    raw = json.loads(apply_output)
+    raw["state"] = state
+    raw["missingArtifacts"] = []
+    probe = OpenSpecProbe(0, "1.3.1\n", 0, json.dumps(raw))
+    fallback_calls = 0
+
+    def fallback_spy(_repository: Path, _change_id: str) -> Success:
+        nonlocal fallback_calls
+        fallback_calls += 1
+        raise AssertionError("field-present candidate must not start fallback")
+
+    monkeypatch.setattr(discovery_module, "_fallback", fallback_spy)
+
+    result = discover_openspec_artifacts(repository, "fixture-change", probe)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "openspec-unprepared"
+    assert result.route is InputRoute.JSON
+    assert fallback_calls == 0
 
 
 def test_fallback_path_failure_returns_no_partial_discovery(tmp_path: Path) -> None:

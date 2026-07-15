@@ -25,6 +25,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     HostCapabilityInput,
     HostDispatch,
     HostSpawnSchema,
+    InputRoute,
     Success,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.preflight import (
@@ -74,6 +75,11 @@ class _DispatchRunner:
 class _CountingOperations(ManifestFileOperations):
     def __init__(self) -> None:
         self.replace_calls = 0
+        self.write_calls = 0
+
+    def write_bytes(self, path: Path, data: bytes) -> None:
+        self.write_calls += 1
+        super().write_bytes(path, data)
 
     def replace(self, source: Path, target: Path) -> None:
         self.replace_calls += 1
@@ -225,6 +231,42 @@ def test_prepare_requires_explicit_approval_and_writes_exactly_once(
     assert isinstance(prepared, Success)
     assert prepared.value.handoff_state is HandoffState.PREPARED
     assert operations.replace_calls == 1
+
+
+@pytest.mark.parametrize("state", ["ready", "blocked"])
+def test_prepare_stops_on_present_empty_missing_artifacts_before_preflight_or_write(
+    tmp_path: Path, state: str
+) -> None:
+    repository, gsd_home, runner = _setup_repository(tmp_path)
+    apply_raw = json.loads(runner.apply_output)
+    apply_raw["state"] = state
+    apply_raw["missingArtifacts"] = []
+    runner.apply_output = json.dumps(apply_raw).encode()
+    operations = _CountingOperations()
+
+    result = prepare_handoff(
+        **_inspect_arguments(repository, gsd_home, runner),
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "openspec-unprepared"
+    assert result.route is InputRoute.JSON
+    assert runner.calls == [
+        ("openspec", "--version"),
+        (
+            "openspec",
+            "instructions",
+            "apply",
+            "--change",
+            "fixture-change",
+            "--json",
+        ),
+    ]
+    assert operations.write_calls == 0
+    assert operations.replace_calls == 0
+    assert not (repository / ".planning").exists()
 
 
 def test_mark_started_requires_gsd_acceptance_and_only_transitions_manifest(
