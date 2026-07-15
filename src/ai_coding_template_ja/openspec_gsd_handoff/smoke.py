@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -187,12 +188,25 @@ def snapshot_repository(
             return _snapshot_failure("repository-metadata-limit-exceeded")
         return None
 
-    def scan(directory: Path, relative_parent: Path) -> SnapshotFailure | None:
+    def path_identity(directory_descriptor: int, name: str) -> os.stat_result | None:
+        try:
+            return os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
+        except OSError:
+            return None
+
+    def open_race_failure(error: OSError) -> SnapshotFailure:
+        if error.errno in {errno.ELOOP, errno.ENOENT, errno.ENOTDIR}:
+            return _snapshot_failure("repository-snapshot-unstable")
+        return _snapshot_failure("repository-snapshot-unreadable")
+
+    def scan(
+        directory_descriptor: int, relative_parent: Path
+    ) -> SnapshotFailure | None:
         nonlocal entry_count
         if deadline_exceeded():
             return _snapshot_failure("repository-snapshot-timeout")
         try:
-            with os.scandir(directory) as iterator:
+            with os.scandir(directory_descriptor) as iterator:
                 entries = sorted(iterator, key=lambda item: item.name)
         except (OSError, UnicodeError):
             return _snapshot_failure("repository-snapshot-unreadable")
@@ -213,29 +227,72 @@ def snapshot_repository(
                 entry_count += 1
                 if entry_count > limits.max_entries:
                     return _snapshot_failure("repository-inventory-limit-exceeded")
-                path = Path(entry.path)
                 try:
-                    before = path.lstat()
+                    before = os.stat(
+                        entry.name,
+                        dir_fd=directory_descriptor,
+                        follow_symlinks=False,
+                    )
                 except OSError:
                     return _snapshot_failure("repository-snapshot-unreadable")
                 mode = str(stat.S_IMODE(before.st_mode)).encode("ascii")
                 if stat.S_ISREG(before.st_mode):
                     content_digest = hashlib.sha256()
                     try:
-                        with path.open("rb") as stream:
+                        path_descriptor = os.open(
+                            entry.name,
+                            os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC,
+                            dir_fd=directory_descriptor,
+                        )
+                    except OSError as error:
+                        return open_race_failure(error)
+                    try:
+                        descriptor_before = os.fstat(path_descriptor)
+                        if not stat.S_ISREG(
+                            descriptor_before.st_mode
+                        ) or not _same_scan_identity(before, descriptor_before):
+                            return _snapshot_failure("repository-snapshot-unstable")
+                        try:
+                            stream_descriptor = os.open(
+                                f"/proc/self/fd/{path_descriptor}",
+                                os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC,
+                            )
+                        except OSError:
+                            return _snapshot_failure("repository-snapshot-unreadable")
+                        try:
+                            stream_before = os.fstat(stream_descriptor)
+                            if not stat.S_ISREG(
+                                stream_before.st_mode
+                            ) or not _same_scan_identity(
+                                descriptor_before, stream_before
+                            ):
+                                return _snapshot_failure("repository-snapshot-unstable")
                             while True:
                                 if deadline_exceeded():
                                     return _snapshot_failure(
                                         "repository-snapshot-timeout"
                                     )
-                                chunk = stream.read(limits.read_chunk_bytes)
+                                chunk = os.read(
+                                    stream_descriptor, limits.read_chunk_bytes
+                                )
                                 if not chunk:
                                     break
                                 content_digest.update(chunk)
-                        after = path.lstat()
+                            stream_after = os.fstat(stream_descriptor)
+                        finally:
+                            os.close(stream_descriptor)
+                        descriptor_after = os.fstat(path_descriptor)
                     except (OSError, UnicodeError):
                         return _snapshot_failure("repository-snapshot-unreadable")
-                    if not _same_scan_identity(before, after):
+                    finally:
+                        os.close(path_descriptor)
+                    after = path_identity(directory_descriptor, entry.name)
+                    if (
+                        after is None
+                        or not _same_scan_identity(before, stream_after)
+                        or not _same_scan_identity(before, descriptor_after)
+                        or not _same_scan_identity(before, after)
+                    ):
                         return _snapshot_failure("repository-snapshot-unstable")
                     _digest_record(
                         root_digest,
@@ -246,20 +303,50 @@ def snapshot_repository(
                         content_digest.digest(),
                     )
                 elif stat.S_ISDIR(before.st_mode):
-                    _digest_record(root_digest, relative_bytes, b"directory", mode)
-                    nested_failure = scan(path, relative)
-                    if nested_failure is not None:
-                        return nested_failure
                     try:
-                        after = path.lstat()
-                    except OSError:
+                        nested_descriptor = os.open(
+                            entry.name,
+                            os.O_RDONLY
+                            | os.O_DIRECTORY
+                            | os.O_NOFOLLOW
+                            | os.O_NONBLOCK
+                            | os.O_CLOEXEC,
+                            dir_fd=directory_descriptor,
+                        )
+                    except OSError as error:
+                        return open_race_failure(error)
+                    try:
+                        descriptor_before = os.fstat(nested_descriptor)
+                        if not stat.S_ISDIR(
+                            descriptor_before.st_mode
+                        ) or not _same_scan_identity(before, descriptor_before):
+                            return _snapshot_failure("repository-snapshot-unstable")
+                        _digest_record(root_digest, relative_bytes, b"directory", mode)
+                        nested_failure = scan(nested_descriptor, relative)
+                        if nested_failure is not None:
+                            return nested_failure
+                        descriptor_after = os.fstat(nested_descriptor)
+                    except (OSError, UnicodeError):
                         return _snapshot_failure("repository-snapshot-unreadable")
-                    if not _same_scan_identity(before, after):
+                    finally:
+                        os.close(nested_descriptor)
+                    after = path_identity(directory_descriptor, entry.name)
+                    if (
+                        after is None
+                        or not _same_scan_identity(before, descriptor_after)
+                        or not _same_scan_identity(before, after)
+                    ):
                         return _snapshot_failure("repository-snapshot-unstable")
                 elif stat.S_ISLNK(before.st_mode):
                     try:
-                        target_bytes = os.fsencode(os.readlink(path))
-                        after = path.lstat()
+                        target_bytes = os.fsencode(
+                            os.readlink(entry.name, dir_fd=directory_descriptor)
+                        )
+                        after = os.stat(
+                            entry.name,
+                            dir_fd=directory_descriptor,
+                            follow_symlinks=False,
+                        )
                     except (OSError, UnicodeError):
                         return _snapshot_failure("repository-snapshot-unreadable")
                     bound_failure = add_metadata(target_bytes)
@@ -286,10 +373,16 @@ def snapshot_repository(
         return None
 
     try:
-        repository = repository.resolve(strict=True)
+        root_descriptor = os.open(
+            repository,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+        )
     except OSError:
         return _snapshot_failure("repository-snapshot-unreadable")
-    failure = scan(repository, Path())
+    try:
+        failure = scan(root_descriptor, Path())
+    finally:
+        os.close(root_descriptor)
     if failure is not None:
         return failure
     return SnapshotSuccess(

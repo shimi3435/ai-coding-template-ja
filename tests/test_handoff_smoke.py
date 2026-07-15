@@ -306,14 +306,16 @@ def test_snapshot_unreadable_has_stable_code(
     repository.mkdir()
     blocked = repository / "blocked"
     blocked.write_text("secret")
-    original_open = Path.open
+    original_open = os.open
 
-    def denied(self: Path, *args: Any, **kwargs: Any) -> Any:
-        if self == blocked:
+    def denied(
+        path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+    ) -> int:
+        if path == blocked.name and dir_fd is not None and flags & os.O_PATH:
             raise PermissionError("denied")
-        return original_open(self, *args, **kwargs)
+        return original_open(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(Path, "open", denied)
+    monkeypatch.setattr(os, "open", denied)
 
     result = snapshot_repository(repository)
 
@@ -328,30 +330,18 @@ def test_snapshot_detects_file_instability_during_streaming(
     repository.mkdir()
     changing = repository / "changing"
     changing.write_bytes(b"before")
-    original_open = Path.open
+    original_read = os.read
+    changed = False
 
-    class _ChangingReader:
-        def __init__(self, wrapped: Any) -> None:
-            self.wrapped = wrapped
+    def changing_read(descriptor: int, size: int) -> bytes:
+        nonlocal changed
+        data = original_read(descriptor, size)
+        if data and not changed:
+            changed = True
+            os.chmod(changing, 0o600)
+        return data
 
-        def __enter__(self) -> _ChangingReader:
-            self.wrapped.__enter__()
-            return self
-
-        def __exit__(self, *args: Any) -> Any:
-            return self.wrapped.__exit__(*args)
-
-        def read(self, size: int) -> bytes:
-            data = self.wrapped.read(size)
-            if data:
-                os.chmod(changing, 0o600)
-            return data
-
-    def changing_open(self: Path, *args: Any, **kwargs: Any) -> Any:
-        opened = original_open(self, *args, **kwargs)
-        return _ChangingReader(opened) if self == changing else opened
-
-    monkeypatch.setattr(Path, "open", changing_open)
+    monkeypatch.setattr(os, "read", changing_read)
 
     result = snapshot_repository(repository)
 
