@@ -95,7 +95,6 @@ class ArtifactEvidence:
 class SmokeEvidence:
     """All observed success evidence, kept immutable until rendering."""
 
-    commands: tuple[str, ...]
     artifacts: tuple[ArtifactEvidence, ...]
     progress_total: int
     progress_complete: int
@@ -382,7 +381,6 @@ def run_smoke(
         change_id=change_id,
         executed_commands=tuple(executed),
         evidence=SmokeEvidence(
-            commands=tuple(executed),
             artifacts=artifacts,
             progress_total=total,
             progress_complete=complete,
