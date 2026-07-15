@@ -127,3 +127,68 @@ def test_preview_tests_are_static_and_do_not_claim_real_host_execution() -> None
         "phase-1-public-state-seam",
     ]
     assert "actual-host-prompt-execution" in scope["unverified_until_phase_3"]
+
+
+def test_prepared_gate_replays_preview_tuple_before_any_route_dispatch() -> None:
+    contract = _contract()
+    skill = _skill()
+    prepare_gate = contract["prepare_gate"]
+
+    assert prepare_gate == {
+        "operation": "prepare_handoff",
+        "replay": "preview_tuple",
+        "required_success": {
+            "ok": True,
+            "operation": "prepare",
+            "known_state": "prepared",
+        },
+        "dispatch_before_success": False,
+    }
+    _assert_tokens_in_order(
+        skill,
+        [
+            "## Stage: approve",
+            "## Stage: prepare",
+            "structured prepared success",
+            "## Stage: dispatch",
+        ],
+    )
+    assert "`prepare_handoff`" in skill
+    assert "replay `preview_tuple`" in skill
+
+
+def test_payload_fixture_is_exactly_equal_for_both_routes() -> None:
+    contract = _contract()
+    payload = contract["parity_payload"]
+    routes = contract["routes"]
+
+    assert routes["uninitialized"]["idea_document_payload"] == payload
+    assert routes["initialized"]["inline_phase_payload"] == payload
+    assert list(payload) == [
+        "change_id",
+        "canonical_paths",
+        "source_commit",
+        "completed_boundary_gates",
+        "unresolved_items",
+        "one_phase_one_change",
+        "specification_nonduplication",
+    ]
+    assert len(payload["canonical_paths"]) == 4
+
+
+def test_route_instructions_render_only_the_common_parity_payload() -> None:
+    contract = _contract()
+    skill = _skill()
+    routes = contract["routes"]
+
+    assert routes["uninitialized"]["entrypoint"] == (
+        "$gsd-new-project --auto @${HANDOFF_BRIEF}"
+    )
+    assert routes["initialized"]["entrypoint"] == "$gsd-phase"
+    assert routes["initialized"]["change_specific"] is True
+    assert routes["partial_initialization"]["dispatch_reachable"] is False
+    assert "`PARITY_PAYLOAD`" in skill
+    assert "$gsd-new-project --auto @<brief>" in skill
+    assert "change-specific `$gsd-phase`" in skill
+    assert skill.count("complete `PARITY_PAYLOAD`") >= 2
+    assert "partial initialization" in skill

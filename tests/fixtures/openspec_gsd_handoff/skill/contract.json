@@ -82,5 +82,87 @@
       "classified-gaps",
       "manual-handoff-guidance"
     ]
+  },
+  "prepare_gate": {
+    "operation": "prepare_handoff",
+    "replay": "preview_tuple",
+    "required_success": {
+      "ok": true,
+      "operation": "prepare",
+      "known_state": "prepared"
+    },
+    "dispatch_before_success": false
+  },
+  "parity_payload": {
+    "change_id": "fixture-change",
+    "canonical_paths": [
+      "openspec/changes/fixture-change/design.md",
+      "openspec/changes/fixture-change/proposal.md",
+      "openspec/changes/fixture-change/specs/fixture-capability/spec.md",
+      "openspec/changes/fixture-change/tasks.md"
+    ],
+    "source_commit": "1111111111111111111111111111111111111111",
+    "completed_boundary_gates": [
+      "implementation-gates-1.1-through-1.3",
+      "strict-validation",
+      "spec-holes-phase-1",
+      "explicit-implementation-approval"
+    ],
+    "unresolved_items": [],
+    "one_phase_one_change": "one GSD phase belongs to fixture-change only",
+    "specification_nonduplication": "OpenSpec owns specification and acceptance criteria; reference canonical paths and source commit without copying or redefining them"
+  },
+  "routes": {
+    "uninitialized": {
+      "project_initialized": false,
+      "entrypoint": "$gsd-new-project --auto @${HANDOFF_BRIEF}",
+      "idea_document_payload": {
+        "change_id": "fixture-change",
+        "canonical_paths": [
+          "openspec/changes/fixture-change/design.md",
+          "openspec/changes/fixture-change/proposal.md",
+          "openspec/changes/fixture-change/specs/fixture-capability/spec.md",
+          "openspec/changes/fixture-change/tasks.md"
+        ],
+        "source_commit": "1111111111111111111111111111111111111111",
+        "completed_boundary_gates": [
+          "implementation-gates-1.1-through-1.3",
+          "strict-validation",
+          "spec-holes-phase-1",
+          "explicit-implementation-approval"
+        ],
+        "unresolved_items": [],
+        "one_phase_one_change": "one GSD phase belongs to fixture-change only",
+        "specification_nonduplication": "OpenSpec owns specification and acceptance criteria; reference canonical paths and source commit without copying or redefining them"
+      }
+    },
+    "initialized": {
+      "project_initialized": true,
+      "entrypoint": "$gsd-phase",
+      "change_specific": true,
+      "inline_phase_payload": {
+        "change_id": "fixture-change",
+        "canonical_paths": [
+          "openspec/changes/fixture-change/design.md",
+          "openspec/changes/fixture-change/proposal.md",
+          "openspec/changes/fixture-change/specs/fixture-capability/spec.md",
+          "openspec/changes/fixture-change/tasks.md"
+        ],
+        "source_commit": "1111111111111111111111111111111111111111",
+        "completed_boundary_gates": [
+          "implementation-gates-1.1-through-1.3",
+          "strict-validation",
+          "spec-holes-phase-1",
+          "explicit-implementation-approval"
+        ],
+        "unresolved_items": [],
+        "one_phase_one_change": "one GSD phase belongs to fixture-change only",
+        "specification_nonduplication": "OpenSpec owns specification and acceptance criteria; reference canonical paths and source commit without copying or redefining them"
+      }
+    },
+    "partial_initialization": {
+      "project_initialized": "partial",
+      "dispatch_reachable": false
+    }
   }
 }
