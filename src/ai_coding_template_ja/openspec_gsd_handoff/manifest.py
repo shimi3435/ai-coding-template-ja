@@ -159,8 +159,13 @@ def _exact_fields(value: object, fields: set[str]) -> Mapping[object, object] | 
 def _parse_artifacts(
     value: object, change_id: str
 ) -> tuple[ManifestArtifact, ...] | None:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value:
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, (str, bytes))
+        or not 1 <= len(value) <= 64
+    ):
         return None
+    expected_root = PurePosixPath("openspec", "changes", change_id)
     artifacts: list[ManifestArtifact] = []
     for raw in value:
         item = _exact_fields(raw, {"kind", "path", "sha256"})
@@ -176,12 +181,25 @@ def _parse_artifacts(
         ):
             return None
         pure_path = PurePosixPath(path)
-        expected_root = PurePosixPath("openspec", "changes", change_id)
         if (
             pure_path.is_absolute()
             or ".." in pure_path.parts
             or not pure_path.is_relative_to(expected_root)
             or pure_path.suffix != ".md"
+        ):
+            return None
+        relative = pure_path.relative_to(expected_root)
+        canonical_path = {
+            "proposal": PurePosixPath("proposal.md"),
+            "design": PurePosixPath("design.md"),
+            "tasks": PurePosixPath("tasks.md"),
+        }.get(kind)
+        if canonical_path is not None and relative != canonical_path:
+            return None
+        if kind == "spec" and not (
+            len(relative.parts) == 3
+            and relative.parts[0] == "specs"
+            and relative.parts[2] == "spec.md"
         ):
             return None
         artifacts.append(ManifestArtifact(kind, path, sha256))
