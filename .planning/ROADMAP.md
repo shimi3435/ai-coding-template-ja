@@ -20,7 +20,7 @@ canonical OpenSpec artifacts に委ねる。
 ## Phases
 
 - [x] **Phase 1: Bridge Core, Persistence, and Preflight** - `BRIDGE-01` が指す bridge 実装境界を source-pinned な証拠とともに成立させる (completed 2026-07-14)
-- [ ] **Phase 2: Approval-Gated Skill Orchestration** - `SKILL-01` が指す skill 実装境界を Phase 1 の seam 上で成立させる
+- [x] **Phase 2: Approval-Gated Skill Orchestration** - `SKILL-01` が指す skill 実装境界を Phase 1 の seam 上で成立させる (completed 2026-07-15)
 - [ ] **Phase 3: Deterministic Verification and Acceptance Evidence** - `VERIFY-01` が指す検証境界から OpenSpec 最終判定用の証拠を整える
 
 ## Phase Details
@@ -63,10 +63,10 @@ Plans:
   2. Phase 2 の証拠は approval-gated skill orchestration の境界に限定され、Phase 1 の契約や OpenSpec の規範本文を再定義していない。
   3. runtime 固有の判断と検証結果は証拠として区別され、canonical scope の変更が必要なら OpenSpec gate へ戻せる。
 
-**Plans**: 0/2 plans executed
+**Plans**: 2/2 plans complete
 
-- [ ] 02-01-PLAN.md
-- [ ] 02-02-PLAN.md
+- [x] 02-01-PLAN.md
+- [x] 02-02-PLAN.md
 
 ### Phase 3: Deterministic Verification and Acceptance Evidence
 
@@ -88,7 +88,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Bridge Core, Persistence, and Preflight | 3/3 | Complete    | 2026-07-14 |
-| 2. Approval-Gated Skill Orchestration | 0/2 | Planned    |  |
+| 2. Approval-Gated Skill Orchestration | 2/2 | Complete    | 2026-07-15 |
 | 3. Deterministic Verification and Acceptance Evidence | 0/TBD | Not started | - |
 
 ## Coverage
