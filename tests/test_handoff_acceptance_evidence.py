@@ -21,6 +21,11 @@ SPEC_PATH = (
     "openspec-gsd-handoff-automation/spec.md"
 )
 TASKS_PATH = "openspec/changes/automate-openspec-gsd-handoff/tasks.md"
+TRACKED_EVIDENCE = (
+    REPO_ROOT
+    / ".planning/phases/03-deterministic-verification-and-acceptance-evidence/"
+    "03-ACCEPTANCE-EVIDENCE.md"
+)
 
 
 def _load_validator() -> ModuleType:
@@ -150,8 +155,19 @@ def valid_evidence() -> bytes:
             _table("Scenarios", scenarios, "fixture-test"),
             _table("Spec holes", holes, "property-test"),
             "\n".join(host_lines),
-            "GSD Phase 3 completion is not OpenSpec final completion; "
-            "tasks 5.1 and 5.2 remain at the main boundary.",
+            "\n".join(
+                [
+                    "## Real read-only observations",
+                    "- Normal gate and opt-in smoke passed without mutable dispatch.",
+                ]
+            ),
+            "\n".join(
+                [
+                    "## Authority boundary",
+                    "GSD Phase 3 completion is not OpenSpec final completion; "
+                    "tasks 5.1 and 5.2 remain at the main boundary.",
+                ]
+            ),
         ]
     )
     return (text + "\n").encode()
@@ -307,7 +323,15 @@ def test_host_rows_require_exact_order_kind_and_no_safe_dry_run_reason() -> None
 
 
 @pytest.mark.parametrize(
-    "heading", ["Requirements", "Scenarios", "Spec holes", "Host unverified"]
+    "heading",
+    [
+        "Requirements",
+        "Scenarios",
+        "Spec holes",
+        "Host unverified",
+        "Real read-only observations",
+        "Authority boundary",
+    ],
 )
 @pytest.mark.parametrize("position", ["before", "after"])
 def test_duplicate_evidence_sections_fail_before_git_with_stable_code(
@@ -336,7 +360,15 @@ def test_duplicate_evidence_sections_fail_before_git_with_stable_code(
 
 @pytest.mark.parametrize(
     "heading",
-    ["Host verified", "Host verification", "HOST UNVERIFIED", "Host observations"],
+    [
+        "Host verified",
+        "Host verification",
+        "HOST UNVERIFIED",
+        "Host observations",
+        "Actual host verified",
+        "Observations from HOST",
+        "Runtime host evidence",
+    ],
 )
 def test_host_claim_heading_variants_are_not_ignored(heading: str) -> None:
     claim = "\n".join(
@@ -353,6 +385,38 @@ def test_host_claim_heading_variants_are_not_ignored(heading: str) -> None:
 
     assert verdict.code == "evidence-section-invalid"
     assert runner.calls == []
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Alternate requirements",
+        "Requirements appendix",
+        "Verification matrix",
+        "Evidence mapping",
+    ],
+)
+def test_unexpected_mapping_sections_fail_before_git(heading: str) -> None:
+    claim = "\n".join(
+        [
+            f"## {heading}",
+            "| Coordinate | Kind | Locator | Reason |",
+            "| --- | --- | --- | --- |",
+            "| R999 | production-test | tests/test_bad.py | false claim |",
+        ]
+    )
+    evidence = f"{valid_evidence().decode()}\n{claim}\n".encode()
+
+    verdict, runner = _validate(evidence)
+
+    assert verdict.code == "evidence-section-invalid"
+    assert runner.calls == []
+
+
+def test_tracked_evidence_uses_the_exact_allowed_section_schema() -> None:
+    verdict, _ = _validate(TRACKED_EVIDENCE.read_bytes())
+
+    assert verdict.ok is True
 
 
 @pytest.mark.parametrize("path", ["/Users/alice/project", r"C:\Users\alice\project"])
