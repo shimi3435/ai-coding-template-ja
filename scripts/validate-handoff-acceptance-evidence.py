@@ -363,6 +363,18 @@ def _validate_host_rows(rows: Sequence[EvidenceRow]) -> str | None:
     return None
 
 
+def _contains_raw_json(text: str) -> bool:
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"(?m)^[ \t]*[\[{]", text):
+        try:
+            decoded, _ = decoder.raw_decode(text, match.end() - 1)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(decoded, dict | list):
+            return True
+    return False
+
+
 def _validate_evidence_content(
     text: str,
     rows: Sequence[EvidenceRow],
@@ -370,26 +382,24 @@ def _validate_evidence_content(
 ) -> str | None:
     if "```" in text or "~~~" in text:
         return "raw-output-forbidden"
-    for raw_line in text.splitlines():
-        stripped = raw_line.strip()
-        if (stripped.startswith("{") and stripped.endswith("}")) or (
-            stripped.startswith("[") and stripped.endswith("]")
-        ):
-            try:
-                decoded = json.loads(stripped)
-            except json.JSONDecodeError:
-                pass
-            else:
-                if isinstance(decoded, dict | list):
-                    return "raw-output-forbidden"
+    if _contains_raw_json(text):
+        return "raw-output-forbidden"
     probe_fields = sum(
-        bool(re.search(rf"\b{re.escape(key)}\b\s*[:=]", text))
+        bool(
+            re.search(
+                rf'(?<![A-Za-z0-9_])(?:["\']{re.escape(key)}["\']|'
+                rf"{re.escape(key)})\s*[:=]",
+                text,
+            )
+        )
         for key in PROBE_OUTPUT_KEYS
     )
     if probe_fields >= 2:
         return "raw-output-forbidden"
     if (
         re.search(r"(?<![A-Za-z0-9_$}{<>./~+\-])/(?!/)[^\s|`]+", text)
+        or re.search(r"(?<![A-Za-z0-9_$}{<>./~+\-:])//[^\s|`]+", text)
+        or re.search(r"(?<![A-Za-z0-9_$}{<>./~+\-])/(?=$|[\s|`,.;:)\]])", text)
         or re.search(r"(?<![A-Za-z0-9_$}{<>./~+\-])~/[^\s|`]+", text)
         or re.search(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s|`]+", text)
         or re.search(r"(?<!\\)\\\\[^\\\s]+\\[^\s|`]+", text)
