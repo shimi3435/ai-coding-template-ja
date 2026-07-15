@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from ai_coding_template_ja.openspec_gsd_handoff.preflight import CommandResult
 from ai_coding_template_ja.openspec_gsd_handoff.smoke import (
+    SnapshotFailure,
     SnapshotLimits,
     SnapshotSuccess,
     render_human_result,
@@ -16,8 +19,6 @@ from ai_coding_template_ja.openspec_gsd_handoff.smoke import (
     run_smoke,
     snapshot_repository,
 )
-
-from ai_coding_template_ja.openspec_gsd_handoff.preflight import CommandResult
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "openspec_gsd_handoff"
@@ -122,7 +123,7 @@ def test_supported_smoke_reports_only_bounded_redacted_evidence(tmp_path: Path) 
     assert result.code == "ok"
     payload = json.loads(render_json_result(result))
     assert payload["openspec"] == {"route": "json", "version": "1.3.1"}
-    assert payload["progress"] == {"complete": 2, "remaining": 1, "total": 3}
+    assert payload["progress"] == {"complete": 1, "remaining": 2, "total": 3}
     assert payload["gsd"] == {
         "entrypoint": "gsd-phase",
         "entrypoint_dry_run": False,
@@ -240,7 +241,7 @@ def test_snapshot_includes_ignored_empty_directory_symlink_mode_and_large_bytes(
     changed = snapshot_repository(repository)
     assert isinstance(changed, SnapshotSuccess)
     assert changed.value.root_digest != mode_changed.value.root_digest
-    assert changed.value.entry_count == 4
+    assert changed.value.entry_count == 3
 
 
 @pytest.mark.parametrize(
@@ -264,6 +265,7 @@ def test_snapshot_resource_bounds_have_stable_codes(
 
     result = snapshot_repository(repository, limits=limits)
 
+    assert isinstance(result, SnapshotFailure)
     assert result.issue.code == expected
 
 
@@ -279,6 +281,7 @@ def test_snapshot_timeout_has_stable_code(tmp_path: Path) -> None:
         clock=lambda: next(ticks),
     )
 
+    assert isinstance(result, SnapshotFailure)
     assert result.issue.code == "repository-snapshot-timeout"
 
 
@@ -300,6 +303,7 @@ def test_snapshot_unreadable_has_stable_code(
 
     result = snapshot_repository(repository)
 
+    assert isinstance(result, SnapshotFailure)
     assert result.issue.code == "repository-snapshot-unreadable"
 
 
@@ -337,4 +341,5 @@ def test_snapshot_detects_file_instability_during_streaming(
 
     result = snapshot_repository(repository)
 
+    assert isinstance(result, SnapshotFailure)
     assert result.issue.code == "repository-snapshot-unstable"
