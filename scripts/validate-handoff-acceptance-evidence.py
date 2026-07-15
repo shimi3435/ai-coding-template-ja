@@ -145,7 +145,7 @@ def _failure(code: str) -> Verdict:
     return Verdict(False, code)
 
 
-def _metadata(text: str) -> dict[str, str]:
+def _metadata(text: str) -> tuple[dict[str, str], str | None]:
     labels = {
         "Source commit": "source",
         "Proposal path": "proposal",
@@ -157,8 +157,16 @@ def _metadata(text: str) -> dict[str, str]:
     for line in text.splitlines():
         match = re.fullmatch(r"- ([A-Za-z ]+): `([^`]+)`", line)
         if match and match.group(1) in labels:
-            found[labels[match.group(1)]] = match.group(2)
-    return found
+            key = labels[match.group(1)]
+            if key in found:
+                duplicate_code = (
+                    "source-commit-invalid"
+                    if key == "source"
+                    else "canonical-paths-mismatch"
+                )
+                return found, duplicate_code
+            found[key] = match.group(2)
+    return found, None
 
 
 def _read_pinned_blobs(
@@ -335,6 +343,24 @@ def _validate_evidence_content(
         return "raw-output-forbidden"
     if re.search(r"\bcovered\b", text, re.IGNORECASE):
         return "bare-covered"
+    metadata_prefixes = (
+        "- Source commit:",
+        "- Proposal path:",
+        "- Design path:",
+        "- Spec path:",
+        "- Tasks path:",
+    )
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if (
+            not stripped
+            or stripped.startswith("#")
+            or stripped.startswith(metadata_prefixes)
+        ):
+            continue
+        normalized_line = " ".join(stripped.replace("`", "").split()).casefold()
+        if normalized_line in canonical_body:
+            return "canonical-body-leak"
     for row in rows:
         for cell in (row.locator, row.reason):
             normalized = " ".join(cell.replace("`", "").split()).casefold()
@@ -356,7 +382,9 @@ def validate_evidence(
         text = evidence.decode("utf-8")
     except UnicodeDecodeError:
         return _failure("evidence-empty")
-    metadata = _metadata(text)
+    metadata, metadata_error = _metadata(text)
+    if metadata_error:
+        return _failure(metadata_error)
     source = metadata.get("source", "")
     if re.fullmatch(r"[0-9a-f]{40}", source) is None:
         return _failure("source-commit-invalid")
