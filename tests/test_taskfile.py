@@ -50,6 +50,10 @@ def test_handoff_smoke_is_explicit_and_isolated_from_normal_check() -> None:
     assert "UV_CACHE_DIR" in smoke
     assert "UV_CONFIG_FILE" in smoke
     assert "uv run --no-sync python scripts/openspec-gsd-handoff-smoke.py" in smoke
+    assert '--change "$HANDOFF_CHANGE_ID"' in smoke
+    assert '--gsd-home "$HANDOFF_GSD_HOME"' in smoke
+    assert '--change "{{.CHANGE_ID}}"' not in smoke
+    assert '--gsd-home "{{.GSD_HOME}}"' not in smoke
     assert "openspec:gsd-handoff:smoke" not in check
     assert "GSD_HOME" not in check
     assert "openspec" not in check
