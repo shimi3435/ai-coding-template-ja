@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 
 from ai_coding_template_ja.openspec_gsd_handoff.preflight import CommandResult
 from ai_coding_template_ja.openspec_gsd_handoff.smoke import (
+    SmokeResult,
     SnapshotFailure,
     SnapshotLimits,
     SnapshotSuccess,
@@ -28,6 +30,17 @@ OPEN_CONTRACT = json.loads(
 GSD_CONTRACT = json.loads(
     (FIXTURES / "gsd" / "contract.json").read_text(encoding="utf-8")
 )
+SMOKE_SCRIPT = REPO_ROOT / "scripts" / "openspec-gsd-handoff-smoke.py"
+
+
+def _load_smoke_script() -> Any:
+    spec = importlib.util.spec_from_file_location(
+        "openspec_gsd_smoke_script", SMOKE_SCRIPT
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _make_repository(tmp_path: Path) -> tuple[Path, str]:
@@ -343,3 +356,69 @@ def test_snapshot_detects_file_instability_during_streaming(
 
     assert isinstance(result, SnapshotFailure)
     assert result.issue.code == "repository-snapshot-unstable"
+
+
+@pytest.mark.parametrize(("ok", "expected_exit"), [(True, 0), (False, 1)])
+def test_cli_emits_exactly_one_json_line_and_one_human_line(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    ok: bool,
+    expected_exit: int,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    gsd_home = tmp_path / "gsd"
+    gsd_home.mkdir()
+    module = _load_smoke_script()
+    monkeypatch.setattr(
+        module,
+        "run_smoke",
+        lambda **_kwargs: SmokeResult(
+            ok=ok,
+            code="ok" if ok else "gsd-probe-failed",
+            change_id="fixture-change",
+            executed_commands=(),
+        ),
+    )
+
+    exit_code = module.main(
+        [
+            "--repository",
+            str(repository),
+            "--change",
+            "fixture-change",
+            "--gsd-home",
+            str(gsd_home),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == expected_exit
+    assert len(captured.out.splitlines()) == 1
+    assert len(captured.err.splitlines()) == 1
+    assert json.loads(captured.out)["ok"] is ok
+    assert str(tmp_path) not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("change_id", ["", "UPPER", "has space", "../escape", "é"])
+def test_cli_rejects_non_lower_kebab_change_id(tmp_path: Path, change_id: str) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    gsd_home = tmp_path / "gsd"
+    gsd_home.mkdir()
+    module = _load_smoke_script()
+
+    with pytest.raises(SystemExit) as raised:
+        module.main(
+            [
+                "--repository",
+                str(repository),
+                "--change",
+                change_id,
+                "--gsd-home",
+                str(gsd_home),
+            ]
+        )
+
+    assert raised.value.code == 2
