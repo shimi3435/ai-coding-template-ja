@@ -6,8 +6,7 @@ description: Preview and explicitly approve a source-pinned OpenSpec change befo
 # Execute OpenSpec Change
 
 Use this first-party skill only to orchestrate the handoff start. OpenSpec remains
-the specification and final-completion authority. The Phase 1 public operations
-`inspect_handoff`, `prepare_handoff`, and `mark_handoff_started` own discovery,
+the specification and final-completion authority. The three Phase 1 public operations own discovery,
 preflight, persistence, and state transitions; do not reimplement those rules here.
 Consume their structured values and classified codes, never display prose or exit 0
 alone.
@@ -133,7 +132,72 @@ Select only the route already reported by the structured prepared value:
   requirement or acceptance text.
 - When GSD is initialized, pass the complete `PARITY_PAYLOAD` inline to one
   change-specific `$gsd-phase`. Do not summarize, rename, omit, or add payload fields.
+  Immediately before dispatch, capture one read-only snapshot containing
+  `maximum-integer-phase`, `phase-directories`, and `roadmap`.
 
 If the project, roadmap, and state signals show partial initialization, stop before
 either entrypoint. Do not repair initialization, choose another route, or dispatch a
 partial payload.
+
+## Stage: accept
+
+GSD is accepted only when both independent terms are true: a **structured completed-success**
+from the resolved host workflow and the complete **route-specific read-only postcondition**
+below. Exit 0 and a prose completion marker is supplemental only. Never accept a
+result by searching human-readable text.
+
+Treat each of these rows as not accepted: `marker-only`, `checkpoint`, `empty`,
+`malformed`, `partial`, `ambiguous`, `dispatch-failure`, and
+`postcondition-mismatch`. For every such row retain `prepared`, do not call the
+started transition, and perform neither automatic retry nor route switch.
+
+### Uninitialized route postcondition
+
+After structured completion, rerun this read-only probe:
+
+```text
+node ${GSD_HOME}/gsd-core/bin/gsd-tools.cjs init progress --raw
+```
+
+Require structured probe evidence with `project_exists=true`, `roadmap_exists=true`,
+`state_exists=true`, `project_root` equal to the frozen repository real path,
+`agents_installed=true`, and `missing_agents=[]`. Also require all four files:
+
+- `.planning/PROJECT.md`
+- `.planning/REQUIREMENTS.md`
+- `.planning/ROADMAP.md`
+- `.planning/STATE.md`
+
+Read those files without mutation. Their collective evidence must preserve
+`exact-change-id`, `exact-source-commit`,
+`all-canonical-paths-or-exact-brief-reference`, `completed-boundary-gates`,
+`unresolved-items`, `one-phase-one-change`, and `specification-nonduplication`.
+Missing, conflicting, or merely probable evidence fails the postcondition.
+
+### Initialized route postcondition
+
+After structured completion, take the same read-only phase and roadmap snapshot.
+Compare it to the pre-dispatch `maximum-integer-phase`, `phase-directories`, and
+`roadmap` values. Require all of these facts:
+
+- `exactly-one-new-max-plus-one-phase`
+- `matching-new-phase-directory`
+- `no-other-phase-or-directory-change`
+- `new-roadmap-section-equals-inline-parity-payload`
+
+The new roadmap section must contain the exact inline `PARITY_PAYLOAD`; selected
+keywords or a prose summary are insufficient.
+
+## Stage: mark-started
+
+Only after conservative acceptance call the Phase 1 public
+`mark_handoff_started` operation with `gsd_accepted=True`. Require its structured
+success and `known_state=started`. If the acceptance predicate is false, this stage
+is unreachable and the manifest remains prepared.
+
+## Evidence limits
+
+Normal CI verifies static SKILL/fixture instruction consistency and existing Phase 1
+dynamic state seams only. It does not execute actual host prompts, spawn generic
+agents, mutate a real GSD project, or observe either route postcondition. Those
+opt-in/manual observations remain unverified until Phase 3.
