@@ -291,8 +291,10 @@ class _FaultOperations(ManifestFileOperations):
         self.fault = fault
         self.replace_calls = 0
 
-    def read_bytes(self, path: Path) -> bytes:
-        data = super().read_bytes(path)
+    def read_bounded_bytes(
+        self, path: Path, *, limit: int = MANIFEST_BYTE_LIMIT
+    ) -> bytes:
+        data = super().read_bounded_bytes(path, limit=limit)
         if self.fault == "validation" and path.suffix == ".tmp":
             return b"{}"
         return data

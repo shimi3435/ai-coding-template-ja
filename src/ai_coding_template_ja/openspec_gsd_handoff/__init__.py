@@ -16,7 +16,7 @@ from .manifest import (
     ManifestPersistenceResult,
     ManifestRepository,
     OpenSpecCapability,
-    parse_manifest_bytes,
+    read_manifest_file,
 )
 from .models import (
     ClassifiedIssue,
@@ -201,14 +201,8 @@ def mark_handoff_started(
     if not _valid_change_id(change_id):
         return _failure("change-id-invalid")
     target = repository / _manifest_path(change_id)
-    try:
-        parsed = parse_manifest_bytes(target.read_bytes())
-    except OSError:
-        return _failure(
-            "manifest-read-failed",
-            category=IssueCategory.PERSISTENCE,
-            known_state=KnownState.UNKNOWN,
-        )
+    filesystem = operations or ManifestFileOperations()
+    parsed = read_manifest_file(target, operations=filesystem)
     if isinstance(parsed, Failure):
         return parsed
     if parsed.value.change_id != change_id:
@@ -218,7 +212,7 @@ def mark_handoff_started(
             known_state=KnownState.UNKNOWN,
         )
     started = replace(parsed.value, handoff_state=HandoffState.STARTED)
-    persisted = ManifestRepository(target, operations=operations).persist(
+    persisted = ManifestRepository(target, operations=filesystem).persist(
         started,
         expected_existing=HandoffState.PREPARED,
     )

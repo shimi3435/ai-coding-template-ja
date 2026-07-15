@@ -27,6 +27,7 @@ from .models import (
     Result,
     Success,
 )
+from .reader import DEFAULT_ARTIFACT_LIMITS
 
 _CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _HEX_40 = re.compile(r"[0-9a-f]{40}")
@@ -40,6 +41,10 @@ _ROOT_FIELDS = {
     "progress",
     "capabilities",
 }
+# A manifest can expand the bounded 1 MiB tasks Markdown through JSON escaping;
+# eight source-file units leave room for the fixed 4096-task/64-artifact envelope.
+MAX_MANIFEST_BYTES = DEFAULT_ARTIFACT_LIMITS.bytes_per_file * 8
+MAX_TASK_DESCRIPTION_BYTES = DEFAULT_ARTIFACT_LIMITS.bytes_per_file
 
 
 @dataclass(frozen=True)
@@ -246,6 +251,7 @@ def _parse_progress(value: object) -> Progress | None:
     ):
         return None
     tasks: list[NormalizedTask] = []
+    description_bytes = 0
     for index, raw in enumerate(raw_tasks, start=1):
         item = _exact_fields(raw, {"id", "description", "done"})
         if item is None:
@@ -257,6 +263,12 @@ def _parse_progress(value: object) -> Progress | None:
             or not description.strip()
             or type(done) is not bool
         ):
+            return None
+        try:
+            description_bytes += len(description.encode("utf-8"))
+        except UnicodeEncodeError:
+            return None
+        if description_bytes > MAX_TASK_DESCRIPTION_BYTES:
             return None
         tasks.append(
             NormalizedTask(
@@ -327,6 +339,8 @@ def _parse_capabilities(value: object) -> ManifestCapabilities | None:
 def parse_manifest_bytes(data: bytes) -> Result[HandoffManifest]:
     """Parse only the complete MVP schema; unknown fields fail closed."""
 
+    if len(data) > MAX_MANIFEST_BYTES:
+        return _failure("manifest-size-limit-exceeded")
     try:
         raw = json.loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
@@ -463,8 +477,14 @@ class ManifestFileOperations:
     def exists(self, path: Path) -> bool:
         return path.exists()
 
-    def read_bytes(self, path: Path) -> bytes:
-        return path.read_bytes()
+    def read_bounded_bytes(
+        self, path: Path, *, limit: int = MAX_MANIFEST_BYTES
+    ) -> bytes:
+        with path.open("rb") as stream:
+            data = stream.read(limit + 1)
+        if len(data) > limit:
+            raise ManifestSizeLimitExceeded
+        return data
 
     def create_staging(self, parent: Path) -> Path:
         descriptor, name = tempfile.mkstemp(
@@ -481,6 +501,25 @@ class ManifestFileOperations:
 
     def unlink(self, path: Path) -> None:
         path.unlink()
+
+
+class ManifestSizeLimitExceeded(ValueError):
+    """A manifest crossed the source-derived in-memory parsing envelope."""
+
+
+def read_manifest_file(
+    path: Path, *, operations: ManifestFileOperations | None = None
+) -> Result[HandoffManifest]:
+    """Read one manifest with limit-plus-one before attempting JSON parsing."""
+
+    filesystem = operations or ManifestFileOperations()
+    try:
+        data = filesystem.read_bounded_bytes(path)
+    except ManifestSizeLimitExceeded:
+        return _failure("manifest-size-limit-exceeded")
+    except OSError:
+        return _failure("manifest-read-failed")
+    return parse_manifest_bytes(data)
 
 
 def _known_state(
@@ -530,16 +569,15 @@ class ManifestRepository:
             )
         )
 
-    def _existing(self) -> tuple[HandoffManifest | None, KnownState]:
+    def _existing(
+        self,
+    ) -> tuple[HandoffManifest | None, KnownState, str | None]:
         if not self.operations.exists(self.target):
-            return None, KnownState.MANIFEST_ABSENT
-        try:
-            parsed = parse_manifest_bytes(self.operations.read_bytes(self.target))
-        except OSError:
-            return None, KnownState.UNKNOWN
+            return None, KnownState.MANIFEST_ABSENT, None
+        parsed = read_manifest_file(self.target, operations=self.operations)
         if isinstance(parsed, Failure):
-            return None, KnownState.UNKNOWN
-        return parsed.value, _known_state(parsed.value)
+            return None, KnownState.UNKNOWN, parsed.issue.code
+        return parsed.value, _known_state(parsed.value), None
 
     def _target_parent_is_safe(self, change_id: str) -> bool:
         """Reject static symlink escapes before any persistence mutation."""
@@ -596,7 +634,15 @@ class ManifestRepository:
                 StagingKnownState.ABSENT,
                 None,
             )
-        existing, target_state = self._existing()
+        existing, target_state, existing_issue = self._existing()
+        if existing_issue is not None:
+            return self._failure(
+                existing_issue,
+                FailurePoint.STATE_GUARD,
+                target_state,
+                StagingKnownState.ABSENT,
+                None,
+            )
         valid_prepare = (
             existing is None
             and target_state is KnownState.MANIFEST_ABSENT
@@ -642,8 +688,8 @@ class ManifestRepository:
                 staging,
             )
         try:
-            staged = parse_manifest_bytes(self.operations.read_bytes(staging))
-        except OSError:
+            staged = parse_manifest_bytes(self.operations.read_bounded_bytes(staging))
+        except (ManifestSizeLimitExceeded, OSError):
             staged = _failure("manifest-staging-read-failed")
         if isinstance(staged, Failure) or staged.value != manifest:
             return self._failure(
