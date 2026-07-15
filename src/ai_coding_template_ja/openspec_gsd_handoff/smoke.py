@@ -143,6 +143,18 @@ def _digest_record(root_digest: Any, *parts: bytes) -> None:
         root_digest.update(part)
 
 
+def _special_entry_type(mode: int) -> bytes:
+    if stat.S_ISFIFO(mode):
+        return b"fifo"
+    if stat.S_ISSOCK(mode):
+        return b"socket"
+    if stat.S_ISBLK(mode):
+        return b"block-device"
+    if stat.S_ISCHR(mode):
+        return b"character-device"
+    return b"unknown-special"
+
+
 def snapshot_repository(
     repository: Path,
     *,
@@ -264,7 +276,12 @@ def snapshot_repository(
                         target_bytes,
                     )
                 else:
-                    _digest_record(root_digest, relative_bytes, b"special", mode)
+                    _digest_record(
+                        root_digest,
+                        relative_bytes,
+                        _special_entry_type(before.st_mode),
+                        mode,
+                    )
         except (OSError, UnicodeError):
             return _snapshot_failure("repository-snapshot-unreadable")
         return None

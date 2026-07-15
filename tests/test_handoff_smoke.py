@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -356,6 +357,25 @@ def test_snapshot_detects_file_instability_during_streaming(
 
     assert isinstance(result, SnapshotFailure)
     assert result.issue.code == "repository-snapshot-unstable"
+
+
+def test_snapshot_distinguishes_safe_special_entry_types(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    special = repository / "special"
+    os.mkfifo(special)
+    fifo = snapshot_repository(repository)
+    assert isinstance(fifo, SnapshotSuccess)
+    special.unlink()
+    unix_socket = socket.socket(socket.AF_UNIX)
+    try:
+        unix_socket.bind(str(special))
+        socket_snapshot = snapshot_repository(repository)
+    finally:
+        unix_socket.close()
+
+    assert isinstance(socket_snapshot, SnapshotSuccess)
+    assert socket_snapshot.value.root_digest != fifo.value.root_digest
 
 
 @pytest.mark.parametrize(("ok", "expected_exit"), [(True, 0), (False, 1)])
