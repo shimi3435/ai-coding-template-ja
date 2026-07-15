@@ -28,8 +28,8 @@ validate、`spec-holes` Phase 1再確認、利用者承認までproduction code�
 
 ## 5. OpenSpec acceptance
 
-- [ ] 5.1 先行changeの最終完了requirementに従い、MVPの全requirement・scenario・spec-holesと実装・テスト・理由付き未検証を対応付ける
-- [ ] 5.2 `openspec validate automate-openspec-gsd-handoff --strict`、`task openspec:validate`、`task check`、manifest追跡・リンク検査を通す
+- [x] 5.1 先行changeの最終完了requirementに従い、MVPの全requirement・scenario・spec-holesと実装・テスト・理由付き未検証を対応付ける
+- [x] 5.2 `openspec validate automate-openspec-gsd-handoff --strict`、`task openspec:validate`、`task check`、manifest追跡・リンク検査を通す
 
 ## 6. Close
 
