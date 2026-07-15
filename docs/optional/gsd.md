@@ -48,21 +48,48 @@ npx @opengsd/gsd-core@latest
 5. 各 phase に元 change と担当範囲を参照させる。仕様や受け入れ基準は GSD artifacts へ転記しない。
 6. phase ごとの検証と進捗更新後、実行主体が対応する OpenSpec 境界ゲートを更新する。
 
-handoff MVPを使う場合、`.planning/openspec/<change-id>/handoff.json`はcanonical artifactsを固定した
-source commitの後続**別commit**でfeature branchへ追跡する。`.planning/`がignoreされる、または
-repository policy上追跡できない下流環境では、cross-session resumeを保証できない。永続化方針を
-明示するまでhandoff stateを`prepared` / `started`へ進めず停止する。テンプレート自身では既存close
-policyに従いpre-mergeでmanifestを手動削除し、自動cleanupは行わない。
+handoff 開始の任意 automation entry は first-party `execute-openspec-change` skill である。canonical
+contract は `design.md` §5 / §10 と `spec.md` §「Requirement: policyとcapabilityのpreflight後にGSD
+handoffを開始する」で、skill は preview から started transition までしか扱わない。
 
-GSD 1.5.0のread-only capability probeは`init progress --raw`で初期化状態とproject root、agent配置を
-確認するところまでで、entrypointにdry-runはない。未初期化なら明示承認後に、canonical paths、source
-commit、one-change制約、仕様非複製を記したidea documentを
-`$gsd-new-project --auto @<handoff-brief>`へ渡す。初期化済みなら同じ参照を持つchange専用
-`$gsd-phase`を追加する。GSD側には仕様や受け入れ基準を転記しない。
+利用順は read-only inspect / host preflight、完全な preview、表示後の新たな明示承認、structured
+`prepared`、初期化状態に応じた一回の dispatch、observable acceptance、`started` である。preview の
+`input_route` は決定論的な `json` / `markdown-fallback` label/state だけを表示し、fallback 原因を
+推測しない。拒否または inspect failure では brief、dispatch、manifest state を変更しない。
 
-CodexではCLI probeと別にhostの`spawn_agent` schemaを検査する。`agent_type`なしのgeneric schemaでは
-対応agent `.toml`をrole-preambleとして使い、`generic-agent workaround`と明示する。typed dispatch
-またはworktree isolationが必須ならgeneric schemaで続行しない。
+両 route は同一の `PARITY_PAYLOAD` を渡す。payload は change ID、全 canonical paths、source commit、
+完了済み境界ゲート、未解決事項、one-phase/one-change、specification nonduplication を省略なく持つ。
+未初期化時はその payload だけから source-pinned brief を作り
+`$gsd-new-project --auto @<brief>`へ渡す。初期化済み時は payload を change 専用 `$gsd-phase` へ inline
+で渡す。GSD artifacts へ仕様、requirements、scenarios、受け入れ基準を転記しない。
+
+dispatch は host workflow の structured completed-success **かつ** route 固有 read-only postcondition
+が揃った場合だけ accepted とする。exit 0 や prose marker だけでは `started` に進めない。
+
+- 未初期化 route: `node ${GSD_HOME}/gsd-core/bin/gsd-tools.cjs init progress --raw` を再実行し、fully
+  initialized、対象 root、agents installed / missing agents なしを確認する。PROJECT / REQUIREMENTS /
+  ROADMAP / STATE の集合が exact payload または exact brief reference を保持することも確認する。
+- 初期化済み route: dispatch 前後の maximum phase、phase directories、ROADMAP snapshot を比較し、
+  exactly one max+1 phase と対応 directory だけが追加され、新 ROADMAP section が exact inline payload
+  を保持することを確認する。
+
+不足、checkpoint、空、malformed、partial、ambiguous、dispatch failure、postcondition mismatch は
+accepted ではなく、manifest を `prepared` のまま保持する。完了済み step、failure point、同じ frozen
+inputs を使う manual continuation evidence を報告し、自動 retry、route switch、rollback を行わない。
+
+Codex host に `agent_type` がなければ `generic-agent workaround` と明示し、typed dispatch と同等には
+扱わない。bridge inspect で entrypoint を read-only 選択した後、承認 / prepare 前に local GSD 1.5.0
+の選択 workflow、到達可能な実 spawn 名すべて、active-config TOML の完全な role preamble、isolation
+requirements を解決する。不明、typed-only、worktree-isolated、非互換なら fail-closed する。
+
+manifest 成功後は manifest path と canonical artifacts の source commit を確認し、operator がレビュー後
+に**別の後続 tracking commit**を作る。skill 自身は commit しない。feature branch の manifest は source
+commit と区別し、`.planning/` が ignore または repository policy 上追跡不能なら prepare 前に停止する。
+handoff 後の lifecycle、final completion、retry / recovery、cleanup、push、PR、merge は自動化しない。
+
+Phase 2 の通常 CI が確認するのは静的な SKILL / fixture instruction contract と既存 Phase 1 の動的 state
+seam だけである。実 host orchestration、generic spawn、GSD route mutation、route postcondition は未検証で、
+Phase 3 の opt-in / manual evidence が所有する。
 
 GSD 実行中に仕様変更が必要になった場合は、GSD を止め、OpenSpec 原本または ADR を先に更新する。
 `spec-holes` と validate を再実行してから、影響する phases を再計画する。
@@ -75,6 +102,10 @@ GSD は opt-in であり、不在は正常。小規模 change は OpenSpec CLI �
 大規模 change で GSD が不在、必要 capability を確認できない、または途中で安全に継続できない場合、
 別経路へ自動切替しない。change の分割、または未完了範囲を OpenSpec の詳細 `tasks.md` へ戻す案を
 提示し、人の承認後にだけ経路を変更する。完了済み phases、commits、checkbox は保持する。
+`execute-openspec-change` の inspect / generic preflight が失敗した場合は pre-prepare のまま canonical
+paths と source commit を使う手動 handoff を提示する。prepare 後に dispatch が accepted にならない
+場合は `prepared` manifest、完了済み step、failure point、manual continuation evidence を保持して停止する。
+どちらも自動 retry や別 route への切替を開始する理由にはならない。
 
 ## 最終完了は OpenSpec で判定する
 
