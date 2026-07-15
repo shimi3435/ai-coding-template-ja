@@ -1,6 +1,6 @@
 ---
 phase: 01-bridge-core-persistence-and-preflight
-reviewed: 2026-07-15T07:57:35Z
+reviewed: 2026-07-15T08:15:19Z
 depth: standard
 files_reviewed: 13
 files_reviewed_list:
@@ -18,62 +18,55 @@ files_reviewed_list:
   - tests/test_handoff_manifest.py
   - tests/test_handoff_preflight.py
 findings:
-  critical: 5
+  critical: 4
   warning: 0
   info: 0
-  total: 5
+  total: 4
 status: issues_found
 ---
 
 # Phase 1: Code Review Report
 
-**Reviewed:** 2026-07-15T07:57:35Z
+**Reviewed:** 2026-07-15T08:15:19Z
 **Depth:** standard
 **Files Reviewed:** 13
 **Status:** issues_found
 
 ## Summary
 
-Source commit `5a1f78b81f546c900745328fad24f9adb073e768` の canonical OpenSpec artifacts、Phase 01 plans/summaries、operation boundaries と照合した。generic-agent workaround で typed `gsd-code-reviewer` dispatch を代替した。
+CR-01〜CR-05の修正と、その周辺のstate/path/resource境界をcanonical OpenSpec artifacts、Phase 01 plans/summaries、`01-REVIEW-FIX.md`に照合した。generic-agent workaround iteration 2としてfresh rereviewを行った。
 
-Phase 1 の責務範囲内に、静的symlinkでrepository外へmanifestを書ける問題、非canonicalな既存manifestを`started`へ進められる問題、複数specのJSON/fallback parity違反、CLI argv errorの非構造化出力、subprocess出力上限の事後判定がある。lifecycle hardening、retry、resume、finalizeの欠落はfindingに含めていない。
+CR-01の通常のstatic parent symlink case、CR-02のkind別canonical locationと64件上限、CR-03のmulti-spec順序、CR-04のargv error、CR-05のsubprocess output上限はそれぞれ修正されている。一方、修正後もchange identity不一致によるCR-01 bypass、lexical aliasによるCR-02 bypassが残る。また、既存manifestのunbounded readと、in-change symlinkでread-only inspectionだけ成功するcanonicality gapがPhase 1境界に残る。directory component-swap/race、retry/resume/finalize/lifecycle hardeningはfindingに含めていない。
 
 ## Critical Issues
 
-### CR-01: Manifestの親symlinkからrepository外へ書き出せる
+### CR-06: manifest内change IDの不一致でstatic symlink guardを迂回できる
 
 **Severity:** Critical
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest.py:568-572`
-**Issue:** `ManifestRepository.persist()` はtarget parentをsemantic containment検査せず、`mkdir`、`mkstemp`、`os.replace`へ渡す。たとえばrepository内の`.planning`がrepository外directoryへのsymlinkなら、成功結果を返しながら外部の`openspec/<change>/handoff.json`を生成する。`prepare_handoff()`のGit ignore probeはlexical pathしか検査しないため、このescapeを止めない。これはcanonical manifest path、fail-closed、path containment契約に違反する。
-**Fix:** mutation前にrepository real rootを固定し、`.planning/openspec/<change-id>`までの各componentを`lstat`/`dir_fd`で検査してsymlinkを拒否する。可能なら`O_DIRECTORY | O_NOFOLLOW`で親directoryを段階的にopenし、そのverified directory handleに対してstaging作成とreplaceを行う。少なくとも静的なparent symlink escapeとcomponent-swapを回帰testに追加する。
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest.py:538-543`
+**Issue:** `_target_parent_is_safe()`はtarget末尾が`manifest.change_id`と一致しない場合に安全確認を成功扱いする。`mark_handoff_started()`は`.planning/openspec/<requested-id>/handoff.json`をparseした後、manifest内`change_id`が`requested-id`と一致するか確認せず、その値をguardへ渡す。このため、requested pathに別change IDのvalid prepared manifestがあると別changeを`started`へ進められる。さらに`.planning`がrepository外へのstatic symlinkで、その外部targetにこのmismatched manifestがある場合、CR-01のguardがline 543で迂回され、外部fileを置換できる。
+**Fix:** noncanonical target tailは成功ではなくfail-closedにし、`mark_handoff_started()`でparse直後に`parsed.value.change_id == change_id`とtargetのexact canonical pathを検証する。mismatched ID単体と、mismatched ID + static parent symlinkの両方をmutation-before-zeroの回帰testに追加する。
 
-### CR-02: Strict manifest parserがkindとcanonical pathの不一致を受理する
-
-**Severity:** Critical
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest.py:177-199`
-**Issue:** parserは全artifact pathがchange root配下の`.md`であることとkindの件数だけを確認し、kindごとのcanonical locationを確認しない。したがって`kind="proposal"`に`openspec/changes/<id>/specs/fake/spec.md`を割り当てたmanifestも`Success`になる。`mark_handoff_started()`はその既存manifestを読み、同じ不正なartifact集合のまま`started`へ遷移させるため、「canonical paths」「既存manifest不正時は自動修復・上書きせず停止」の契約を破る。artifact数64上限も既存manifest parse時には失われている。
-**Fix:** parserでartifact数を1..64に制限し、proposal/design/tasksはそれぞれ`<change-root>/proposal.md`、`design.md`、`tasks.md`と完全一致、specは`<change-root>/specs/<single-capability-segment>/spec.md`だけを許可する。kind/path mismatchおよび65件の既存prepared manifestがparse/transitionとも失敗するtestを追加する。
-
-### CR-03: 複数specのJSON経路だけcandidate順を保持しparityが崩れる
+### CR-07: manifest parserがcanonical pathのlexical aliasを受理する
 
 **Severity:** Critical
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/discovery.py:127-160`
-**Issue:** fixed-directory fallbackはcapability directoryを名前順にsortする一方、JSON candidateは`contextFiles.specs`の入力順をそのままclaim/artifact順に使う。複数specを逆順で返すvalidなOpenSpec JSONでは、同じMarkdown filesでもJSON routeとfallback routeの`Discovery.artifacts` tupleが異なる。仕様は順序依存を排除し、両routeがinput route以外で同じcanonical content/progressを生成することを要求している。現在のtest fixtureはspecが1件なのでこの違反を検出できない。
-**Fix:** validated/resolved spec pathsをrepo-relative canonical pathでsortしてから`ArtifactClaim`を構築するか、全claimをcanonical kind/path順へ正規化する。2件以上のspecをJSONでreverse/shuffleしたcaseとfallbackの値が完全一致する回帰testを追加する。
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest.py:183-207`
+**Issue:** `PurePosixPath`で正規化した値だけをcanonical location判定に使う一方、保存する値と重複判定にはraw stringを使う。実際に`./openspec/changes/fixture-change/proposal.md`はcanonical proposalとしてparse成功する。また`specs/a/spec.md`と`specs/a//spec.md`は同じcanonical pathへ正規化されるが、raw stringが異なるためduplicate checkを通過できる。これはCR-02が修正対象にしたexact canonical path、duplicate artifact、既存manifest fail-closed契約をまだ破る。
+**Fix:** `path == PurePosixPath(path).as_posix()`を必須にし、canonical `PurePosixPath`を重複判定・sort判定にも使用する。`./`、重複separator、同一specのalias 2件をparse/transitionとも拒否するtestを追加する。
 
-### CR-04: argparseの失敗経路がmachine-readable JSONを返さない
-
-**Severity:** Critical
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/__main__.py:168-170`
-**Issue:** `parse_args()`のmissing required option、unknown operation、invalid argvは`SystemExit(2)`となり、usageをstderrへ出してstdoutを空にする。Phase 1 contractはargv/request validationをentrypointが所有し、helpを除くsuccess/failureを1件のstructured JSONとして返すことを要求している。現在のCLI testはargparseを通過した後の`--approved`不足しか検証しておらず、実際のargv errorを覆っていない。
-**Fix:** `ArgumentParser.error()`をoverrideしてtyped request errorをraiseするか、parser層をstructured failureへ変換し、既存の`_failure_payload`相当をstdoutへ一度だけ出してinput exit classを返す。missing option、unknown subcommand、invalid option valueのsubprocess testsを追加し、通常の`--help`だけは既存help出力を維持する。
-
-### CR-05: subprocess出力上限がcapture完了後にしか適用されない
+### CR-08: 既存manifestを上限なしで読み込みJSON parseする
 
 **Severity:** Critical
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/preflight.py:109-124`
-**Issue:** `subprocess.run(capture_output=True)`はchildのstdout/stderrを無制限にmemoryへ収集し、終了後に初めて4 MiB上限を確認する。外部tool outputが巨大な場合、上限判定へ到達する前にbridge processがmemory exhaustionで落ち得るため、threat modelとplanが要求するbounded subprocess boundaryになっていない。timeoutは時間だけを制限し、出力量を制限しない。
-**Fix:** `Popen`で両pipeをincrementalに読み、各streamを`COMMAND_OUTPUT_LIMIT + 1`までだけ保持し、超過時にchildをterminate/killしてwaitするbounded runnerへ変更する。stdout/stderrそれぞれの境界値と超過、および超過childのreapingを回帰testで確認する。
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest.py:527-532`
+**Issue:** `_existing()`は追跡済みとは限らない既存targetを`read_bytes()`で無制限にmemoryへ読み、`parse_manifest_bytes()`もbyte長やtask description長を確認せず`json.loads()`する。`mark_handoff_started()`にも同じunbounded readがある。artifact count/task countの事後schema検査では、巨大な単一stringや巨大JSONを読み終える前のmemory exhaustionを防げない。これはcanonical designのR3「manifest過大は上限超過で停止」とPlan T-01-09のbounded filesystem operationに違反する。
+**Fix:** source-pinned canonical inputから導ける明示的manifest byte上限を固定し、`limit + 1`のbinary readで超過をJSON parse前に分類して停止する。repository state guardと`mark-started`を同じbounded readerへ収束し、exact boundary / boundary+1 /巨大descriptionの回帰testを追加する。
+
+### CR-09: in-change symlinkでinspectだけ非canonical artifactを成功扱いする
+
+**Severity:** Critical
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/reader.py:83-123`
+**Issue:** readerはresolved pathがchange root内のMarkdownであることだけを確認し、claim kindに対応するcanonical locationは確認しない。たとえばcanonical `proposal.md`をchange内の`other.md`へのsymlinkにすると、JSON側のsingleton比較も両辺をresolveするため通過し、readerはartifact pathを`other.md`として返す。`inspect_handoff()`はその非canonical manifestを検証せずSuccessにするが、承認後の`prepare_handoff()`だけがmanifest serializerで拒否する。したがってread-only preflightが「全gate成功」と誤報し、canonical artifact path契約と表示後承認の順序を破る。
+**Fix:** discovery/reader境界でkindごとのlogical canonical pathとresolved target policyを一度だけ固定する。MVPでartifact symlinkを許可しないなら明示的にrejectし、許可するならlogical canonical repo-relative pathを保持したままsource-commit blob同一性を検証できる設計にする。少なくともsingletonとspec directoryのin-change symlinkで`inspect_handoff()`がfail-closedするtestを追加する。
 
 ## Warnings
 
@@ -85,6 +78,6 @@ Phase 1 の責務範囲内に、静的symlinkでrepository外へmanifestを書�
 
 ---
 
-_Reviewed: 2026-07-15T07:57:35Z_
-_Reviewer: the agent (gsd-code-reviewer via generic-agent workaround)_
+_Reviewed: 2026-07-15T08:15:19Z_
+_Reviewer: the agent (gsd-code-reviewer via generic-agent workaround, iteration 2)_
 _Depth: standard_
