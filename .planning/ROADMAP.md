@@ -92,7 +92,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Bridge Core, Persistence, and Preflight | 3/3 | Complete    | 2026-07-14 |
 | 2. Approval-Gated Skill Orchestration | 2/2 | Complete    | 2026-07-15 |
-| 3. Deterministic Verification and Acceptance Evidence | 2/2 | Complete   | 2026-07-15 |
+| 3. Deterministic Verification and Acceptance Evidence | 2/2 | Complete    | 2026-07-15 |
 
 ## Coverage
 
