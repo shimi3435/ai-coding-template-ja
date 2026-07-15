@@ -91,6 +91,34 @@ Phase 2 の通常 CI が確認するのは静的な SKILL / fixture instruction 
 seam だけである。実 host orchestration、generic spawn、GSD route mutation、route postcondition は未検証で、
 Phase 3 の opt-in / manual evidence が所有する。
 
+### 実 tool の read-only smoke（明示 opt-in）
+
+handoff compatibility をローカルの実 tool で確認する場合だけ、active config root を明示して次を実行する。
+
+```bash
+task openspec:gsd-handoff:smoke CHANGE_ID=automate-openspec-gsd-handoff GSD_HOME=<active-config-root>
+```
+
+この task は OpenSpec `1.3.1` と GSD `1.5.0` の完全一致を要求する。成功時は stdout に一つの
+machine-readable JSON object、stderr に一行の human summary を出す。tool 不在、version 不一致、
+required file / signal 不足、probe failure、または repository mutation 検出時は非ゼロで終了し、失敗を
+成功へ読み替えない。
+
+許可する操作は、OpenSpec の version と `instructions apply --change <id> --json` による path discovery /
+progress parity、および GSD の `VERSION` / required files と
+`node <active-config-root>/gsd-core/bin/gsd-tools.cjs init progress --raw` の read-only probe だけである。
+probe の前後には `.git` だけを除外し、ignored files も含めた repository 全体を streaming snapshot して、
+entry count / digest と mutation verdict を比較する。
+
+この task は承認を求めず、prepare、manifest 保存、brief 作成、`$gsd-new-project` / `$gsd-phase` dispatch、
+`started` への更新を一切行わない。通常の `task check` は fake runner / fixtures だけを実行し、この opt-in
+task、Node、OpenSpec、GSD、network のいずれにも依存しない。
+
+確認できるのは installed-tool compatibility、read-only signals、JSON route の canonical artifact identity /
+progress、repository 無変更までである。actual host prompt、generic-agent spawn、実 GSD mutation、JSON /
+Markdown fallback の route-specific postconditions は安全な dry-run seam がないため未検証であり、この
+smoke の成功から成立を推論しない。
+
 GSD 実行中に仕様変更が必要になった場合は、GSD を止め、OpenSpec 原本または ADR を先に更新する。
 `spec-holes` と validate を再実行してから、影響する phases を再計画する。
 
