@@ -339,20 +339,36 @@ def snapshot_repository(
                         return _snapshot_failure("repository-snapshot-unstable")
                 elif stat.S_ISLNK(before.st_mode):
                     try:
-                        target_bytes = os.fsencode(
-                            os.readlink(entry.name, dir_fd=directory_descriptor)
-                        )
-                        after = os.stat(
+                        link_descriptor = os.open(
                             entry.name,
+                            os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC,
                             dir_fd=directory_descriptor,
-                            follow_symlinks=False,
                         )
+                    except OSError as error:
+                        return open_race_failure(error)
+                    try:
+                        descriptor_before = os.fstat(link_descriptor)
+                        if not stat.S_ISLNK(
+                            descriptor_before.st_mode
+                        ) or not _same_scan_identity(before, descriptor_before):
+                            return _snapshot_failure("repository-snapshot-unstable")
+                        target_bytes = os.fsencode(
+                            os.readlink("", dir_fd=link_descriptor)
+                        )
+                        descriptor_after = os.fstat(link_descriptor)
                     except (OSError, UnicodeError):
                         return _snapshot_failure("repository-snapshot-unreadable")
+                    finally:
+                        os.close(link_descriptor)
+                    after = path_identity(directory_descriptor, entry.name)
                     bound_failure = add_metadata(target_bytes)
                     if bound_failure is not None:
                         return bound_failure
-                    if not _same_scan_identity(before, after):
+                    if (
+                        after is None
+                        or not _same_scan_identity(before, descriptor_after)
+                        or not _same_scan_identity(before, after)
+                    ):
                         return _snapshot_failure("repository-snapshot-unstable")
                     _digest_record(
                         root_digest,
