@@ -119,6 +119,9 @@ None - plan executed exactly as written.
 - **F-03-02:** RED `b92b579`; GREEN `b05ba0a`. Requirements, Scenarios, Spec holes, and Host unverified must each occur exactly once; Host claim heading variants fail before Git reads with one stable code.
 - **F-03-03:** RED `be594f0`; GREEN `b333c46`. Backtick/tilde fences, raw JSON/probe output, POSIX/home/Windows absolute paths are rejected while relative canonical paths and placeholders remain valid.
 - Post-remediation verification: 55 focused validator tests and the fixed-source 5/26/60+4 evidence validation passed.
+- **F-03-02 remediation-2:** RED `dc1961d`; GREEN `ebd9480`. Validation now accepts exactly the six documented level-2 sections in schema order, rejects every unknown/duplicate mapping section, and rejects any alternate heading containing the word `host`.
+- **F-03-03 remediation-2:** RED `601a33e`; GREEN `e5c6181`. Balanced multiline JSON, quoted probe fields, POSIX network roots, and a bare root are rejected while URLs, fixed relative paths, placeholders, and ordinary slash prose remain accepted.
+- Remediation-2 verification: 73 validator tests and the tracked 5/26/60+4 evidence passed; the combined Phase 3 security suite passed 103 tests, both full gates passed 300 tests, strict/project OpenSpec validation passed, and the actual read-only smoke passed without a detected write.
 
 ## Known Stubs
 

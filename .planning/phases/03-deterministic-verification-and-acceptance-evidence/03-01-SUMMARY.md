@@ -127,6 +127,8 @@ status: complete
 
 - **F-03-01:** RED `90c61e2`; GREEN `48c52e0`. Snapshot traversal now uses stable directory descriptors and no-follow `O_PATH` regular-file descriptors, verifies descriptor/path identity, and never opens a swapped symlink/FIFO/device for content reads.
 - Post-remediation verification: 22 focused smoke tests, 280 full tests, and the actual read-only smoke passed with `write_detected=false`.
+- **F-03-01 remediation-2:** RED `a58e21b`; GREEN `6567a2d`. The symlink object is now pinned with `O_PATH|O_NOFOLLOW`, its target is read only through the descriptor with `readlink("", dir_fd=...)`, and descriptor/path identity is rechecked before accepting the snapshot.
+- Remediation-2 verification: substitution-and-restore and descriptor-drift regressions pass in 24 focused smoke tests; the final Phase 3 security suite passed 103 tests, both full gates passed 300 tests, and the actual read-only smoke again reported `write_detected=false`.
 
 ## User Setup Required
 
