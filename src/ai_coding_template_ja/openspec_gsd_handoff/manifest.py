@@ -540,7 +540,7 @@ class ManifestRepository:
 
         expected_tail = (".planning", "openspec", change_id, "handoff.json")
         if tuple(self.target.parts[-4:]) != expected_tail:
-            return True
+            return False
         repository_root = self.target.parents[3]
         try:
             resolved_root = repository_root.resolve(strict=True)

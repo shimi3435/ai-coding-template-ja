@@ -320,7 +320,7 @@ def test_faults_never_advance_target_and_report_cleanup_evidence(
     staging: StagingKnownState,
     cleanup: CleanupOutcome,
 ) -> None:
-    target = tmp_path / "handoff.json"
+    target = tmp_path / ".planning" / "openspec" / "fixture-change" / "handoff.json"
     operations = _FaultOperations("none")
     repository = ManifestRepository(target, operations=operations)
     assert isinstance(repository.persist(_manifest()), Success)

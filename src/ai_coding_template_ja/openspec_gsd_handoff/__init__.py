@@ -211,6 +211,12 @@ def mark_handoff_started(
         )
     if isinstance(parsed, Failure):
         return parsed
+    if parsed.value.change_id != change_id:
+        return _failure(
+            "manifest-identity-mismatch",
+            category=IssueCategory.PERSISTENCE,
+            known_state=KnownState.UNKNOWN,
+        )
     started = replace(parsed.value, handoff_state=HandoffState.STARTED)
     persisted = ManifestRepository(target, operations=operations).persist(
         started,
