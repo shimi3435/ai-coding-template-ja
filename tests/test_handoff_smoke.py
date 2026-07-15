@@ -299,6 +299,20 @@ def test_snapshot_timeout_has_stable_code(tmp_path: Path) -> None:
     assert result.issue.code == "repository-snapshot-timeout"
 
 
+def test_snapshot_fails_closed_when_o_path_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / "artifact").write_bytes(b"content")
+    monkeypatch.delattr(os, "O_PATH")
+
+    result = snapshot_repository(repository)
+
+    assert isinstance(result, SnapshotFailure)
+    assert result.issue.code == "repository-snapshot-unreadable"
+
+
 def test_snapshot_unreadable_has_stable_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

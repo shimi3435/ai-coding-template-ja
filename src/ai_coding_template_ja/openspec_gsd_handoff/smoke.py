@@ -163,6 +163,15 @@ def snapshot_repository(
 ) -> SnapshotResult:
     """Fingerprint all ignored-inclusive entries without following symlinks."""
 
+    required_descriptor_flags = (
+        "O_PATH",
+        "O_NOFOLLOW",
+        "O_DIRECTORY",
+        "O_NONBLOCK",
+        "O_CLOEXEC",
+    )
+    if any(not hasattr(os, name) for name in required_descriptor_flags):
+        return _snapshot_failure("repository-snapshot-unreadable")
     if (
         limits.max_entries < 1
         or limits.max_metadata_bytes < 1
