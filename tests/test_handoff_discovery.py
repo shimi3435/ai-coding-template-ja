@@ -178,3 +178,33 @@ def test_fallback_path_failure_returns_no_partial_discovery(tmp_path: Path) -> N
 
     assert isinstance(result, Failure)
     assert result.route is InputRoute.MARKDOWN_FALLBACK
+
+
+@pytest.mark.parametrize("symlink_case", ["singleton-file", "spec-parent"])
+def test_inspection_rejects_symlink_inside_canonical_artifact_path(
+    tmp_path: Path, symlink_case: str
+) -> None:
+    repository = tmp_path / "repository"
+    positive_case = CONTRACT["positive"]
+    probe = _probe_for_case(positive_case, repository)
+    change = repository / "openspec" / "changes" / "fixture-change"
+    if symlink_case == "singleton-file":
+        proposal = change / "proposal.md"
+        other = change / "other.md"
+        other.write_text("# noncanonical proposal\n", encoding="utf-8")
+        proposal.unlink()
+        proposal.symlink_to(other)
+    else:
+        capability = change / "specs" / "fixture-capability"
+        other = change / "specs" / "other-capability"
+        other.mkdir()
+        (other / "spec.md").write_text("# noncanonical spec\n", encoding="utf-8")
+        (capability / "spec.md").unlink()
+        capability.rmdir()
+        capability.symlink_to(other, target_is_directory=True)
+
+    result = discover_openspec_artifacts(repository, "fixture-change", probe)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "artifact-path-symlink"
+    assert result.route is InputRoute.MARKDOWN_FALLBACK
