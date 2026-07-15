@@ -123,6 +123,11 @@ status: complete
 - **Unverified:** actual host prompt, generic-agent spawn, real GSD mutation, and route-specific postconditions. No safe dry-run exists; Plan 03-02 records these as separate reasoned-unverified acceptance rows.
 - No prepare, manifest persistence, brief creation, `gsd-new-project`, `gsd-phase`, mark-started, lifecycle hardening, push, PR, or merge operation was invoked by the smoke.
 
+## Security Remediation
+
+- **F-03-01:** RED `90c61e2`; GREEN `48c52e0`. Snapshot traversal now uses stable directory descriptors and no-follow `O_PATH` regular-file descriptors, verifies descriptor/path identity, and never opens a swapped symlink/FIFO/device for content reads.
+- Post-remediation verification: 22 focused smoke tests, 280 full tests, and the actual read-only smoke passed with `write_detected=false`.
+
 ## User Setup Required
 
 None - the smoke is optional and uses an explicitly supplied existing GSD installation.

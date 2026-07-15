@@ -114,6 +114,12 @@ None - plan executed exactly as written.
 - **Reason:** no read-only or dry-run host seam exists; invoking these would cross the approval/mutation boundary.
 - No hardening, lifecycle automation, retry, resume, rollback, finalize, cleanup, push, PR, or merge was performed.
 
+## Security Remediation
+
+- **F-03-02:** RED `b92b579`; GREEN `b05ba0a`. Requirements, Scenarios, Spec holes, and Host unverified must each occur exactly once; Host claim heading variants fail before Git reads with one stable code.
+- **F-03-03:** RED `be594f0`; GREEN `b333c46`. Backtick/tilde fences, raw JSON/probe output, POSIX/home/Windows absolute paths are rejected while relative canonical paths and placeholders remain valid.
+- Post-remediation verification: 55 focused validator tests and the fixed-source 5/26/60+4 evidence validation passed.
+
 ## Known Stubs
 
 None.
