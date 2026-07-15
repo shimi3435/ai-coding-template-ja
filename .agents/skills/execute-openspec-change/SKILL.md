@@ -16,8 +16,8 @@ create a handoff brief, dispatch GSD, or change manifest state.
 
 ## Stage: capture-input
 
-Resolve the repository and capture the invocation inputs. Freeze one immutable tuple
-named `preview_tuple` containing:
+Resolve the repository and capture the invocation inputs. Freeze one immutable
+`invocation_tuple` containing:
 
 - `repository_real_path`
 - `change_id`
@@ -27,9 +27,9 @@ named `preview_tuple` containing:
 - `host_evidence`
 - `completed_gates`
 - `unresolved_items`
-- `canonical_paths`
 
-Do not silently default, normalize, or replace a frozen value after this point.
+Reserve `canonical_paths` for the structured inspection result. Do not silently
+default, normalize, or replace a frozen invocation value after this point.
 
 ## Stage: inspect-host
 
@@ -44,6 +44,10 @@ Call the Phase 1 public `inspect_handoff` operation exactly once with the frozen
 repository, change, source, GSD home, repository-policy, and host values. This call is
 read-only. Require a structured success value; exit 0 or human-readable output is not
 success evidence.
+
+On structured success, take every sorted artifact path from the inspection and freeze
+`canonical_paths` exactly once. Combine it with `invocation_tuple` to create the
+immutable `preview_tuple`; this is the only tuple later replayed to prepare.
 
 On structured failure, report the classified category, code, and known state as
 `classified-gaps`, add `manual-handoff-guidance` using the canonical OpenSpec paths,
