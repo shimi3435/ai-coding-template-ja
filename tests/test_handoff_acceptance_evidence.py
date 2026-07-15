@@ -432,6 +432,12 @@ def test_cross_platform_user_profile_paths_are_rejected(path: str) -> None:
         '```json\n{"ok":true}\n```',
         '{"project_exists":true,"roadmap_exists":true,"state_exists":true}',
         "project_exists=true roadmap_exists=true state_exists=true",
+        "{\n"
+        '  "project_exists": true,\n'
+        '  "roadmap_exists": true,\n'
+        '  "state_exists": true\n'
+        "}",
+        '"project_exists": true\n"roadmap_exists": true',
     ],
 )
 def test_fenced_and_raw_probe_shaped_blocks_are_rejected(payload: str) -> None:
@@ -450,6 +456,9 @@ def test_fenced_and_raw_probe_shaped_blocks_are_rejected(payload: str) -> None:
         "~/private/repository",
         r"C:\work\repository",
         "D:/work/repository",
+        "//srv/private/repository",
+        "//server/share",
+        "/",
     ],
 )
 def test_arbitrary_local_absolute_paths_are_rejected(path: str) -> None:
@@ -457,11 +466,17 @@ def test_arbitrary_local_absolute_paths_are_rejected(path: str) -> None:
     assert verdict.code == "absolute-path-leak"
 
 
+def test_bare_posix_root_is_rejected() -> None:
+    verdict, _ = _validate(_replace(valid_evidence(), "verified by named test", "/"))
+
+    assert verdict.code == "absolute-path-leak"
+
+
 def test_relative_paths_placeholders_and_ordinary_slash_prose_are_allowed() -> None:
     replacement = (
         "tests/test_named.py and openspec/changes/example/tasks.md via "
         "${GSD_HOME}/gsd-core/bin/gsd-tools.cjs in <repository>/; "
-        "OpenSpec/GSD comparison"
+        "https://docs.example.test/OpenSpec/GSD; OpenSpec/GSD comparison"
     )
 
     verdict, _ = _validate(
