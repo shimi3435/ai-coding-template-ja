@@ -306,6 +306,55 @@ def test_host_rows_require_exact_order_kind_and_no_safe_dry_run_reason() -> None
     assert verdict.code == "host-unverified-invalid"
 
 
+@pytest.mark.parametrize(
+    "heading", ["Requirements", "Scenarios", "Spec holes", "Host unverified"]
+)
+@pytest.mark.parametrize("position", ["before", "after"])
+def test_duplicate_evidence_sections_fail_before_git_with_stable_code(
+    heading: str, position: str
+) -> None:
+    duplicate = "\n".join(
+        [
+            f"## {heading}",
+            "| Coordinate | Kind | Locator | Reason |",
+            "| --- | --- | --- | --- |",
+            "| CONTRADICTORY | production-test | tests/test_bad.py | false claim |",
+        ]
+    )
+    original = valid_evidence().decode()
+    evidence = (
+        f"{duplicate}\n\n{original}"
+        if position == "before"
+        else f"{original}\n{duplicate}\n"
+    ).encode()
+
+    verdict, runner = _validate(evidence)
+
+    assert verdict.code == "evidence-section-invalid"
+    assert runner.calls == []
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["Host verified", "Host verification", "HOST UNVERIFIED", "Host observations"],
+)
+def test_host_claim_heading_variants_are_not_ignored(heading: str) -> None:
+    claim = "\n".join(
+        [
+            f"## {heading}",
+            "| Coordinate | Kind | Locator | Reason |",
+            "| --- | --- | --- | --- |",
+            "| HOST-CLAIM | real-smoke | host orchestration | verified |",
+        ]
+    )
+    evidence = f"{valid_evidence().decode()}\n{claim}\n".encode()
+
+    verdict, runner = _validate(evidence)
+
+    assert verdict.code == "evidence-section-invalid"
+    assert runner.calls == []
+
+
 @pytest.mark.parametrize("path", ["/Users/alice/project", r"C:\Users\alice\project"])
 def test_cross_platform_user_profile_paths_are_rejected(path: str) -> None:
     verdict, _ = _validate(_replace(valid_evidence(), "tests/test_named.py", path))
