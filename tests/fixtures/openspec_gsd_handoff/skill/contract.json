@@ -1,0 +1,86 @@
+{
+  "contract_version": 1,
+  "evidence_scope": {
+    "verified": [
+      "static-skill-instruction-contract",
+      "fixture-consistency",
+      "phase-1-public-state-seam"
+    ],
+    "unverified_until_phase_3": [
+      "actual-host-prompt-execution",
+      "generic-agent-spawning",
+      "real-gsd-mutation",
+      "route-specific-postconditions"
+    ]
+  },
+  "ordered_stages": [
+    "capture-input",
+    "inspect-host",
+    "inspect-bridge",
+    "resolve-dispatch",
+    "preview",
+    "approve"
+  ],
+  "preview": {
+    "bridge_operation": "inspect_handoff",
+    "read_only": true,
+    "fields": [
+      "change_id",
+      "canonical_paths",
+      "input_route",
+      "source_commit",
+      "manifest_path",
+      "openspec_capability",
+      "gsd_capability",
+      "gsd_project_initialized",
+      "gsd_entrypoint",
+      "repository_policy",
+      "host_spawn_schema",
+      "host_dispatch",
+      "generic_degradation"
+    ],
+    "input_route_values": [
+      "json",
+      "markdown-fallback"
+    ],
+    "fallback_cause_available": false
+  },
+  "frozen_inputs": [
+    "repository_real_path",
+    "change_id",
+    "source_commit",
+    "gsd_home",
+    "repository_policy",
+    "host_evidence",
+    "completed_gates",
+    "unresolved_items",
+    "canonical_paths"
+  ],
+  "approval": {
+    "fresh_explicit_answer_after_complete_preview": true,
+    "substitutes_forbidden": [
+      "prior-approval",
+      "default-answer",
+      "automatic-mode",
+      "cli-flag",
+      "tool-presence"
+    ]
+  },
+  "terminal_before_mutation": {
+    "outcomes": [
+      "inspect-failure",
+      "refusal",
+      "no-answer"
+    ],
+    "forbidden_stages": [
+      "prepare",
+      "brief-create",
+      "gsd-dispatch",
+      "mark-started"
+    ],
+    "report": [
+      "classified-gaps",
+      "manual-handoff-guidance"
+    ]
+  }
+}
