@@ -19,7 +19,7 @@ validate、`spec-holes` Phase 1再確認、利用者承認までproduction code�
 
 ## 3. Skill phase
 
-- [ ] 3.1 `execute-openspec-change` skillと必要なagent用導線を実装し、先行policyの検査、入力表示、承認、bridge実行、GSD handoff開始までを検証する
+- [x] 3.1 `execute-openspec-change` skillと必要なagent用導線を実装し、先行policyの検査、入力表示、承認、bridge実行、GSD handoff開始までを検証する
 
 ## 4. Test phase
 
