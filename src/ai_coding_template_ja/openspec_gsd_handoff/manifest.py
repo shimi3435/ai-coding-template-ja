@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -516,6 +517,36 @@ class ManifestRepository:
             return None, KnownState.UNKNOWN
         return parsed.value, _known_state(parsed.value)
 
+    def _target_parent_is_safe(self, change_id: str) -> bool:
+        """Reject static symlink escapes before any persistence mutation."""
+
+        expected_tail = (".planning", "openspec", change_id, "handoff.json")
+        if tuple(self.target.parts[-4:]) != expected_tail:
+            return True
+        repository_root = self.target.parents[3]
+        try:
+            resolved_root = repository_root.resolve(strict=True)
+        except OSError:
+            return False
+        current = repository_root
+        for component in expected_tail[:-1]:
+            current /= component
+            try:
+                mode = current.lstat().st_mode
+            except FileNotFoundError:
+                break
+            except OSError:
+                return False
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                return False
+        try:
+            if self.target.is_symlink():
+                return False
+            resolved_parent = self.target.parent.resolve(strict=False)
+        except OSError:
+            return False
+        return resolved_parent.is_relative_to(resolved_root)
+
     def persist(
         self,
         manifest: HandoffManifest,
@@ -524,6 +555,14 @@ class ManifestRepository:
     ) -> ManifestPersistenceResult:
         """Persist prepared or one caller-authorized prepared-to-started transition."""
 
+        if not self._target_parent_is_safe(manifest.change_id):
+            return self._failure(
+                "manifest-target-unsafe",
+                FailurePoint.STATE_GUARD,
+                KnownState.UNKNOWN,
+                StagingKnownState.ABSENT,
+                None,
+            )
         serialized = serialize_manifest(manifest)
         if isinstance(serialized, Failure):
             return self._failure(
