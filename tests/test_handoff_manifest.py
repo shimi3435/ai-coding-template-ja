@@ -250,6 +250,46 @@ def test_repository_rejects_static_parent_symlink_escape_before_mutation(
     assert not (outside / "openspec" / "fixture-change" / "handoff.json").exists()
 
 
+@pytest.mark.parametrize("static_parent_symlink", [False, True])
+def test_mark_started_rejects_mismatched_manifest_identity_before_mutation(
+    tmp_path: Path, static_parent_symlink: bool
+) -> None:
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    manifest_root = repository_root
+    if static_parent_symlink:
+        manifest_root = tmp_path / "outside"
+        manifest_root.mkdir()
+        (repository_root / ".planning").symlink_to(
+            manifest_root / ".planning", target_is_directory=True
+        )
+    target = (
+        manifest_root / ".planning" / "openspec" / "fixture-change" / "handoff.json"
+    )
+    target.parent.mkdir(parents=True)
+    raw = json.loads(EXPECTED)
+    raw["change_id"] = "different-change"
+    for artifact in raw["artifacts"]:
+        artifact["path"] = artifact["path"].replace(
+            "/fixture-change/", "/different-change/"
+        )
+    target.write_text(json.dumps(raw), encoding="utf-8")
+    before = target.read_bytes()
+    operations = _MutationCountingOperations()
+
+    result = mark_handoff_started(
+        repository_root,
+        "fixture-change",
+        gsd_accepted=True,
+        operations=operations,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-identity-mismatch"
+    assert operations.mutations == 0
+    assert target.read_bytes() == before
+
+
 @pytest.mark.parametrize(
     ("fault", "point", "staging", "cleanup"),
     [
