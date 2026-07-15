@@ -23,8 +23,8 @@ validate、`spec-holes` Phase 1再確認、利用者承認までproduction code�
 
 ## 4. Test phase
 
-- [ ] 4.1 JSON path discoveryとMarkdown fallback、進捗、最小manifest、path safety、atomic writeのfixtures / testsを通常CIへ追加する
-- [ ] 4.2 実OpenSpec / GSDのopt-in smokeを追加し、GSD未導入環境の通常`task check`が成功することを確認する
+- [x] 4.1 JSON path discoveryとMarkdown fallback、進捗、最小manifest、path safety、atomic writeのfixtures / testsを通常CIへ追加する
+- [x] 4.2 実OpenSpec / GSDのopt-in smokeを追加し、GSD未導入環境の通常`task check`が成功することを確認する
 
 ## 5. OpenSpec acceptance
 
