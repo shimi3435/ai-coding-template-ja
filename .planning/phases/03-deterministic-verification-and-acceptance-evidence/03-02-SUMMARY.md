@@ -53,7 +53,7 @@ status: complete
 ## Accomplishments
 
 - Added a stdlib validator that accepts only the fixed source commit and canonical paths, reads proposal/design/spec with fixed `git show` argv and bounded output, and derives the exact 5/26/60 coordinate sequence.
-- Added 27 validator tests covering every stable failure class, path/SHA injection before Git calls, bounded and invalid blobs, worktree drift, ordering, evidence kinds, local-path/raw-body leakage, and the four host rows.
+- Added 33 validator tests covering every stable failure class, path/SHA injection before Git calls, bounded and invalid blobs, worktree drift, ordering, duplicate metadata, global/local-path/raw-body leakage, and the four host rows.
 - Made JSON/fallback artifact kind, path, SHA-256, canonical bytes, and normalized progress parity explicit in the existing integration test without adding production behavior.
 - Recorded an exact source-pinned acceptance matrix and successful no-GSD/real-tool observations without absolute local paths, raw probe output, or canonical Markdown bodies.
 
@@ -64,6 +64,8 @@ status: complete
 3. **Task 2: read-only smoke operator contract** - `191d671` (docs)
 4. **Task 3: explicit route parity projection** - `7518f46` (test)
 5. **Task 3: complete acceptance evidence** - `23fa846` (docs)
+6. **Main review RED: global body and metadata gaps** - `5e43209` (test)
+7. **Main review GREEN: fail-closed global and duplicate checks** - `0a00ce2` (fix)
 
 ## Files Created/Modified
 
@@ -89,13 +91,19 @@ None - plan executed exactly as written.
 - The first evidence commit attempt was stopped by the end-of-file pre-commit hook. The hook's formatting-only correction was revalidated before the successful commit.
 - The query-form state metric/decision calls rejected positional arguments in this installed GSD version. The documented named-argument state commands succeeded; their initially unknown phase label was corrected to Phase 03, and `state validate` passed without warnings.
 
+## Main Review Fixes
+
+- A pinned non-heading canonical body line is now rejected even when copied into ordinary prose outside all evidence tables. The validator compares normalized global lines as well as locator/reason cells, while allowing headings, the five exact metadata lines, and short references.
+- Duplicate Source commit metadata now fails as `source-commit-invalid`; duplicate Proposal/Design/Spec/Tasks path metadata fails as `canonical-paths-mismatch`. All five cases stop before any Git call.
+- These gaps were closed with a separate RED commit followed by the minimal GREEN fix; the existing tracked evidence remains valid.
+
 ## Verification
 
-- `uv run pytest tests/test_handoff_acceptance_evidence.py -q`: 27 passed.
+- `uv run pytest tests/test_handoff_acceptance_evidence.py -q`: 33 passed after main review fixes.
 - `uv run pytest tests/test_handoff_discovery.py tests/test_handoff_acceptance_evidence.py -q`: 47 passed.
 - Phase 1/2/smoke audit suite: 143 passed before evidence implementation.
 - `task check:without-gsd`: exit 0; nested normal check passed 248 tests with optional launchers absent.
-- `task check`: Ruff format/check, basedpyright, and all 248 tests passed.
+- `task check`: Ruff format/check, basedpyright, and all 254 tests passed after main review fixes.
 - Validator CLI: `ok`, with 5 requirements, 26 scenarios, 60 spec holes, and 4 host-unverified rows.
 - Real opt-in smoke: two exit-0 read-only runs; exact OpenSpec 1.3.1 / GSD 1.5.0, route `json`, initialized `gsd-phase` signal, and `write_detected=false`. The tracked evidence records the first bounded snapshot; the final verification run observed 13,965 entries after the evidence file existed.
 - `git diff --check` and absolute-home-path scans: passed.
@@ -122,7 +130,7 @@ None - the real-tool smoke remains an explicit operator opt-in using an already 
 ## Self-Check: PASSED
 
 - All five changed paths exist.
-- Task commits `aaf8ac0`, `0601246`, `191d671`, `7518f46`, and `23fa846` exist on the worktree branch.
+- Task commits `aaf8ac0`, `0601246`, `191d671`, `7518f46`, `23fa846`, `5e43209`, and `0a00ce2` exist on the worktree branch.
 - No canonical OpenSpec task checkbox was modified by this plan.
 
 ---
