@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import re
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
 from .models import (
     Artifact,
     ArtifactClaim,
+    ArtifactKind,
     ClassifiedIssue,
     Failure,
     IssueCategory,
@@ -52,6 +54,51 @@ def _valid_change_id(change_id: str, limit: int) -> bool:
     return 0 < len(encoded) <= limit and _CHANGE_ID.fullmatch(change_id) is not None
 
 
+def _canonical_logical_path(
+    repository: Path, change_id: str, claim: ArtifactClaim
+) -> Path | None:
+    requested = claim.path if claim.path.is_absolute() else repository / claim.path
+    try:
+        relative = requested.relative_to(repository)
+    except ValueError:
+        return None
+    root = ("openspec", "changes", change_id)
+    expected_singleton = {
+        ArtifactKind.PROPOSAL: (*root, "proposal.md"),
+        ArtifactKind.DESIGN: (*root, "design.md"),
+        ArtifactKind.TASKS: (*root, "tasks.md"),
+    }.get(claim.kind)
+    if expected_singleton is not None:
+        return requested if relative.parts == expected_singleton else None
+    if claim.kind is not ArtifactKind.SPEC:
+        return None
+    parts = relative.parts
+    if (
+        len(parts) != 6
+        or parts[:3] != root
+        or parts[3] != "specs"
+        or not parts[4]
+        or parts[5] != "spec.md"
+    ):
+        return None
+    return requested
+
+
+def _contains_symlink(repository: Path, logical_path: Path) -> bool | None:
+    """Check existing canonical components; None means the path is unreadable."""
+
+    current = repository
+    try:
+        relative = logical_path.relative_to(repository)
+        for component in relative.parts:
+            current /= component
+            if stat.S_ISLNK(current.lstat().st_mode):
+                return True
+    except OSError:
+        return None
+    return False
+
+
 def read_canonical_artifacts(
     repository_root: Path,
     change_id: str,
@@ -80,12 +127,20 @@ def read_canonical_artifacts(
     if not change_root.is_relative_to(repository):
         return _failure("artifact-change-root-outside-repository")
 
-    resolved_claims: list[tuple[ArtifactClaim, Path]] = []
-    seen_paths: set[Path] = set()
+    resolved_claims: list[tuple[ArtifactClaim, Path, Path]] = []
+    seen_logical_paths: set[Path] = set()
+    seen_resolved_paths: set[Path] = set()
     for claim in claims:
-        requested = claim.path if claim.path.is_absolute() else repository / claim.path
+        logical_path = _canonical_logical_path(repository, change_id, claim)
+        if logical_path is None:
+            return _failure("artifact-path-noncanonical")
+        symlink = _contains_symlink(repository, logical_path)
+        if symlink is None:
+            return _failure("artifact-path-unreadable")
+        if symlink:
+            return _failure("artifact-path-symlink")
         try:
-            resolved = requested.resolve(strict=True)
+            resolved = logical_path.resolve(strict=True)
         except OSError:
             return _failure("artifact-path-unreadable")
         if not resolved.is_relative_to(repository) or not resolved.is_relative_to(
@@ -94,14 +149,15 @@ def read_canonical_artifacts(
             return _failure("artifact-path-outside-change")
         if not resolved.is_file() or resolved.suffix != ".md":
             return _failure("artifact-path-not-markdown-file")
-        if resolved in seen_paths:
+        if logical_path in seen_logical_paths or resolved in seen_resolved_paths:
             return _failure("artifact-path-duplicate")
-        seen_paths.add(resolved)
-        resolved_claims.append((claim, resolved))
+        seen_logical_paths.add(logical_path)
+        seen_resolved_paths.add(resolved)
+        resolved_claims.append((claim, logical_path, resolved))
 
     artifacts: list[Artifact] = []
     aggregate_bytes = 0
-    for claim, resolved in resolved_claims:
+    for claim, logical_path, resolved in resolved_claims:
         try:
             with resolved.open("rb") as stream:
                 content_bytes = stream.read(limits.bytes_per_file + 1)
@@ -119,7 +175,7 @@ def read_canonical_artifacts(
         artifacts.append(
             Artifact(
                 kind=claim.kind,
-                path=resolved.relative_to(repository).as_posix(),
+                path=logical_path.relative_to(repository).as_posix(),
                 sha256=hashlib.sha256(content_bytes).hexdigest(),
                 content=content,
                 content_bytes=content_bytes,

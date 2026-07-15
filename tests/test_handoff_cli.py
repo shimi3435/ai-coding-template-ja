@@ -182,6 +182,34 @@ def test_inspect_is_read_only_and_preserves_route_and_host(tmp_path: Path) -> No
     assert not (repository / ".planning").exists()
 
 
+@pytest.mark.parametrize("symlink_case", ["singleton-file", "spec-parent"])
+def test_inspect_fails_closed_for_canonical_artifact_symlink(
+    tmp_path: Path, symlink_case: str
+) -> None:
+    repository, gsd_home, runner = _setup_repository(tmp_path)
+    change = repository / "openspec" / "changes" / "fixture-change"
+    if symlink_case == "singleton-file":
+        proposal = change / "proposal.md"
+        other = change / "other.md"
+        other.write_text("# noncanonical proposal\n", encoding="utf-8")
+        proposal.unlink()
+        proposal.symlink_to(other)
+    else:
+        capability = change / "specs" / "fixture-capability"
+        other = change / "specs" / "other-capability"
+        other.mkdir()
+        (other / "spec.md").write_text("# noncanonical spec\n", encoding="utf-8")
+        (capability / "spec.md").unlink()
+        capability.rmdir()
+        capability.symlink_to(other, target_is_directory=True)
+
+    result = inspect_handoff(**_inspect_arguments(repository, gsd_home, runner))
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "artifact-path-symlink"
+    assert not (repository / ".planning").exists()
+
+
 def test_prepare_requires_explicit_approval_and_writes_exactly_once(
     tmp_path: Path,
 ) -> None:
