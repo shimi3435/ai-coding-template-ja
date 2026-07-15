@@ -46,7 +46,14 @@ HOST_LOCATORS = (
     "real GSD mutation",
     "route-specific postconditions",
 )
-REQUIRED_SECTIONS = ("Requirements", "Scenarios", "Spec holes", "Host unverified")
+EVIDENCE_SECTION_SCHEMA = (
+    "Requirements",
+    "Scenarios",
+    "Spec holes",
+    "Host unverified",
+    "Real read-only observations",
+    "Authority boundary",
+)
 PROBE_OUTPUT_KEYS = (
     "project_exists",
     "roadmap_exists",
@@ -178,18 +185,17 @@ def _metadata(text: str) -> tuple[dict[str, str], str | None]:
 
 
 def _validate_section_structure(text: str) -> str | None:
-    headings = [
+    headings = tuple(
         line.removeprefix("## ")
         for line in text.splitlines()
         if line.startswith("## ") and not line.startswith("### ")
-    ]
-    if any(headings.count(required) != 1 for required in REQUIRED_SECTIONS):
-        return "evidence-section-invalid"
+    )
     if any(
-        re.match(r"host(?:\s|$)", heading, re.IGNORECASE)
-        and heading != "Host unverified"
+        re.search(r"\bhost\b", heading, re.IGNORECASE) and heading != "Host unverified"
         for heading in headings
     ):
+        return "evidence-section-invalid"
+    if headings != EVIDENCE_SECTION_SCHEMA:
         return "evidence-section-invalid"
     return None
 
