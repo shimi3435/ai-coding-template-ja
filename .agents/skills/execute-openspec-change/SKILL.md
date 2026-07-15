@@ -55,6 +55,49 @@ Resolve dispatch using the inspected host schema and the bridge-selected GSD
 entrypoint. Record `host_dispatch` and any `generic_degradation`. Unknown or
 inconsistent evidence stops before preview approval.
 
+For a generic host, finish this whole preflight before preview, approval, or prepare:
+
+1. Require the installed local GSD version to be exactly 1.5.0. Resolve the selected
+   entrypoint SKILL and read it completely.
+2. Resolve the SKILL's concrete workflow under the frozen arguments and configuration.
+   Follow its routing and referenced workflow files, then enumerate every reachable
+   `Task(...)` or `Agent(...)` spawn name and every isolation argument. Do not rely on
+   an available-agent summary or an unselected branch.
+3. Resolve `ACTIVE_CONFIG_ROOT` in this explicit priority order: `CODEX_HOME`,
+   `--config-dir`, `project-local-.codex`, then `default-global-config`.
+4. Map each reachable spawn name to
+   `${ACTIVE_CONFIG_ROOT}/agents/<spawn-name>.toml`, read the complete TOML, and retain
+   the complete developer instructions as the role preamble. This is
+   `complete-role-preamble-for-each-spawn`; a prefix, summary, or `.md` substitute is
+   insufficient.
+5. Verify `every-isolation-requirement` against the visible generic spawn schema before
+   authorizing the workaround.
+
+For the frozen uninitialized route, resolve these exact local files:
+
+- `${ACTIVE_CONFIG_ROOT}/skills/gsd-new-project/SKILL.md`
+- `${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/new-project.md`
+
+With `$gsd-new-project --auto @${HANDOFF_BRIEF}`, the resolved reachable spawn names
+are `gsd-project-researcher`, `gsd-research-synthesizer`, and `gsd-roadmapper`.
+Map and completely read the active TOML for each name.
+
+For the frozen initialized route, resolve these exact local files:
+
+- `${ACTIVE_CONFIG_ROOT}/skills/gsd-phase/SKILL.md`
+- `${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/add-phase.md`
+
+With `$gsd-phase ${INLINE_PARITY_PAYLOAD}`, the resolved add-phase branch has no
+reachable spawn. Still inspect the complete workflow for isolation or dynamically
+referenced branches; do not infer absence from the current summary.
+
+Fail closed on any of: `unknown-reachability`, `unknown-toml-mapping`,
+`incomplete-role-preamble`, `unknown-isolation`, `typed-only-requirement`,
+`worktree-isolated-requirement`, or `incompatible-isolation`. Stop before approval or
+prepare and report the missing evidence. Otherwise inject each complete role preamble
+into its corresponding generic spawn and label every dispatch, result, and report
+`generic-agent workaround`. This route is **not equivalent to typed dispatch**.
+
 ## Stage: preview
 
 Display one complete approval preview containing these labelled fields:
@@ -194,6 +237,17 @@ Only after conservative acceptance call the Phase 1 public
 `mark_handoff_started` operation with `gsd_accepted=True`. Require its structured
 success and `known_state=started`. If the acceptance predicate is false, this stage
 is unreachable and the manifest remains prepared.
+
+## Stage: report
+
+After any prepared manifest success, always report `manifest-path` and `source-commit`
+and state `operator-makes-distinct-later-tracking-commit`. The operator creates that
+tracking commit after reviewing the manifest; this skill must never execute a Git commit.
+
+If dispatch is not accepted, also report `completed-operations`, `failure-point`,
+`prepared-state`, and `manual-continuation-evidence` sufficient to reconstruct the
+same frozen manual handoff. Do not perform or promise `retry`, `rollback`,
+`route-switch`, `finalize`, `cleanup`, `push`, `pull-request`, or `merge`.
 
 ## Evidence limits
 
