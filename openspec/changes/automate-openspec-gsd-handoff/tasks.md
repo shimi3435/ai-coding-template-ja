@@ -14,8 +14,8 @@ validate、`spec-holes` Phase 1再確認、利用者承認までproduction code�
 
 ## 2. Bridge MVP phase
 
-- [ ] 2.1 artifact path discovery、共通Markdown reader、task progress算出、最小manifest、capability / Git preflightを責務別moduleで実装する
-- [ ] 2.2 path traversal、空・重複・壊れた入力、部分生成、ignoreされたmanifest、capability不足でfail-closedすることを検証する
+- [x] 2.1 artifact path discovery、共通Markdown reader、task progress算出、最小manifest、capability / Git preflightを責務別moduleで実装する
+- [x] 2.2 path traversal、空・重複・壊れた入力、部分生成、ignoreされたmanifest、capability不足でfail-closedすることを検証する
 
 ## 3. Skill phase
 
