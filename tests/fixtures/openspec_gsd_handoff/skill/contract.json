@@ -164,5 +164,89 @@
       "project_initialized": "partial",
       "dispatch_reachable": false
     }
+  },
+  "acceptance": {
+    "predicate": [
+      "host-structured-completed-success",
+      "route-read-only-postcondition"
+    ],
+    "accepted_rows": [
+      {
+        "name": "uninitialized-completed-and-observed",
+        "route": "uninitialized",
+        "host_result": "structured-completed-success",
+        "postcondition": "pass",
+        "accepted": true,
+        "resulting_state": "started"
+      },
+      {
+        "name": "initialized-completed-and-observed",
+        "route": "initialized",
+        "host_result": "structured-completed-success",
+        "postcondition": "pass",
+        "accepted": true,
+        "resulting_state": "started"
+      }
+    ],
+    "retained_prepared_rows": [
+      "marker-only",
+      "checkpoint",
+      "empty",
+      "malformed",
+      "partial",
+      "ambiguous",
+      "dispatch-failure",
+      "postcondition-mismatch"
+    ],
+    "on_not_accepted": {
+      "resulting_state": "prepared",
+      "call_mark_started": false,
+      "retry": false,
+      "route_switch": false
+    },
+    "transition": {
+      "operation": "mark_handoff_started",
+      "argument": "gsd_accepted=True",
+      "only_when_accepted": true
+    }
+  },
+  "uninitialized_postcondition": {
+    "probe": "node ${GSD_HOME}/gsd-core/bin/gsd-tools.cjs init progress --raw",
+    "probe_expected": {
+      "project_exists": true,
+      "roadmap_exists": true,
+      "state_exists": true,
+      "project_root": "${FROZEN_REPOSITORY_REAL_PATH}",
+      "agents_installed": true,
+      "missing_agents": []
+    },
+    "required_files": [
+      ".planning/PROJECT.md",
+      ".planning/REQUIREMENTS.md",
+      ".planning/ROADMAP.md",
+      ".planning/STATE.md"
+    ],
+    "collective_payload_evidence": [
+      "exact-change-id",
+      "exact-source-commit",
+      "all-canonical-paths-or-exact-brief-reference",
+      "completed-boundary-gates",
+      "unresolved-items",
+      "one-phase-one-change",
+      "specification-nonduplication"
+    ]
+  },
+  "initialized_postcondition": {
+    "pre_snapshot": [
+      "maximum-integer-phase",
+      "phase-directories",
+      "roadmap"
+    ],
+    "post_snapshot": [
+      "exactly-one-new-max-plus-one-phase",
+      "matching-new-phase-directory",
+      "no-other-phase-or-directory-change",
+      "new-roadmap-section-equals-inline-parity-payload"
+    ]
   }
 }

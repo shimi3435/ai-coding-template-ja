@@ -192,3 +192,114 @@ def test_route_instructions_render_only_the_common_parity_payload() -> None:
     assert "change-specific `$gsd-phase`" in skill
     assert skill.count("complete `PARITY_PAYLOAD`") >= 2
     assert "partial initialization" in skill
+
+
+def test_acceptance_matrix_retains_prepared_for_checkpoint_and_ambiguous_rows() -> None:
+    contract = _contract()
+    skill = _skill()
+    acceptance = contract["acceptance"]
+
+    assert acceptance["predicate"] == [
+        "host-structured-completed-success",
+        "route-read-only-postcondition",
+    ]
+    assert acceptance["retained_prepared_rows"] == [
+        "marker-only",
+        "checkpoint",
+        "empty",
+        "malformed",
+        "partial",
+        "ambiguous",
+        "dispatch-failure",
+        "postcondition-mismatch",
+    ]
+    assert acceptance["on_not_accepted"] == {
+        "resulting_state": "prepared",
+        "call_mark_started": False,
+        "retry": False,
+        "route_switch": False,
+    }
+    for row in acceptance["retained_prepared_rows"]:
+        assert f"`{row}`" in skill
+    assert "prose completion marker is supplemental only" in skill
+
+
+def test_uninitialized_acceptance_requires_complete_read_only_postcondition() -> None:
+    contract = _contract()
+    skill = _skill()
+    postcondition = contract["uninitialized_postcondition"]
+
+    assert postcondition["probe"].endswith("init progress --raw")
+    assert postcondition["probe_expected"] == {
+        "project_exists": True,
+        "roadmap_exists": True,
+        "state_exists": True,
+        "project_root": "${FROZEN_REPOSITORY_REAL_PATH}",
+        "agents_installed": True,
+        "missing_agents": [],
+    }
+    assert postcondition["required_files"] == [
+        ".planning/PROJECT.md",
+        ".planning/REQUIREMENTS.md",
+        ".planning/ROADMAP.md",
+        ".planning/STATE.md",
+    ]
+    for evidence in postcondition["collective_payload_evidence"]:
+        assert f"`{evidence}`" in skill
+    for path in postcondition["required_files"]:
+        assert f"`{path}`" in skill
+
+
+def test_initialized_acceptance_compares_exact_phase_snapshots() -> None:
+    contract = _contract()
+    skill = _skill()
+    postcondition = contract["initialized_postcondition"]
+
+    assert postcondition["pre_snapshot"] == [
+        "maximum-integer-phase",
+        "phase-directories",
+        "roadmap",
+    ]
+    assert postcondition["post_snapshot"] == [
+        "exactly-one-new-max-plus-one-phase",
+        "matching-new-phase-directory",
+        "no-other-phase-or-directory-change",
+        "new-roadmap-section-equals-inline-parity-payload",
+    ]
+    for snapshot_field in [
+        *postcondition["pre_snapshot"],
+        *postcondition["post_snapshot"],
+    ]:
+        assert f"`{snapshot_field}`" in skill
+
+
+def test_started_transition_is_reachable_only_after_conservative_acceptance() -> None:
+    contract = _contract()
+    skill = _skill()
+    acceptance = contract["acceptance"]
+
+    assert all(row["accepted"] for row in acceptance["accepted_rows"])
+    assert all(
+        row["resulting_state"] == "started" for row in acceptance["accepted_rows"]
+    )
+    assert acceptance["transition"] == {
+        "operation": "mark_handoff_started",
+        "argument": "gsd_accepted=True",
+        "only_when_accepted": True,
+    }
+    _assert_tokens_in_order(
+        skill,
+        [
+            "structured completed-success",
+            "route-specific read-only postcondition",
+            "`mark_handoff_started`",
+        ],
+    )
+    assert "`gsd_accepted=True`" in skill
+
+
+def test_ambiguous_host_or_postcondition_evidence_remains_unverified() -> None:
+    scope = _contract()["evidence_scope"]
+
+    assert "actual-host-prompt-execution" in scope["unverified_until_phase_3"]
+    assert "route-specific-postconditions" in scope["unverified_until_phase_3"]
