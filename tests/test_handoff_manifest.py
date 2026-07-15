@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from ai_coding_template_ja.openspec_gsd_handoff import mark_handoff_started
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     CleanupOutcome,
     FailurePoint,
@@ -23,6 +25,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     serialize_manifest,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
+    Failure,
     HandoffState,
     HostCapabilityInput,
     HostDispatch,
@@ -122,6 +125,50 @@ def test_parser_rejects_malformed_or_non_minimal_manifest() -> None:
     assert malformed.issue.code == "manifest-json-invalid"  # type: ignore[union-attr]
     assert unsupported.issue.code == "manifest-schema-unsupported"  # type: ignore[union-attr]
     assert extended.issue.code == "manifest-fields-invalid"  # type: ignore[union-attr]
+
+
+def test_started_transition_rejects_kind_path_mismatched_existing_manifest(
+    tmp_path: Path,
+) -> None:
+    raw = json.loads(EXPECTED)
+    proposal = next(item for item in raw["artifacts"] if item["kind"] == "proposal")
+    spec = next(item for item in raw["artifacts"] if item["kind"] == "spec")
+    proposal["path"], spec["path"] = spec["path"], proposal["path"]
+    target = tmp_path / ".planning" / "openspec" / "fixture-change" / "handoff.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(json.dumps(raw), encoding="utf-8")
+
+    result = mark_handoff_started(tmp_path, "fixture-change", gsd_accepted=True)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-value-invalid"
+
+
+def test_parser_rejects_manifest_with_more_than_64_artifacts() -> None:
+    raw = json.loads(EXPECTED)
+    singleton_artifacts = [item for item in raw["artifacts"] if item["kind"] != "spec"]
+    raw["artifacts"] = sorted(
+        [
+            *singleton_artifacts,
+            *(
+                {
+                    "kind": "spec",
+                    "path": (
+                        "openspec/changes/fixture-change/specs/"
+                        f"capability-{index:02d}/spec.md"
+                    ),
+                    "sha256": f"{index:064x}",
+                }
+                for index in range(62)
+            ),
+        ],
+        key=lambda item: (item["kind"], item["path"]),
+    )
+
+    result = parse_manifest_bytes(json.dumps(raw).encode())
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-value-invalid"
 
 
 def test_repository_persists_prepared_then_transitions_only_to_started(
