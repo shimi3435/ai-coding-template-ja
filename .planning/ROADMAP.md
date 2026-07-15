@@ -20,7 +20,7 @@ canonical OpenSpec artifacts に委ねる。
 ## Phases
 
 - [x] **Phase 1: Bridge Core, Persistence, and Preflight** - `BRIDGE-01` が指す bridge 実装境界を source-pinned な証拠とともに成立させる (completed 2026-07-14)
-- [ ] **Phase 2: Approval-Gated Skill Orchestration** - `SKILL-01` が指す skill 実装境界を Phase 1 の seam 上で成立させる
+- [x] **Phase 2: Approval-Gated Skill Orchestration** - `SKILL-01` が指す skill 実装境界を Phase 1 の seam 上で成立させる (completed 2026-07-15)
 - [ ] **Phase 3: Deterministic Verification and Acceptance Evidence** - `VERIFY-01` が指す検証境界から OpenSpec 最終判定用の証拠を整える
 
 ## Phase Details
@@ -84,7 +84,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Bridge Core, Persistence, and Preflight | 3/3 | Complete   | 2026-07-14 |
+| 1. Bridge Core, Persistence, and Preflight | 3/3 | Complete    | 2026-07-14 |
 | 2. Approval-Gated Skill Orchestration | 0/TBD | Not started | - |
 | 3. Deterministic Verification and Acceptance Evidence | 0/TBD | Not started | - |
 
