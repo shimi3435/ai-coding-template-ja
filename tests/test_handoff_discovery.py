@@ -121,6 +121,30 @@ def test_positive_json_and_fallback_share_values_but_keep_distinct_routes(
     assert isinstance(json_result, Success)
     assert isinstance(fallback_result, Success)
     assert json_result.value == fallback_result.value
+    json_projection = tuple(
+        sorted(
+            (
+                artifact.kind.value,
+                artifact.path,
+                artifact.sha256,
+                artifact.content_bytes,
+            )
+            for artifact in json_result.value.artifacts
+        )
+    )
+    fallback_projection = tuple(
+        sorted(
+            (
+                artifact.kind.value,
+                artifact.path,
+                artifact.sha256,
+                artifact.content_bytes,
+            )
+            for artifact in fallback_result.value.artifacts
+        )
+    )
+    assert json_projection == fallback_projection
+    assert json_result.value.progress == fallback_result.value.progress
     assert json_result.route is InputRoute.JSON
     assert fallback_result.route is InputRoute.MARKDOWN_FALLBACK
 
