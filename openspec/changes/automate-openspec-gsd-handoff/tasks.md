@@ -33,4 +33,4 @@ validate、`spec-holes` Phase 1再確認、利用者承認までproduction code�
 
 ## 6. Close
 
-- [ ] 6.1 `self-review`を行い、後続hardeningとの境界を確認し、既存close policyで一時handoff artifactsを手動処理する
+- [x] 6.1 `self-review`を行い、後続hardeningとの境界を確認し、既存close policyで一時handoff artifactsを手動処理する
