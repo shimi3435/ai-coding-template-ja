@@ -3,20 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
-from ai_coding_template_ja.openspec_gsd_handoff.preflight import (
-    CommandResult,
-    GsdProbeEvidence,
-    RepositoryPolicyVerdict,
-    collect_gsd_probe,
-    collect_openspec_probe,
-    parse_gsd_capability,
-    validate_repository_inputs,
-)
 
+import ai_coding_template_ja.openspec_gsd_handoff.preflight as preflight_module
 from ai_coding_template_ja.openspec_gsd_handoff.discovery import (
     discover_openspec_artifacts,
 )
@@ -29,6 +23,16 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     HostDispatch,
     HostSpawnSchema,
     Success,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.preflight import (
+    CommandResult,
+    GsdProbeEvidence,
+    RepositoryPolicyVerdict,
+    collect_gsd_probe,
+    collect_openspec_probe,
+    parse_gsd_capability,
+    subprocess_runner,
+    validate_repository_inputs,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -52,6 +56,51 @@ class _QueueRunner:
         self.calls.append((argv, cwd, timeout))
         return_code, stdout, stderr = self.results.pop(0)
         return CommandResult(argv, cwd, timeout, return_code, stdout, stderr)
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_subprocess_runner_keeps_each_stream_at_the_exact_output_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stream: str
+) -> None:
+    monkeypatch.setattr(preflight_module, "COMMAND_OUTPUT_LIMIT", 32)
+    script = (
+        f"import sys; sys.{stream}.buffer.write(b'x' * 32); sys.{stream}.buffer.flush()"
+    )
+
+    result = subprocess_runner(
+        (sys.executable, "-c", script), cwd=tmp_path, timeout=2.0
+    )
+
+    assert result.return_code == 0
+    assert len(result.stdout if stream == "stdout" else result.stderr.encode()) == 32
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_subprocess_runner_stops_and_reaps_output_over_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stream: str
+) -> None:
+    monkeypatch.setattr(preflight_module, "COMMAND_OUTPUT_LIMIT", 32)
+    pid_path = tmp_path / f"{stream}.pid"
+    script = (
+        "import os, pathlib, sys, time; "
+        "pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); "
+        f"sys.{stream}.buffer.write(b'x' * 33); "
+        f"sys.{stream}.buffer.flush(); "
+        "time.sleep(10)"
+    )
+
+    result = subprocess_runner(
+        (sys.executable, "-c", script, str(pid_path)),
+        cwd=tmp_path,
+        timeout=2.0,
+    )
+
+    assert result.return_code == 125
+    assert result.stdout == b""
+    assert result.stderr == "command-output-limit-exceeded"
+    pid = int(pid_path.read_text(encoding="utf-8"))
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
 
 
 def test_openspec_adapter_uses_fixed_argv_cwd_timeout_and_separate_streams(
