@@ -171,6 +171,49 @@ def test_parser_rejects_manifest_with_more_than_64_artifacts() -> None:
     assert result.issue.code == "manifest-value-invalid"
 
 
+@pytest.mark.parametrize("alias", ["dot", "separator", "duplicate"])
+def test_parser_and_transition_reject_lexical_path_aliases(
+    tmp_path: Path, alias: str
+) -> None:
+    raw = json.loads(EXPECTED)
+    if alias == "dot":
+        raw["artifacts"][1]["path"] = f"./{raw['artifacts'][1]['path']}"
+    elif alias == "separator":
+        raw["artifacts"][1]["path"] = raw["artifacts"][1]["path"].replace(
+            "openspec/changes", "openspec//changes"
+        )
+    else:
+        spec = next(item for item in raw["artifacts"] if item["kind"] == "spec")
+        duplicate = dict(spec)
+        duplicate["path"] = duplicate["path"].replace("/spec.md", "//spec.md")
+        raw["artifacts"].append(duplicate)
+    raw["artifacts"].sort(key=lambda item: (item["kind"], item["path"]))
+    data = json.dumps(raw).encode()
+
+    parsed = parse_manifest_bytes(data)
+
+    assert isinstance(parsed, Failure)
+    assert parsed.issue.code == "manifest-value-invalid"
+
+    target = tmp_path / ".planning" / "openspec" / "fixture-change" / "handoff.json"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(data)
+    before = target.read_bytes()
+    operations = _MutationCountingOperations()
+
+    transitioned = mark_handoff_started(
+        tmp_path,
+        "fixture-change",
+        gsd_accepted=True,
+        operations=operations,
+    )
+
+    assert isinstance(transitioned, Failure)
+    assert transitioned.issue.code == "manifest-value-invalid"
+    assert operations.mutations == 0
+    assert target.read_bytes() == before
+
+
 def test_repository_persists_prepared_then_transitions_only_to_started(
     tmp_path: Path,
 ) -> None:
