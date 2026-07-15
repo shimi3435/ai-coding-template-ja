@@ -31,8 +31,17 @@ from .models import (
 from .preflight import RepositoryPolicyVerdict
 
 
+class _RequestArgumentError(Exception):
+    """An argv validation failure that belongs on the structured output seam."""
+
+
+class _StructuredArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise _RequestArgumentError(message)
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _StructuredArgumentParser(
         prog="python -m ai_coding_template_ja.openspec_gsd_handoff",
         description=(
             "Inspect or persist the mechanical OpenSpec-to-GSD handoff boundary."
@@ -45,10 +54,12 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--change", required=True)
         command.add_argument("--source-commit", required=True)
         command.add_argument("--gsd-home", type=Path, required=True)
-        command.add_argument("--repository-policy")
+        command.add_argument(
+            "--repository-policy", choices=tuple(RepositoryPolicyVerdict)
+        )
         command.add_argument("--host-inspected", action="store_true")
-        command.add_argument("--host-schema")
-        command.add_argument("--host-dispatch")
+        command.add_argument("--host-schema", choices=tuple(HostSpawnSchema))
+        command.add_argument("--host-dispatch", choices=tuple(HostDispatch))
         command.add_argument("--agent-role-source")
         if name == "prepare":
             command.add_argument("--approved", action="store_true")
@@ -166,7 +177,23 @@ def _failure_payload(operation: str, result: object) -> dict[str, object]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    try:
+        args = _parser().parse_args(arguments)
+    except _RequestArgumentError:
+        operation = (
+            arguments[0]
+            if arguments and arguments[0] in {"inspect", "prepare", "mark-started"}
+            else "unknown"
+        )
+        print(
+            json.dumps(
+                _failure_payload(operation, _input_failure("request-invalid")),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+        return 2
     result = _dispatch(args)
     if isinstance(result, Success):
         payload = _success_payload(args.operation, result)
