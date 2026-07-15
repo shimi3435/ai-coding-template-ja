@@ -339,6 +339,51 @@ def test_pinned_canonical_body_line_is_rejected_but_worktree_drift_is_not_author
     assert verdict.ok is True
 
 
+def test_pinned_canonical_body_line_outside_tables_is_rejected() -> None:
+    canonical_line = next(
+        line.decode().strip()
+        for line in PINNED_BLOBS[SPEC_PATH].splitlines()
+        if len(line.decode().strip()) >= 32 and not line.startswith(b"#")
+    )
+    evidence = (
+        valid_evidence()
+        .decode()
+        .replace(
+            "## Requirements",
+            f"{canonical_line}\n\n## Requirements",
+            1,
+        )
+    )
+
+    verdict, _ = _validate(evidence.encode())
+
+    assert verdict.code == "canonical-body-leak"
+
+
+@pytest.mark.parametrize(
+    ("label", "value", "expected"),
+    [
+        ("Source commit", SOURCE_COMMIT, "source-commit-invalid"),
+        ("Proposal path", PROPOSAL_PATH, "canonical-paths-mismatch"),
+        ("Design path", DESIGN_PATH, "canonical-paths-mismatch"),
+        ("Spec path", SPEC_PATH, "canonical-paths-mismatch"),
+        ("Tasks path", TASKS_PATH, "canonical-paths-mismatch"),
+    ],
+)
+def test_duplicate_canonical_metadata_fails_before_git(
+    label: str,
+    value: str,
+    expected: str,
+) -> None:
+    line = f"- {label}: `{value}`"
+    evidence = valid_evidence().decode().replace(line, f"{line}\n{line}", 1).encode()
+
+    verdict, runner = _validate(evidence)
+
+    assert verdict.code == expected
+    assert runner.calls == []
+
+
 def test_cli_prints_one_sorted_bounded_json_verdict(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.md"
     evidence.write_bytes(_replace(valid_evidence(), "| R1 |", "| R9 |"))
