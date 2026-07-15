@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import selectors
 import subprocess
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import BinaryIO, cast
 
 from .discovery import OpenSpecProbe
 from .manifest import GsdCapability
@@ -107,30 +111,96 @@ def subprocess_runner(
     """Run one bounded fixed argv without shell interpolation."""
 
     try:
-        completed = subprocess.run(  # noqa: S603 - argv is fixed by bridge callers
+        process = subprocess.Popen(  # noqa: S603 - argv is fixed by bridge callers
             list(argv),
             cwd=cwd,
-            timeout=timeout,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             shell=False,
-            check=False,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
+    except OSError as exc:
         return CommandResult(argv, cwd, timeout, 126, b"", str(exc))
-    stdout = completed.stdout
-    stderr_bytes = completed.stderr
-    if len(stdout) > COMMAND_OUTPUT_LIMIT or len(stderr_bytes) > COMMAND_OUTPUT_LIMIT:
+
+    stdout_pipe = process.stdout
+    stderr_pipe = process.stderr
+    if stdout_pipe is None or stderr_pipe is None:
+        _stop_process(process)
+        return CommandResult(argv, cwd, timeout, 126, b"", "command-pipe-missing")
+    streams = {stdout_pipe: bytearray(), stderr_pipe: bytearray()}
+    selector = selectors.DefaultSelector()
+    selector.register(stdout_pipe, selectors.EVENT_READ)
+    selector.register(stderr_pipe, selectors.EVENT_READ)
+    deadline = time.monotonic() + timeout
+    failure: str | None = None
+    try:
+        while selector.get_map():
+            remaining_time = deadline - time.monotonic()
+            if remaining_time <= 0:
+                failure = "command-timeout"
+                break
+            events = selector.select(remaining_time)
+            if not events:
+                failure = "command-timeout"
+                break
+            for key, _mask in events:
+                stream = cast(BinaryIO, key.fileobj)
+                buffer = streams[stream]
+                read_size = min(65_536, COMMAND_OUTPUT_LIMIT + 1 - len(buffer))
+                try:
+                    chunk = os.read(stream.fileno(), max(1, read_size))
+                except OSError as exc:
+                    failure = str(exc)
+                    break
+                if not chunk:
+                    selector.unregister(stream)
+                    continue
+                buffer.extend(chunk)
+                if len(buffer) > COMMAND_OUTPUT_LIMIT:
+                    failure = "command-output-limit-exceeded"
+                    break
+            if failure is not None:
+                break
+    finally:
+        selector.close()
+
+    if failure is not None:
+        _stop_process(process)
+        return_code = 125 if failure == "command-output-limit-exceeded" else 126
         return CommandResult(
-            argv, cwd, timeout, 125, b"", "command-output-limit-exceeded"
+            argv,
+            cwd,
+            timeout,
+            return_code,
+            b"",
+            failure,
         )
+    try:
+        return_code = process.wait(timeout=max(0.0, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        _stop_process(process)
+        return CommandResult(argv, cwd, timeout, 126, b"", "command-timeout")
     return CommandResult(
         argv,
         cwd,
         timeout,
-        completed.returncode,
-        stdout,
-        stderr_bytes.decode("utf-8", errors="replace"),
+        return_code,
+        bytes(streams[stdout_pipe]),
+        bytes(streams[stderr_pipe]).decode("utf-8", errors="replace"),
     )
+
+
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    """Terminate and always reap a child after a bounded-runner failure."""
+
+    if process.poll() is not None:
+        process.wait()
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=0.5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 def _run(
