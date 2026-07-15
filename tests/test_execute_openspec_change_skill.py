@@ -303,3 +303,116 @@ def test_ambiguous_host_or_postcondition_evidence_remains_unverified() -> None:
 
     assert "actual-host-prompt-execution" in scope["unverified_until_phase_3"]
     assert "route-specific-postconditions" in scope["unverified_until_phase_3"]
+
+
+def test_generic_preflight_completes_before_preview_approval_or_prepare() -> None:
+    contract = _contract()
+    skill = _skill()
+    preflight = contract["generic_preflight"]
+
+    assert preflight["timing"] == (
+        "after-inspect-bridge-before-preview-approval-prepare"
+    )
+    assert preflight["supported_version"] == "1.5.0"
+    assert preflight["required_evidence"] == [
+        "selected-entrypoint-skill",
+        "concrete-workflow-under-frozen-arguments-and-config",
+        "every-reachable-task-or-agent-spawn-name",
+        "active-codex-config-root",
+        "agent-toml-mapping-for-each-spawn",
+        "complete-role-preamble-for-each-spawn",
+        "every-isolation-requirement",
+    ]
+    _assert_tokens_in_order(
+        skill,
+        [
+            "## Stage: inspect-bridge",
+            "## Stage: resolve-dispatch",
+            "complete-role-preamble-for-each-spawn",
+            "## Stage: preview",
+            "## Stage: approve",
+            "## Stage: prepare",
+        ],
+    )
+
+
+def test_generic_route_resolves_exact_local_workflows_and_spawn_names() -> None:
+    contract = _contract()
+    skill = _skill()
+    preflight = contract["generic_preflight"]
+    entrypoints = preflight["entrypoints"]
+
+    assert entrypoints["uninitialized"] == {
+        "skill": "${ACTIVE_CONFIG_ROOT}/skills/gsd-new-project/SKILL.md",
+        "workflow": "${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/new-project.md",
+        "frozen_arguments": "$gsd-new-project --auto @${HANDOFF_BRIEF}",
+        "reachable_spawn_names": [
+            "gsd-project-researcher",
+            "gsd-research-synthesizer",
+            "gsd-roadmapper",
+        ],
+    }
+    assert entrypoints["initialized"] == {
+        "skill": "${ACTIVE_CONFIG_ROOT}/skills/gsd-phase/SKILL.md",
+        "workflow": "${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/add-phase.md",
+        "frozen_arguments": "$gsd-phase ${INLINE_PARITY_PAYLOAD}",
+        "reachable_spawn_names": [],
+    }
+    for entrypoint in entrypoints.values():
+        assert entrypoint["skill"] in skill
+        assert entrypoint["workflow"] in skill
+        for spawn_name in entrypoint["reachable_spawn_names"]:
+            assert f"`{spawn_name}`" in skill
+    assert preflight["toml_pattern"] in skill
+
+
+def test_generic_isolation_or_unknown_evidence_fails_closed() -> None:
+    contract = _contract()
+    skill = _skill()
+    preflight = contract["generic_preflight"]
+
+    assert preflight["equivalent_to_typed_dispatch"] is False
+    assert preflight["workaround_label"] == "generic-agent workaround"
+    assert preflight["active_config_root_priority"] == [
+        "CODEX_HOME",
+        "--config-dir",
+        "project-local-.codex",
+        "default-global-config",
+    ]
+    for reason in preflight["fail_closed"]:
+        assert f"`{reason}`" in skill
+    assert "generic-agent workaround" in skill
+    assert "not equivalent to typed dispatch" in skill
+
+
+def test_manifest_report_requires_distinct_later_commit_without_automation() -> None:
+    contract = _contract()
+    skill = _skill()
+    reporting = contract["reporting"]
+
+    assert reporting["after_manifest_success"] == [
+        "manifest-path",
+        "source-commit",
+        "operator-makes-distinct-later-tracking-commit",
+    ]
+    assert reporting["automatic_git_commit"] is False
+    for report_field in reporting["after_manifest_success"]:
+        assert f"`{report_field}`" in skill
+    assert "never execute a Git commit" in skill
+
+
+def test_non_accepted_report_preserves_manual_continuation_and_scope() -> None:
+    contract = _contract()
+    skill = _skill()
+    reporting = contract["reporting"]
+
+    assert reporting["after_non_accepted_dispatch"] == [
+        "completed-operations",
+        "failure-point",
+        "prepared-state",
+        "manual-continuation-evidence",
+    ]
+    for report_field in reporting["after_non_accepted_dispatch"]:
+        assert f"`{report_field}`" in skill
+    for operation in reporting["forbidden_lifecycle_operations"]:
+        assert f"`{operation}`" in skill

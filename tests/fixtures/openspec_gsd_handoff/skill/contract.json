@@ -248,5 +248,78 @@
       "no-other-phase-or-directory-change",
       "new-roadmap-section-equals-inline-parity-payload"
     ]
+  },
+  "generic_preflight": {
+    "timing": "after-inspect-bridge-before-preview-approval-prepare",
+    "supported_version": "1.5.0",
+    "required_evidence": [
+      "selected-entrypoint-skill",
+      "concrete-workflow-under-frozen-arguments-and-config",
+      "every-reachable-task-or-agent-spawn-name",
+      "active-codex-config-root",
+      "agent-toml-mapping-for-each-spawn",
+      "complete-role-preamble-for-each-spawn",
+      "every-isolation-requirement"
+    ],
+    "active_config_root_priority": [
+      "CODEX_HOME",
+      "--config-dir",
+      "project-local-.codex",
+      "default-global-config"
+    ],
+    "entrypoints": {
+      "uninitialized": {
+        "skill": "${ACTIVE_CONFIG_ROOT}/skills/gsd-new-project/SKILL.md",
+        "workflow": "${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/new-project.md",
+        "frozen_arguments": "$gsd-new-project --auto @${HANDOFF_BRIEF}",
+        "reachable_spawn_names": [
+          "gsd-project-researcher",
+          "gsd-research-synthesizer",
+          "gsd-roadmapper"
+        ]
+      },
+      "initialized": {
+        "skill": "${ACTIVE_CONFIG_ROOT}/skills/gsd-phase/SKILL.md",
+        "workflow": "${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/add-phase.md",
+        "frozen_arguments": "$gsd-phase ${INLINE_PARITY_PAYLOAD}",
+        "reachable_spawn_names": []
+      }
+    },
+    "toml_pattern": "${ACTIVE_CONFIG_ROOT}/agents/<spawn-name>.toml",
+    "fail_closed": [
+      "unknown-reachability",
+      "unknown-toml-mapping",
+      "incomplete-role-preamble",
+      "unknown-isolation",
+      "typed-only-requirement",
+      "worktree-isolated-requirement",
+      "incompatible-isolation"
+    ],
+    "workaround_label": "generic-agent workaround",
+    "equivalent_to_typed_dispatch": false
+  },
+  "reporting": {
+    "after_manifest_success": [
+      "manifest-path",
+      "source-commit",
+      "operator-makes-distinct-later-tracking-commit"
+    ],
+    "automatic_git_commit": false,
+    "after_non_accepted_dispatch": [
+      "completed-operations",
+      "failure-point",
+      "prepared-state",
+      "manual-continuation-evidence"
+    ],
+    "forbidden_lifecycle_operations": [
+      "retry",
+      "rollback",
+      "route-switch",
+      "finalize",
+      "cleanup",
+      "push",
+      "pull-request",
+      "merge"
+    ]
   }
 }
