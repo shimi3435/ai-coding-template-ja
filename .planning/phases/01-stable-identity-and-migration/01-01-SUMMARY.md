@@ -130,7 +130,7 @@ status: complete
 
 - A pre-commit hook temporarily saved and restored an unstaged source patch in its local cache while committing a test-only correction. It did not create or modify a Git stash ref, and the restored patch, historical manifest, brief, and OpenSpec tasks were verified unchanged afterward.
 
-## Verification
+## Test Results
 
 - `uv run pytest tests/test_handoff_identity.py tests/test_handoff_core.py -q` — 50 passed.
 - `uv run pytest tests/test_handoff_identity.py tests/test_handoff_core.py tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` — 82 passed.
