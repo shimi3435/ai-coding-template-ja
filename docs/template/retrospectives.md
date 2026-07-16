@@ -18,4 +18,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-07-13 fix-rename-and-additive-extras（PR #38）: 逃した欠陥 1 件（self-review=1 / review=0 / CI=0 / merge後=0）— rename-smoke 後に新規回帰テスト自身が書き換わる問題を実動作確認で検出
 - 2026-07-14 align-offline-diagnostics-and-secret-policy（PR #39）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— doctor のオフライン診断・Context7 key の last-wins・MCP 生成設定 0600 を TDD で整合
 - 2026-07-14 revise-openspec-gsd-execution-boundary（PR #40）: 逃した欠陥 1 件（self-review=0 / review=1 / CI=0 / merge後=0）— Claude Code review で README の GSD 説明が旧境界のまま残っていた不整合を検出
-- 2026-07-16 automate-openspec-gsd-handoff（PR #41）: 逃した欠陥 3 件（self-review=1 / review=1 / CI=1 / merge後=0）— self-review=Linux capability guard 不足、review=prefix capability の sort key 不整合、CI=source-pinned acceptance test の shallow clone 非互換
+- 2026-07-16 automate-openspec-gsd-handoff（PR #41）: 逃した欠陥 4 件（self-review=1 / review=1 / CI=2 / merge後=0）— self-review=Linux capability guard 不足、review=prefix capability の sort key 不整合、CI=source-pinned acceptance test の shallow clone 非互換とrename時のsmoke script import残存
