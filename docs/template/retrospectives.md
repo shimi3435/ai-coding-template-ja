@@ -19,3 +19,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-07-14 align-offline-diagnostics-and-secret-policy（PR #39）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— doctor のオフライン診断・Context7 key の last-wins・MCP 生成設定 0600 を TDD で整合
 - 2026-07-14 revise-openspec-gsd-execution-boundary（PR #40）: 逃した欠陥 1 件（self-review=0 / review=1 / CI=0 / merge後=0）— Claude Code review で README の GSD 説明が旧境界のまま残っていた不整合を検出
 - 2026-07-16 automate-openspec-gsd-handoff（PR #41）: 逃した欠陥 6 件（self-review=1 / review=3 / CI=2 / merge後=0）— self-review=Linux capability guard 不足、review=prefix capability sort・Markdown link誤検知・Linux smoke前提の未記載、CI=source-pinned testのshallow clone非互換・rename後のsmoke import残存
+- 2026-07-16 define-proportional-agent-workflow（PR #42）: 逃した欠陥 3 件（self-review=0 / review=3 / CI=0 / merge後=0）— Claude Code reviewでGSD昇格段落のsection誤配置・実行予算の用語契約不整合・change ID欠落のvalidateコマンドを検出
