@@ -9,10 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from ai_coding_template_ja.openspec_gsd_handoff.versioned_manifest import (
-    parse_versioned_manifest_bytes,
-    read_versioned_manifest_file,
-)
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -37,6 +33,10 @@ from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     ActiveSourceItem,
     SourceCategory,
     SourceIdentityState,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.versioned_manifest import (
+    parse_versioned_manifest_bytes,
+    read_versioned_manifest_file,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -463,6 +463,8 @@ def test_schema_v2_complete_values_round_trip_to_the_same_value_and_bytes(
     assert isinstance(serialized, Success)
     reparsed = parse_versioned_manifest_bytes(serialized.value)
     assert reparsed == Success(manifest)
+    assert isinstance(reparsed, Success)
+    assert isinstance(reparsed.value, HandoffManifestV2)
     reserialized = serialize_manifest_v2(reparsed.value)
     assert isinstance(reserialized, Success)
     assert reserialized.value == serialized.value
