@@ -51,7 +51,7 @@ def parse_versioned_manifest_bytes(
         return _failure("manifest-requested-schema-invalid")
     try:
         raw = json.loads(data)
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, RecursionError):
         return _failure("manifest-json-invalid")
     if not isinstance(raw, Mapping):
         return _failure("manifest-schema-unsupported")

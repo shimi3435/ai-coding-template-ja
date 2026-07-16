@@ -653,7 +653,7 @@ def parse_manifest_v2_bytes(data: bytes) -> Result[HandoffManifestV2]:
         return _failure("manifest-size-limit-exceeded")
     try:
         raw = json.loads(data)
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, RecursionError):
         return _failure("manifest-v2-json-invalid")
     root = _exact_fields(raw, _ROOT_FIELDS)
     if root is None:
