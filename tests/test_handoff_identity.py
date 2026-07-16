@@ -6,6 +6,8 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff import source_identity as identity
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
@@ -475,6 +477,21 @@ def _active_requirement(
     )
 
 
+def _requirement_observation(
+    name: str,
+    *,
+    block: str = "Body.\n",
+) -> identity.SourceObservation:
+    return identity.SourceObservation(
+        category=SourceCategory.REQUIREMENT,
+        source_path=SOURCE_PATH,
+        raw_heading=f"### Requirement: {name}",
+        normalized_heading=f"Requirement: {name}",
+        normalized_block=block,
+        parent_locator=None,
+    )
+
+
 def test_reconcile_allocates_namespaced_ids_in_canonical_identity_order(
     tmp_path: Path,
 ) -> None:
@@ -648,3 +665,217 @@ def test_reconcile_refuses_allocation_at_exhausted_sentinel() -> None:
     assert isinstance(result, Failure)
     assert result.issue.code == "source-counter-exhausted"
     assert not hasattr(result, "value")
+
+
+def test_reconcile_retains_exact_identity_and_updates_changed_fingerprint() -> None:
+    initial = identity.reconcile_source_items(
+        identity.SourceInventory(items=(_requirement_observation("Stable"),)),
+        _empty_source_state(),
+    )
+    assert isinstance(initial, Success)
+
+    changed = identity.reconcile_source_items(
+        identity.SourceInventory(
+            items=(
+                _requirement_observation(
+                    "Stable",
+                    block="Changed body.\n",
+                ),
+            )
+        ),
+        initial.value.state,
+    )
+
+    assert isinstance(changed, Success)
+    assert changed.value.created == ()
+    assert changed.value.updated == ("REQ-000001",)
+    assert changed.value.tombstoned == ()
+    assert changed.value.state.active[0].id == "REQ-000001"
+    assert (
+        changed.value.state.active[0].fingerprint
+        != initial.value.state.active[0].fingerprint
+    )
+
+
+def test_reconcile_requires_explicit_unique_match_for_renamed_identity() -> None:
+    initial = identity.reconcile_source_items(
+        identity.SourceInventory(items=(_requirement_observation("Original"),)),
+        _empty_source_state(),
+    )
+    assert isinstance(initial, Success)
+    renamed = _requirement_observation("Renamed")
+    renamed_inventory = identity.SourceInventory(items=(renamed,))
+
+    unmatched = identity.reconcile_source_items(
+        renamed_inventory,
+        initial.value.state,
+    )
+    matched = identity.reconcile_source_items(
+        renamed_inventory,
+        initial.value.state,
+        explicit_matches=(
+            identity.ExplicitSourceMatch(
+                source_path=renamed.source_path,
+                normalized_heading=renamed.normalized_heading,
+                parent_locator=None,
+                source_id="REQ-000001",
+            ),
+        ),
+    )
+
+    assert isinstance(unmatched, Success)
+    assert unmatched.value.created == ("REQ-000002",)
+    assert unmatched.value.tombstoned == ("REQ-000001",)
+    assert isinstance(matched, Success)
+    assert matched.value.created == ()
+    assert matched.value.updated == ("REQ-000001",)
+    assert matched.value.tombstoned == ()
+    assert matched.value.state.active[0].id == "REQ-000001"
+
+
+def test_reconcile_tombstones_parent_and_children_with_last_parent_evidence(
+    tmp_path: Path,
+) -> None:
+    repository, source_path = _write_source(tmp_path, _canonical_bytes())
+    inventory = read_source_inventory(repository, [source_path])
+    assert isinstance(inventory, Success)
+    initial = identity.reconcile_source_items(
+        inventory.value,
+        _empty_source_state(),
+    )
+    assert isinstance(initial, Success)
+
+    removed = identity.reconcile_source_items(
+        identity.SourceInventory(items=()),
+        initial.value.state,
+    )
+
+    assert isinstance(removed, Success)
+    assert removed.value.state.active == ()
+    assert removed.value.tombstoned == (
+        "REQ-000001",
+        "REQ-000002",
+        "SCN-000001",
+    )
+    requirement_ids = {
+        item.id
+        for item in removed.value.state.tombstones
+        if item.category is SourceCategory.REQUIREMENT
+    }
+    scenario = next(
+        item
+        for item in removed.value.state.tombstones
+        if item.category is SourceCategory.SCENARIO
+    )
+    assert scenario.last_parent_id == "REQ-000001"
+    assert scenario.last_parent_id in requirement_ids
+
+
+def test_reconcile_rejects_many_to_one_and_unknown_explicit_matches() -> None:
+    initial = identity.reconcile_source_items(
+        identity.SourceInventory(items=(_requirement_observation("Original"),)),
+        _empty_source_state(),
+    )
+    assert isinstance(initial, Success)
+    first = _requirement_observation("First")
+    second = _requirement_observation("Second")
+    inventory = identity.SourceInventory(items=(first, second))
+
+    many_to_one = identity.reconcile_source_items(
+        inventory,
+        initial.value.state,
+        explicit_matches=(
+            identity.ExplicitSourceMatch(
+                first.source_path,
+                first.normalized_heading,
+                None,
+                "REQ-000001",
+            ),
+            identity.ExplicitSourceMatch(
+                second.source_path,
+                second.normalized_heading,
+                None,
+                "REQ-000001",
+            ),
+        ),
+    )
+    unknown = identity.reconcile_source_items(
+        identity.SourceInventory(items=(first,)),
+        initial.value.state,
+        explicit_matches=(
+            identity.ExplicitSourceMatch(
+                first.source_path,
+                first.normalized_heading,
+                None,
+                "REQ-000999",
+            ),
+        ),
+    )
+
+    assert isinstance(many_to_one, Failure)
+    assert many_to_one.issue.code == "source-explicit-match-ambiguous"
+    assert isinstance(unknown, Failure)
+    assert unknown.issue.code == "source-explicit-match-invalid"
+
+
+@given(
+    names=st.lists(
+        st.from_regex(r"[A-Za-z]{1,12}", fullmatch=True).filter(
+            lambda value: value != "Added"
+        ),
+        min_size=2,
+        max_size=8,
+        unique=True,
+    )
+)
+def test_allocator_property_is_order_independent_idempotent_and_never_reuses(
+    names: list[str],
+) -> None:
+    observations = tuple(_requirement_observation(name) for name in names)
+    forward = identity.reconcile_source_items(
+        identity.SourceInventory(items=observations),
+        _empty_source_state(),
+    )
+    reverse = identity.reconcile_source_items(
+        identity.SourceInventory(items=tuple(reversed(observations))),
+        _empty_source_state(),
+    )
+    assert isinstance(forward, Success)
+    assert isinstance(reverse, Success)
+    assert forward.value.state == reverse.value.state
+    assert forward.value.state.next_requirement_id == len(names) + 1
+
+    removed_name = sorted(names)[0]
+    retained = tuple(
+        observation
+        for observation in observations
+        if observation.normalized_heading != f"Requirement: {removed_name}"
+    )
+    removed = identity.reconcile_source_items(
+        identity.SourceInventory(items=tuple(reversed(retained))),
+        forward.value.state,
+    )
+    assert isinstance(removed, Success)
+    assert len(removed.value.state.tombstones) == 1
+    removed_id = removed.value.state.tombstones[0].id
+    assert removed.value.state.next_requirement_id == len(names) + 1
+
+    rerun = identity.reconcile_source_items(
+        identity.SourceInventory(items=retained),
+        removed.value.state,
+    )
+    assert isinstance(rerun, Success)
+    assert rerun.value.state == removed.value.state
+    assert rerun.value.created == ()
+    assert rerun.value.updated == ()
+    assert rerun.value.tombstoned == ()
+
+    added = identity.reconcile_source_items(
+        identity.SourceInventory(items=(*retained, _requirement_observation("Added"))),
+        rerun.value.state,
+    )
+    assert isinstance(added, Success)
+    assert added.value.created == (f"REQ-{len(names) + 1:06d}",)
+    assert added.value.created[0] != removed_id
+    assert added.value.state.tombstones == removed.value.state.tombstones
+    assert added.value.state.next_requirement_id == len(names) + 2
