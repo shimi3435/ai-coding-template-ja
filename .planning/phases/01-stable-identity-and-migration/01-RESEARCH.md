@@ -531,10 +531,10 @@ legitimacy audit is not applicable. `[VERIFIED: environment probes and project d
 |---|-------|---------|---------------|
 | — | None. Recommendations are grounded in the repinned canonical artifacts, repository code/tests, local pinned tool distribution, or Python 3.12 documentation. | — | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-No external/specification decision blocks Phase 1 planning. The following are implementation
-boundaries, not permission to broaden scope:
+No external/specification decision blocks Phase 1 planning. The following are resolved
+implementation boundaries, not permission to broaden scope:
 
 1. Exact internal class/function names may change during planning, but the responsibility split
    and public behavioral seams above must remain. `[VERIFIED: 01-CONTEXT.md discretion]`

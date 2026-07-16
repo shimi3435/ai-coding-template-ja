@@ -33,12 +33,16 @@ created: 2026-07-17
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-01 | 01-01 | 1 | HND-01 | T-01 path/input ambiguity | Source inventory rejects malformed, ambiguous, escaped, aliased, and over-limit inputs | fixed unit/fixture | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
-| 01-02 | 01-02 | 2 | HND-01 | T-02 ID spoofing/exhaustion | Namespaced allocation preserves order invariants, tombstones, parents, and counter sentinel | unit + property | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
-| 01-03 | 01-03 | 3 | HND-01 | T-03 schema confusion | Exact v1/v2 dispatch rejects unknown fields, invalid counters/parents, unknown schemas, and downgrades | unit + property | `uv run pytest tests/test_handoff_manifest_v2.py -q` | ❌ W0 | ⬜ pending |
-| 01-04 | 01-04 | 4 | HND-01 | T-04 incomplete preview | Preview is complete, deterministic, read-only, and rejects incompatible observations before staging | filesystem example | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
-| 01-05 | 01-05 | 5 | HND-01 | T-05 stale approval / partial persistence | Apply binds exact hashes and preserves v1 or reports unknown on failure | filesystem fault integration | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
-| 01-06 | 01-05 | 5 | HND-01 | — | Existing schema-v1 and public MVP operations remain unchanged | regression | `uv run pytest tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` | ✅ | ⬜ pending |
+| 01-01-T1 | 01-01 | 1 | HND-01 | T-01 path/input ambiguity | Supported ATX source is normalized and fingerprinted from exact framed bytes | fixed unit/fixture | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
+| 01-01-T2 | 01-01 | 1 | HND-01 | T-01 path/input ambiguity | Malformed, ambiguous, escaped, aliased, and over-limit source fails closed | fixed unit/fixture | `uv run pytest tests/test_handoff_identity.py tests/test_handoff_core.py -q` | ❌ W0 | ⬜ pending |
+| 01-02-T1 | 01-02 | 2 | HND-01 | T-02 ID spoofing/exhaustion | Namespaced IDs, exact counters, active parents, and tombstone parents validate | fixed unit | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
+| 01-02-T2 | 01-02 | 2 | HND-01 | T-02 ID spoofing/exhaustion | Reconciliation is permutation-invariant, monotonic, idempotent, and non-reusing | allocator property + examples | `uv run pytest tests/test_handoff_identity.py tests/test_handoff_core.py -q` | ❌ W0 | ⬜ pending |
+| 01-03-T1 | 01-03 | 3 | HND-01 | T-03 schema confusion | Exact schema 2 objects reject invalid fields, counters, parents, and placeholders | fixed unit | `uv run pytest tests/test_handoff_manifest_v2.py -q` | ❌ W0 | ⬜ pending |
+| 01-03-T2 | 01-03 | 3 | HND-01 | T-03 schema confusion | Exact v1/v2 dispatch, unknown/downgrade refusal, and schema-2 round trip hold | manifest round-trip property + regression | `uv run pytest tests/test_handoff_manifest_v2.py tests/test_handoff_manifest.py -q` | ❌ W0 | ⬜ pending |
+| 01-04-T1 | 01-04 | 4 | HND-01 | T-04 incomplete preview | Preview binds repository/target and current source snapshot without mutation | filesystem example | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
+| 01-04-T2 | 01-04 | 4 | HND-01 | T-04 incomplete preview | Incompatible or incomplete preview observations fail before staging | filesystem example | `uv run pytest tests/test_handoff_migration.py tests/test_handoff_identity.py tests/test_handoff_manifest_v2.py -q` | ❌ W0 | ⬜ pending |
+| 01-05-T1 | 01-05 | 5 | HND-01 | T-05 stale approval | Exact approved preview applies only to its frozen repository/target and fresh bytes | filesystem integration | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
+| 01-05-T2 | 01-05 | 5 | HND-01 | T-05 partial persistence | Staging/replace faults preserve v1 or report unknown with cleanup evidence | filesystem fault integration + regression | `uv run pytest tests/test_handoff_identity.py tests/test_handoff_manifest_v2.py tests/test_handoff_migration.py tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` | ❌ W0 | ⬜ pending |
 
 ## Wave 0 Requirements
 
