@@ -22,6 +22,7 @@ from .models import (
 
 _FINGERPRINT_VERSION = "openspec-source-v1\0"
 _REQUIREMENT_ID = re.compile(r"REQ-([0-9]{6})\Z")
+_CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
 class SourceCategory(StrEnum):
@@ -161,7 +162,15 @@ def _parse_atx_heading(line: str, line_index: int) -> _Heading | None:
         marker_end += 1
     if marker_end == 0:
         suspicious = _strip_horizontal_left(line)
-        if suspicious.startswith(("Requirement:", "Scenario:", "###Requirement:")):
+        if suspicious.startswith(
+            (
+                "Requirement:",
+                "Scenario:",
+                "### Requirement:",
+                "#### Scenario:",
+                "###Requirement:",
+            )
+        ):
             raise _SourceInputError("source-heading-unsupported")
         return None
     if marker_end > 6:
@@ -286,6 +295,8 @@ def _observations_from_source(
     raw_lines = with_lf.split("\n")
     normalized_lines = [unicodedata.normalize("NFC", line) for line in raw_lines]
     headings = _scan_headings(raw_lines, normalized_lines)
+    if not any(heading.category is not None for heading in headings):
+        raise _SourceInputError("source-items-empty")
     observations: list[SourceObservation] = []
     for heading_index, heading in enumerate(headings):
         if heading.category is None:
@@ -335,6 +346,15 @@ def _canonical_source_path(path: str | Path) -> tuple[tuple[str, ...], str]:
     normalized_segments = tuple(
         unicodedata.normalize("NFC", segment) for segment in raw_segments
     )
+    if (
+        len(normalized_segments) != 6
+        or normalized_segments[:2] != ("openspec", "changes")
+        or _CHANGE_ID.fullmatch(normalized_segments[2]) is None
+        or normalized_segments[3] != "specs"
+        or not normalized_segments[4]
+        or normalized_segments[5] != "spec.md"
+    ):
+        raise _SourceInputError("source-path-noncanonical")
     return raw_segments, "/".join(normalized_segments)
 
 

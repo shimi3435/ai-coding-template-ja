@@ -344,13 +344,14 @@ def test_inventory_rejects_markdown_outside_canonical_spec_artifacts(
 
 def test_inventory_rejects_symlink_escape_without_following_it(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
-    repository.mkdir()
     outside = tmp_path / "outside.md"
     outside.write_text("### Requirement: Outside\nBody.\n", encoding="utf-8")
-    link = repository / "spec.md"
+    source_path = "openspec/changes/fixture/specs/link/spec.md"
+    link = repository / source_path
+    link.parent.mkdir(parents=True)
     link.symlink_to(outside)
 
-    result = read_source_inventory(repository, ["spec.md"])
+    result = read_source_inventory(repository, [source_path])
 
     assert isinstance(result, Failure)
     assert result.issue.code == "source-path-symlink"
@@ -359,8 +360,14 @@ def test_inventory_rejects_symlink_escape_without_following_it(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("first_path", "second_path"),
     [
-        ("specs/Café/spec.md", "specs/Café/spec.md"),
-        ("specs/Case/spec.md", "specs/case/spec.md"),
+        (
+            "openspec/changes/fixture/specs/Café/spec.md",
+            "openspec/changes/fixture/specs/Café/spec.md",
+        ),
+        (
+            "openspec/changes/fixture/specs/Case/spec.md",
+            "openspec/changes/fixture/specs/case/spec.md",
+        ),
     ],
 )
 def test_inventory_rejects_unicode_and_case_path_aliases(
