@@ -379,6 +379,29 @@ def test_schema_v2_parser_rejects_deeply_nested_json_as_structured_failure(
     assert result.issue.code == "manifest-v2-json-invalid"
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        EXPECTED_V2.replace(
+            b'{\n  "schema_version": 2,',
+            b'{\n  "schema_version": 1,\n  "schema_version": 2,',
+            1,
+        ),
+        EXPECTED_V2.replace(
+            b'    {\n      "kind": "design",',
+            b'    {\n      "kind": "proposal",\n      "kind": "design",',
+            1,
+        ),
+    ],
+    ids=["root", "nested"],
+)
+def test_schema_v2_parser_rejects_duplicate_object_names(data: bytes) -> None:
+    result = parse_manifest_v2_bytes(data)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-v2-json-invalid"
+
+
 def test_schema_v2_serializer_rejects_invalid_complete_values() -> None:
     parsed = parse_manifest_v2_bytes(EXPECTED_V2)
     assert isinstance(parsed, Success)
@@ -467,6 +490,29 @@ def test_versioned_parser_rejects_deeply_nested_json_as_structured_failure(
         data = b"[" * depth + b"0" + b"]" * depth
 
     assert len(data) < MAX_MANIFEST_BYTES
+    result = parse_versioned_manifest_bytes(data)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-json-invalid"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        EXPECTED_V2.replace(
+            b'{\n  "schema_version": 2,',
+            b'{\n  "schema_version": 1,\n  "schema_version": 2,',
+            1,
+        ),
+        EXPECTED_V2.replace(
+            b'    {\n      "kind": "design",',
+            b'    {\n      "kind": "proposal",\n      "kind": "design",',
+            1,
+        ),
+    ],
+    ids=["root", "nested"],
+)
+def test_versioned_parser_rejects_duplicate_object_names(data: bytes) -> None:
     result = parse_versioned_manifest_bytes(data)
 
     assert isinstance(result, Failure)
