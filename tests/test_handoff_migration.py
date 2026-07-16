@@ -167,6 +167,28 @@ class FaultInjectingOperations(MutationRecordingOperations):
         super().unlink(path)
 
 
+class ParentSwapAtReplaceOperations(MutationRecordingOperations):
+    """Swap the target parent at the final replace boundary."""
+
+    def __init__(self, target: Path, outside_parent: Path) -> None:
+        super().__init__()
+        self.target = target
+        self.outside_parent = outside_parent
+        self.moved_parent = target.parent.with_name(f"{target.parent.name}-moved")
+
+    def before_replace_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        del parent_descriptor, source_name, target_name
+        self.mutations.append("replace")
+        parent.rename(self.moved_parent)
+        parent.symlink_to(self.outside_parent, target_is_directory=True)
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -620,6 +642,38 @@ def test_apply_exact_preview_validates_staging_then_atomically_replaces_target(
     assert applied.value == preview.candidate_manifest
     assert target.read_bytes() == preview.candidate_bytes
     assert operations.mutations == ["create", "write", "replace"]
+
+
+def test_apply_rejects_parent_swap_at_replace_without_touching_outside(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    outside_parent = tmp_path / "outside"
+    outside_parent.mkdir()
+    outside_target = outside_parent / target.name
+    outside_bytes = b"outside sentinel"
+    outside_target.write_bytes(outside_bytes)
+    operations = ParentSwapAtReplaceOperations(target, outside_parent)
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert applied.issue.staging_state is MigrationStagingState.VALIDATED
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+    assert outside_target.read_bytes() == outside_bytes
+    assert (operations.moved_parent / target.name).read_bytes() == EXPECTED_V1
+    assert not any(operations.moved_parent.glob(".handoff.*.tmp"))
+    assert operations.mutations == ["create", "write", "replace", "unlink"]
 
 
 def test_apply_rejects_repository_alias_change_before_staging(tmp_path: Path) -> None:
