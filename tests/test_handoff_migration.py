@@ -96,21 +96,35 @@ class MutationRecordingOperations(ManifestMigrationFileOperations):
     def __init__(self) -> None:
         self.mutations: list[str] = []
 
-    def create_staging(self, parent: Path) -> Path:
+    def create_staging_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+    ) -> str:
         self.mutations.append("create")
-        return super().create_staging(parent)
+        return super().create_staging_at(parent_descriptor, parent)
 
-    def write_bytes(self, path: Path, data: bytes) -> None:
+    def write_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        data: bytes,
+    ) -> None:
         self.mutations.append("write")
-        super().write_bytes(path, data)
+        super().write_bytes_at(parent_descriptor, name, data)
 
-    def replace(self, source: Path, target: Path) -> None:
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
         self.mutations.append("replace")
-        super().replace(source, target)
+        super().replace_at(parent_descriptor, source_name, target_name)
 
-    def unlink(self, path: Path) -> None:
+    def unlink_at(self, parent_descriptor: int, name: str) -> None:
         self.mutations.append("unlink")
-        super().unlink(path)
+        super().unlink_at(parent_descriptor, name)
 
 
 class FaultInjectingOperations(MutationRecordingOperations):
@@ -122,49 +136,81 @@ class FaultInjectingOperations(MutationRecordingOperations):
         self.target = target
         self.staging: Path | None = None
 
-    def create_staging(self, parent: Path) -> Path:
+    def create_staging_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+    ) -> str:
         if self.fault == "create":
             self.mutations.append("create")
             raise OSError("injected create failure")
-        self.staging = super().create_staging(parent)
-        return self.staging
+        staging_name = super().create_staging_at(parent_descriptor, parent)
+        self.staging = parent / staging_name
+        return staging_name
 
-    def write_bytes(self, path: Path, data: bytes) -> None:
+    def write_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        data: bytes,
+    ) -> None:
         if self.fault in {"write", "write-target-changed", "cleanup"}:
             self.mutations.append("write")
-            ManifestMigrationFileOperations.write_bytes(self, path, b"{")
+            ManifestMigrationFileOperations.write_bytes_at(
+                self,
+                parent_descriptor,
+                name,
+                b"{",
+            )
             if self.fault == "write-target-changed":
                 self.target.write_bytes(b"changed concurrently")
             raise OSError("injected write failure")
         if self.fault == "validate":
-            super().write_bytes(path, b"{}")
+            super().write_bytes_at(parent_descriptor, name, b"{}")
             return
-        super().write_bytes(path, data)
+        super().write_bytes_at(parent_descriptor, name, data)
 
-    def read_bounded_bytes(
-        self, path: Path, *, limit: int = MAX_MANIFEST_BYTES
+    def read_bounded_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        *,
+        limit: int = MAX_MANIFEST_BYTES,
     ) -> bytes:
-        if self.fault == "reread" and path == self.staging:
+        if (
+            self.fault == "reread"
+            and self.staging is not None
+            and name == self.staging.name
+        ):
             raise OSError("injected staging reread failure")
-        return super().read_bounded_bytes(path, limit=limit)
+        return super().read_bounded_bytes_at(
+            parent_descriptor,
+            name,
+            limit=limit,
+        )
 
-    def replace(self, source: Path, target: Path) -> None:
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
         if self.fault.startswith("replace-"):
             self.mutations.append("replace")
             if self.fault == "replace-changed":
-                target.write_bytes(b"changed during replace")
+                self.target.write_bytes(b"changed during replace")
             elif self.fault == "replace-unreadable":
-                target.unlink()
+                self.target.unlink()
             elif self.fault == "replace-oversized":
-                target.write_bytes(b"x" * (MAX_MANIFEST_BYTES + 1))
+                self.target.write_bytes(b"x" * (MAX_MANIFEST_BYTES + 1))
             raise OSError("injected replace failure")
-        super().replace(source, target)
+        super().replace_at(parent_descriptor, source_name, target_name)
 
-    def unlink(self, path: Path) -> None:
+    def unlink_at(self, parent_descriptor: int, name: str) -> None:
         if self.fault == "cleanup":
             self.mutations.append("unlink")
             raise OSError("injected cleanup failure")
-        super().unlink(path)
+        super().unlink_at(parent_descriptor, name)
 
 
 class ParentSwapAtReplaceOperations(MutationRecordingOperations):

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import stat
 import unicodedata
 from collections.abc import Sequence
@@ -155,6 +156,14 @@ class ManifestMigrationFailure:
 type ManifestMigrationResult = Success[HandoffManifestV2] | ManifestMigrationFailure
 
 
+@dataclass(frozen=True)
+class _MigrationDirectoryAnchor:
+    path: Path
+    descriptor: int
+    device: int
+    inode: int
+
+
 class ManifestMigrationFileOperations(ManifestFileOperations):
     """No-follow bounded reads and durable staging writes for migration apply."""
 
@@ -193,6 +202,156 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
                 os.fsync(descriptor)
         finally:
             os.close(descriptor)
+
+    def open_parent_directory(
+        self,
+        repository: Path,
+        relative_parent: Path,
+    ) -> _MigrationDirectoryAnchor:
+        """Open one repository-owned parent without following path components."""
+
+        directory_flags = self._open_flags(os.O_RDONLY | os.O_DIRECTORY)
+        descriptor = os.open(repository, directory_flags)
+        try:
+            for component in relative_parent.parts:
+                child = os.open(component, directory_flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+            observed = os.fstat(descriptor)
+            anchor = _MigrationDirectoryAnchor(
+                path=repository.joinpath(*relative_parent.parts),
+                descriptor=descriptor,
+                device=observed.st_dev,
+                inode=observed.st_ino,
+            )
+            if not self.parent_directory_is_current(anchor, repository):
+                raise OSError("migration parent directory identity changed")
+        except BaseException:
+            os.close(descriptor)
+            raise
+        return anchor
+
+    def close_parent_directory(self, anchor: _MigrationDirectoryAnchor) -> None:
+        os.close(anchor.descriptor)
+
+    def parent_directory_is_current(
+        self,
+        anchor: _MigrationDirectoryAnchor,
+        repository: Path,
+    ) -> bool:
+        try:
+            descriptor_state = os.fstat(anchor.descriptor)
+            path_state = os.stat(anchor.path, follow_symlinks=False)
+            resolved_parent = anchor.path.resolve(strict=True)
+        except OSError:
+            return False
+        descriptor_identity = (descriptor_state.st_dev, descriptor_state.st_ino)
+        path_identity = (path_state.st_dev, path_state.st_ino)
+        return (
+            stat.S_ISDIR(descriptor_state.st_mode)
+            and stat.S_ISDIR(path_state.st_mode)
+            and descriptor_identity == (anchor.device, anchor.inode)
+            and path_identity == descriptor_identity
+            and resolved_parent == anchor.path
+            and resolved_parent.is_relative_to(repository)
+        )
+
+    def create_staging_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+    ) -> str:
+        del parent
+        flags = self._open_flags(os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        for _ in range(128):
+            name = f".handoff.{secrets.token_hex(8)}.tmp"
+            try:
+                descriptor = os.open(
+                    name,
+                    flags,
+                    0o600,
+                    dir_fd=parent_descriptor,
+                )
+            except FileExistsError:
+                continue
+            try:
+                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                    raise OSError("migration staging path is not a regular file")
+            finally:
+                os.close(descriptor)
+            return name
+        raise OSError("could not allocate migration staging file")
+
+    def read_bounded_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        *,
+        limit: int = MAX_MANIFEST_BYTES,
+    ) -> bytes:
+        descriptor = os.open(
+            name,
+            self._open_flags(os.O_RDONLY),
+            dir_fd=parent_descriptor,
+        )
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise OSError("migration path is not a regular file")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                data = stream.read(limit + 1)
+        finally:
+            os.close(descriptor)
+        if len(data) > limit:
+            raise ManifestSizeLimitExceeded
+        return data
+
+    def write_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        data: bytes,
+    ) -> None:
+        if len(data) > MAX_MANIFEST_BYTES:
+            raise ManifestSizeLimitExceeded
+        descriptor = os.open(
+            name,
+            self._open_flags(os.O_WRONLY | os.O_TRUNC),
+            dir_fd=parent_descriptor,
+        )
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise OSError("migration staging path is not a regular file")
+            with os.fdopen(descriptor, "wb", closefd=False) as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def before_replace_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        """Test seam immediately before the final directory identity guard."""
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        os.replace(
+            source_name,
+            target_name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+
+    def unlink_at(self, parent_descriptor: int, name: str) -> None:
+        os.unlink(name, dir_fd=parent_descriptor)
 
 
 def _failure(code: str, *, category: IssueCategory = IssueCategory.PERSISTENCE):
@@ -317,18 +476,37 @@ def _preview_is_consistent(preview: ManifestMigrationPreview) -> bool:
     )
 
 
-def _cleanup_staging(
+def _cleanup_staging_at(
     operations: ManifestMigrationFileOperations,
-    staging: Path,
+    parent_descriptor: int,
+    staging_name: str,
 ) -> MigrationCleanupOutcome:
     try:
-        operations.unlink(staging)
+        operations.unlink_at(parent_descriptor, staging_name)
     except OSError:
         return MigrationCleanupOutcome.FAILED
     return MigrationCleanupOutcome.REMOVED
 
 
-def _observe_target_state(
+def _observe_target_state_at(
+    operations: ManifestMigrationFileOperations,
+    parent_descriptor: int,
+    target_name: str,
+    expected_v1_sha256: str,
+) -> MigrationTargetState:
+    try:
+        target_bytes = operations.read_bounded_bytes_at(
+            parent_descriptor,
+            target_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        return MigrationTargetState.UNKNOWN
+    if _sha256(target_bytes) == expected_v1_sha256:
+        return MigrationTargetState.V1_PRESERVED
+    return MigrationTargetState.UNKNOWN
+
+
+def _observe_target_state_path(
     operations: ManifestMigrationFileOperations,
     target: Path,
     expected_v1_sha256: str,
@@ -342,37 +520,43 @@ def _observe_target_state(
     return MigrationTargetState.UNKNOWN
 
 
-def _migration_failure_after_staging(
+def _migration_failure_after_staging_at(
     code: str,
     failure_point: MigrationFailurePoint,
     staging_state: MigrationStagingState,
     *,
     operations: ManifestMigrationFileOperations,
-    target: Path,
+    parent_descriptor: int,
+    target_name: str,
     expected_v1_sha256: str,
-    staging: Path | None,
+    staging_name: str | None,
 ) -> ManifestMigrationFailure:
     cleanup = (
         MigrationCleanupOutcome.NOT_NEEDED
-        if staging is None
-        else _cleanup_staging(operations, staging)
+        if staging_name is None
+        else _cleanup_staging_at(operations, parent_descriptor, staging_name)
     )
     return _migration_failure(
         code,
         failure_point,
-        _observe_target_state(operations, target, expected_v1_sha256),
+        _observe_target_state_at(
+            operations,
+            parent_descriptor,
+            target_name,
+            expected_v1_sha256,
+        ),
         staging_state,
         cleanup,
     )
 
 
-def _staging_path_is_safe(staging: Path, target: Path) -> bool:
-    if staging == target or staging.parent != target.parent:
-        return False
-    try:
-        return not staging.is_symlink() and stat.S_ISREG(staging.lstat().st_mode)
-    except OSError:
-        return False
+def _staging_name_is_safe(staging_name: str, target_name: str) -> bool:
+    return (
+        staging_name != target_name
+        and Path(staging_name).name == staging_name
+        and staging_name.startswith(".handoff.")
+        and staging_name.endswith(".tmp")
+    )
 
 
 def _resolve_target(
@@ -666,6 +850,216 @@ def preview_manifest_migration(
     return Success(replace(preview, preview_sha256=_preview_identity(preview)))
 
 
+def _apply_anchored_manifest_migration(
+    preview: ManifestMigrationPreview,
+    *,
+    operations: ManifestMigrationFileOperations,
+    anchor: _MigrationDirectoryAnchor,
+    repository: Path,
+    resolved_target: tuple[Path, str, str],
+) -> ManifestMigrationResult:
+    target_name = Path(preview.target_path).name
+    try:
+        anchored_target = operations.read_bounded_bytes_at(
+            anchor.descriptor,
+            target_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure(
+            "migration-target-reread-failed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    if _sha256(anchored_target) != preview.v1_sha256:
+        return _migration_failure(
+            "migration-target-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+
+    try:
+        staging_name = operations.create_staging_at(
+            anchor.descriptor,
+            anchor.path,
+        )
+    except OSError:
+        return _migration_failure_after_staging_at(
+            "migration-staging-create-failed",
+            MigrationFailurePoint.CREATE,
+            MigrationStagingState.UNKNOWN,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=None,
+        )
+    if not _staging_name_is_safe(staging_name, target_name):
+        return _migration_failure_after_staging_at(
+            "migration-staging-path-unsafe",
+            MigrationFailurePoint.CREATE,
+            MigrationStagingState.UNKNOWN,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    try:
+        operations.write_bytes_at(
+            anchor.descriptor,
+            staging_name,
+            preview.candidate_bytes,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure_after_staging_at(
+            "migration-staging-write-failed",
+            MigrationFailurePoint.WRITE,
+            MigrationStagingState.UNKNOWN,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    try:
+        staged_bytes = operations.read_bounded_bytes_at(
+            anchor.descriptor,
+            staging_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure_after_staging_at(
+            "migration-staging-reread-failed",
+            MigrationFailurePoint.REREAD,
+            MigrationStagingState.UNKNOWN,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    staged = parse_manifest_v2_bytes(staged_bytes)
+    if (
+        staged_bytes != preview.candidate_bytes
+        or isinstance(staged, Failure)
+        or staged.value != preview.candidate_manifest
+    ):
+        return _migration_failure_after_staging_at(
+            "migration-staging-validation-failed",
+            MigrationFailurePoint.VALIDATE,
+            MigrationStagingState.INVALID,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+
+    confirmed = _resolve_target(
+        repository,
+        Path(preview.target_path),
+        operations=operations,
+    )
+    snapshot_before_replace = _validate_source_snapshot(
+        repository,
+        preview.source_paths,
+        preview.current_artifacts,
+        preview.current_progress,
+        change_id=preview.candidate_manifest.change_id,
+        limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
+    )
+    try:
+        target_before_replace = operations.read_bounded_bytes_at(
+            anchor.descriptor,
+            target_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        target_before_replace = b""
+    if (
+        isinstance(confirmed, Failure)
+        or confirmed.value != resolved_target
+        or isinstance(snapshot_before_replace, Failure)
+        or not operations.parent_directory_is_current(anchor, repository)
+        or _sha256(target_before_replace) != preview.v1_sha256
+    ):
+        return _migration_failure_after_staging_at(
+            "migration-state-changed-before-replace",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationStagingState.VALIDATED,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+
+    try:
+        operations.before_replace_at(
+            anchor.descriptor,
+            anchor.path,
+            staging_name,
+            target_name,
+        )
+    except OSError:
+        return _migration_failure_after_staging_at(
+            "migration-replace-guard-failed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationStagingState.VALIDATED,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    confirmed_at_replace = _resolve_target(
+        repository,
+        Path(preview.target_path),
+        operations=operations,
+    )
+    try:
+        target_at_replace = operations.read_bounded_bytes_at(
+            anchor.descriptor,
+            target_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        target_at_replace = b""
+    if (
+        isinstance(confirmed_at_replace, Failure)
+        or confirmed_at_replace.value != resolved_target
+        or not operations.parent_directory_is_current(anchor, repository)
+        or _sha256(target_at_replace) != preview.v1_sha256
+    ):
+        return _migration_failure_after_staging_at(
+            "migration-target-parent-changed-before-replace",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationStagingState.VALIDATED,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    try:
+        operations.replace_at(
+            anchor.descriptor,
+            staging_name,
+            target_name,
+        )
+    except OSError:
+        return _migration_failure_after_staging_at(
+            "migration-replace-failed",
+            MigrationFailurePoint.REPLACE,
+            MigrationStagingState.VALIDATED,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    return Success(preview.candidate_manifest)
+
+
 def apply_manifest_migration(
     preview: ManifestMigrationPreview,
     *,
@@ -765,7 +1159,7 @@ def apply_manifest_migration(
         return _migration_failure(
             "migration-current-snapshot-changed",
             MigrationFailurePoint.STATE_GUARD,
-            _observe_target_state(filesystem, target, preview.v1_sha256),
+            _observe_target_state_path(filesystem, target, preview.v1_sha256),
             MigrationStagingState.ABSENT,
         )
     confirmed = _resolve_target(
@@ -777,114 +1171,29 @@ def apply_manifest_migration(
         return _migration_failure(
             "migration-target-identity-changed",
             MigrationFailurePoint.STATE_GUARD,
-            _observe_target_state(filesystem, target, preview.v1_sha256),
+            _observe_target_state_path(filesystem, target, preview.v1_sha256),
             MigrationStagingState.ABSENT,
         )
 
     try:
-        staging = filesystem.create_staging(target.parent)
+        anchor = filesystem.open_parent_directory(
+            repository,
+            Path(canonical_target).parent,
+        )
     except OSError:
-        return _migration_failure_after_staging(
-            "migration-staging-create-failed",
-            MigrationFailurePoint.CREATE,
-            MigrationStagingState.UNKNOWN,
-            operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=None,
-        )
-    if not _staging_path_is_safe(staging, target):
-        return _migration_failure_after_staging(
-            "migration-staging-path-unsafe",
-            MigrationFailurePoint.CREATE,
-            MigrationStagingState.UNKNOWN,
-            operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=None,
-        )
-    try:
-        filesystem.write_bytes(staging, preview.candidate_bytes)
-    except (ManifestSizeLimitExceeded, OSError):
-        return _migration_failure_after_staging(
-            "migration-staging-write-failed",
-            MigrationFailurePoint.WRITE,
-            MigrationStagingState.UNKNOWN,
-            operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=staging,
-        )
-    try:
-        staged_bytes = filesystem.read_bounded_bytes(staging)
-    except (ManifestSizeLimitExceeded, OSError):
-        return _migration_failure_after_staging(
-            "migration-staging-reread-failed",
-            MigrationFailurePoint.REREAD,
-            MigrationStagingState.UNKNOWN,
-            operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=staging,
-        )
-    staged = parse_manifest_v2_bytes(staged_bytes)
-    if (
-        staged_bytes != preview.candidate_bytes
-        or isinstance(staged, Failure)
-        or staged.value != preview.candidate_manifest
-    ):
-        return _migration_failure_after_staging(
-            "migration-staging-validation-failed",
-            MigrationFailurePoint.VALIDATE,
-            MigrationStagingState.INVALID,
-            operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=staging,
-        )
-
-    confirmed = _resolve_target(
-        repository,
-        Path(preview.target_path),
-        operations=filesystem,
-    )
-    snapshot_before_replace = _validate_source_snapshot(
-        repository,
-        preview.source_paths,
-        preview.current_artifacts,
-        preview.current_progress,
-        change_id=preview.candidate_manifest.change_id,
-        limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
-    )
-    try:
-        target_before_replace = filesystem.read_bounded_bytes(target)
-    except (ManifestSizeLimitExceeded, OSError):
-        target_before_replace = b""
-    if (
-        isinstance(confirmed, Failure)
-        or confirmed.value != resolved.value
-        or isinstance(snapshot_before_replace, Failure)
-        or _sha256(target_before_replace) != preview.v1_sha256
-    ):
-        return _migration_failure_after_staging(
-            "migration-state-changed-before-replace",
+        return _migration_failure(
+            "migration-target-parent-open-failed",
             MigrationFailurePoint.STATE_GUARD,
-            MigrationStagingState.VALIDATED,
-            operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=staging,
+            _observe_target_state_path(filesystem, target, preview.v1_sha256),
+            MigrationStagingState.ABSENT,
         )
     try:
-        filesystem.replace(staging, target)
-    except OSError:
-        return _migration_failure_after_staging(
-            "migration-replace-failed",
-            MigrationFailurePoint.REPLACE,
-            MigrationStagingState.VALIDATED,
+        return _apply_anchored_manifest_migration(
+            preview,
             operations=filesystem,
-            target=target,
-            expected_v1_sha256=preview.v1_sha256,
-            staging=staging,
+            anchor=anchor,
+            repository=repository,
+            resolved_target=resolved.value,
         )
-    return Success(preview.candidate_manifest)
+    finally:
+        filesystem.close_parent_directory(anchor)
