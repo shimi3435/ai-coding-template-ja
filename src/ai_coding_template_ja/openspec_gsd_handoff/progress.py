@@ -20,6 +20,17 @@ _OPEN_MARKER = "- [ ] "
 _DONE_MARKER = "- [x] "
 
 
+def _is_markdown_link_bullet(line: str) -> bool:
+    if not line.startswith(("- [", "* [")):
+        return False
+    label_end = line.find("]", 3)
+    return (
+        label_end >= 3
+        and line.startswith("(", label_end + 1)
+        and ")" in line[label_end + 2 :]
+    )
+
+
 def _failure(code: str) -> Failure:
     return Failure(
         ClassifiedIssue(
@@ -37,6 +48,7 @@ def parse_task_progress(
 
     tasks: list[NormalizedTask] = []
     for line in markdown.splitlines():
+        stripped = line.lstrip()
         done: bool
         if line.startswith(_OPEN_MARKER):
             done = False
@@ -44,7 +56,9 @@ def parse_task_progress(
         elif line.startswith(_DONE_MARKER):
             done = True
             description = line[len(_DONE_MARKER) :]
-        elif line.lstrip().startswith(("- [", "* [")):
+        elif stripped.startswith(("- [", "* [")) and not _is_markdown_link_bullet(
+            stripped
+        ):
             return _failure("task-checkbox-malformed")
         else:
             continue

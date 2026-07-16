@@ -58,6 +58,20 @@ def test_progress_preserves_order_unicode_and_number_text() -> None:
     )
 
 
+def test_progress_ignores_markdown_link_bullets_before_tasks() -> None:
+    result = parse_task_progress(
+        "## References\n"
+        "- [design.md](../design.md) を参照\n"
+        "* [workflow](../../docs/agents/workflow.md)\n"
+        "## Tasks\n"
+        "- [ ] 1.1 handoffを準備する\n"
+    )
+
+    assert isinstance(result, Success)
+    assert result.value.total == 1
+    assert result.value.tasks[0].description == "1.1 handoffを準備する"
+
+
 @pytest.mark.parametrize(
     ("markdown", "code"),
     [
@@ -67,6 +81,7 @@ def test_progress_preserves_order_unicode_and_number_text() -> None:
         ("* [ ] star\n", "task-checkbox-malformed"),
         ("  - [ ] indented\n", "task-checkbox-malformed"),
         ("- [maybe] broken\n", "task-checkbox-malformed"),
+        ("- [maybe] broken [link](target)\n", "task-checkbox-malformed"),
     ],
 )
 def test_progress_fails_closed_without_partial_value(markdown: str, code: str) -> None:

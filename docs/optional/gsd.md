@@ -94,6 +94,8 @@ Phase 3 の opt-in / manual evidence が所有する。
 ### 実 tool の read-only smoke（明示 opt-in）
 
 handoff compatibility をローカルの実 tool で確認する場合だけ、active config root を明示して次を実行する。
+この smoke は Linux の `/proc/self/fd` と `O_PATH` を前提とし、macOS など非対応環境では
+`repository-snapshot-unreadable` で fail-closed するため、Linux 環境で実行する。
 
 ```bash
 task openspec:gsd-handoff:smoke CHANGE_ID=automate-openspec-gsd-handoff GSD_HOME=<active-config-root>
