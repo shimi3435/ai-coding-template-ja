@@ -1,0 +1,61 @@
+# Requirements Registry: OpenSpec–GSD Handoff Lifecycle Hardening
+
+**Defined:** 2026-07-16
+**Core Value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
+**Authority:** This file is non-normative GSD traceability metadata. Requirement text,
+scenarios, acceptance criteria, and final completion remain in the canonical OpenSpec
+artifacts pinned at `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`.
+
+## v1 Requirements
+
+The entries below are opaque execution handles. They intentionally do not reproduce or
+reinterpret canonical requirement prose.
+
+### Canonical Coverage
+
+- [ ] **HND-01**: Stable identity and migration coverage pointer to canonical `HARD-R1`
+- [ ] **HND-02**: Source-to-execution mapping coverage pointer to canonical `HARD-R1`
+- [ ] **HND-03**: Coverage pointer to canonical `HARD-R2`
+- [ ] **HND-04**: Coverage pointer to canonical `HARD-R3`
+- [ ] **HND-05**: Coverage pointer to canonical `HARD-R4`
+- [ ] **HND-06**: Coverage pointer to canonical `HARD-R5`
+- [ ] **HND-07**: Cross-phase evidence pointer to canonical `HARD-R6`
+
+## v2 Requirements
+
+None. Scope changes must be made in OpenSpec first and handed off again from a new
+source-pinned commit.
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Canonical specification prose in GSD artifacts | OpenSpec owns WHAT / WHY, requirements, scenarios, acceptance criteria, and final completion |
+| PR #42 or another active change | One phase and branch contain only `harden-openspec-gsd-handoff-lifecycle` |
+| Automatic route switch, rollback, or repair | The canonical change requires fail-closed inspection and explicit recovery |
+| Push, PR creation, merge, or OpenSpec close | Requires a separate human-originated request |
+| Mandatory real-tool smoke in normal CI | Optional OpenSpec / GSD / host evidence remains opt-in |
+
+## Traceability
+
+Updated during roadmap creation. Each GSD handle maps to exactly one primary phase;
+`HND-07` may be cited as cross-cutting evidence but has one primary verification phase.
+
+| Requirement | Canonical Handle | Phase | Status |
+|-------------|------------------|-------|--------|
+| HND-01 | HARD-R1 | Unmapped | Pending |
+| HND-02 | HARD-R1 | Unmapped | Pending |
+| HND-03 | HARD-R2 | Unmapped | Pending |
+| HND-04 | HARD-R3 | Unmapped | Pending |
+| HND-05 | HARD-R4 | Unmapped | Pending |
+| HND-06 | HARD-R5 | Unmapped | Pending |
+| HND-07 | HARD-R6 | Unmapped | Pending |
+
+**Coverage:**
+- v1 execution handles: 7 total
+- Mapped to primary phases: 0
+- Unmapped: 7
+
+---
+*Requirements registry defined: 2026-07-16*
+*Last updated: 2026-07-16 after research synthesis*
