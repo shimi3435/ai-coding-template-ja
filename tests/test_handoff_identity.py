@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -358,6 +359,63 @@ def test_inventory_rejects_symlink_escape_without_following_it(tmp_path: Path) -
 
     assert isinstance(result, Failure)
     assert result.issue.code == "source-path-symlink"
+
+
+def test_inventory_rejects_parent_swap_before_source_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, source_path = _write_source(
+        tmp_path,
+        b"### Requirement: Inside\nInside body.\n",
+    )
+    source = repository / source_path
+    source_parent = source.parent
+    detached_parent = tmp_path / "detached-lifecycle"
+    outside_parent = tmp_path / "outside-lifecycle"
+    outside_parent.mkdir()
+    (outside_parent / "spec.md").write_text(
+        "### Requirement: Outside\nOutside body.\n",
+        encoding="utf-8",
+    )
+
+    original_path_open = Path.open
+    original_os_open = os.open
+    swapped = False
+
+    def swap_parent_once() -> None:
+        nonlocal swapped
+        if swapped:
+            return
+        swapped = True
+        source_parent.rename(detached_parent)
+        source_parent.symlink_to(outside_parent, target_is_directory=True)
+
+    def racing_path_open(self: Path, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        if self == source:
+            swap_parent_once()
+        return original_path_open(self, *args, **kwargs)
+
+    def racing_os_open(
+        path: str | bytes,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        if path == source_parent.name and dir_fd is not None:
+            swap_parent_once()
+        return original_os_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(Path, "open", racing_path_open)
+    monkeypatch.setattr(os, "open", racing_os_open)
+
+    result = read_source_inventory(repository, [source_path])
+
+    assert swapped
+    assert isinstance(result, Failure)
+    assert result.issue.code in {"source-path-symlink", "source-path-identity-changed"}
+    assert not hasattr(result, "value")
 
 
 @pytest.mark.parametrize(
