@@ -33,9 +33,13 @@ _Avoid_: product artifact, 最終ファイル
 _Avoid_: 恒久成果, 成果物
 
 **実行予算**:
-change の開始前に定める、想定する実行経路、恒久成果、一時実行証跡、早期検証、停止・再計画条件の境界。
+仕様と実行経路の確定後、実装開始前に定める、想定する実行経路、恒久成果、一時実行証跡、早期検証、停止・再計画条件の境界。
 _Avoid_: token budget, 見積もり
 
 **検証価値**:
 既存 gate と異なる failure、seam、risk を捕捉するか、復帰・レビュー判断に必要な根拠を与える性質。
 _Avoid_: coverage 数, evidence 量
+
+**実質的な拡張（material expansion）**:
+実行予算で想定していなかった独立成果、GSD phase、外部依存、trust boundary、通常 CI、永続データ、公開 API の追加・変更。検出時は続行前に実行予算を更新し、必要なら change 分割または経路を再判定する。
+_Avoid_: 単なる行数増加, nit

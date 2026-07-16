@@ -5,7 +5,7 @@
 - **Route**: OpenSpec直接経路。文書4点とproject languageの一体的な小規模変更で、依存phase・隔離並列単位・複数セッションを要しない。
 - **恒久成果**: `CONTEXT.md`、ADR-0009、`AGENTS.md`、`docs/agents/workflow.md`。
 - **一時実行証跡**: 本 change directory。pre-merge closeで削除する。
-- **早期検証**: `openspec validate --strict`。実装後に `task openspec:validate` と `task check`。
+- **早期検証**: `openspec validate define-proportional-agent-workflow --strict`。実装後に `task openspec:validate` と `task check`。
 - **停止・再計画**: 自動metrics、CI job、tooling、固定token accounting、別workflow capabilityが必要になった時点で停止し、別changeを提案する。
 
 ## Implementation

@@ -38,6 +38,11 @@ proposal / design / spec delta と `spec-holes` Phase 1 の確定後、`tasks.md
 3. 上記の大規模条件がなく、単一セッションと単一コンテキストで安全に完了・検証できるなら
    OpenSpec 直接経路とする。
 
+直接実行中に大規模条件を満たした場合は、完了済み checkbox を保持し、未完了範囲を境界ゲートへ
+再構成する。理由と状態を提示して承認を得た後にだけ GSD へ昇格する。GSD が利用不能または安全に
+継続できない場合も直接経路へ自動で戻さず、既存 commits、完了済み phases、未完了範囲、詳細
+`tasks.md` の再構成案を提示して承認を得る。
+
 ### 実装開始前の実行予算（ADR-0009）
 
 直接 / GSD のどちらの経路でも、仕様と経路の確定後、実装開始前に `tasks.md` へ次の5項目を短く
@@ -52,8 +57,9 @@ proposal / design / spec delta と `spec-holes` Phase 1 の確定後、`tasks.md
 | 停止・再計画 | 当初の change / phase / trust boundary を超える条件 |
 
 固定 token、行数、commit、phase 数の一律上限は、変更ごとの安全性と依存関係を表せないため品質の
-代理にしない。ただし次の追加は material expansion とし、続行前に同じ実行予算を更新する。独立して
-出荷できる恒久成果は先に別 OpenSpec change へ分割し、経路変更は ADR-0008 の承認境界に従う。
+代理にしない。ただし次の追加は実質的な拡張（material expansion）とし、続行前に同じ実行予算を
+更新する。独立して出荷できる恒久成果は先に別 OpenSpec change へ分割し、経路変更は ADR-0008 の
+承認境界に従う。
 
 - 独立して出荷できる恒久成果または OpenSpec change
 - GSD phase、外部依存、trust boundary
@@ -86,12 +92,7 @@ shallow / historyless check、rename-smoke、offline check、実行対象 OS の
 
 受け入れ基準と project checks が green で blocker がなければ、nit、独立 hardening、測定 tooling、
 自動 token accounting は別 change / 提案へ送り、現在 change の実装と証跡を拡張しない。同じ blocker の
-反復または material expansion は追加生成の理由ではなく、停止・再計画の signal とする。
-
-直接実行中に大規模条件を満たした場合は、完了済み checkbox を保持し、未完了範囲を境界ゲートへ
-再構成する。理由と状態を提示して承認を得た後にだけ GSD へ昇格する。GSD が利用不能または安全に
-継続できない場合も直接経路へ自動で戻さず、既存 commits、完了済み phases、未完了範囲、詳細
-`tasks.md` の再構成案を提示して承認を得る。
+反復または実質的な拡張は追加生成の理由ではなく、停止・再計画の signal とする。
 
 ### 大規模 change の手動 handoff
 
