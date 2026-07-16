@@ -791,6 +791,35 @@ def test_reconcile_tombstones_parent_and_children_with_last_parent_evidence(
     assert scenario.last_parent_id in requirement_ids
 
 
+def test_reconcile_rejects_reintroduced_tombstone_locator_without_reallocation() -> (
+    None
+):
+    observation = _requirement_observation("Removed")
+    initial = identity.reconcile_source_items(
+        identity.SourceInventory(items=(observation,)),
+        _empty_source_state(),
+    )
+    assert isinstance(initial, Success)
+
+    removed = identity.reconcile_source_items(
+        identity.SourceInventory(items=()),
+        initial.value.state,
+    )
+    assert isinstance(removed, Success)
+    removed_state = removed.value.state
+
+    reintroduced = identity.reconcile_source_items(
+        identity.SourceInventory(items=(observation,)),
+        removed_state,
+    )
+
+    assert isinstance(reintroduced, Failure)
+    assert reintroduced.issue.code == "source-tombstone-identity-collision"
+    assert not hasattr(reintroduced, "value")
+    assert removed_state.next_requirement_id == 2
+    assert tuple(item.id for item in removed_state.tombstones) == ("REQ-000001",)
+
+
 def test_reconcile_rejects_many_to_one_and_unknown_explicit_matches() -> None:
     initial = identity.reconcile_source_items(
         identity.SourceInventory(items=(_requirement_observation("Original"),)),
