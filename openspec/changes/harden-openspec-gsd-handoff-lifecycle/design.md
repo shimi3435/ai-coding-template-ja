@@ -8,9 +8,6 @@
 `handoff.json` の commit / gitignore、保持、archive 方針は MVP の契約を入力として受ける。本 change が
 独自の保存場所や追跡 semantics を決めると resume の正が二重化するため、dependency gate で整合を確認する。
 
-change在庫も依存順に分離する。本changeは`automate-openspec-gsd-handoff`のmerge後をbaseにした専用branchで
-保持し、そのPRには本changeだけを載せる。先行changesと同時にmainへ残したり、同一PRへ束ねたりしない。
-
 ## Goals / Non-Goals
 
 **Goals:**
@@ -31,16 +28,18 @@ change在庫も依存順に分離する。本changeは`automate-openspec-gsd-han
 
 ## Decisions
 
-### 0. dependency gateでMVP v1とhandoff開始契約を固定する
+### Gate A. MVP v1とhandoff開始契約を固定する
 
-MVP manifest schema v1のroot fieldsは次の7件だけで、追加fieldを許すextension pointはない。
+以下はdependency commit `d96e451`に固定したMVP manifest schema v1の契約snapshotである。実装時は
+merge済みreader / writerのfixturesとの一致を検査し、表だけを独立したschema正本として扱わない。root fieldsは
+次の7件だけで、追加fieldを許すextension pointはない。
 
 | root field | v1 value contract |
 | --- | --- |
 | `schema_version` | integer `1` |
 | `change_id` | 1〜128 byte ASCII lower-kebab |
 | `handoff_state` | `prepared` または `started` |
-| `artifacts` | 4〜64件のexact `{kind,path,sha256}`、proposal / design / tasks各1・spec 1以上、`kind/path`順 |
+| `artifacts` | schema上は1〜64件のexact `{kind,path,sha256}`。kind構成制約により実効最小4件（proposal / design / tasks各1・spec 1以上）、`kind/path`順 |
 | `source_commit` | 40文字lowercase hex commit |
 | `progress` | exact `{total,complete,remaining,tasks}`、1〜4096 tasks |
 | `capabilities` | exact `{openspec,gsd,host}` |
@@ -68,7 +67,7 @@ structured host successとroute別postcondition後だけの`mark-started`に固�
 selected workflow、全reachable spawn、active TOMLの完全role preamble、全isolation要件をpreview前に解決できる
 場合だけ許可し、不明・typed-only・worktree-isolated・非互換ならfail-closedする。
 
-### 0.1 hardening schema v2はv1の明示migrationとして導入する
+### Gate B. hardening schema v2はv1の明示migrationとして導入する
 
 v1にextension pointがないため、hardeningはv1へfieldを足さずschema version `2`を導入する。v2 rootはv1の
 7 fieldsを同じ意味で保持し、次の4 fieldsを加えたexact 11 fieldsとする。
@@ -109,13 +108,14 @@ target v1 bytesを一切変更せず、staging cleanup結果を報告する。re
 v1保持、一致を証明できなければ`unknown`として停止し、自動rollbackしない。unknown schema、v2→v1、callerがdisk
 schemaより低いschemaを要求するdowngradeはpreviewもapplyもfail-closedし、既存bytesを変更しない。
 
-### 0.2 adaptive policyはcurrent-tree stable reference recordで参照する
+### Gate C. adaptive policyはcurrent-tree stable reference recordで参照する
 
 policy本文の正はcurrent treeの`docs/template/adr/0008-adaptive-openspec-gsd-execution-boundary.md`と
 `docs/agents/workflow.md`である。実装時に
 `docs/agents/adaptive-change-execution.references.json`を追加し、record version、stable requirement / scenario ID、
 current-tree source path、section heading、section normalized SHA-256、非規範のhistorical provenanceを保持する。
-旧change specの`a2eb744`は由来確認だけに使い、runtime / 通常CIはcommitの存在やblob到達性を要求しない。
+旧change specの`a2eb744`は利用可能なrepository cloneでの由来確認だけに使う。branch ref消滅や履歴省略により
+blobへ到達できない環境でも契約判定を変えず、runtime / 通常CIはcommitの存在やblob到達性を要求しない。
 通常CIはrecord内IDの一意性、参照先current-tree path / heading / section hash、hardening mapping内IDの存在だけを検査する。
 policy本文をrecord、manifest、GSD artifactsへ複製しない。
 
@@ -124,17 +124,22 @@ stable reference namespaceは次に固定する。
 | ID | current policy concept |
 | --- | --- |
 | `ACE-R1` / `ACE-S1-START-GATES` | 経路判定と開始前gate |
-| `ACE-R2` / `ACE-S2-OPEN-SPEC-AUTHORITY` | OpenSpecがWHAT/WHYと最終完了を所有 |
+| `ACE-R2` / `ACE-S2-OPEN-SPEC-AUTHORITY` | OpenSpecがWHAT/WHY、受け入れ基準、最終完了判定の正本を所有 |
 | `ACE-S2-GSD-PROGRESS` | GSDが詳細plan / phase進捗を所有 |
-| `ACE-S2-ONE-PHASE-ONE-CHANGE` | 一つのphaseへ複数changesを混在させない |
+| `ACE-S2-ONE-PHASE-ONE-CHANGE` | 一つの phase へ複数 changes を混在させない |
 | `ACE-S2-SPEC-CHANGE-REPLAN` | 仕様判断時はOpenSpec更新後に再計画 |
-| `ACE-R4` / `ACE-S4-SOURCE-PINNED` | 専用branchのreviewable source commit |
+| `ACE-R3` | 小規模changeの直接実行policy。本hardeningでは参照しないが、active IDとして保持して再利用しない |
+| `ACE-R4` / `ACE-S4-SOURCE-PINNED` | 専用 branch の reviewable source commit |
 | `ACE-S4-CONTEXT-PARITY` | canonical paths / source / gates / unresolvedのhandoff |
 | `ACE-S4-NO-AUTO-FALLBACK` | capability不足・継続不能時に自動経路変更しない |
 | `ACE-S4-RESUME` | sourceと完了済み進捗を再確認して復帰 |
 | `ACE-R5` / `ACE-S5-OPEN-SPEC-FINAL` | OpenSpec原本との独立最終検証 |
 | `ACE-S5-REVALIDATE-ON-DRIFT` | 原本変更後は完了gateを再検証 |
 | `ACE-S5-SINGLE-ACTIVE-CLOSE` | 一PR一active changeとpre-merge close |
+
+`ACE-R2`は正本の所有権を表し、`ACE-R5`はその正本に対して独立した最終検証を実行する手順を表す。
+`ACE-R3` は current policy で有効だが GSD lifecycle enforcement の参照対象ではないため、scenario IDを本 change で
+新設せずrequirement IDだけをstable namespaceに保持する。
 
 hardening scenarioからpolicy referenceへの対応は次のとおりである。これはenforcementの由来であり、
 hardening requirementの振る舞いをpolicyへ逆輸入しない。
@@ -208,8 +213,8 @@ mapping validatorは固定fixture / example、filesystem、Git、atomic journal�
 
 ## Migration Plan
 
-1. 二つの依存changesがmerge済みであることとMVPのmanifest / tracking / capability contractsを確認し、
-   MVP merge後のbaseから本changeだけを載せる専用branch / PRを作る。
+1. 二つの依存 changes がmerge済みであることと MVP の manifest / tracking / capability contracts を確認し、
+   MVP merge後のbaseから本 change だけを載せる専用 branch / PRを作る。
 2. 既存 manifest を読取専用で解析し、schema migration preview と rollback 条件を fixture 化する。
 3. stable ID と mapping、drift、ownership、journal / recovery、preview / receipt の順で GSD phases を実行する。
 4. 全 Phase 1 holes を tests または理由付き未検証へ対応付け、通常 CI と opt-in smoke を分離して検証する。
@@ -220,7 +225,7 @@ Migration failure 時は旧 MVP manifest を変更せず staging を破棄する
 
 ## Resolved dependency contracts
 
-implementation gate 1.1–1.2をblockしていた事項はDecisions 0–0.2で解決した。v1にはmigration extension
+implementation gate 1.1–1.2をblockしていた事項はGate A–Cで解決した。v1にはmigration extension
 pointがないためv2を別schemaとして導入する。`handoff.json`と全derived lifecycle recordsは同じchangeの
 ownership / close contractへ載せ、canonical OpenSpecとpolicy docsは参照に限定する。OpenSpec JSON、
 Markdown fallback、GSD 1.5.0 composite signal、host dispatch、`inspect` / `prepare` / `mark-started`の利用可能
@@ -376,6 +381,8 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 
 各cellは対応するPhase 1表の同番号へ一つ以上の反証可能なevidenceを割り当てる。`N/A`はPhase 1で
 明示的に非該当 / スコープ外とした項目で、test未作成の理由も同じcellに残す。
+`H01`〜`H12`は順に、空・ゼロ長・None、境界値、重複・衝突、順序、型・形式不正、エラー経路、
+冪等性・再実行、時刻・タイムゾーン、文字列、数値、巨大入力・リソース枯渇、状態遷移の未定義パスを表す。
 
 | requirement | H01 | H02 | H03 | H04 | H05 | H06 | H07 | H08 | H09 | H10 | H11 | H12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

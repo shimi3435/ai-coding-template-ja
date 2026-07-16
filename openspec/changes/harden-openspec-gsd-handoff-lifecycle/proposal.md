@@ -22,12 +22,11 @@ capability preflight を備える MVP handoff を提供する。MVP は一つの
 
 - `revise-openspec-gsd-execution-boundary` は `origin/main` の `7c048da`、MVP change
   `automate-openspec-gsd-handoff` は `origin/main` の `d96e451` としてmerge済みである。後者をbaseにした
-  `agent/harden-openspec-gsd-handoff-lifecycle` だけを本changeに使用する。
+  `agent/harden-openspec-gsd-handoff-lifecycle` だけを本 change に使用し、先行 changes や他の active change を
+  同じ PR へ載せない。
 - MVP manifest schema v1、OpenSpec 1.3.1 JSON / Markdown fallback、GSD 1.5.0 composite capability、
   `inspect` / `prepare` / `mark-started` のpublic state seam、host dispatch、route別postconditionは
   merge済みcode、fixtures、first-party skillを入力契約とする。
-- 本 change は `automate-openspec-gsd-handoff` をmergeしたbaseから専用branch / PRを作り、そのPRには
-  本changeだけを載せる。先行2 changesと同一PRに束ねず、blocked proposalをmainへ残さない。
 - 本 change は上記 policy の MUST を複製しない。各機械検査は参照する policy requirement / scenario を
   traceability metadata と test に明記する。
 
@@ -71,5 +70,3 @@ capability preflight を備える MVP handoff を提供する。MVP は一つの
   `docs/agents/adaptive-change-execution.references.json`で管理する。旧change spec commitは非規範の
   provenanceに限定し、通常CIは到達不能なGit履歴を読まない。
 - **Safety**: repo 外 path、symlink escape、ownership 不明、drift、期限切れ承認、部分検査では書込・削除しない。
-- **Git / delivery**: MVP changeをmergeしたbaseからの専用branch / PRで保持し、他のOpenSpec changeを
-  同じPRへ載せない。
