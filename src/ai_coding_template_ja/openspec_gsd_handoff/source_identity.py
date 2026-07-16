@@ -286,6 +286,8 @@ def _normalize_block(lines: Sequence[str]) -> str:
 def _observations_from_source(
     source_path: str,
     content_bytes: bytes,
+    *,
+    max_items: int,
 ) -> list[SourceObservation]:
     try:
         decoded = content_bytes.decode("utf-8")
@@ -301,6 +303,8 @@ def _observations_from_source(
     for heading_index, heading in enumerate(headings):
         if heading.category is None:
             continue
+        if len(observations) == max_items:
+            raise _SourceInputError("source-item-limit-exceeded")
         boundary = len(normalized_lines)
         for candidate in headings[heading_index + 1 :]:
             if candidate.level <= heading.level:
@@ -433,7 +437,11 @@ def read_source_inventory(
         if aggregate_bytes > limits.bytes_total:
             return _failure("source-total-limit-exceeded")
         try:
-            parsed = _observations_from_source(canonical_path, content_bytes)
+            parsed = _observations_from_source(
+                canonical_path,
+                content_bytes,
+                max_items=limits.max_items - len(observations),
+            )
         except _SourceInputError as error:
             return _failure(error.code)
         for observation in parsed:
@@ -447,8 +455,6 @@ def read_source_inventory(
                 return _failure("source-identity-duplicate")
             identities.add(identity)
             observations.append(observation)
-            if len(observations) > limits.max_items:
-                return _failure("source-item-limit-exceeded")
 
     return Success(SourceInventory(items=tuple(observations)))
 
