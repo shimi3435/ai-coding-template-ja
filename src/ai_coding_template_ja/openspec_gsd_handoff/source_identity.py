@@ -783,6 +783,17 @@ def _active_identity(
     )
 
 
+def _tombstone_identity(
+    item: SourceTombstone,
+) -> tuple[SourceCategory, str, str, str | None]:
+    return (
+        item.category,
+        item.last_source_path,
+        _normalized_persisted_heading(item.last_raw_heading, item.category),
+        item.last_parent_id,
+    )
+
+
 def _allocate_id(category: SourceCategory, counter: int) -> tuple[str, int]:
     if counter == 1_000_000:
         raise _SourceInputError("source-counter-exhausted")
@@ -915,6 +926,9 @@ def reconcile_source_items(
         previous_by_identity = {
             _active_identity(item): item for item in previous_state.active
         }
+        tombstone_identities = {
+            _tombstone_identity(item) for item in previous_state.tombstones
+        }
         matched_ids: set[str] = set()
         active: list[ActiveSourceItem] = []
         created: list[str] = []
@@ -937,6 +951,8 @@ def reconcile_source_items(
                 observation.normalized_heading,
                 None,
             )
+            if identity_key in tombstone_identities:
+                raise _SourceInputError("source-tombstone-identity-collision")
             observation_key = _observation_key(observation)
             previous = _select_previous_item(
                 exact=previous_by_identity.get(identity_key),
@@ -993,6 +1009,8 @@ def reconcile_source_items(
                 observation.normalized_heading,
                 parent_id,
             )
+            if identity_key in tombstone_identities:
+                raise _SourceInputError("source-tombstone-identity-collision")
             observation_key = _observation_key(observation)
             previous = _select_previous_item(
                 exact=previous_by_identity.get(identity_key),
