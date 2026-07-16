@@ -804,6 +804,97 @@ def _sorted_observations(
     )
 
 
+def _explicit_match_category(match: ExplicitSourceMatch) -> SourceCategory:
+    if match.normalized_heading.startswith("Requirement:"):
+        if match.parent_locator is not None:
+            raise _SourceInputError("source-explicit-match-invalid")
+        return SourceCategory.REQUIREMENT
+    if match.normalized_heading.startswith("Scenario:"):
+        if match.parent_locator is None:
+            raise _SourceInputError("source-explicit-match-invalid")
+        return SourceCategory.SCENARIO
+    raise _SourceInputError("source-explicit-match-invalid")
+
+
+def _validate_explicit_matches(
+    explicit_matches: Sequence[ExplicitSourceMatch],
+    inventory: SourceInventory,
+    previous_state: SourceIdentityState,
+) -> dict[
+    tuple[SourceCategory, str, str, SourceParentLocator | None],
+    ActiveSourceItem,
+]:
+    if (
+        isinstance(explicit_matches, (str, bytes))
+        or len(explicit_matches) > _MAX_SOURCE_ITEMS
+    ):
+        raise _SourceInputError("source-explicit-match-invalid")
+    inventory_keys = {_observation_key(item) for item in inventory.items}
+    active_by_id = {item.id: item for item in previous_state.active}
+    matches: dict[
+        tuple[SourceCategory, str, str, SourceParentLocator | None],
+        ActiveSourceItem,
+    ] = {}
+    matched_ids: set[str] = set()
+
+    for match in explicit_matches:
+        if not isinstance(match, ExplicitSourceMatch):
+            raise _SourceInputError("source-explicit-match-invalid")
+        _validate_persisted_path(match.source_path)
+        if (
+            not isinstance(match.normalized_heading, str)
+            or _normalize_heading_text(match.normalized_heading)
+            != match.normalized_heading
+        ):
+            raise _SourceInputError("source-explicit-match-invalid")
+        category = _explicit_match_category(match)
+        if match.parent_locator is not None:
+            _validate_persisted_path(match.parent_locator.source_path)
+            if (
+                not match.parent_locator.normalized_heading.startswith("Requirement:")
+                or _normalize_heading_text(match.parent_locator.normalized_heading)
+                != match.parent_locator.normalized_heading
+            ):
+                raise _SourceInputError("source-explicit-match-invalid")
+        pattern = (
+            _REQUIREMENT_ID if category is SourceCategory.REQUIREMENT else _SCENARIO_ID
+        )
+        if pattern.fullmatch(match.source_id) is None:
+            raise _SourceInputError("source-explicit-match-invalid")
+        previous = active_by_id.get(match.source_id)
+        if previous is None or previous.category is not category:
+            raise _SourceInputError("source-explicit-match-invalid")
+        key = (
+            category,
+            match.source_path,
+            match.normalized_heading,
+            match.parent_locator,
+        )
+        if key not in inventory_keys:
+            raise _SourceInputError("source-explicit-match-invalid")
+        if key in matches or match.source_id in matched_ids:
+            raise _SourceInputError("source-explicit-match-ambiguous")
+        matches[key] = previous
+        matched_ids.add(match.source_id)
+    return matches
+
+
+def _select_previous_item(
+    *,
+    exact: ActiveSourceItem | None,
+    explicit: ActiveSourceItem | None,
+    matched_ids: set[str],
+) -> ActiveSourceItem | None:
+    if exact is not None and explicit is not None and exact.id != explicit.id:
+        raise _SourceInputError("source-explicit-match-ambiguous")
+    selected = exact if exact is not None else explicit
+    if selected is not None:
+        if selected.id in matched_ids:
+            raise _SourceInputError("source-explicit-match-ambiguous")
+        matched_ids.add(selected.id)
+    return selected
+
+
 def reconcile_source_items(
     inventory: SourceInventory,
     previous_state: SourceIdentityState,
@@ -815,8 +906,11 @@ def reconcile_source_items(
     try:
         _validate_source_state(previous_state)
         _validate_inventory(inventory)
-        if explicit_matches:
-            raise _SourceInputError("source-explicit-match-invalid")
+        explicit_by_observation = _validate_explicit_matches(
+            explicit_matches,
+            inventory,
+            previous_state,
+        )
 
         previous_by_identity = {
             _active_identity(item): item for item in previous_state.active
@@ -843,7 +937,12 @@ def reconcile_source_items(
                 observation.normalized_heading,
                 None,
             )
-            previous = previous_by_identity.get(identity_key)
+            observation_key = _observation_key(observation)
+            previous = _select_previous_item(
+                exact=previous_by_identity.get(identity_key),
+                explicit=explicit_by_observation.get(observation_key),
+                matched_ids=matched_ids,
+            )
             if previous is None:
                 source_id, next_requirement_id = _allocate_id(
                     SourceCategory.REQUIREMENT,
@@ -852,7 +951,6 @@ def reconcile_source_items(
                 created.append(source_id)
             else:
                 source_id = previous.id
-                matched_ids.add(source_id)
             fingerprint = fingerprint_source_observation(
                 observation,
                 parent_id=None,
@@ -895,7 +993,12 @@ def reconcile_source_items(
                 observation.normalized_heading,
                 parent_id,
             )
-            previous = previous_by_identity.get(identity_key)
+            observation_key = _observation_key(observation)
+            previous = _select_previous_item(
+                exact=previous_by_identity.get(identity_key),
+                explicit=explicit_by_observation.get(observation_key),
+                matched_ids=matched_ids,
+            )
             if previous is None:
                 source_id, next_scenario_id = _allocate_id(
                     SourceCategory.SCENARIO,
@@ -904,7 +1007,6 @@ def reconcile_source_items(
                 created.append(source_id)
             else:
                 source_id = previous.id
-                matched_ids.add(source_id)
             fingerprint = fingerprint_source_observation(
                 observation,
                 parent_id=parent_id,

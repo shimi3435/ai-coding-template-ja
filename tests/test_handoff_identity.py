@@ -481,14 +481,34 @@ def _requirement_observation(
     name: str,
     *,
     block: str = "Body.\n",
+    source_path: str = SOURCE_PATH,
 ) -> identity.SourceObservation:
     return identity.SourceObservation(
         category=SourceCategory.REQUIREMENT,
-        source_path=SOURCE_PATH,
+        source_path=source_path,
         raw_heading=f"### Requirement: {name}",
         normalized_heading=f"Requirement: {name}",
         normalized_block=block,
         parent_locator=None,
+    )
+
+
+def _scenario_observation(
+    name: str,
+    *,
+    parent_name: str,
+    source_path: str = SOURCE_PATH,
+) -> identity.SourceObservation:
+    return identity.SourceObservation(
+        category=SourceCategory.SCENARIO,
+        source_path=source_path,
+        raw_heading=f"#### Scenario: {name}",
+        normalized_heading=f"Scenario: {name}",
+        normalized_block="Steps.\n",
+        parent_locator=identity.SourceParentLocator(
+            source_path=source_path,
+            normalized_heading=f"Requirement: {parent_name}",
+        ),
     )
 
 
@@ -811,11 +831,114 @@ def test_reconcile_rejects_many_to_one_and_unknown_explicit_matches() -> None:
             ),
         ),
     )
+    two_initial = identity.reconcile_source_items(
+        identity.SourceInventory(
+            items=(
+                _requirement_observation("Original"),
+                _requirement_observation("Other"),
+            )
+        ),
+        _empty_source_state(),
+    )
+    assert isinstance(two_initial, Success)
+    one_to_many = identity.reconcile_source_items(
+        identity.SourceInventory(items=(first,)),
+        two_initial.value.state,
+        explicit_matches=(
+            identity.ExplicitSourceMatch(
+                first.source_path,
+                first.normalized_heading,
+                None,
+                "REQ-000001",
+            ),
+            identity.ExplicitSourceMatch(
+                first.source_path,
+                first.normalized_heading,
+                None,
+                "REQ-000002",
+            ),
+        ),
+    )
 
     assert isinstance(many_to_one, Failure)
     assert many_to_one.issue.code == "source-explicit-match-ambiguous"
+    assert isinstance(one_to_many, Failure)
+    assert one_to_many.issue.code == "source-explicit-match-ambiguous"
     assert isinstance(unknown, Failure)
     assert unknown.issue.code == "source-explicit-match-invalid"
+
+
+def test_reconcile_requires_explicit_match_for_path_and_parent_changes() -> None:
+    other_path = "openspec/changes/fixture/specs/other/spec.md"
+    initial_inventory = identity.SourceInventory(
+        items=(
+            _requirement_observation("First"),
+            _requirement_observation("Second"),
+            _scenario_observation("Runs", parent_name="First"),
+        )
+    )
+    initial = identity.reconcile_source_items(
+        initial_inventory,
+        _empty_source_state(),
+    )
+    assert isinstance(initial, Success)
+
+    moved_requirement = _requirement_observation(
+        "First",
+        source_path=other_path,
+    )
+    parent_changed_scenario = _scenario_observation(
+        "Runs",
+        parent_name="Second",
+    )
+    changed_inventory = identity.SourceInventory(
+        items=(
+            moved_requirement,
+            _requirement_observation("Second"),
+            parent_changed_scenario,
+        )
+    )
+    without_matches = identity.reconcile_source_items(
+        changed_inventory,
+        initial.value.state,
+    )
+    with_matches = identity.reconcile_source_items(
+        changed_inventory,
+        initial.value.state,
+        explicit_matches=(
+            identity.ExplicitSourceMatch(
+                moved_requirement.source_path,
+                moved_requirement.normalized_heading,
+                None,
+                "REQ-000001",
+            ),
+            identity.ExplicitSourceMatch(
+                parent_changed_scenario.source_path,
+                parent_changed_scenario.normalized_heading,
+                parent_changed_scenario.parent_locator,
+                "SCN-000001",
+            ),
+        ),
+    )
+
+    assert isinstance(without_matches, Success)
+    assert without_matches.value.created == ("REQ-000003", "SCN-000002")
+    assert without_matches.value.tombstoned == ("REQ-000001", "SCN-000001")
+    assert isinstance(with_matches, Success)
+    assert with_matches.value.created == ()
+    assert with_matches.value.updated == ("REQ-000001", "SCN-000001")
+    assert with_matches.value.tombstoned == ()
+    assert {item.id for item in with_matches.value.state.active} == {
+        "REQ-000001",
+        "REQ-000002",
+        "SCN-000001",
+    }
+    scenario = next(
+        item
+        for item in with_matches.value.state.active
+        if item.category is SourceCategory.SCENARIO
+    )
+    assert scenario.parent_id == "REQ-000002"
 
 
 @given(
