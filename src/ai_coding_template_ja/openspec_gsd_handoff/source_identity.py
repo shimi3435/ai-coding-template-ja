@@ -22,7 +22,11 @@ from .models import (
 
 _FINGERPRINT_VERSION = "openspec-source-v1\0"
 _REQUIREMENT_ID = re.compile(r"REQ-([0-9]{6})\Z")
+_SCENARIO_ID = re.compile(r"SCN-([0-9]{6})\Z")
+_FINGERPRINT = re.compile(r"[0-9a-f]{64}\Z")
 _CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_MAX_SOURCE_ITEMS = 4096
+_MAX_SOURCE_STATE_BYTES = 8_388_608
 
 
 class SourceCategory(StrEnum):
@@ -69,6 +73,61 @@ class SourceInventory:
     """A complete inventory; partial observations are never exposed."""
 
     items: tuple[SourceObservation, ...]
+
+
+@dataclass(frozen=True)
+class ActiveSourceItem:
+    """One active stable identity persisted by the hardening manifest."""
+
+    id: str
+    category: SourceCategory
+    source_path: str
+    raw_heading: str
+    parent_id: str | None
+    fingerprint: str
+
+
+@dataclass(frozen=True)
+class SourceTombstone:
+    """One removed identity whose namespace suffix remains reserved."""
+
+    id: str
+    category: SourceCategory
+    last_source_path: str
+    last_raw_heading: str
+    last_parent_id: str | None
+    fingerprint: str
+
+
+@dataclass(frozen=True)
+class SourceIdentityState:
+    """Complete allocator state for one OpenSpec change."""
+
+    next_requirement_id: int
+    next_scenario_id: int
+    active: tuple[ActiveSourceItem, ...]
+    tombstones: tuple[SourceTombstone, ...]
+
+
+@dataclass(frozen=True)
+class ExplicitSourceMatch:
+    """Operator-supplied one-to-one match for a changed source identity."""
+
+    source_path: str
+    normalized_heading: str
+    parent_locator: SourceParentLocator | None
+    source_id: str
+
+
+@dataclass(frozen=True)
+class SourceReconciliation:
+    """Complete stable-state result and deterministic change evidence."""
+
+    state: SourceIdentityState
+    created: tuple[str, ...]
+    updated: tuple[str, ...]
+    tombstoned: tuple[str, ...]
+    exclusions: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -492,3 +551,407 @@ def fingerprint_source_observation(
         framed.extend(len(encoded).to_bytes(8, "big"))
         framed.extend(encoded)
     return Success(hashlib.sha256(framed).hexdigest())
+
+
+def _source_id_suffix(source_id: str, category: SourceCategory) -> int:
+    pattern = (
+        _REQUIREMENT_ID if category is SourceCategory.REQUIREMENT else _SCENARIO_ID
+    )
+    match = pattern.fullmatch(source_id)
+    if match is None:
+        raise _SourceInputError("source-state-id-invalid")
+    suffix = int(match.group(1))
+    if not 1 <= suffix <= 999_999:
+        raise _SourceInputError("source-state-id-invalid")
+    return suffix
+
+
+def _counter_for(state: SourceIdentityState, category: SourceCategory) -> int:
+    return (
+        state.next_requirement_id
+        if category is SourceCategory.REQUIREMENT
+        else state.next_scenario_id
+    )
+
+
+def _normalized_persisted_heading(
+    raw_heading: str,
+    category: SourceCategory,
+) -> str:
+    if not isinstance(raw_heading, str) or "\n" in raw_heading or "\r" in raw_heading:
+        raise _SourceInputError("source-state-heading-invalid")
+    normalized_line = unicodedata.normalize("NFC", raw_heading)
+    parsed = _parse_atx_heading(normalized_line, 0)
+    if parsed is None or parsed.category is not category:
+        raise _SourceInputError("source-state-heading-invalid")
+    return parsed.normalized_heading
+
+
+def _validate_persisted_path(source_path: str) -> None:
+    if not isinstance(source_path, str):
+        raise _SourceInputError("source-state-path-invalid")
+    try:
+        _, canonical = _canonical_source_path(source_path)
+    except _SourceInputError as error:
+        raise _SourceInputError("source-state-path-invalid") from error
+    if canonical != source_path:
+        raise _SourceInputError("source-state-path-invalid")
+
+
+def _validate_fingerprint(fingerprint: str) -> None:
+    if not isinstance(fingerprint, str) or _FINGERPRINT.fullmatch(fingerprint) is None:
+        raise _SourceInputError("source-state-fingerprint-invalid")
+
+
+def _validate_counter(counter: object) -> int:
+    if type(counter) is not int or not 1 <= counter <= 1_000_000:
+        raise _SourceInputError("source-state-counter-invalid")
+    return counter
+
+
+def _validate_source_state(state: SourceIdentityState) -> None:
+    next_requirement_id = _validate_counter(state.next_requirement_id)
+    next_scenario_id = _validate_counter(state.next_scenario_id)
+    if type(state.active) is not tuple or type(state.tombstones) is not tuple:
+        raise _SourceInputError("source-state-collection-invalid")
+    if len(state.active) + len(state.tombstones) > _MAX_SOURCE_ITEMS:
+        raise _SourceInputError("source-state-limit-exceeded")
+
+    ids: set[str] = set()
+    active_requirement_ids: set[str] = set()
+    all_requirement_ids: set[str] = set()
+    active_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
+    aggregate_bytes = 0
+
+    for item in (*state.active, *state.tombstones):
+        if type(item.category) is not SourceCategory:
+            raise _SourceInputError("source-state-category-invalid")
+        suffix = _source_id_suffix(item.id, item.category)
+        if item.id in ids:
+            raise _SourceInputError("source-state-id-duplicate")
+        ids.add(item.id)
+        if suffix >= _counter_for(state, item.category):
+            raise _SourceInputError("source-state-counter-invalid")
+        if item.category is SourceCategory.REQUIREMENT:
+            all_requirement_ids.add(item.id)
+
+        if isinstance(item, ActiveSourceItem):
+            source_path = item.source_path
+            raw_heading = item.raw_heading
+            parent_id = item.parent_id
+            if item.category is SourceCategory.REQUIREMENT:
+                active_requirement_ids.add(item.id)
+        elif isinstance(item, SourceTombstone):
+            source_path = item.last_source_path
+            raw_heading = item.last_raw_heading
+            parent_id = item.last_parent_id
+        else:
+            raise _SourceInputError("source-state-item-invalid")
+
+        _validate_persisted_path(source_path)
+        normalized_heading = _normalized_persisted_heading(
+            raw_heading,
+            item.category,
+        )
+        _validate_fingerprint(item.fingerprint)
+        aggregate_bytes += sum(
+            len(value.encode("utf-8"))
+            for value in (
+                item.id,
+                source_path,
+                raw_heading,
+                parent_id or "",
+                item.fingerprint,
+            )
+        )
+        if aggregate_bytes > _MAX_SOURCE_STATE_BYTES:
+            raise _SourceInputError("source-state-limit-exceeded")
+
+        if isinstance(item, ActiveSourceItem):
+            identity = (
+                item.category,
+                source_path,
+                normalized_heading,
+                parent_id,
+            )
+            if identity in active_identities:
+                raise _SourceInputError("source-state-identity-duplicate")
+            active_identities.add(identity)
+
+    if next_requirement_id != state.next_requirement_id:
+        raise _SourceInputError("source-state-counter-invalid")
+    if next_scenario_id != state.next_scenario_id:
+        raise _SourceInputError("source-state-counter-invalid")
+
+    for item in state.active:
+        if item.category is SourceCategory.REQUIREMENT:
+            if item.parent_id is not None:
+                raise _SourceInputError("source-state-parent-invalid")
+        elif (
+            item.parent_id is None
+            or _REQUIREMENT_ID.fullmatch(item.parent_id) is None
+            or item.parent_id not in active_requirement_ids
+        ):
+            raise _SourceInputError("source-state-parent-invalid")
+
+    for item in state.tombstones:
+        if item.category is SourceCategory.REQUIREMENT:
+            if item.last_parent_id is not None:
+                raise _SourceInputError("source-state-parent-invalid")
+        elif (
+            item.last_parent_id is None
+            or _REQUIREMENT_ID.fullmatch(item.last_parent_id) is None
+            or item.last_parent_id not in all_requirement_ids
+        ):
+            raise _SourceInputError("source-state-parent-invalid")
+
+
+def _observation_key(
+    observation: SourceObservation,
+) -> tuple[SourceCategory, str, str, SourceParentLocator | None]:
+    return (
+        observation.category,
+        observation.source_path,
+        observation.normalized_heading,
+        observation.parent_locator,
+    )
+
+
+def _validate_inventory(inventory: SourceInventory) -> None:
+    if type(inventory.items) is not tuple:
+        raise _SourceInputError("source-inventory-invalid")
+    if len(inventory.items) > _MAX_SOURCE_ITEMS:
+        raise _SourceInputError("source-item-limit-exceeded")
+    identities: set[tuple[SourceCategory, str, str, SourceParentLocator | None]] = set()
+    aggregate_bytes = 0
+    for observation in inventory.items:
+        if not isinstance(observation, SourceObservation):
+            raise _SourceInputError("source-inventory-invalid")
+        if type(observation.category) is not SourceCategory:
+            raise _SourceInputError("source-inventory-invalid")
+        _validate_persisted_path(observation.source_path)
+        normalized_heading = _normalized_persisted_heading(
+            observation.raw_heading,
+            observation.category,
+        )
+        if normalized_heading != observation.normalized_heading:
+            raise _SourceInputError("source-inventory-invalid")
+        if not isinstance(
+            observation.normalized_block, str
+        ) or not observation.normalized_block.endswith("\n"):
+            raise _SourceInputError("source-inventory-invalid")
+        if observation.category is SourceCategory.REQUIREMENT:
+            if observation.parent_locator is not None:
+                raise _SourceInputError("source-inventory-invalid")
+        else:
+            parent = observation.parent_locator
+            if parent is None:
+                raise _SourceInputError("source-parent-unresolved")
+            _validate_persisted_path(parent.source_path)
+            if (
+                not isinstance(parent.normalized_heading, str)
+                or not parent.normalized_heading.startswith("Requirement:")
+                or _normalize_heading_text(parent.normalized_heading)
+                != parent.normalized_heading
+            ):
+                raise _SourceInputError("source-parent-unresolved")
+        identity = _observation_key(observation)
+        if identity in identities:
+            raise _SourceInputError("source-identity-duplicate")
+        identities.add(identity)
+        aggregate_bytes += sum(
+            len(value.encode("utf-8"))
+            for value in (
+                observation.source_path,
+                observation.raw_heading,
+                observation.normalized_heading,
+                observation.normalized_block,
+            )
+        )
+        if aggregate_bytes > _MAX_SOURCE_STATE_BYTES:
+            raise _SourceInputError("source-item-limit-exceeded")
+
+
+def _active_identity(
+    item: ActiveSourceItem,
+) -> tuple[SourceCategory, str, str, str | None]:
+    return (
+        item.category,
+        item.source_path,
+        _normalized_persisted_heading(item.raw_heading, item.category),
+        item.parent_id,
+    )
+
+
+def _allocate_id(category: SourceCategory, counter: int) -> tuple[str, int]:
+    if counter == 1_000_000:
+        raise _SourceInputError("source-counter-exhausted")
+    prefix = "REQ" if category is SourceCategory.REQUIREMENT else "SCN"
+    return f"{prefix}-{counter:06d}", counter + 1
+
+
+def _sorted_observations(
+    observations: Sequence[SourceObservation],
+) -> tuple[SourceObservation, ...]:
+    return tuple(
+        sorted(
+            observations,
+            key=lambda item: (
+                item.source_path.encode("utf-8"),
+                item.normalized_heading.encode("utf-8"),
+            ),
+        )
+    )
+
+
+def reconcile_source_items(
+    inventory: SourceInventory,
+    previous_state: SourceIdentityState,
+    *,
+    explicit_matches: Sequence[ExplicitSourceMatch] = (),
+) -> Result[SourceReconciliation]:
+    """Reconcile one complete inventory without partial allocation or repair."""
+
+    try:
+        _validate_source_state(previous_state)
+        _validate_inventory(inventory)
+        if explicit_matches:
+            raise _SourceInputError("source-explicit-match-invalid")
+
+        previous_by_identity = {
+            _active_identity(item): item for item in previous_state.active
+        }
+        matched_ids: set[str] = set()
+        active: list[ActiveSourceItem] = []
+        created: list[str] = []
+        updated: list[str] = []
+        next_requirement_id = previous_state.next_requirement_id
+        next_scenario_id = previous_state.next_scenario_id
+        requirement_ids: dict[SourceParentLocator, str] = {}
+
+        requirements = _sorted_observations(
+            tuple(
+                item
+                for item in inventory.items
+                if item.category is SourceCategory.REQUIREMENT
+            )
+        )
+        for observation in requirements:
+            identity_key = (
+                SourceCategory.REQUIREMENT,
+                observation.source_path,
+                observation.normalized_heading,
+                None,
+            )
+            previous = previous_by_identity.get(identity_key)
+            if previous is None:
+                source_id, next_requirement_id = _allocate_id(
+                    SourceCategory.REQUIREMENT,
+                    next_requirement_id,
+                )
+                created.append(source_id)
+            else:
+                source_id = previous.id
+                matched_ids.add(source_id)
+            fingerprint = fingerprint_source_observation(
+                observation,
+                parent_id=None,
+            )
+            if isinstance(fingerprint, Failure):
+                raise _SourceInputError(fingerprint.issue.code)
+            current = ActiveSourceItem(
+                id=source_id,
+                category=SourceCategory.REQUIREMENT,
+                source_path=observation.source_path,
+                raw_heading=observation.raw_heading,
+                parent_id=None,
+                fingerprint=fingerprint.value,
+            )
+            active.append(current)
+            if previous is not None and previous != current:
+                updated.append(source_id)
+            requirement_ids[
+                SourceParentLocator(
+                    source_path=observation.source_path,
+                    normalized_heading=observation.normalized_heading,
+                )
+            ] = source_id
+
+        scenarios = _sorted_observations(
+            tuple(
+                item
+                for item in inventory.items
+                if item.category is SourceCategory.SCENARIO
+            )
+        )
+        for observation in scenarios:
+            parent_locator = observation.parent_locator
+            if parent_locator is None or parent_locator not in requirement_ids:
+                raise _SourceInputError("source-parent-unresolved")
+            parent_id = requirement_ids[parent_locator]
+            identity_key = (
+                SourceCategory.SCENARIO,
+                observation.source_path,
+                observation.normalized_heading,
+                parent_id,
+            )
+            previous = previous_by_identity.get(identity_key)
+            if previous is None:
+                source_id, next_scenario_id = _allocate_id(
+                    SourceCategory.SCENARIO,
+                    next_scenario_id,
+                )
+                created.append(source_id)
+            else:
+                source_id = previous.id
+                matched_ids.add(source_id)
+            fingerprint = fingerprint_source_observation(
+                observation,
+                parent_id=parent_id,
+            )
+            if isinstance(fingerprint, Failure):
+                raise _SourceInputError(fingerprint.issue.code)
+            current = ActiveSourceItem(
+                id=source_id,
+                category=SourceCategory.SCENARIO,
+                source_path=observation.source_path,
+                raw_heading=observation.raw_heading,
+                parent_id=parent_id,
+                fingerprint=fingerprint.value,
+            )
+            active.append(current)
+            if previous is not None and previous != current:
+                updated.append(source_id)
+
+        newly_tombstoned = tuple(
+            SourceTombstone(
+                id=item.id,
+                category=item.category,
+                last_source_path=item.source_path,
+                last_raw_heading=item.raw_heading,
+                last_parent_id=item.parent_id,
+                fingerprint=item.fingerprint,
+            )
+            for item in previous_state.active
+            if item.id not in matched_ids
+        )
+        tombstones = (*previous_state.tombstones, *newly_tombstoned)
+        state = SourceIdentityState(
+            next_requirement_id=next_requirement_id,
+            next_scenario_id=next_scenario_id,
+            active=tuple(active),
+            tombstones=tombstones,
+        )
+        _validate_source_state(state)
+    except _SourceInputError as error:
+        return _failure(error.code, category=IssueCategory.INPUT)
+
+    return Success(
+        SourceReconciliation(
+            state=state,
+            created=tuple(created),
+            updated=tuple(updated),
+            tombstoned=tuple(item.id for item in newly_tombstoned),
+            exclusions=(),
+        )
+    )
