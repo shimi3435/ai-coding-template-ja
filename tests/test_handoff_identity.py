@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_coding_template_ja.openspec_gsd_handoff import source_identity as identity
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
@@ -449,4 +450,201 @@ def test_later_source_failure_does_not_expose_earlier_observations(
 
     assert isinstance(result, Failure)
     assert result.issue.code == "source-utf8-invalid"
+    assert not hasattr(result, "value")
+
+
+def _empty_source_state() -> identity.SourceIdentityState:
+    return identity.SourceIdentityState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+
+
+def _active_requirement(
+    source_id: str = "REQ-000001",
+) -> identity.ActiveSourceItem:
+    return identity.ActiveSourceItem(
+        id=source_id,
+        category=SourceCategory.REQUIREMENT,
+        source_path=SOURCE_PATH,
+        raw_heading="### Requirement: Existing",
+        parent_id=None,
+        fingerprint="1" * 64,
+    )
+
+
+def test_reconcile_allocates_namespaced_ids_in_canonical_identity_order(
+    tmp_path: Path,
+) -> None:
+    repository, source_path = _write_source(tmp_path, _canonical_bytes())
+    inventory = read_source_inventory(repository, [source_path])
+    assert isinstance(inventory, Success)
+
+    result = identity.reconcile_source_items(inventory.value, _empty_source_state())
+
+    assert isinstance(result, Success)
+    assert result.value.state.next_requirement_id == 3
+    assert result.value.state.next_scenario_id == 2
+    assert result.value.created == (
+        "REQ-000001",
+        "REQ-000002",
+        "SCN-000001",
+    )
+    assert result.value.updated == ()
+    assert result.value.tombstoned == ()
+    assert result.value.exclusions == ()
+    assert tuple(item.id for item in result.value.state.active) == result.value.created
+    first, second, scenario = result.value.state.active
+    assert first.raw_heading == "### Requirement:\tCafé launch   ###"
+    assert second.raw_heading == "### Requirement: Secondary"
+    assert first.parent_id is None
+    assert second.parent_id is None
+    assert scenario.parent_id == "REQ-000001"
+
+
+@pytest.mark.parametrize("counter", [0, True, 1_000_001])
+def test_reconcile_rejects_invalid_counter_without_partial_state(
+    counter: object,
+) -> None:
+    previous = identity.SourceIdentityState(
+        next_requirement_id=counter,  # type: ignore[arg-type]
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+
+    result = identity.reconcile_source_items(
+        identity.SourceInventory(
+            items=(
+                identity.SourceObservation(
+                    category=SourceCategory.REQUIREMENT,
+                    source_path=SOURCE_PATH,
+                    raw_heading="### Requirement: New",
+                    normalized_heading="Requirement: New",
+                    normalized_block="Body.\n",
+                    parent_locator=None,
+                ),
+            )
+        ),
+        previous,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-state-counter-invalid"
+    assert not hasattr(result, "value")
+
+
+def test_reconcile_rejects_noncanonical_id_and_suffix_at_counter() -> None:
+    malformed_id = identity.SourceIdentityState(
+        next_requirement_id=2,
+        next_scenario_id=1,
+        active=(_active_requirement("REQ-000000"),),
+        tombstones=(),
+    )
+    suffix_at_counter = identity.SourceIdentityState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(_active_requirement(),),
+        tombstones=(),
+    )
+    empty_inventory = identity.SourceInventory(items=())
+
+    malformed_result = identity.reconcile_source_items(empty_inventory, malformed_id)
+    counter_result = identity.reconcile_source_items(empty_inventory, suffix_at_counter)
+
+    assert isinstance(malformed_result, Failure)
+    assert malformed_result.issue.code == "source-state-id-invalid"
+    assert isinstance(counter_result, Failure)
+    assert counter_result.issue.code == "source-state-counter-invalid"
+
+
+def test_reconcile_rejects_invalid_parent_and_duplicate_ids() -> None:
+    parented_requirement = identity.ActiveSourceItem(
+        id="REQ-000001",
+        category=SourceCategory.REQUIREMENT,
+        source_path=SOURCE_PATH,
+        raw_heading="### Requirement: Existing",
+        parent_id="REQ-000001",
+        fingerprint="1" * 64,
+    )
+    orphan_scenario = identity.ActiveSourceItem(
+        id="SCN-000001",
+        category=SourceCategory.SCENARIO,
+        source_path=SOURCE_PATH,
+        raw_heading="#### Scenario: Existing",
+        parent_id="REQ-000999",
+        fingerprint="2" * 64,
+    )
+    duplicate_tombstone = identity.SourceTombstone(
+        id="REQ-000001",
+        category=SourceCategory.REQUIREMENT,
+        last_source_path=SOURCE_PATH,
+        last_raw_heading="### Requirement: Removed",
+        last_parent_id=None,
+        fingerprint="3" * 64,
+    )
+    empty_inventory = identity.SourceInventory(items=())
+
+    parent_result = identity.reconcile_source_items(
+        empty_inventory,
+        identity.SourceIdentityState(
+            next_requirement_id=2,
+            next_scenario_id=1,
+            active=(parented_requirement,),
+            tombstones=(),
+        ),
+    )
+    orphan_result = identity.reconcile_source_items(
+        empty_inventory,
+        identity.SourceIdentityState(
+            next_requirement_id=1,
+            next_scenario_id=2,
+            active=(orphan_scenario,),
+            tombstones=(),
+        ),
+    )
+    duplicate_result = identity.reconcile_source_items(
+        empty_inventory,
+        identity.SourceIdentityState(
+            next_requirement_id=2,
+            next_scenario_id=1,
+            active=(_active_requirement(),),
+            tombstones=(duplicate_tombstone,),
+        ),
+    )
+
+    assert isinstance(parent_result, Failure)
+    assert parent_result.issue.code == "source-state-parent-invalid"
+    assert isinstance(orphan_result, Failure)
+    assert orphan_result.issue.code == "source-state-parent-invalid"
+    assert isinstance(duplicate_result, Failure)
+    assert duplicate_result.issue.code == "source-state-id-duplicate"
+
+
+def test_reconcile_refuses_allocation_at_exhausted_sentinel() -> None:
+    inventory = identity.SourceInventory(
+        items=(
+            identity.SourceObservation(
+                category=SourceCategory.REQUIREMENT,
+                source_path=SOURCE_PATH,
+                raw_heading="### Requirement: New",
+                normalized_heading="Requirement: New",
+                normalized_block="Body.\n",
+                parent_locator=None,
+            ),
+        )
+    )
+    previous = identity.SourceIdentityState(
+        next_requirement_id=1_000_000,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+
+    result = identity.reconcile_source_items(inventory, previous)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-counter-exhausted"
     assert not hasattr(result, "value")
