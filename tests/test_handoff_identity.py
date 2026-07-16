@@ -6,14 +6,15 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
+
+from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
+    SourceIdentityLimits,
     SourceObservation,
     fingerprint_source_observation,
     read_source_inventory,
 )
-
-from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "openspec_gsd_handoff" / "identity"
 SOURCE_PATH = "openspec/changes/fixture/specs/lifecycle/spec.md"
@@ -251,3 +252,179 @@ def test_fingerprint_rejects_parent_mismatch_without_partial_value(
     assert requirement_result.issue.code == "source-parent-id-invalid"
     assert isinstance(scenario_result, Failure)
     assert scenario_result.issue.code == "source-parent-id-invalid"
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "code"),
+    [
+        ("duplicate-heading.md", "source-identity-duplicate"),
+        ("unclosed-fence.md", "source-fence-unclosed"),
+    ],
+)
+def test_inventory_rejects_ambiguous_fixture_without_partial_items(
+    tmp_path: Path,
+    fixture_name: str,
+    code: str,
+) -> None:
+    repository, source_path = _write_source(
+        tmp_path,
+        (FIXTURE_ROOT / fixture_name).read_bytes(),
+    )
+
+    result = read_source_inventory(repository, [source_path])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == code
+    assert not hasattr(result, "value")
+
+
+@pytest.mark.parametrize(
+    ("content", "code"),
+    [
+        (b"", "source-items-empty"),
+        (b"\xff", "source-utf8-invalid"),
+        (b"   ### Requirement: Indented\nBody.\n", "source-heading-unsupported"),
+        (b"###Requirement: Missing separator\nBody.\n", "source-heading-unsupported"),
+        (b"## Requirement: Wrong level\nBody.\n", "source-heading-unsupported"),
+        (b"#### Scenario: Missing parent\nBody.\n", "source-scenario-parent-missing"),
+    ],
+)
+def test_inventory_rejects_incomplete_or_unsupported_markdown(
+    tmp_path: Path,
+    content: bytes,
+    code: str,
+) -> None:
+    repository, source_path = _write_source(tmp_path, content)
+
+    result = read_source_inventory(repository, [source_path])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == code
+
+
+@pytest.mark.parametrize(
+    "source_path",
+    [
+        "",
+        "/absolute/spec.md",
+        "./spec.md",
+        "../spec.md",
+        "specs/../spec.md",
+        "specs\\spec.md",
+        "specs/\0spec.md",
+    ],
+)
+def test_inventory_rejects_noncanonical_source_paths(
+    tmp_path: Path,
+    source_path: str,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+
+    result = read_source_inventory(repository, [source_path])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-path-invalid"
+
+
+def test_inventory_rejects_symlink_escape_without_following_it(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("### Requirement: Outside\nBody.\n", encoding="utf-8")
+    link = repository / "spec.md"
+    link.symlink_to(outside)
+
+    result = read_source_inventory(repository, ["spec.md"])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-path-symlink"
+
+
+@pytest.mark.parametrize(
+    ("first_path", "second_path"),
+    [
+        ("specs/Café/spec.md", "specs/Café/spec.md"),
+        ("specs/Case/spec.md", "specs/case/spec.md"),
+    ],
+)
+def test_inventory_rejects_unicode_and_case_path_aliases(
+    tmp_path: Path,
+    first_path: str,
+    second_path: str,
+) -> None:
+    repository, _ = _write_source(
+        tmp_path,
+        b"### Requirement: First\nBody.\n",
+        source_path=first_path,
+    )
+    second = repository / second_path
+    second.parent.mkdir(parents=True, exist_ok=True)
+    second.write_text("### Requirement: Second\nBody.\n", encoding="utf-8")
+
+    result = read_source_inventory(repository, [first_path, second_path])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-path-alias"
+
+
+def test_inventory_enforces_item_file_and_total_limit_plus_one(
+    tmp_path: Path,
+) -> None:
+    canonical = _canonical_bytes()
+    repository, source_path = _write_source(tmp_path, canonical)
+    other_path = "openspec/changes/fixture/specs/other/spec.md"
+    other = repository / other_path
+    other.parent.mkdir(parents=True)
+    other.write_bytes(b"### Requirement: Other\nBody.\n")
+
+    item_limit = read_source_inventory(
+        repository,
+        [source_path],
+        limits=SourceIdentityLimits(
+            max_items=2,
+            bytes_per_file=len(canonical),
+            bytes_total=len(canonical),
+        ),
+    )
+    file_limit = read_source_inventory(
+        repository,
+        [source_path],
+        limits=SourceIdentityLimits(
+            max_items=10,
+            bytes_per_file=len(canonical) - 1,
+            bytes_total=len(canonical),
+        ),
+    )
+    total_limit = read_source_inventory(
+        repository,
+        [source_path, other_path],
+        limits=SourceIdentityLimits(
+            max_items=10,
+            bytes_per_file=len(canonical),
+            bytes_total=len(canonical) + len(other.read_bytes()) - 1,
+        ),
+    )
+
+    assert isinstance(item_limit, Failure)
+    assert item_limit.issue.code == "source-item-limit-exceeded"
+    assert isinstance(file_limit, Failure)
+    assert file_limit.issue.code == "source-file-limit-exceeded"
+    assert isinstance(total_limit, Failure)
+    assert total_limit.issue.code == "source-total-limit-exceeded"
+
+
+def test_later_source_failure_does_not_expose_earlier_observations(
+    tmp_path: Path,
+) -> None:
+    repository, source_path = _write_source(tmp_path, _canonical_bytes())
+    invalid_path = "openspec/changes/fixture/specs/invalid/spec.md"
+    invalid = repository / invalid_path
+    invalid.parent.mkdir(parents=True)
+    invalid.write_bytes(b"\xff")
+
+    result = read_source_inventory(repository, [source_path, invalid_path])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-utf8-invalid"
+    assert not hasattr(result, "value")
