@@ -110,13 +110,16 @@ schemaより低いschemaを要求するdowngradeはpreviewもapplyもfail-closed
 
 ### Gate C. adaptive policyはcurrent-tree stable reference recordで参照する
 
-policy本文の正はcurrent treeの`docs/template/adr/0008-adaptive-openspec-gsd-execution-boundary.md`と
-`docs/agents/workflow.md`である。実装時に
+policy本文の正はcurrent treeの`docs/agents/workflow.md`とし、
+`docs/template/adr/0008-adaptive-openspec-gsd-execution-boundary.md`はテンプレート内で利用可能な補強根拠とする。
+実装時に
 `docs/agents/adaptive-change-execution.references.json`を追加し、record version、stable requirement / scenario ID、
 current-tree source path、section heading、section normalized SHA-256、非規範のhistorical provenanceを保持する。
 旧change specの`a2eb744`は利用可能なrepository cloneでの由来確認だけに使う。branch ref消滅や履歴省略により
 blobへ到達できない環境でも契約判定を変えず、runtime / 通常CIはcommitの存在やblob到達性を要求しない。
 通常CIはrecord内IDの一意性、参照先current-tree path / heading / section hash、hardening mapping内IDの存在だけを検査する。
+全stable IDの必須anchorはprune後も残る`docs/agents/workflow.md`に置くため、`task prune-template-docs`で
+`docs/template/`を削除した下流repositoryでも参照検査を継続できる。ADR-0008の存在やhashは通常CIの成功条件にしない。
 policy本文をrecord、manifest、GSD artifactsへ複製しない。
 
 stable reference namespaceは次に固定する。
@@ -140,6 +143,10 @@ stable reference namespaceは次に固定する。
 `ACE-R2`は正本の所有権を表し、`ACE-R5`はその正本に対して独立した最終検証を実行する手順を表す。
 `ACE-R3` は current policy で有効だが GSD lifecycle enforcement の参照対象ではないため、scenario IDを本 change で
 新設せずrequirement IDだけをstable namespaceに保持する。
+`ACE-S2-SPEC-CHANGE-REPLAN`と`ACE-S5-REVALIDATE-ON-DRIFT`は、どちらも
+`docs/agents/workflow.md`の「OpenSpec / GSD の責務境界（ADR-0008）」をanchorにできる。同じpolicy sectionが
+仕様変更時の再計画と最終完了判定の再評価をともに定めるため、stable IDは一意に保ちつつ同一section path /
+heading / hashの共有を許す。
 
 hardening scenarioからpolicy referenceへの対応は次のとおりである。`HARD-R1`〜`HARD-R6`はspec deltaの
 stable requirement IDであり、要件の並び順とは独立して参照する。これはenforcementの由来であり、
@@ -164,7 +171,7 @@ mechanical contractも、参照対象外である理由を表へ明記する。
 | `HARD-R4`: 自動回復不能 | `ACE-S4-NO-AUTO-FALLBACK`, `ACE-S4-RESUME` |
 | `HARD-R5`: preview / no-op | `ACE-S5-OPEN-SPEC-FINAL`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
 | `HARD-R5`: stale preview / 部分失敗 | `ACE-S5-REVALIDATE-ON-DRIFT`, `ACE-S4-RESUME`, `ACE-S4-NO-AUTO-FALLBACK` |
-| `HARD-R6`: fixtures / properties / integration / smoke | `ACE-S1-START-GATES`, `ACE-S5-OPEN-SPEC-FINAL` |
+| `HARD-R6`: optional toolsなしの通常CI / fixtures / properties / integration / smoke | `ACE-S1-START-GATES`, `ACE-S5-OPEN-SPEC-FINAL` |
 
 ### 1. stable ID は単調増加し、曖昧一致を拒否する
 
