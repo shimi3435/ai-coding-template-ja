@@ -1,6 +1,6 @@
 ---
 phase: 01-stable-identity-and-migration
-reviewed: 2026-07-16T22:46:17Z
+reviewed: 2026-07-16T23:23:27Z
 depth: standard
 files_reviewed: 8
 files_reviewed_list:
@@ -13,16 +13,16 @@ files_reviewed_list:
   - tests/test_handoff_migration.py
   - tests/fixtures/openspec_gsd_handoff/manifest/expected-migrated-v2.json
 findings:
-  critical: 6
-  warning: 1
+  critical: 4
+  warning: 0
   info: 0
-  total: 7
+  total: 4
 status: issues_found
 ---
 
 # Phase 1: Code Review Report
 
-**Reviewed:** 2026-07-16T22:46:17Z
+**Reviewed:** 2026-07-16T23:23:27Z
 **Depth:** standard
 **Files Reviewed:** 8
 **Status:** issues_found
@@ -31,89 +31,96 @@ status: issues_found
 
 ### Summary
 
-修正対象だった3件の狭い回帰入力は解消済みである。parent swap integration testはrepository外を変更せずstructured failure、削除済みlocatorの直接再導入は`source-tombstone-identity-collision`、10,000階層のobject/arrayは両JSON parserでstructured invalid JSONになり、focused suiteは`104 passed`だった。
+前回の6件のBLOCKERと1件のWARNINGに対する修正は、指定された回帰入力では成立している。
+descriptor-anchored source read、active / tombstone identityとcasefold aliasの拒否、directory-fd
+migration、post-open staging cleanup、post-replace result保持、malformed previewの例外封じ込め、deep
+JSON / duplicate object name拒否をコードとfocused suite（`124 passed`）で再確認した。
 
-ただし、同じfail-closed契約の別入力で6件のblockerと1件のwarningを再現した。特にsource readの親差し替え、allocatorが返すcodec-invalid state、staging作成後失敗、およびreplace後close失敗は、path ownershipまたはpartial-failure evidenceを破るためPhase 1完了前に修正が必要である。
+ただし同じcanonical契約の別入力で4件のBLOCKERを再現した。read-only previewのpath race、最終source
+snapshot後のdrift、candidateと一致しないapproval evidence、JSON codecの非total入力であり、いずれも
+HARD-R1のfail-closed / migration preview / stale approval / exact schema境界を破る。
 
 ### Critical Issues
 
-#### CR-01: source path検査後の親差し替えでrepository外のMarkdownを成功値として読む
+#### CR-01: read-only previewが差し替えられたtargetまたはartifact pathをrepository外まで追従する
 
 **Classification:** BLOCKER
 
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:424-490`
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:781-819, 949-954`
 
-**Issue:** `_contains_symlink()`と`resolve(strict=True)`で検査した後、`Path.open()`まで親directory identityを固定していない。検査後にspecの親directoryをrenameし、同じlogical pathをrepository外directoryへのsymlinkへ差し替える再現では、`read_source_inventory()`が`Success`を返し、outside側の`### Requirement: Outside`とbodyをinventoryへ取り込んだ。これはHARD-R1のpath/symlink escape拒否と、Plan 01の「lexical rejection plus component lstat/resolved containment before reads」を破る。
+**Issue:** applyのreplace pathはdirectory descriptorへ固定されたが、previewのv1 target readは
+`_resolve_target()`のpath検査後に`filesystem.read_bounded_bytes(target)`を行い、canonical artifact snapshotも
+path-basedな`read_canonical_artifacts()`へ委譲している。target parentを検査後・read直前にrepository外の
+directory symlinkへ差し替え、外側へvalid v1 bytesを置く再現では、`preview_manifest_migration()`が
+`Success`を返した。またproposalを検査後・`Path.open()`直前だけ外側fileへのsymlinkへ差し替え、descriptor
+取得直後に元へ戻す再現では、2回のartifact snapshotがともに外側bytesを採用し、外側hashを持つpreviewが
+`Success`になった。readを2回比較しても、各openが同じraceを踏めばpath ownershipは証明できない。
 
-**Fix:** repository rootから各componentを`O_DIRECTORY | O_NOFOLLOW`と`dir_fd`でwalkし、最終`spec.md`も同じanchored descriptorから`O_NOFOLLOW`でopenして`fstat()`したregular fileだけをlimit+1 readする。path-based validationとopenの間を残さず、親swap時にstructured `source-path-symlink`またはidentity-changed failureを返すintegration testを追加する。
+**Fix:** previewでもrepository descriptorからtargetと全canonical artifactsを`dir_fd`、`O_NOFOLLOW`、
+regular-file `fstat()`でopenし、同じanchored descriptorからlimit+1 readする。artifact readerには
+descriptor-anchored APIを追加するかmigration専用adapterを使い、logical entryとopened inodeの一致を
+read前後に検査する。target parent swapとproposal / tasks file swapを、外側bytesが一度もpreviewへ入らない
+integration regressionにする。
 
-#### CR-02: 既存activeとtombstoneが同じnormalized identityを持つstateからduplicate tombstoneを成功生成する
-
-**Classification:** BLOCKER
-
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:620-679, 926-1065`
-
-**Issue:** `_validate_source_state()`のidentity uniquenessはactive itemsだけを集合へ追加する。異なるIDのactive `REQ-000001`とtombstone `REQ-000002`へ同じpath/normalized headingを与え、empty inventoryでreconcileすると`Success`になり、同一locatorのtombstoneが2件残った。そのstateを`serialize_manifest_v2()`へ渡すと`manifest-v2-serialization-invalid`になる。直接のtombstone再導入は修正されたが、public allocatorは依然codecが受理できないstateを返せる。
-
-**Fix:** `_validate_source_state()`でactive/tombstoneを共通のnormalized identity setへ登録し、cross-stateおよびtombstone同士の衝突をallocation前に`source-tombstone-identity-collision`等のstructured collisionとして拒否する。active+tombstone同一locatorからempty inventoryへ遷移する回帰テストと、成功したreconciliationは必ずschema-v2 serialize/parseできる不変条件を追加する。
-
-#### CR-03: schema-v2 parserがplatform case aliasのsource pathsを同時に受理する
-
-**Classification:** BLOCKER
-
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_v2.py:286-456`
-
-**Issue:** source identity uniquenessはpath文字列のexact equalityだけで、path alias keyを検査しない。fixtureのactive itemに、同じheadingを持つ`.../fixture-capability/spec.md`と`.../Fixture-Capability/spec.md`を別IDで追加したmanifestが`Success`になった。source inventoryはcasefold aliasを拒否しており、codecだけがHARD-R1/designのUnicode/platform-case alias collision拒否と異なるstateを受理する。
-
-**Fix:** active/tombstone全件のcanonical pathへNFC済みcasefold alias keyを作り、異なるraw pathが同じaliasへ畳まれる場合は`manifest-v2-value-invalid`にする。同じ検査をallocatorのpersisted-state validatorにも共有し、case/NFC alias fixtureを追加する。
-
-#### CR-04: staging作成後にcreate処理が失敗するとorphanを残してcleanupを`not-needed`と報告する
+#### CR-02: final replace seamでcanonical sourceが変わってもstale candidateをinstallする
 
 **Classification:** BLOCKER
 
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:259-283, 882-907`
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:1160-1233`
 
-**Issue:** `create_staging_at()`は`os.open(...O_CREAT|O_EXCL)`後の`fstat()`または`close()`でも例外になり得るが、apply側はmethodがnameをreturnする前の全例外を`staging_name=None`として扱う。実ファイルを作成した直後に`OSError`を注入すると、target v1は維持される一方、`.handoff.*.tmp`が残り、結果は`staging_state=unknown`かつ`cleanup_outcome=not-needed`だった。staging existenceとcleanup evidenceが事実に反する。
+**Issue:** `_validate_source_snapshot()`はstaging validation後に一度実行されるが、その後の
+`before_replace_at()`とfinal guardはtarget parent / target v1 hashだけを再検査する。
+`before_replace_at()`でcanonical `spec.md`へ1行追加するfault adapterを使うと、sourceはapproved previewから
+driftしたにもかかわらず`apply_manifest_migration()`が`Success`を返し、旧fingerprint / artifact hashを持つ
+v2 candidateをtargetへreplaceした。これはpreview後のstate changeでapprovalを失効させる契約を破る。
 
-**Fix:** creation ownershipをadapter内で完結させ、open成功後の全失敗で同じdir fdから一度だけunlinkを試すか、作成済みnameとcleanup outcomeを運ぶ専用exception/resultをapplyへ返す。post-open `fstat`/close failureを注入し、orphan有無とcleanup evidenceが一致する回帰テストを追加する。
+**Fix:** test seamを含む全pre-replace actionの後、replace直前の一つのguardでcanonical artifacts、tasks
+progress、source inventory、target parent、target v1 bytesを再取得・照合する。いずれか一つでも違えばvalidated
+stagingをcleanupして`STATE_GUARD` failureを返す。spec、proposal、tasksそれぞれをfinal seamで変更する
+regression testを追加する。
 
-#### CR-05: target置換後のparent descriptor close失敗がstructured resultを上書きする
-
-**Classification:** BLOCKER
-
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:1178-1199`
-
-**Issue:** `_apply_anchored_manifest_migration()`のreturnを`finally`内の`close_parent_directory()`が上書きできる。closeを「実際にcloseしてから`OSError`」にすると、targetはschema 2へ置換済みなのに`apply_manifest_migration()`は`OSError`を外へ送出した。callerは成功値もmigration failure evidenceも受け取れず、partial effectの既知状態を失う。
-
-**Fix:** apply resultを先に保持し、close exceptionを捕捉して外へ漏らさない。replace済み候補をanchored/bounded rereadで証明できる場合は正確なsuccess、証明不能なら専用failure pointとtarget stateを持つstructured resultを返す。replace後close faultの回帰テストを追加する。
-
-#### CR-06: malformed/tampered previewがapproval failureではなく`AttributeError`を送出する
+#### CR-03: approval previewのchanges / exclusionsがcandidate source stateと一致しなくてもapplyできる
 
 **Classification:** BLOCKER
 
-**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:406-435, 1072-1089`
+**File:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:578-657, 1297-1314`
 
-**Issue:** approval guardは`_preview_identity(preview)`をschema validationより先に呼び、machine view builderの例外を捕捉しない。valid previewを`replace(preview, changes=("bad",))`で改変し、保存済みpreview hashとliteral approvalを渡すと、target v1を維持するものの`'str' object has no attribute 'kind'`が外へ漏れた。Plan 04/05の「incomplete previewはpartial evidenceなしでfail closed」「applyはimmutable successまたはmigration-specific failure evidence」を満たさない。
+**Issue:** `_preview_is_consistent()`はcandidate bytes、artifact / progress hash、source commitは検査するが、
+`changes`と`exclusions`がreconciliationおよび`candidate_manifest.source_items`から導出された完全なevidenceかを
+検査しない。valid previewのcreated changeを空配列にする、またはsource path / candidate fingerprintを別の
+valid-shaped値へ変更し、そのmachine viewから新しいpreview hashを作って明示承認すると、
+`apply_manifest_migration()`は`Success`を返してcandidateをinstallした。承認hashは虚偽のchange summary自体には
+正しく結び付くため、単なるhash mismatchでは拒否できない。
 
-**Fix:** preview machine view/identity計算をtotal validatorにし、全field型・bounds・candidate consistencyを検査して例外を`migration-preview-invalid`へ分類する。nested `changes`、artifacts、progress、source pathsを1項目ずつ壊すtable testを追加し、mutation zeroとstructured failureを確認する。
+**Fix:** previous source stateまたはそのcanonical digestをpreviewのfrozen evidenceへ含め、candidateとの比較から
+`changes` / `exclusions`をvalidation時に再導出する。再導出した完全な順序付きevidenceとpreview fieldが一致しない
+場合は`migration-preview-invalid`としてapproval / staging前に拒否する。created項目の欠落、余分な項目、valid
+hexだが誤ったfingerprint、誤ったsource pathをtable regressionに追加する。
 
-### Warnings
+#### CR-04: exact JSON codecがbounded malformed inputをstructured failureへ閉じ込めない
 
-#### WR-01: exact JSON parserがduplicate object namesをlast-value-winsで受理する
-
-**Classification:** WARNING
+**Classification:** BLOCKER
 
 **Files:**
 
-- `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_v2.py:649-663`
-- `src/ai_coding_template_ja/openspec_gsd_handoff/versioned_manifest.py:38-68`
+- `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_v2.py:95-98, 670-700, 865-881`
+- `src/ai_coding_template_ja/openspec_gsd_handoff/versioned_manifest.py:57-79`
 
-**Issue:** `json.loads()`のdefault object decoderはduplicate namesを上書きする。golden v2の先頭へ`"schema_version": 1`を追加し、後段の既存`"schema_version": 2`を残したbytesは、direct v2 parserとversion dispatcherの双方でschema 2 `Success`になった。Python内では一貫するが、first-wins parserとの間でschema discriminator解釈が分かれ、exact/strict wire contractに曖昧なdocumentを持ち込む。
+**Issue:** 8 MiB未満の`{"schema_version": <5000桁の整数>}`を渡すとPythonのinteger digit limitによる
+`ValueError`がdirect v2 parserとversion dispatcherの両方から外へ漏れる。valid v2 JSONのtask descriptionを
+escaped lone surrogate `"\\ud800"`へ変えると`_parse_common_manifest()`のUTF-8 encodeで
+`UnicodeEncodeError`が漏れる。一方、source itemの`raw_heading`へ同じlone surrogateを置く入力はparserが
+`Success`を返すが、直後のserializerはFailureになり、strict UTF-8 source itemとround-trip契約を破る。
+さらにvalid valueの`schema_version`を5000桁integerへ差し替えたserializer入力も`ValueError`を送出する。
 
-**Fix:** 全object levelでduplicate nameを検出する`object_pairs_hook`を使い、direct parserは`manifest-v2-json-invalid`、dispatcherは`manifest-json-invalid`へ分類する。rootとnested objectのduplicate-key fixturesを追加する。
+**Fix:** JSON decodeでgeneral `ValueError`をstructured invalid-JSONへ分類し、decoded treeの全stringをUnicode
+scalar / UTF-8 encodableとしてbounded validationする。`_parse_common_manifest()`とserializerも
+`UnicodeEncodeError`、`ValueError`、`OverflowError`、`RecursionError`を対応するstructured failureへ閉じ込める。
+huge integer、lone surrogate in common field、lone surrogate in source item、huge integer serializer valueを
+regressionへ追加する。
 
 ---
 
-_Reviewed: 2026-07-16T22:46:17Z_
+_Reviewed: 2026-07-16T23:23:27Z_
 _Reviewer: generic-agent workaround (gsd-code-reviewer role contract; not typed-dispatch equivalent)_
 _Depth: standard_
