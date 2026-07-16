@@ -24,6 +24,8 @@ from .manifest_v2 import (
     serialize_manifest_v2,
 )
 from .models import (
+    ArtifactClaim,
+    ArtifactKind,
     ClassifiedIssue,
     Failure,
     IssueCategory,
@@ -32,6 +34,7 @@ from .models import (
     Result,
     Success,
 )
+from .reader import read_canonical_artifacts
 from .source_identity import (
     DEFAULT_SOURCE_IDENTITY_LIMITS,
     ExplicitSourceMatch,
@@ -188,24 +191,34 @@ def _resolve_target(
     return Success((repository, target_path.as_posix(), parts[2]))
 
 
-def _read_source_hashes(
+def _read_artifact_snapshot(
     repository: Path,
-    source_paths: Sequence[str],
-    *,
-    limit: int,
-) -> Result[dict[str, str]]:
-    hashes: dict[str, str] = {}
+    change_id: str,
+    artifacts: Sequence[ManifestArtifact],
+) -> Result[tuple[ManifestArtifact, ...]]:
     try:
-        for source_path in source_paths:
-            target = repository.joinpath(*source_path.split("/"))
-            with target.open("rb") as stream:
-                data = stream.read(limit + 1)
-            if len(data) > limit:
-                return _failure("source-file-limit-exceeded")
-            hashes[source_path] = _sha256(data)
-    except OSError:
-        return _failure("source-read-failed")
-    return Success(hashes)
+        claims = tuple(
+            ArtifactClaim(
+                kind=ArtifactKind(artifact.kind),
+                path=Path(artifact.path),
+            )
+            for artifact in artifacts
+        )
+    except ValueError:
+        return _failure("migration-artifact-snapshot-invalid")
+    observed = read_canonical_artifacts(repository, change_id, claims)
+    if isinstance(observed, Failure):
+        return observed
+    return Success(
+        tuple(
+            ManifestArtifact(
+                kind=artifact.kind.value,
+                path=artifact.path,
+                sha256=artifact.sha256,
+            )
+            for artifact in observed.value
+        )
+    )
 
 
 def _validate_source_snapshot(
@@ -213,43 +226,35 @@ def _validate_source_snapshot(
     source_paths: Sequence[str],
     artifacts: Sequence[ManifestArtifact],
     *,
+    change_id: str,
     limits: SourceIdentityLimits,
 ) -> Result[SourceInventory]:
+    first_artifacts = _read_artifact_snapshot(repository, change_id, artifacts)
+    if isinstance(first_artifacts, Failure):
+        return first_artifacts
+    if first_artifacts.value != tuple(artifacts):
+        return _failure("migration-artifact-snapshot-mismatch")
     inventory = read_source_inventory(repository, source_paths, limits=limits)
     if isinstance(inventory, Failure):
         return inventory
-    first_hashes = _read_source_hashes(
-        repository,
-        source_paths,
-        limit=limits.bytes_per_file,
-    )
-    if isinstance(first_hashes, Failure):
-        return first_hashes
     confirmed_inventory = read_source_inventory(repository, source_paths, limits=limits)
     if isinstance(confirmed_inventory, Failure):
         return confirmed_inventory
-    confirmed_hashes = _read_source_hashes(
+    confirmed_artifacts = _read_artifact_snapshot(
         repository,
-        source_paths,
-        limit=limits.bytes_per_file,
+        change_id,
+        artifacts,
     )
-    if isinstance(confirmed_hashes, Failure):
-        return confirmed_hashes
+    if isinstance(confirmed_artifacts, Failure):
+        return confirmed_artifacts
     if (
         confirmed_inventory.value != inventory.value
-        or confirmed_hashes.value != first_hashes.value
+        or confirmed_artifacts.value != first_artifacts.value
     ):
         return _failure("migration-source-changed-during-preview")
 
-    artifact_hashes = {
-        artifact.path: artifact.sha256
-        for artifact in artifacts
-        if artifact.kind == "spec"
-    }
-    if set(artifact_hashes) != set(source_paths) or any(
-        artifact_hashes[path] != fingerprint
-        for path, fingerprint in confirmed_hashes.value.items()
-    ):
+    spec_paths = {artifact.path for artifact in artifacts if artifact.kind == "spec"}
+    if spec_paths != set(source_paths):
         return _failure("migration-source-snapshot-mismatch")
     return inventory
 
@@ -367,6 +372,7 @@ def preview_manifest_migration(
         repository,
         canonical_source_paths,
         artifacts,
+        change_id=source_manifest.change_id,
         limits=limits,
     )
     if isinstance(source_snapshot, Failure):
