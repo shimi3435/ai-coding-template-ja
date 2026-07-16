@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import stat
 import unicodedata
@@ -27,6 +28,8 @@ _FINGERPRINT = re.compile(r"[0-9a-f]{64}\Z")
 _CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _MAX_SOURCE_ITEMS = 4096
 _MAX_SOURCE_STATE_BYTES = 8_388_608
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+_FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 
 
 class SourceCategory(StrEnum):
@@ -421,40 +424,125 @@ def _canonical_source_path(path: str | Path) -> tuple[tuple[str, ...], str]:
     return raw_segments, "/".join(normalized_segments)
 
 
-def _contains_symlink(repository: Path, raw_segments: Sequence[str]) -> bool | None:
-    current = repository
+def _entry_is_symlink(parent_fd: int, name: str) -> bool:
     try:
-        for segment in raw_segments:
-            current /= segment
-            if stat.S_ISLNK(current.lstat().st_mode):
-                return True
+        entry = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     except OSError:
-        return None
-    return False
+        return False
+    return stat.S_ISLNK(entry.st_mode)
 
 
-def read_source_inventory(
-    repository_root: Path,
-    source_paths: Sequence[str | Path],
+def _open_anchored_entry(
+    parent_fd: int,
+    name: str,
     *,
-    limits: SourceIdentityLimits = DEFAULT_SOURCE_IDENTITY_LIMITS,
-) -> Result[SourceInventory]:
-    """Read all canonical Markdown inputs once or return one whole-operation failure."""
-
-    if not _valid_limits(limits):
-        return _failure("source-limits-invalid", category=IssueCategory.INPUT)
-    if not source_paths:
-        return _failure("source-paths-empty", category=IssueCategory.INPUT)
-    if len(source_paths) > limits.max_items:
-        return _failure("source-path-count-limit-exceeded")
+    directory: bool,
+) -> int:
+    flags = _DIRECTORY_OPEN_FLAGS if directory else _FILE_OPEN_FLAGS
     try:
-        repository = repository_root.resolve(strict=True)
-    except OSError:
-        return _failure("source-root-unreadable")
-    if not repository.is_dir():
-        return _failure("source-root-invalid")
+        descriptor = os.open(name, flags, dir_fd=parent_fd)
+    except OSError as error:
+        if _entry_is_symlink(parent_fd, name):
+            raise _SourceInputError("source-path-symlink") from error
+        raise _SourceInputError("source-path-unreadable") from error
 
-    prepared_paths: list[tuple[Path, str]] = []
+    try:
+        opened = os.fstat(descriptor)
+    except OSError as error:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        raise _SourceInputError("source-path-unreadable") from error
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    if not expected_type(opened.st_mode):
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        code = "source-path-unreadable" if directory else "source-path-not-file"
+        raise _SourceInputError(code)
+    return descriptor
+
+
+def _verify_anchored_entry(parent_fd: int, name: str, descriptor: int) -> None:
+    try:
+        linked = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        opened = os.fstat(descriptor)
+    except OSError as error:
+        raise _SourceInputError("source-path-identity-changed") from error
+    if stat.S_ISLNK(linked.st_mode):
+        raise _SourceInputError("source-path-symlink")
+    if (linked.st_dev, linked.st_ino, stat.S_IFMT(linked.st_mode)) != (
+        opened.st_dev,
+        opened.st_ino,
+        stat.S_IFMT(opened.st_mode),
+    ):
+        raise _SourceInputError("source-path-identity-changed")
+
+
+def _read_anchored_source(
+    repository_fd: int,
+    raw_segments: Sequence[str],
+    *,
+    max_bytes: int,
+) -> bytes:
+    opened_descriptors: list[int] = []
+    anchored_entries: list[tuple[int, str, int]] = []
+    content_bytes: bytes | None = None
+    read_error: _SourceInputError | None = None
+    parent_fd = repository_fd
+    try:
+        for segment in raw_segments[:-1]:
+            descriptor = _open_anchored_entry(parent_fd, segment, directory=True)
+            opened_descriptors.append(descriptor)
+            anchored_entries.append((parent_fd, segment, descriptor))
+            _verify_anchored_entry(parent_fd, segment, descriptor)
+            parent_fd = descriptor
+
+        filename = raw_segments[-1]
+        source_fd = _open_anchored_entry(parent_fd, filename, directory=False)
+        opened_descriptors.append(source_fd)
+        anchored_entries.append((parent_fd, filename, source_fd))
+        _verify_anchored_entry(parent_fd, filename, source_fd)
+
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(source_fd, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content_bytes = b"".join(chunks)
+
+        for entry_parent_fd, entry_name, descriptor in anchored_entries:
+            _verify_anchored_entry(entry_parent_fd, entry_name, descriptor)
+    except _SourceInputError as error:
+        read_error = error
+    except OSError:
+        read_error = _SourceInputError("source-read-failed")
+    finally:
+        for descriptor in reversed(opened_descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                if read_error is None:
+                    read_error = _SourceInputError("source-read-failed")
+
+    if read_error is not None:
+        raise read_error
+    if content_bytes is None:
+        raise _SourceInputError("source-read-failed")
+    return content_bytes
+
+
+def _read_inventory_from_repository_fd(
+    repository_fd: int,
+    source_paths: Sequence[str | Path],
+    limits: SourceIdentityLimits,
+) -> Result[SourceInventory]:
+    prepared_paths: list[tuple[tuple[str, ...], str]] = []
     aliases: set[str] = set()
     for source_path in source_paths:
         try:
@@ -465,31 +553,20 @@ def read_source_inventory(
         if alias in aliases:
             return _failure("source-path-alias")
         aliases.add(alias)
-        logical_path = repository.joinpath(*raw_segments)
-        symlink = _contains_symlink(repository, raw_segments)
-        if symlink is None:
-            return _failure("source-path-unreadable")
-        if symlink:
-            return _failure("source-path-symlink")
-        try:
-            resolved_path = logical_path.resolve(strict=True)
-        except OSError:
-            return _failure("source-path-unreadable")
-        if not resolved_path.is_relative_to(repository):
-            return _failure("source-path-outside-repository")
-        if not resolved_path.is_file():
-            return _failure("source-path-not-file")
-        prepared_paths.append((resolved_path, canonical_path))
+        prepared_paths.append((raw_segments, canonical_path))
 
     observations: list[SourceObservation] = []
     aggregate_bytes = 0
     identities: set[tuple[object, ...]] = set()
-    for resolved_path, canonical_path in prepared_paths:
+    for raw_segments, canonical_path in prepared_paths:
         try:
-            with resolved_path.open("rb") as stream:
-                content_bytes = stream.read(limits.bytes_per_file + 1)
-        except OSError:
-            return _failure("source-read-failed")
+            content_bytes = _read_anchored_source(
+                repository_fd,
+                raw_segments,
+                max_bytes=limits.bytes_per_file,
+            )
+        except _SourceInputError as error:
+            return _failure(error.code)
         if len(content_bytes) > limits.bytes_per_file:
             return _failure("source-file-limit-exceeded")
         aggregate_bytes += len(content_bytes)
@@ -516,6 +593,56 @@ def read_source_inventory(
             observations.append(observation)
 
     return Success(SourceInventory(items=tuple(observations)))
+
+
+def read_source_inventory(
+    repository_root: Path,
+    source_paths: Sequence[str | Path],
+    *,
+    limits: SourceIdentityLimits = DEFAULT_SOURCE_IDENTITY_LIMITS,
+) -> Result[SourceInventory]:
+    """Read all canonical Markdown inputs once or return one whole-operation failure."""
+
+    if not _valid_limits(limits):
+        return _failure("source-limits-invalid", category=IssueCategory.INPUT)
+    if not source_paths:
+        return _failure("source-paths-empty", category=IssueCategory.INPUT)
+    if len(source_paths) > limits.max_items:
+        return _failure("source-path-count-limit-exceeded")
+    try:
+        repository = repository_root.resolve(strict=True)
+    except OSError:
+        return _failure("source-root-unreadable")
+    try:
+        repository_fd = os.open(repository, _DIRECTORY_OPEN_FLAGS)
+    except OSError:
+        return _failure("source-root-unreadable")
+    try:
+        repository_stat = os.fstat(repository_fd)
+    except OSError:
+        try:
+            os.close(repository_fd)
+        except OSError:
+            pass
+        return _failure("source-root-unreadable")
+    if not stat.S_ISDIR(repository_stat.st_mode):
+        try:
+            os.close(repository_fd)
+        except OSError:
+            pass
+        return _failure("source-root-invalid")
+
+    result = _read_inventory_from_repository_fd(
+        repository_fd,
+        source_paths,
+        limits,
+    )
+    try:
+        os.close(repository_fd)
+    except OSError:
+        if isinstance(result, Success):
+            return _failure("source-root-unreadable")
+    return result
 
 
 def fingerprint_source_observation(

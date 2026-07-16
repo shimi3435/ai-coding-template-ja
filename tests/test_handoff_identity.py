@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from typing import Any
 
 import pytest
 from hypothesis import given
@@ -391,7 +392,7 @@ def test_inventory_rejects_parent_swap_before_source_open(
         source_parent.rename(detached_parent)
         source_parent.symlink_to(outside_parent, target_is_directory=True)
 
-    def racing_path_open(self: Path, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+    def racing_path_open(self: Path, *args: Any, **kwargs: Any) -> Any:
         if self == source:
             swap_parent_once()
         return original_path_open(self, *args, **kwargs)
