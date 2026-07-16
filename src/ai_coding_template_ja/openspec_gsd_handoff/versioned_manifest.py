@@ -13,7 +13,12 @@ from .manifest import (
     ManifestSizeLimitExceeded,
     parse_manifest_bytes,
 )
-from .manifest_v2 import HandoffManifestV2, parse_manifest_v2_bytes
+from .manifest_v2 import (
+    DuplicateJsonObjectNameError,
+    HandoffManifestV2,
+    decode_json_without_duplicate_object_names,
+    parse_manifest_v2_bytes,
+)
 from .models import (
     ClassifiedIssue,
     Failure,
@@ -50,8 +55,14 @@ def parse_versioned_manifest_bytes(
     ):
         return _failure("manifest-requested-schema-invalid")
     try:
-        raw = json.loads(data)
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, RecursionError):
+        raw = decode_json_without_duplicate_object_names(data)
+    except (
+        DuplicateJsonObjectNameError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        TypeError,
+        RecursionError,
+    ):
         return _failure("manifest-json-invalid")
     if not isinstance(raw, Mapping):
         return _failure("manifest-schema-unsupported")

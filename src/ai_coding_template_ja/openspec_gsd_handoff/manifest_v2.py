@@ -79,6 +79,25 @@ _REFERENCED_KINDS = {
 }
 
 
+class DuplicateJsonObjectNameError(ValueError):
+    """Raised when one JSON object declares the same decoded name twice."""
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for name, item in pairs:
+        if name in value:
+            raise DuplicateJsonObjectNameError(name)
+        value[name] = item
+    return value
+
+
+def decode_json_without_duplicate_object_names(data: bytes) -> object:
+    """Decode JSON while rejecting duplicate names at every object level."""
+
+    return json.loads(data, object_pairs_hook=_unique_json_object)
+
+
 @dataclass(frozen=True)
 class ManifestMapping:
     """One stable source-to-execution reference declaration."""
@@ -664,8 +683,14 @@ def parse_manifest_v2_bytes(data: bytes) -> Result[HandoffManifestV2]:
     if len(data) > MAX_MANIFEST_BYTES:
         return _failure("manifest-size-limit-exceeded")
     try:
-        raw = json.loads(data)
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, RecursionError):
+        raw = decode_json_without_duplicate_object_names(data)
+    except (
+        DuplicateJsonObjectNameError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        TypeError,
+        RecursionError,
+    ):
         return _failure("manifest-v2-json-invalid")
     root = _exact_fields(raw, _ROOT_FIELDS)
     if root is None:
