@@ -3,8 +3,9 @@
 **Project:** OpenSpec–GSD Handoff Lifecycle Hardening
 **Domain:** source-pinned workflow lifecycle enforcement
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Canonical source:** `2cbb127917feaa637ef5eac439478227ac5f717b`
-**Canonical artifacts:** `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` に列挙された paths
+**Research baseline source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Current planning source:** `2cbb127917feaa637ef5eac439478227ac5f717b`; Phase 1 phase research must reread the current canonical artifacts.
+**Research artifact paths:** historical `handoff-brief.md` に列挙された paths
 **Researched:** 2026-07-16
 **Confidence:** HIGH
 
@@ -295,9 +296,10 @@ OpenSpec final validationとGSD phase verificationは独立させ、どちらも
 ### Primary (HIGH confidence)
 
 - `.planning/PROJECT.md` — project scope、constraints、ownership boundaries
-- `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` — exact change ID、
-  canonical paths、source commit、boundary gates
-- source commit `2cbb127917feaa637ef5eac439478227ac5f717b` — canonical reference point after approved manual recovery
+- `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` — historical dispatchの
+  exact change ID、canonical paths、旧source commit、boundary gates
+- research baseline source `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd` — source used for this project-level research
+- current planning authority `2cbb127917feaa637ef5eac439478227ac5f717b` — source Phase 1 must reread after approved manual recovery
 - [STACK.md](STACK.md) — stack、versions、reuse seams、verification performed
 - [FEATURES.md](FEATURES.md) — capability chain、evidence model、anti-features
 - [ARCHITECTURE.md](ARCHITECTURE.md) — component boundaries、data flow、build order

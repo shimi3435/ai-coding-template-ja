@@ -1,8 +1,9 @@
 # Technology Stack: OpenSpec–GSD Handoff Lifecycle Hardening
 
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Canonical source:** `2cbb127917feaa637ef5eac439478227ac5f717b`
-**Canonical artifacts:** `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` と `handoff.json` に列挙された paths
+**Research baseline source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Current planning source:** `2cbb127917feaa637ef5eac439478227ac5f717b`; Phase 1 phase research must reread the current canonical artifacts.
+**Research artifact paths:** historical `handoff-brief.md` / `handoff.json` に列挙された paths
 **Researched:** 2026-07-16
 **Confidence:** HIGH（implementation baseline調査は旧dispatch時点。manual recovery後のPhase 1 planningはcurrent source pinを再読する）
 
@@ -20,7 +21,8 @@
 - deterministic fixtures、fault injection、property tests
 - repository write detectionを伴う opt-in read-only smoke
 
-各 phase は canonical OpenSpec の `HARD-R1`〜`HARD-R6` handles と source commitを参照し、仕様本文、requirements、scenarios、acceptance criteriaを GSD 側へコピーしない。
+各 phase は current planning source の canonical OpenSpec にある `HARD-R1`〜`HARD-R6` handles と
+source commitを参照し、仕様本文、requirements、scenarios、acceptance criteriaを GSD 側へコピーしない。
 
 ## Existing Version Baseline
 
@@ -231,7 +233,8 @@ Repository-primary evidence:
 - `.planning/PROJECT.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff.json`
-- canonical OpenSpec handles `HARD-R1`〜`HARD-R6` at source commit `2cbb127917feaa637ef5eac439478227ac5f717b`
+- original research baseline for canonical OpenSpec handles `HARD-R1`〜`HARD-R6`: `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+- current planning authority for Phase 1 reread: `2cbb127917feaa637ef5eac439478227ac5f717b`
 - `pyproject.toml`, `uv.lock`, `Taskfile.yml`, `.github/workflows/ci.yml`
 - `src/ai_coding_template_ja/openspec_gsd_handoff/`
 - `tests/test_handoff_*.py`, `tests/test_execute_openspec_change_skill.py`, `tests/test_taskfile.py`

@@ -2,7 +2,8 @@
 
 **Domain:** source-pinned workflow lifecycle enforcement
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Source commit:** `2cbb127917feaa637ef5eac439478227ac5f717b`
+**Research baseline source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Current planning source:** `2cbb127917feaa637ef5eac439478227ac5f717b`; Phase 1 phase research must reread the current canonical artifacts.
 **Researched:** 2026-07-16
 **Confidence:** HIGH
 
@@ -337,5 +338,7 @@ Primary repository evidence:
 - `tests/fixtures/openspec_gsd_handoff/`
 
 The unchanged `handoff.json` records the original dispatch and is historical / stale
-evidence after manual recovery. Current planning is grounded in the source commit above
-and the canonical paths; no external ecosystem claim is needed for this feature dimension.
+evidence after manual recovery. This document records research performed against the
+research baseline above; current Phase 1 planning must reread the canonical paths at the
+separately identified current planning source. No external ecosystem claim is needed for
+this feature dimension.

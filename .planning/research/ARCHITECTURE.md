@@ -2,7 +2,8 @@
 
 **Project:** OpenSpec–GSD Handoff Lifecycle Hardening
 **Researched:** 2026-07-16
-**Source commit:** `2cbb127917feaa637ef5eac439478227ac5f717b`
+**Research baseline source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Current planning source:** `2cbb127917feaa637ef5eac439478227ac5f717b`; Phase 1 phase research must reread the current canonical artifacts.
 **Confidence:** HIGH for current boundaries and dependency order; MEDIUM for proposed file names
 
 ## Scope and Authority
@@ -491,7 +492,8 @@ OpenSpec-owned final completion.
 
 ## Sources
 
-- Source commit `2cbb127917feaa637ef5eac439478227ac5f717b`
+- Research baseline source `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+- Current planning authority `2cbb127917feaa637ef5eac439478227ac5f717b`
 - `.planning/PROJECT.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff.json`

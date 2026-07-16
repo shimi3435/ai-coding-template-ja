@@ -2,10 +2,11 @@
 
 **Domain:** OpenSpec–GSD handoff lifecycle hardening
 **Researched:** 2026-07-16
-**Source pin:** `2cbb127917feaa637ef5eac439478227ac5f717b`
-**Overall confidence:** HIGH — source-pinned canonical artifacts, current implementation, fixed
-fixtures, and public-seam tests were cross-checked directly. No external ecosystem claims are
-needed for this repository-specific analysis.
+**Research baseline source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Current planning source:** `2cbb127917feaa637ef5eac439478227ac5f717b`; Phase 1 phase research must reread the current canonical artifacts.
+**Overall confidence:** HIGH for the research baseline — its source-pinned canonical artifacts,
+implementation, fixed fixtures, and public-seam tests were cross-checked directly. No external
+ecosystem claims are needed for this repository-specific analysis.
 
 This document does not restate canonical requirements or scenarios. Each warning refers only to
 the applicable `HARD-R1`–`HARD-R6` handle.
@@ -20,9 +21,9 @@ the applicable `HARD-R1`–`HARD-R6` handle.
 - Existing tests provide useful evidence for v1 bounded reads, strict parsing, atomic staging,
   path containment, read-only probes, and static generic-dispatch instructions. They do not prove
   the future v2 lifecycle, repository-wide ownership, recovery, or approval-bound finalize seams.
-- The prepared handoff manifest currently exists with `handoff_state: prepared` under the
-  untracked `.planning/openspec/` directory. It is useful local evidence, but it is not durable
-  resume state until the repository-owned tracking step occurs.
+- At research time, the handoff manifest existed with `handoff_state: prepared`. It was later
+  started and is now retained unchanged as historical / stale dispatch evidence; current Phase 1
+  planning authority comes from the separately identified current source.
 - The visible host path is a **generic-agent workaround**, not typed dispatch. Static TOML and skill
   contracts do not by themselves prove actual prompt injection, spawning, or route postconditions.
 
@@ -463,7 +464,9 @@ Use these rules to avoid both coverage gaps and low-value duplication:
 - `.planning/PROJECT.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff.json`
-- `openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md` at source commit
+- `openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md` at research baseline
+  source `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+- current Phase 1 planning authority:
   `2cbb127917feaa637ef5eac439478227ac5f717b`
 - `openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md`
 - `src/ai_coding_template_ja/openspec_gsd_handoff/`

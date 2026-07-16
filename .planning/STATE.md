@@ -19,7 +19,7 @@ See: .planning/PROJECT.md (updated 2026-07-17)
 **Current focus:** Phase 1 — Stable Identity and Migration
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
 **Source commit:** `2cbb127917feaa637ef5eac439478227ac5f717b`
-**Project mode:** mvp
+**Project mode:** standard
 
 ## Current Position
 
