@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -30,9 +29,11 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
-    ActiveSourceItem,
     SourceCategory,
     SourceIdentityState,
+    SourceInventory,
+    SourceObservation,
+    reconcile_source_items,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.versioned_manifest import (
     parse_versioned_manifest_bytes,
@@ -480,28 +481,35 @@ def test_schema_v2_complete_values_round_trip_to_the_same_value_and_bytes(
     parsed = parse_manifest_v2_bytes(EXPECTED_V2)
     assert isinstance(parsed, Success)
     names = tuple(sorted(generated_names))
-    active = tuple(
-        ActiveSourceItem(
-            id=f"REQ-{index:06d}",
-            category=SourceCategory.REQUIREMENT,
-            source_path=(
-                "openspec/changes/fixture-change/specs/"
-                f"generated-{index:06d}-{name}/spec.md"
-            ),
-            raw_heading=f"### Requirement: Generated {index:06d} {name}",
-            parent_id=None,
-            fingerprint=hashlib.sha256(name.encode()).hexdigest(),
+    inventory = SourceInventory(
+        items=tuple(
+            SourceObservation(
+                category=SourceCategory.REQUIREMENT,
+                source_path=(
+                    "openspec/changes/fixture-change/specs/"
+                    f"generated-{index:06d}-{name}/spec.md"
+                ),
+                raw_heading=f"### Requirement: Generated {index:06d} {name}",
+                normalized_heading=f"Requirement: Generated {index:06d} {name}",
+                normalized_block="Generated body.\n",
+                parent_locator=None,
+            )
+            for index, name in enumerate(names, start=1)
         )
-        for index, name in enumerate(names, start=1)
     )
-    manifest = replace(
-        parsed.value,
-        source_items=SourceIdentityState(
-            next_requirement_id=len(active) + 1,
+    reconciled = reconcile_source_items(
+        inventory,
+        SourceIdentityState(
+            next_requirement_id=1,
             next_scenario_id=1,
-            active=active,
+            active=(),
             tombstones=(),
         ),
+    )
+    assert isinstance(reconciled, Success)
+    manifest = replace(
+        parsed.value,
+        source_items=reconciled.value.state,
     )
 
     serialized = serialize_manifest_v2(manifest)

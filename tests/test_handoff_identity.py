@@ -719,6 +719,51 @@ def test_reconcile_rejects_invalid_parent_and_duplicate_ids() -> None:
     assert duplicate_result.issue.code == "source-state-id-duplicate"
 
 
+@pytest.mark.parametrize("collision_kind", ["active-tombstone", "tombstones"])
+def test_reconcile_rejects_identity_collisions_including_tombstones(
+    collision_kind: str,
+) -> None:
+    first = _active_requirement()
+    duplicate_tombstone = identity.SourceTombstone(
+        id="REQ-000002",
+        category=SourceCategory.REQUIREMENT,
+        last_source_path=first.source_path,
+        last_raw_heading=first.raw_heading,
+        last_parent_id=None,
+        fingerprint="2" * 64,
+    )
+    if collision_kind == "active-tombstone":
+        active = (first,)
+        tombstones = (duplicate_tombstone,)
+    else:
+        active = ()
+        tombstones = (
+            identity.SourceTombstone(
+                id=first.id,
+                category=first.category,
+                last_source_path=first.source_path,
+                last_raw_heading=first.raw_heading,
+                last_parent_id=None,
+                fingerprint=first.fingerprint,
+            ),
+            duplicate_tombstone,
+        )
+
+    result = identity.reconcile_source_items(
+        identity.SourceInventory(items=()),
+        identity.SourceIdentityState(
+            next_requirement_id=3,
+            next_scenario_id=1,
+            active=active,
+            tombstones=tombstones,
+        ),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-tombstone-identity-collision"
+    assert not hasattr(result, "value")
+
+
 def test_reconcile_refuses_allocation_at_exhausted_sentinel() -> None:
     inventory = identity.SourceInventory(
         items=(
