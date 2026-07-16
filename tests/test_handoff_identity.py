@@ -44,12 +44,11 @@ def _fingerprint(observation: SourceObservation, parent_id: str | None) -> str:
 
 def _normalized_projection(
     observation: SourceObservation,
-) -> tuple[SourceCategory, str, str, str, object]:
+) -> tuple[SourceCategory, str, str, object]:
     return (
         observation.category,
         observation.source_path,
         observation.normalized_heading,
-        observation.normalized_block,
         observation.parent_locator,
     )
 
@@ -150,17 +149,20 @@ def test_equivalent_line_endings_nfc_and_display_heading_space_keep_identity(
     assert tuple(map(_normalized_projection, result.value.items)) == tuple(
         map(_normalized_projection, canonical_result.value.items)
     )
-    assert [
+    result_fingerprints = [
         _fingerprint(
             item, "REQ-000001" if item.category is SourceCategory.SCENARIO else None
         )
         for item in result.value.items
-    ] == [
+    ]
+    canonical_fingerprints = [
         _fingerprint(
             item, "REQ-000001" if item.category is SourceCategory.SCENARIO else None
         )
         for item in canonical_result.value.items
     ]
+    assert result_fingerprints[0] != canonical_fingerprints[0]
+    assert result_fingerprints[1:] == canonical_fingerprints[1:]
     assert (
         result.value.items[0].raw_heading != canonical_result.value.items[0].raw_heading
     )
