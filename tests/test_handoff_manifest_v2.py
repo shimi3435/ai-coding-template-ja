@@ -235,6 +235,18 @@ def test_schema_v2_validates_exact_future_reference_shapes() -> None:
             ),
             "manifest-v2-value-invalid",
         ),
+        (
+            lambda raw: raw["source_items"]["tombstones"][0].update(
+                {
+                    "last_source_path": (
+                        "openspec/changes/fixture-change/specs/"
+                        "fixture-capability/spec.md"
+                    ),
+                    "last_raw_heading": "### Requirement: Fixture identity",
+                }
+            ),
+            "manifest-v2-value-invalid",
+        ),
     ],
 )
 def test_schema_v2_rejects_malformed_ids_counters_parents_and_duplicates(
