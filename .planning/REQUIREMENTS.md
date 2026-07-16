@@ -43,19 +43,19 @@ Updated during roadmap creation. Each GSD handle maps to exactly one primary pha
 
 | Requirement | Canonical Handle | Phase | Status |
 |-------------|------------------|-------|--------|
-| HND-01 | HARD-R1 | Unmapped | Pending |
-| HND-02 | HARD-R1 | Unmapped | Pending |
-| HND-03 | HARD-R2 | Unmapped | Pending |
-| HND-04 | HARD-R3 | Unmapped | Pending |
-| HND-05 | HARD-R4 | Unmapped | Pending |
-| HND-06 | HARD-R5 | Unmapped | Pending |
-| HND-07 | HARD-R6 | Unmapped | Pending |
+| HND-01 | HARD-R1 | Phase 1 | Pending |
+| HND-02 | HARD-R1 | Phase 2 | Pending |
+| HND-03 | HARD-R2 | Phase 3 | Pending |
+| HND-04 | HARD-R3 | Phase 4 | Pending |
+| HND-05 | HARD-R4 | Phase 5 | Pending |
+| HND-06 | HARD-R5 | Phase 6 | Pending |
+| HND-07 | HARD-R6 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 execution handles: 7 total
-- Mapped to primary phases: 0
-- Unmapped: 7
+- Mapped to primary phases: 7
+- Unmapped: 0
 
 ---
 *Requirements registry defined: 2026-07-16*
-*Last updated: 2026-07-16 after research synthesis*
+*Last updated: 2026-07-16 after roadmap creation*
