@@ -14,6 +14,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
     ManifestMigrationFailure,
     ManifestMigrationFileOperations,
+    MigrationCleanupOutcome,
     MigrationFailurePoint,
     MigrationStagingState,
     MigrationTargetState,
@@ -109,6 +110,60 @@ class MutationRecordingOperations(ManifestMigrationFileOperations):
 
     def unlink(self, path: Path) -> None:
         self.mutations.append("unlink")
+        super().unlink(path)
+
+
+class FaultInjectingOperations(MutationRecordingOperations):
+    """Inject one filesystem fault while keeping every side effect observable."""
+
+    def __init__(self, fault: str, target: Path) -> None:
+        super().__init__()
+        self.fault = fault
+        self.target = target
+        self.staging: Path | None = None
+
+    def create_staging(self, parent: Path) -> Path:
+        if self.fault == "create":
+            self.mutations.append("create")
+            raise OSError("injected create failure")
+        self.staging = super().create_staging(parent)
+        return self.staging
+
+    def write_bytes(self, path: Path, data: bytes) -> None:
+        if self.fault in {"write", "write-target-changed", "cleanup"}:
+            self.mutations.append("write")
+            ManifestMigrationFileOperations.write_bytes(self, path, b"{")
+            if self.fault == "write-target-changed":
+                self.target.write_bytes(b"changed concurrently")
+            raise OSError("injected write failure")
+        if self.fault == "validate":
+            super().write_bytes(path, b"{}")
+            return
+        super().write_bytes(path, data)
+
+    def read_bounded_bytes(
+        self, path: Path, *, limit: int = MAX_MANIFEST_BYTES
+    ) -> bytes:
+        if self.fault == "reread" and path == self.staging:
+            raise OSError("injected staging reread failure")
+        return super().read_bounded_bytes(path, limit=limit)
+
+    def replace(self, source: Path, target: Path) -> None:
+        if self.fault.startswith("replace-"):
+            self.mutations.append("replace")
+            if self.fault == "replace-changed":
+                target.write_bytes(b"changed during replace")
+            elif self.fault == "replace-unreadable":
+                target.unlink()
+            elif self.fault == "replace-oversized":
+                target.write_bytes(b"x" * (MAX_MANIFEST_BYTES + 1))
+            raise OSError("injected replace failure")
+        super().replace(source, target)
+
+    def unlink(self, path: Path) -> None:
+        if self.fault == "cleanup":
+            self.mutations.append("unlink")
+            raise OSError("injected cleanup failure")
         super().unlink(path)
 
 
@@ -565,3 +620,172 @@ def test_apply_exact_preview_validates_staging_then_atomically_replaces_target(
     assert applied.value == preview.candidate_manifest
     assert target.read_bytes() == preview.candidate_bytes
     assert operations.mutations == ["create", "write", "replace"]
+
+
+def test_apply_rejects_repository_alias_change_before_staging(tmp_path: Path) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    moved = tmp_path / "moved-repository"
+    repository.rename(moved)
+    repository.symlink_to(moved, target_is_directory=True)
+    operations = MutationRecordingOperations()
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert operations.mutations == []
+    assert (moved / TARGET_PATH).read_bytes() == EXPECTED_V1
+    assert target == repository / TARGET_PATH
+
+
+def test_apply_reports_pre_replace_faults_and_preserves_exact_v1(
+    tmp_path: Path,
+) -> None:
+    expected = {
+        "create": (
+            MigrationFailurePoint.CREATE,
+            MigrationStagingState.UNKNOWN,
+            MigrationCleanupOutcome.NOT_NEEDED,
+            ["create"],
+        ),
+        "write": (
+            MigrationFailurePoint.WRITE,
+            MigrationStagingState.UNKNOWN,
+            MigrationCleanupOutcome.REMOVED,
+            ["create", "write", "unlink"],
+        ),
+        "reread": (
+            MigrationFailurePoint.REREAD,
+            MigrationStagingState.UNKNOWN,
+            MigrationCleanupOutcome.REMOVED,
+            ["create", "write", "unlink"],
+        ),
+        "validate": (
+            MigrationFailurePoint.VALIDATE,
+            MigrationStagingState.INVALID,
+            MigrationCleanupOutcome.REMOVED,
+            ["create", "write", "unlink"],
+        ),
+    }
+    for fault, (point, staging_state, cleanup, mutations) in expected.items():
+        repository, target = _write_repository(tmp_path, name=fault)
+        preview_result = _preview(repository)
+        assert isinstance(preview_result, Success)
+        preview = preview_result.value
+        operations = FaultInjectingOperations(fault, target)
+
+        applied = apply_manifest_migration(
+            preview,
+            approved_preview_sha256=preview.preview_sha256,
+            approved=True,
+            operations=operations,
+        )
+
+        assert isinstance(applied, ManifestMigrationFailure)
+        assert applied.issue.failure_point is point
+        assert applied.issue.target_state is MigrationTargetState.V1_PRESERVED
+        assert applied.issue.staging_state is staging_state
+        assert applied.issue.cleanup_outcome is cleanup
+        assert operations.mutations == mutations
+        assert target.read_bytes() == EXPECTED_V1
+        if operations.staging is not None:
+            assert not operations.staging.exists()
+
+
+def test_apply_does_not_claim_v1_preserved_when_write_fault_observes_target_drift(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = FaultInjectingOperations("write-target-changed", target)
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.WRITE
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert target.read_bytes() == b"changed concurrently"
+    assert operations.mutations == ["create", "write", "unlink"]
+
+
+def test_apply_reports_cleanup_failure_separately_and_attempts_it_once(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = FaultInjectingOperations("cleanup", target)
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.FAILED
+    assert applied.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert operations.mutations.count("unlink") == 1
+    assert operations.staging is not None
+    assert operations.staging.exists()
+    assert target.read_bytes() == EXPECTED_V1
+    operations.staging.unlink()
+
+
+def test_apply_classifies_replace_failure_from_bounded_target_reread(
+    tmp_path: Path,
+) -> None:
+    expected = {
+        "replace-unchanged": MigrationTargetState.V1_PRESERVED,
+        "replace-changed": MigrationTargetState.UNKNOWN,
+        "replace-unreadable": MigrationTargetState.UNKNOWN,
+        "replace-oversized": MigrationTargetState.UNKNOWN,
+    }
+    for fault, target_state in expected.items():
+        repository, target = _write_repository(tmp_path, name=fault)
+        preview_result = _preview(repository)
+        assert isinstance(preview_result, Success)
+        preview = preview_result.value
+        operations = FaultInjectingOperations(fault, target)
+
+        applied = apply_manifest_migration(
+            preview,
+            approved_preview_sha256=preview.preview_sha256,
+            approved=True,
+            operations=operations,
+        )
+
+        assert isinstance(applied, ManifestMigrationFailure)
+        assert applied.issue.failure_point is MigrationFailurePoint.REPLACE
+        assert applied.issue.target_state is target_state
+        assert applied.issue.staging_state is MigrationStagingState.VALIDATED
+        assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+        assert operations.mutations == ["create", "write", "replace", "unlink"]
+        assert operations.staging is not None
+        assert not operations.staging.exists()
+        if fault == "replace-unchanged":
+            assert target.read_bytes() == EXPECTED_V1
+        elif fault == "replace-changed":
+            assert target.read_bytes() == b"changed during replace"
+        elif fault == "replace-unreadable":
+            assert not target.exists()
+        else:
+            assert target.stat().st_size == MAX_MANIFEST_BYTES + 1
