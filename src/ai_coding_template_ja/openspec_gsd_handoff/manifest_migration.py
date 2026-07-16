@@ -1104,6 +1104,30 @@ def _apply_anchored_manifest_migration(
             expected_v1_sha256=preview.v1_sha256,
             staging_name=staging_name,
         )
+    try:
+        installed_bytes = operations.read_bounded_bytes_at(
+            anchor.descriptor,
+            target_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure(
+            "migration-replaced-target-reread-failed",
+            MigrationFailurePoint.REREAD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    installed = parse_manifest_v2_bytes(installed_bytes)
+    if (
+        installed_bytes != preview.candidate_bytes
+        or isinstance(installed, Failure)
+        or installed.value != preview.candidate_manifest
+    ):
+        return _migration_failure(
+            "migration-replaced-target-validation-failed",
+            MigrationFailurePoint.VALIDATE,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
     return Success(preview.candidate_manifest)
 
 
@@ -1234,8 +1258,9 @@ def apply_manifest_migration(
             _observe_target_state_path(filesystem, target, preview.v1_sha256),
             MigrationStagingState.ABSENT,
         )
+    result: ManifestMigrationResult | None = None
     try:
-        return _apply_anchored_manifest_migration(
+        result = _apply_anchored_manifest_migration(
             preview,
             operations=filesystem,
             anchor=anchor,
@@ -1243,4 +1268,12 @@ def apply_manifest_migration(
             resolved_target=resolved.value,
         )
     finally:
-        filesystem.close_parent_directory(anchor)
+        try:
+            filesystem.close_parent_directory(anchor)
+        except OSError:
+            # The anchored result includes bounded post-replace evidence. Retrying
+            # close is unsafe because the descriptor may already have been closed.
+            pass
+    if result is None:  # pragma: no cover - an exception bypasses this statement
+        raise AssertionError("anchored migration returned no result")
+    return result
