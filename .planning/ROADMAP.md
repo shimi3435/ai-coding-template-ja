@@ -43,7 +43,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 **Mode:** standard
 **Depends on:** Nothing (first phase)
 **Requirements:** HND-01 (opaque canonical handle: HARD-R1)
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can trace the phase result to the exact change ID, canonical artifact paths, and pinned source commit without duplicated specification text.
@@ -55,7 +55,7 @@ Plans:
 
 - [x] 01-01-PLAN.md — Inventory and normalize bounded canonical source blocks.
 - [x] 01-02-PLAN.md — Reconcile stable namespaced IDs, parents, counters, and tombstones.
-- [ ] 01-03-PLAN.md — Add the exact schema-2 codec and bounded version dispatch.
+- [x] 01-03-PLAN.md — Add the exact schema-2 codec and bounded version dispatch.
 - [ ] 01-04-PLAN.md — Build the complete read-only schema migration preview.
 - [ ] 01-05-PLAN.md — Apply an exact approved preview with atomic persistence evidence.
 
@@ -144,7 +144,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Stable Identity and Migration | 2/5 | In Progress|  |
+| 1. Stable Identity and Migration | 3/5 | In Progress|  |
 | 2. Source-to-Execution Mapping | 0/TBD | Blocked on Phase 1 verification | - |
 | 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 1 verification | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 1 verification | - |
