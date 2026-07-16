@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path
 
 from .manifest import (
+    MAX_MANIFEST_BYTES,
     HandoffManifest,
     ManifestArtifact,
     ManifestFileOperations,
@@ -21,6 +25,7 @@ from .manifest_v2 import (
     HandoffManifestV2,
     ManifestLifecycle,
     ManifestOwnership,
+    parse_manifest_v2_bytes,
     serialize_manifest_v2,
 )
 from .models import (
@@ -93,6 +98,103 @@ class ManifestMigrationPreview:
     preview_sha256: str
 
 
+class MigrationFailurePoint(StrEnum):
+    """Stable approval and persistence failure boundaries."""
+
+    APPROVAL = "approval"
+    STATE_GUARD = "state-guard"
+    CREATE = "create"
+    WRITE = "write"
+    REREAD = "reread"
+    VALIDATE = "validate"
+    REPLACE = "replace"
+
+
+class MigrationTargetState(StrEnum):
+    """What a failed apply proved about the schema-1 target."""
+
+    V1_PRESERVED = "v1-preserved"
+    UNKNOWN = "unknown"
+
+
+class MigrationStagingState(StrEnum):
+    """What a failed apply proved about its staging file."""
+
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
+    INVALID = "invalid"
+    VALIDATED = "validated"
+
+
+class MigrationCleanupOutcome(StrEnum):
+    """Evidence from at most one staging cleanup attempt."""
+
+    NOT_NEEDED = "not-needed"
+    REMOVED = "removed"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class ManifestMigrationIssue:
+    """Structured migration failure evidence without a recovery claim."""
+
+    code: str
+    failure_point: MigrationFailurePoint
+    target_state: MigrationTargetState
+    staging_state: MigrationStagingState
+    cleanup_outcome: MigrationCleanupOutcome
+
+
+@dataclass(frozen=True)
+class ManifestMigrationFailure:
+    """A failed migration apply with no partial success value."""
+
+    issue: ManifestMigrationIssue
+
+
+type ManifestMigrationResult = Success[HandoffManifestV2] | ManifestMigrationFailure
+
+
+class ManifestMigrationFileOperations(ManifestFileOperations):
+    """No-follow bounded reads and durable staging writes for migration apply."""
+
+    @staticmethod
+    def _open_flags(base: int) -> int:
+        return base | getattr(os, "O_NOFOLLOW", 0)
+
+    def read_bounded_bytes(
+        self, path: Path, *, limit: int = MAX_MANIFEST_BYTES
+    ) -> bytes:
+        descriptor = os.open(path, self._open_flags(os.O_RDONLY))
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise OSError("migration path is not a regular file")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                data = stream.read(limit + 1)
+        finally:
+            os.close(descriptor)
+        if len(data) > limit:
+            raise ManifestSizeLimitExceeded
+        return data
+
+    def write_bytes(self, path: Path, data: bytes) -> None:
+        if len(data) > MAX_MANIFEST_BYTES:
+            raise ManifestSizeLimitExceeded
+        descriptor = os.open(
+            path,
+            self._open_flags(os.O_WRONLY | os.O_TRUNC),
+        )
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise OSError("migration staging path is not a regular file")
+            with os.fdopen(descriptor, "wb", closefd=False) as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def _failure(code: str, *, category: IssueCategory = IssueCategory.PERSISTENCE):
     return Failure(
         ClassifiedIssue(
@@ -152,6 +254,87 @@ def _change_object(change: MigrationCandidateChange) -> dict[str, object]:
         "candidate_fingerprint": change.candidate_fingerprint,
         "reason": change.reason,
     }
+
+
+def _preview_machine_view(preview: ManifestMigrationPreview) -> dict[str, object]:
+    return {
+        "repository_root": preview.repository_root,
+        "target_path": preview.target_path,
+        "observed_source_commit": preview.observed_source_commit,
+        "current_source_commit": preview.current_source_commit,
+        "v1_sha256": preview.v1_sha256,
+        "current_artifacts_sha256": preview.current_artifacts_sha256,
+        "current_progress_sha256": preview.current_progress_sha256,
+        "source_paths": list(preview.source_paths),
+        "v2_sha256": preview.v2_sha256,
+        "changes": [_change_object(change) for change in preview.changes],
+        "exclusions": list(preview.exclusions),
+    }
+
+
+def _preview_identity(preview: ManifestMigrationPreview) -> str:
+    return _sha256(_compact_json(_preview_machine_view(preview)))
+
+
+def _migration_failure(
+    code: str,
+    failure_point: MigrationFailurePoint,
+    target_state: MigrationTargetState,
+    staging_state: MigrationStagingState,
+    cleanup_outcome: MigrationCleanupOutcome = MigrationCleanupOutcome.NOT_NEEDED,
+) -> ManifestMigrationFailure:
+    return ManifestMigrationFailure(
+        ManifestMigrationIssue(
+            code=code,
+            failure_point=failure_point,
+            target_state=target_state,
+            staging_state=staging_state,
+            cleanup_outcome=cleanup_outcome,
+        )
+    )
+
+
+def _preview_is_consistent(preview: ManifestMigrationPreview) -> bool:
+    artifact_snapshot = [
+        _artifact_object(artifact) for artifact in preview.current_artifacts
+    ]
+    progress_snapshot = _progress_object(preview.current_progress)
+    if (
+        _sha256(_compact_json(artifact_snapshot)) != preview.current_artifacts_sha256
+        or _sha256(_compact_json(progress_snapshot)) != preview.current_progress_sha256
+        or _sha256(preview.candidate_bytes) != preview.v2_sha256
+        or preview.candidate_manifest.artifacts != preview.current_artifacts
+        or preview.candidate_manifest.progress != preview.current_progress
+        or preview.candidate_manifest.source_commit != preview.current_source_commit
+    ):
+        return False
+    parsed = parse_manifest_v2_bytes(preview.candidate_bytes)
+    if isinstance(parsed, Failure) or parsed.value != preview.candidate_manifest:
+        return False
+    serialized = serialize_manifest_v2(preview.candidate_manifest)
+    return (
+        isinstance(serialized, Success) and serialized.value == preview.candidate_bytes
+    )
+
+
+def _cleanup_staging(
+    operations: ManifestMigrationFileOperations,
+    staging: Path,
+) -> MigrationCleanupOutcome:
+    try:
+        operations.unlink(staging)
+    except OSError:
+        return MigrationCleanupOutcome.FAILED
+    return MigrationCleanupOutcome.REMOVED
+
+
+def _staging_path_is_safe(staging: Path, target: Path) -> bool:
+    if staging == target or staging.parent != target.parent:
+        return False
+    try:
+        return not staging.is_symlink() and stat.S_ISREG(staging.lstat().st_mode)
+    except OSError:
+        return False
 
 
 def _resolve_target(
@@ -424,36 +607,234 @@ def preview_manifest_migration(
     progress_snapshot = _progress_object(current_progress)
     artifacts_sha256 = _sha256(_compact_json(artifact_snapshot))
     progress_sha256 = _sha256(_compact_json(progress_snapshot))
-    machine_view = {
-        "repository_root": str(repository),
-        "target_path": canonical_target,
-        "observed_source_commit": source_manifest.source_commit,
-        "current_source_commit": current_source_commit,
-        "v1_sha256": _sha256(v1_bytes),
-        "current_artifacts_sha256": artifacts_sha256,
-        "current_progress_sha256": progress_sha256,
-        "source_paths": list(canonical_source_paths),
-        "v2_sha256": v2_sha256,
-        "changes": [_change_object(change) for change in changes],
-        "exclusions": list(reconciliation.value.exclusions),
-    }
-    return Success(
-        ManifestMigrationPreview(
-            repository_root=str(repository),
-            target_path=canonical_target,
-            observed_source_commit=source_manifest.source_commit,
-            current_source_commit=current_source_commit,
-            current_artifacts=artifacts,
-            current_progress=current_progress,
-            source_paths=canonical_source_paths,
-            current_artifacts_sha256=artifacts_sha256,
-            current_progress_sha256=progress_sha256,
-            v1_sha256=_sha256(v1_bytes),
-            v2_sha256=v2_sha256,
-            candidate_bytes=serialized.value,
-            candidate_manifest=candidate,
-            changes=changes,
-            exclusions=reconciliation.value.exclusions,
-            preview_sha256=_sha256(_compact_json(machine_view)),
-        )
+    preview = ManifestMigrationPreview(
+        repository_root=str(repository),
+        target_path=canonical_target,
+        observed_source_commit=source_manifest.source_commit,
+        current_source_commit=current_source_commit,
+        current_artifacts=artifacts,
+        current_progress=current_progress,
+        source_paths=canonical_source_paths,
+        current_artifacts_sha256=artifacts_sha256,
+        current_progress_sha256=progress_sha256,
+        v1_sha256=_sha256(v1_bytes),
+        v2_sha256=v2_sha256,
+        candidate_bytes=serialized.value,
+        candidate_manifest=candidate,
+        changes=changes,
+        exclusions=reconciliation.value.exclusions,
+        preview_sha256="",
     )
+    return Success(replace(preview, preview_sha256=_preview_identity(preview)))
+
+
+def apply_manifest_migration(
+    preview: ManifestMigrationPreview,
+    *,
+    approved_preview_sha256: str,
+    approved: bool,
+    operations: ManifestMigrationFileOperations | None = None,
+) -> ManifestMigrationResult:
+    """Apply only the exact approved preview through validated atomic replacement."""
+
+    filesystem = operations or ManifestMigrationFileOperations()
+    if (
+        approved is not True
+        or approved_preview_sha256 != preview.preview_sha256
+        or preview.preview_sha256 != _preview_identity(preview)
+    ):
+        return _migration_failure(
+            "migration-approval-rejected",
+            MigrationFailurePoint.APPROVAL,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    if not _preview_is_consistent(preview):
+        return _migration_failure(
+            "migration-preview-invalid",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+
+    resolved = _resolve_target(
+        Path(preview.repository_root),
+        Path(preview.target_path),
+        operations=filesystem,
+    )
+    if isinstance(resolved, Failure):
+        return _migration_failure(
+            resolved.issue.code,
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    repository, canonical_target, target_change_id = resolved.value
+    if (
+        str(repository) != preview.repository_root
+        or canonical_target != preview.target_path
+        or target_change_id != preview.candidate_manifest.change_id
+    ):
+        return _migration_failure(
+            "migration-preview-target-mismatch",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    target = repository.joinpath(*Path(canonical_target).parts)
+    try:
+        target_bytes = filesystem.read_bounded_bytes(target)
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure(
+            "migration-target-reread-failed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    if _sha256(target_bytes) != preview.v1_sha256:
+        return _migration_failure(
+            "migration-target-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    parsed_target = parse_versioned_manifest_bytes(
+        target_bytes,
+        requested_schema_version=2,
+    )
+    if (
+        isinstance(parsed_target, Failure)
+        or not isinstance(parsed_target.value, HandoffManifest)
+        or parsed_target.value.change_id != target_change_id
+        or parsed_target.value.source_commit != preview.observed_source_commit
+    ):
+        return _migration_failure(
+            "migration-target-schema-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+
+    source_snapshot = _validate_source_snapshot(
+        repository,
+        preview.source_paths,
+        preview.current_artifacts,
+        preview.current_progress,
+        change_id=preview.candidate_manifest.change_id,
+        limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
+    )
+    if isinstance(source_snapshot, Failure):
+        return _migration_failure(
+            "migration-current-snapshot-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.ABSENT,
+        )
+    confirmed = _resolve_target(
+        repository,
+        Path(preview.target_path),
+        operations=filesystem,
+    )
+    if isinstance(confirmed, Failure) or confirmed.value != resolved.value:
+        return _migration_failure(
+            "migration-target-identity-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.ABSENT,
+        )
+
+    try:
+        staging = filesystem.create_staging(target.parent)
+    except OSError:
+        return _migration_failure(
+            "migration-staging-create-failed",
+            MigrationFailurePoint.CREATE,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.UNKNOWN,
+        )
+    if not _staging_path_is_safe(staging, target):
+        return _migration_failure(
+            "migration-staging-path-unsafe",
+            MigrationFailurePoint.CREATE,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.UNKNOWN,
+        )
+    try:
+        filesystem.write_bytes(staging, preview.candidate_bytes)
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure(
+            "migration-staging-write-failed",
+            MigrationFailurePoint.WRITE,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.UNKNOWN,
+            _cleanup_staging(filesystem, staging),
+        )
+    try:
+        staged_bytes = filesystem.read_bounded_bytes(staging)
+    except (ManifestSizeLimitExceeded, OSError):
+        return _migration_failure(
+            "migration-staging-reread-failed",
+            MigrationFailurePoint.REREAD,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.UNKNOWN,
+            _cleanup_staging(filesystem, staging),
+        )
+    staged = parse_manifest_v2_bytes(staged_bytes)
+    if (
+        staged_bytes != preview.candidate_bytes
+        or isinstance(staged, Failure)
+        or staged.value != preview.candidate_manifest
+    ):
+        return _migration_failure(
+            "migration-staging-validation-failed",
+            MigrationFailurePoint.VALIDATE,
+            MigrationTargetState.V1_PRESERVED,
+            MigrationStagingState.INVALID,
+            _cleanup_staging(filesystem, staging),
+        )
+
+    confirmed = _resolve_target(
+        repository,
+        Path(preview.target_path),
+        operations=filesystem,
+    )
+    snapshot_before_replace = _validate_source_snapshot(
+        repository,
+        preview.source_paths,
+        preview.current_artifacts,
+        preview.current_progress,
+        change_id=preview.candidate_manifest.change_id,
+        limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
+    )
+    try:
+        target_before_replace = filesystem.read_bounded_bytes(target)
+    except (ManifestSizeLimitExceeded, OSError):
+        target_before_replace = b""
+    if (
+        isinstance(confirmed, Failure)
+        or confirmed.value != resolved.value
+        or isinstance(snapshot_before_replace, Failure)
+        or _sha256(target_before_replace) != preview.v1_sha256
+    ):
+        return _migration_failure(
+            "migration-state-changed-before-replace",
+            MigrationFailurePoint.STATE_GUARD,
+            (
+                MigrationTargetState.V1_PRESERVED
+                if _sha256(target_before_replace) == preview.v1_sha256
+                else MigrationTargetState.UNKNOWN
+            ),
+            MigrationStagingState.VALIDATED,
+            _cleanup_staging(filesystem, staging),
+        )
+    try:
+        filesystem.replace(staging, target)
+    except OSError:
+        return _migration_failure(
+            "migration-replace-failed",
+            MigrationFailurePoint.REPLACE,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.VALIDATED,
+            _cleanup_staging(filesystem, staging),
+        )
+    return Success(preview.candidate_manifest)
