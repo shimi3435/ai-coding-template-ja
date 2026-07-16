@@ -7,13 +7,18 @@ from dataclasses import replace
 from pathlib import Path
 
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
+    MAX_MANIFEST_BYTES,
     ManifestFileOperations,
     parse_manifest_bytes,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
     preview_manifest_migration,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.models import Success
+from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
+from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
+    SourceIdentityLimits,
+    SourceIdentityState,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_V1 = (
@@ -24,9 +29,20 @@ EXPECTED_V1 = (
     / "manifest"
     / "expected-prepared.json"
 ).read_bytes()
+EXPECTED_V2 = (
+    REPO_ROOT
+    / "tests"
+    / "fixtures"
+    / "openspec_gsd_handoff"
+    / "manifest"
+    / "expected-migrated-v2.json"
+).read_bytes()
 SOURCE_PATH = "openspec/changes/fixture-change/specs/fixture-capability/spec.md"
 TARGET_PATH = ".planning/openspec/fixture-change/handoff.json"
 SOURCE_COMMIT = "a" * 40
+PROPOSAL_PATH = "openspec/changes/fixture-change/proposal.md"
+DESIGN_PATH = "openspec/changes/fixture-change/design.md"
+TASKS_PATH = "openspec/changes/fixture-change/tasks.md"
 SOURCE = (
     b"## ADDED Requirements\n\n"
     b"### Requirement: Durable preview\n"
@@ -35,6 +51,12 @@ SOURCE = (
     b"- **WHEN** the source content changes\n"
     b"- **THEN** the stable identity remains\n"
 )
+CANONICAL_CONTENT = {
+    DESIGN_PATH: b"# Design\n",
+    PROPOSAL_PATH: b"# Proposal\n",
+    SOURCE_PATH: SOURCE,
+    TASKS_PATH: b"# Tasks\n\n- [ ] 1. First\n",
+}
 
 
 class ReadOnlyCountingOperations(ManifestFileOperations):
@@ -73,24 +95,25 @@ def _write_repository(
     *,
     name: str = "repository",
     source: bytes = SOURCE,
+    manifest: bytes = EXPECTED_V1,
 ) -> tuple[Path, Path]:
     repository = tmp_path / name
     target = repository / TARGET_PATH
     target.parent.mkdir(parents=True)
-    target.write_bytes(EXPECTED_V1)
-    source_target = repository / SOURCE_PATH
-    source_target.parent.mkdir(parents=True)
-    source_target.write_bytes(source)
+    target.write_bytes(manifest)
+    for artifact_path, content in CANONICAL_CONTENT.items():
+        artifact_target = repository / artifact_path
+        artifact_target.parent.mkdir(parents=True, exist_ok=True)
+        artifact_target.write_bytes(source if artifact_path == SOURCE_PATH else content)
     return repository, target
 
 
 def _inputs(source: bytes = SOURCE):
     parsed = parse_manifest_bytes(EXPECTED_V1)
     assert isinstance(parsed, Success)
+    content_by_path = {**CANONICAL_CONTENT, SOURCE_PATH: source}
     current_artifacts = tuple(
-        replace(artifact, sha256=_sha256(source))
-        if artifact.path == SOURCE_PATH
-        else artifact
+        replace(artifact, sha256=_sha256(content_by_path[artifact.path]))
         for artifact in parsed.value.artifacts
     )
     return parsed.value, current_artifacts
@@ -157,6 +180,167 @@ def test_preview_builds_complete_deterministic_schema_v2_without_mutation(
     assert len(preview.preview_sha256) == 64
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_preview_rejects_stale_non_source_artifact_without_partial_value(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    v1, current_artifacts = _inputs()
+    (repository / PROPOSAL_PATH).write_bytes(b"# Changed proposal\n")
+    before = _tree_bytes(repository)
+
+    result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=current_artifacts,
+        current_progress=v1.progress,
+        source_paths=(SOURCE_PATH,),
+        operations=ReadOnlyCountingOperations(),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "migration-artifact-snapshot-mismatch"
+    assert target.read_bytes() == EXPECTED_V1
+    assert _tree_bytes(repository) == before
+
+
+def test_preview_rejects_unknown_schema_and_schema2_downgrade_without_mutation(
+    tmp_path: Path,
+) -> None:
+    unknown_repository, unknown_target = _write_repository(
+        tmp_path,
+        name="unknown",
+        manifest=EXPECTED_V1.replace(b'"schema_version": 1', b'"schema_version": 9'),
+    )
+    v2_repository, v2_target = _write_repository(
+        tmp_path,
+        name="v2",
+        manifest=EXPECTED_V2,
+    )
+
+    unknown = _preview(unknown_repository)
+    downgrade = _preview(v2_repository)
+    requested_downgrade = preview_manifest_migration(
+        v2_repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        requested_schema_version=1,
+        operations=ReadOnlyCountingOperations(),
+    )
+
+    assert isinstance(unknown, Failure)
+    assert unknown.issue.code == "manifest-schema-unsupported"
+    assert isinstance(downgrade, Failure)
+    assert downgrade.issue.code == "migration-source-schema-invalid"
+    assert isinstance(requested_downgrade, Failure)
+    assert requested_downgrade.issue.code == "manifest-downgrade-rejected"
+    assert unknown_target.read_bytes().startswith(b'{\n  "schema_version": 9')
+    assert v2_target.read_bytes() == EXPECTED_V2
+
+
+def test_preview_rejects_malformed_collision_exhaustion_and_bounds(
+    tmp_path: Path,
+) -> None:
+    malformed = SOURCE + b"\n```markdown\n"
+    malformed_repository, malformed_target = _write_repository(
+        tmp_path,
+        name="malformed",
+        source=malformed,
+    )
+    collision_repository, collision_target = _write_repository(
+        tmp_path,
+        name="collision",
+    )
+    exhausted_repository, exhausted_target = _write_repository(
+        tmp_path,
+        name="exhausted",
+    )
+    oversized_repository, oversized_target = _write_repository(
+        tmp_path,
+        name="oversized",
+    )
+    collision_seed = _preview(collision_repository)
+    assert isinstance(collision_seed, Success)
+    active = collision_seed.value.candidate_manifest.source_items.active
+    collision = SourceIdentityState(
+        next_requirement_id=2,
+        next_scenario_id=2,
+        active=(active[0], active[0], active[1]),
+        tombstones=(),
+    )
+    exhausted = SourceIdentityState(
+        next_requirement_id=1_000_000,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+
+    malformed_result = _preview(malformed_repository, source=malformed)
+    collision_result = _preview(
+        collision_repository,
+        previous_source_items=collision,
+    )
+    exhausted_result = _preview(
+        exhausted_repository,
+        previous_source_items=exhausted,
+    )
+    oversized_result = preview_manifest_migration(
+        oversized_repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        limits=SourceIdentityLimits(
+            max_items=16,
+            bytes_per_file=16,
+            bytes_total=32,
+        ),
+        operations=ReadOnlyCountingOperations(),
+    )
+
+    assert isinstance(malformed_result, Failure)
+    assert malformed_result.issue.code == "source-fence-unclosed"
+    assert isinstance(collision_result, Failure)
+    assert collision_result.issue.code == "source-state-id-duplicate"
+    assert isinstance(exhausted_result, Failure)
+    assert exhausted_result.issue.code == "source-counter-exhausted"
+    assert isinstance(oversized_result, Failure)
+    assert oversized_result.issue.code == "source-file-limit-exceeded"
+    assert malformed_target.read_bytes() == EXPECTED_V1
+    assert collision_target.read_bytes() == EXPECTED_V1
+    assert exhausted_target.read_bytes() == EXPECTED_V1
+    assert oversized_target.read_bytes() == EXPECTED_V1
+
+
+def test_preview_rejects_oversized_or_missing_manifest_without_creating_state(
+    tmp_path: Path,
+) -> None:
+    oversized_repository, oversized_target = _write_repository(
+        tmp_path,
+        name="oversized-target",
+        manifest=b" " * (MAX_MANIFEST_BYTES + 1),
+    )
+    missing_repository, missing_target = _write_repository(
+        tmp_path,
+        name="missing-target",
+    )
+    missing_target.unlink()
+
+    oversized = _preview(oversized_repository)
+    missing = _preview(missing_repository)
+
+    assert isinstance(oversized, Failure)
+    assert oversized.issue.code == "manifest-size-limit-exceeded"
+    assert isinstance(missing, Failure)
+    assert missing.issue.code == "manifest-read-failed"
+    assert oversized_target.read_bytes() == b" " * (MAX_MANIFEST_BYTES + 1)
+    assert not missing_target.exists()
 
 
 def test_preview_identity_binds_repository_real_path(tmp_path: Path) -> None:
