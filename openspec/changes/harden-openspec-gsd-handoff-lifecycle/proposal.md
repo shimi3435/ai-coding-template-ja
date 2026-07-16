@@ -30,8 +30,9 @@ capability preflight を備える MVP handoff を提供する。MVP は一つの
 
 ## What Changes
 
-- MVP manifest を後方互換に拡張し、OpenSpec requirements / scenarios に欠番を再利用しない stable ID と
-  source fingerprint を割り当てる。並び替えでは ID を変えず、曖昧一致や衝突は自動修復しない。
+- MVP manifest を後方互換に拡張し、OpenSpec requirements / scenarios に namespaced ASCII stable ID
+  （`REQ-000001` / `SCN-000001`）と正規化 source fingerprint を割り当てる。欠番は再利用せず、
+  並び替え・等価な表記差では ID を変えず、曖昧一致や衝突は自動修復しない。
 - stable ID を GSD phases / plans / verification evidence へ対応付け、未対応、重複、複数 changes の混在を
   機械検査する。これは `adaptive-change-execution` の所有権 policy の enforcement であり、policy 自体を
   再定義しない。

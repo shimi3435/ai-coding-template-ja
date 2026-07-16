@@ -6,15 +6,48 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
 
 #### Scenario: 新しい source item に ID を割り当てる
 - **WHEN** validated canonical artifact に既存 mapping を持たない requirement または scenario が追加される
-- **THEN** bridge は category 内の単調増加する未使用 ID を割り当て、source path、raw heading、親子関係、fingerprint を記録する
+- **THEN** bridge は requirement に`REQ-000001`〜`REQ-999999`、scenario に`SCN-000001`〜`SCN-999999`の
+  category別counterが示す未使用IDを割り当て、canonical POSIX source path、raw heading、親子関係、
+  normalized source fingerprintを記録し、counterを戻さない
 
 #### Scenario: source の順序または表示上の空白だけが変わる
-- **WHEN** 正規化した source identity が一意に一致し、意味内容と親子関係が保たれる
-- **THEN** bridge は既存 ID を再利用し、番号を詰めず、更新した fingerprint を migration preview に示す
+- **WHEN** source順、ATX headingの表示上のhorizontal whitespace、CRLF / CR / LF、または
+  NFC-equivalentな表記だけが変わり、正規化したsource identityと意味内容と親子関係が保たれる
+- **THEN** bridge は既存IDを再利用して番号を詰めず、normalized source blockが同じなら同じfingerprint、
+  blockの配置内容が変われば更新したfingerprintをmigration previewに示す
+
+#### Scenario: 同じ source identity の意味内容が変わる
+- **WHEN** category、canonical source path、normalized heading、scenarioの親requirementが同じまま、
+  normalized source blockの意味内容が変わる
+- **THEN** bridgeは既存IDを再利用し、変更後のfingerprint、影響mapping、再検証・再計画対象をmigration previewに示す
 
 #### Scenario: mapping が曖昧または衝突する
-- **WHEN** 一つの source が複数 IDs に一致する、複数 source が同じ ID に一致する、または Unicode 正規化後に衝突する
-- **THEN** bridge は ID の再割当、自動 merge、欠番再利用を行わず、衝突候補と手動解決手順を報告する
+- **WHEN** 一つのsourceが複数IDsに一致する、複数sourceが同じIDに一致する、active / tombstoneを跨いでIDが
+  重複する、またはUnicode NFC、heading、path、親参照の正規化後に衝突する
+- **THEN** bridge は ID の再割当、自動 merge、欠番再利用、heuristic mappingを行わず、衝突候補と手動解決手順を報告する
+
+#### Scenario: source item schema または counter が不正である
+- **WHEN** categoryとID prefixが一致しない、ID suffixが0・負数・7桁・noncanonical paddingである、
+  counterが0・負数・非整数・1000001以上である、ID suffixが同categoryのcounter以上である、またはcounterが
+  exhausted sentinel `1000000`で新規割当を要求する
+- **THEN** bridgeはmanifestを変更せずfail-closedし、不正fieldまたはID枯渇を報告する
+
+#### Scenario: source item の親参照を検査する
+- **WHEN** activeまたはtombstone source itemをstrict validationする
+- **THEN** bridgeはactive requirementの`parent_id`とrequirement tombstoneの`last_parent_id`をnull、
+  active scenarioの`parent_id`を同じchange内のactive requirement ID、scenario tombstoneの
+  `last_parent_id`を削除直前のrequirement IDとして要求する
+
+#### Scenario: source identity を正規化する
+- **WHEN** canonical Markdownからsource identityとfingerprintを生成する
+- **THEN** bridgeはstrict UTF-8、LF、Unicode NFC、canonical POSIX relative path、正規化ATX heading、親ID、
+  fenced code blockを考慮したbounded source blockを用い、versioned length-prefixed bytesのSHA-256 lowercase
+  hexを生成し、曖昧Markdown、path / symlink escape、巨大入力を拒否する
+
+#### Scenario: heading path または親が変化する
+- **WHEN** source itemのnormalized heading、canonical source path、またはscenario parentが既存recordから変化する
+- **THEN** bridgeは自動heuristicで既存IDへ紐付けず、explicit unique matchがある場合だけIDを維持し、
+  それ以外はnew allocationと旧IDのtombstone化またはcollision / manual resolutionをpreviewする
 
 #### Scenario: phase mapping の完全性を検査する
 - **WHEN** GSD phase、plan、または verification evidence を handoff source へ対応付ける

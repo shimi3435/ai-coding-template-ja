@@ -80,10 +80,46 @@ v1にextension pointがないため、hardeningはv1へfieldを足さずschema v
 | `lifecycle` | exact `{checkpoints,receipts,archives}`のrecord reference |
 
 active source itemはexact `{id,category,source_path,raw_heading,parent_id,fingerprint}`、tombstoneはexact
-`{id,category,last_source_path,last_raw_heading,fingerprint}`とする。IDはcategory別の正整数counterから単調増加し、
-削除時もcounterを戻さずtombstoneを残す。mapping entryはexact
-`{source_id,phase_id,phase_path,plan_paths,evidence_paths,policy_references}`とし、migration直後の空mappingは
-schema-validだがplan / execute等のoperation-readyではない。
+`{id,category,last_source_path,last_raw_heading,last_parent_id,fingerprint}`とする。`category`は
+`requirement` / `scenario`だけを許す。requirement IDは`REQ-`と6桁zero-padded decimalを結合した
+`REQ-000001`〜`REQ-999999`、scenario IDは同様の`SCN-000001`〜`SCN-999999`に固定し、categoryとprefixの
+一致を要求する。`0`、負数、6桁でないpadding、wrong prefix、非ASCII、範囲外suffixは拒否する。
+IDは一つのmanifest / change内で`active`と`tombstones`を通して一意である。
+
+`next_requirement_id` / `next_scenario_id`は各categoryで次に割り当てるsuffixを示すintegerである。初期値は`1`、
+割当可能範囲は`1..999999`とし、割当後に1増やす。`1000000`は割当不可のexhausted sentinelであり、
+`1000001`以上、`0`、負数、非整数を拒否する。counterより小さいsuffixだけが同categoryのactive / tombstoneに
+存在でき、削除時もcounterを戻さず欠番を再利用しない。counterが`1000000`なら新規割当はfail-closedする。
+
+active requirementの`parent_id`は`null`、active scenarioの`parent_id`は同じmanifest / change内にあるactive
+requirement IDを必須とする。tombstoneの`last_parent_id`はrequirementなら`null`、scenarioなら削除直前に
+参照したrequirement IDを保持し、親requirementもtombstoneになった後のidentity再利用・衝突検査に使う。
+mapping entryはexact `{source_id,phase_id,phase_path,plan_paths,evidence_paths,policy_references}`とし、
+namespaced `source_id`だけでcategoryを含めず一意に参照できる。migration直後の空mappingはschema-validだが
+plan / execute等のoperation-readyではない。
+
+source itemはUTF-8をstrict decodeし、invalid UTF-8を拒否する。`source_path`は各segmentをUnicode NFCにした
+repository root内のcanonical POSIX relative pathとし、空path、absolute path、`.` / `..` segment、backslash、NUL、
+repo外解決、symlink escape、Unicode / platform case alias collisionを拒否する。source textはCRLFとCRをLFへ
+変換してUnicode NFCにする。`raw_heading`はstrict decodeした原文heading lineをline terminatorなし、ATX marker
+を含む形でNFC / whitespace normalization前のまま保持する。identity用headingはopening markerと任意のclosing
+markerを除き、外側のhorizontal whitespaceを除去し、内部のhorizontal whitespace runをsingle ASCII spaceへ
+正規化する。horizontal whitespaceはU+0009とUnicode category `Zs`に限定し、改行を空白へfoldしない。
+
+normalized source blockは対象ATX heading直後から、fenced code block外にある次の同level以上のATX heading直前まで
+とする。fenced code block内のheading-like textは境界にしない。blockは各line末尾のhorizontal whitespaceだけを
+除去し、leading indentation、先頭・内部のblank lines、内部改行、タブ等のcontentを保持し、末尾newlineをexactly
+oneにする。閉じていないfence、同じsource itemに解釈できるheadingの重複、unsupported / ambiguous Markdown、
+bounded readで全blockを確定できない入力はfail-closedする。
+
+normalized source identityは順に`category`、canonical `source_path`、normalized heading、scenarioでは
+`parent_id`（requirementでは`null`）から作る。fingerprintは、version tag `openspec-source-v1\0`、これらの
+identity components、normalized source blockをこの順で並べ、各componentを8-byte unsigned big-endian lengthと
+UTF-8 bytesの組として結合したbytesのSHA-256 lowercase hexとする。`null` parent componentはzero-length bytesで
+表す。source順、表示上のheading空白、line ending、NFC-equivalentな表記だけの変更はidentityを維持する。
+normalized source blockも同じならfingerprintを維持し、同じidentityのblock内容が変われば同じIDを維持して
+fingerprint更新をpreviewする。heading、path、scenario parentの変更はheuristicで紐付けず、既存recordとの
+explicit unique matchがない限りnew allocationと旧IDのtombstone化、またはcollision / manual resolutionを要求する。
 
 ownership entryはexact `{kind,path}`とし、manifest自身のownerはmanifest pathから暗黙に当該changeと決まる。
 `owned` kindは`handoff-brief` / `phase` / `plan` / `verification` / `checkpoint` / `receipt` / `archive`、
@@ -99,7 +135,8 @@ manifest、checkpoint、receipt、一時archive / briefを対象changeと同じp
 `pending` / `completed` / `unknown`に限定する。archiveは同じreference形式で索引し、内容をmanifestへ複製しない。
 v2 manifestと各record fileはv1と同じ8 MiB limit+1 readを適用し、`active`、`tombstones`、`mappings`、
 `owned`、`referenced`、各lifecycle配列、各recordのeffectsはそれぞれ最大4096件とする。path / ID / heading / evidence
-のUTF-8 aggregateがfile上限を越える場合は切り捨てず停止する。
+のUTF-8 aggregateがfile上限を越える場合は切り捨てず停止する。source itemは最大4096件と8 MiB file上限に加え、
+category別counterの`999999`割当上限にも従う。
 
 v1 readerは残し、v1 / v2を判別して読み取る。migration previewはv1 bytes hash、生成予定v2 hash、stable ID
 割当、作成・更新候補、除外理由を副作用なしで返す。applyはpreview hashと明示承認を再検査し、v2を同directoryの
@@ -155,7 +192,8 @@ mechanical contractも、参照対象外である理由を表へ明記する。
 
 | hardening scenario | stable policy references |
 | --- | --- |
-| `HARD-R1`: 新規ID / 順序・空白 / 曖昧衝突 | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S2-SPEC-CHANGE-REPLAN` |
+| `HARD-R1`: 新規ID / 等価表記 / 意味内容変更 / rename / 曖昧衝突 | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S2-SPEC-CHANGE-REPLAN` |
+| `HARD-R1`: exact ID・counter・親参照・source normalizer | 適用なし。stable identity wire formatとbounded parsingのmechanical contract |
 | `HARD-R1`: phase mapping完全性 | `ACE-S2-ONE-PHASE-ONE-CHANGE`, `ACE-S4-CONTEXT-PARITY` |
 | `HARD-R1`: v1 migration preview / staging failure / unknown schema | 適用なし。MVP schema互換性とatomic persistenceのmechanical contract |
 | `HARD-R1`: policy reference traceability | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S5-OPEN-SPEC-FINAL` |
@@ -175,9 +213,10 @@ mechanical contractも、参照対象外である理由を表へ明記する。
 
 ### 1. stable ID は単調増加し、曖昧一致を拒否する
 
-MVP manifest の schema migration により raw source identity と正規化 fingerprint を保存する。既存の一意な
-mapping を優先し、新しい item だけ category 内の次番号を割り当てる。削除済み ID は tombstone として残し、
-欠番を再利用しない。見出し変更などで一意に一致しなければ停止し、類似度による自動紐付けをしない。
+MVP manifest の schema migration により raw source identity と正規化 fingerprint を保存する。既存のexactな
+normalized identityまたは明示された一意な対応を優先し、新しいitemだけcategory別counterからnamespaced IDを
+割り当てる。削除済みIDは親参照を含むtombstoneとして残し、欠番を再利用しない。見出し、path、親変更などで
+一意な対応を証明できなければ停止し、類似度による自動紐付けをしない。
 
 ### 2. mapping は policy 参照を持つ enforcement record とする
 
@@ -254,17 +293,17 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
 | 1 | 空・ゼロ長・None | 該当 | source item / mapping / evidence が空 | 1: 必須 item 欠落として mapping を拒否 |
-| 2 | 境界値 | 該当 | 初回ID、最大ID、番号枯渇 | 1: 単調増加し上限超過は停止 |
-| 3 | 重複・衝突 | 該当 | ID/source の一対多・多対一 | 1: 自動mergeせず衝突を報告 |
-| 4 | 順序 | 該当 | 並び替えで再番号付け | 1: identity 一致時は既存IDを再利用 |
-| 5 | 型・形式不正 | 該当 | malformed ID / fingerprint / mapping | 1: strict validationで停止 |
+| 2 | 境界値 | 該当 | 初回ID、`999999`、exhausted sentinel、番号枯渇 | 1: counterは`1..1000000`、sentinelからは割り当てず停止 |
+| 3 | 重複・衝突 | 該当 | active / tombstoneを跨ぐID、normalized identity、親参照の衝突 | 1: global uniquenessとcategory / prefix一致を検査し自動mergeしない |
+| 4 | 順序 | 該当 | source並び替えで再番号付け | 1: normalized identity一致時は既存IDを再利用 |
+| 5 | 型・形式不正 | 該当 | malformed ID / counter / category / parent / fingerprint / Markdown | 1: exact schemaとstrict parserで停止 |
 | 6 | エラー経路 | 該当 | migration の部分失敗 | 1: stagingを採用せず旧manifestを保持 |
 | 7 | 冪等性・再実行 | 該当 | 再実行でIDが変わる | 1: 同じsource/mappingは同じ出力 |
 | 8 | 時刻・タイムゾーン | 非該当 | IDへ時刻を含めない | 2: timestampによるidentity判定は対象外 |
-| 9 | 文字列 | 該当 | Unicode正規化・空白・case衝突 | 1: raw値保持、一意でなければ停止 |
-| 10 | 数値 | 該当 | 負数・浮動ID・overflow | 1: 正整数と明示上限だけ許容 |
-| 11 | 巨大入力・リソース枯渇 | 該当 | tombstone / mappingの肥大 | 1: 切捨てず上限超過を報告 |
-| 12 | 状態遷移の未定義パス | 該当 | deleted ID の復活・再利用 | 1: tombstone保持、再利用禁止 |
+| 9 | 文字列 | 該当 | invalid UTF-8、NFC、改行、heading空白、fence内見出し、path alias | 1: exact canonicalization、raw heading保持、曖昧Markdown停止 |
+| 10 | 数値 | 該当 | 0・負数・非整数・overflow・noncanonical padding | 1: suffix`1..999999`とcounter`1..1000000`だけ許容 |
+| 11 | 巨大入力・リソース枯渇 | 該当 | source block / tombstone / mappingの肥大 | 1: 8 MiB / 4096 / counter上限で切捨てず停止 |
+| 12 | 状態遷移の未定義パス | 該当 | deleted ID の復活・親消失・再利用 | 1: `last_parent_id`付きtombstoneを保持し再利用禁止 |
 
 ### HARD-R2: lifecycle 操作前に source と派生状態の drift を検査する
 
@@ -375,19 +414,19 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 
 | evidence ID | 検証形態 | 予定test seam |
 | --- | --- | --- |
-| `P-ALLOC` | Hypothesis property | allocatorの単調増加、欠番非再利用、順序不変、衝突停止 |
-| `P-NORMALIZER` | Hypothesis property | source / checkbox normalizerの冪等性とcheckbox-only分離 |
+| `P-ALLOC` | Hypothesis property | namespaced allocatorの単調増加、counter sentinel、欠番非再利用、順序不変、active / tombstone衝突停止 |
+| `P-NORMALIZER` | Hypothesis property | UTF-8 / LF / NFC / ATX block source normalizerとcheckbox normalizerの冪等性、等価表記、checkbox-only分離 |
 | `P-MANIFEST-RT` | Hypothesis property | v2 manifest canonical round-tripとunknown-field拒否 |
 | `P-OWNERSHIP` | Hypothesis property | ownership graphの順序不変、単独owner安全性、alias衝突停止 |
 | `P-PREVIEW` | Hypothesis property | preview builderの決定性、冪等性、hash binding |
 | `E-MIGRATION` | fixture / example | v1読取、read-only preview、staging failure時v1保持、unknown / downgrade拒否 |
-| `E-MAPPING` | fixture / example | 空・重複・cross-change・policy ref不整合・coverage不足 |
+| `E-MAPPING` | fixture / example | category / ID prefix / parent整合、空・重複・cross-change・policy ref不整合・coverage不足 |
 | `E-DRIFT` | fixture / example | source / phase / capability drift、checkbox-only除外、unknown停止 |
 | `I-OWNERSHIP` | filesystem / Git integration | 全manifest scan、shared reference、symlink / traversal / Unicode / case alias |
 | `I-RECOVERY` | filesystem integration | 0/1/N effects、中断、corrupt journal、resume再検査、巨大evidence |
 | `I-FINALIZE` | filesystem / Git integration | no-op、stale approval、dependency順、partial failure receipt、再実行 |
 | `E-POLICY` | fixture / example | current-tree stable record、ID一意性、section hash、history非依存 |
-| `E-BOUNDS` | bounded example | ID / item / manifest / journal / previewの境界とlimit+1停止 |
+| `E-BOUNDS` | bounded example | suffix`1..999999`、counter sentinel`1000000`、source / item / manifest / journal / previewの境界とlimit+1停止 |
 | `S-TOOLS` | opt-in smoke | 実OpenSpec / GSD probe、drift、中断resume、no-op finalize、未検証報告 |
 
 ### Spec-holes Phase 1 → Phase 2 一対一対応
@@ -399,7 +438,7 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 
 | requirement | H01 | H02 | H03 | H04 | H05 | H06 | H07 | H08 | H09 | H10 | H11 | H12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `HARD-R1` stable identity / mapping | `E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC` | `P-MANIFEST-RT`,`E-MAPPING` | `E-MIGRATION` | `P-ALLOC`,`P-MANIFEST-RT` | N/A: identityへ時刻不使用 | `P-ALLOC`,`E-MAPPING` | `E-BOUNDS` | `E-BOUNDS` | `P-ALLOC`,`E-MIGRATION` |
+| `HARD-R1` stable identity / mapping | `E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC`,`P-NORMALIZER` | `P-MANIFEST-RT`,`E-MAPPING`,`P-NORMALIZER` | `E-MIGRATION` | `P-ALLOC`,`P-MANIFEST-RT`,`P-NORMALIZER` | N/A: identityへ時刻不使用 | `P-NORMALIZER`,`E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `E-BOUNDS`,`P-NORMALIZER` | `P-ALLOC`,`E-MIGRATION`,`E-MAPPING` |
 | `HARD-R2` drift | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `P-NORMALIZER`,`E-DRIFT` | N/A: mtime判定なし | `P-NORMALIZER`,`E-DRIFT` | N/A: fuzzy判定なし | `E-BOUNDS`,`E-DRIFT` | `E-DRIFT` |
 | `HARD-R3` ownership | `P-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP` | `I-OWNERSHIP` | `I-OWNERSHIP` | `P-OWNERSHIP` | N/A: 時刻優先なし | `I-OWNERSHIP` | N/A: score推定なし | `E-BOUNDS`,`I-OWNERSHIP` | `I-OWNERSHIP`,`I-FINALIZE` |
 | `HARD-R4` recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |
