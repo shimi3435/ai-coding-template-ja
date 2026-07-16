@@ -4,7 +4,7 @@ status: planning
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-17)
 ## Current Position
 
 Phase: 1 of 6 (Stable Identity and Migration)
-Plan: 0 of TBD in current phase
-Status: Pending replanning after approved manual recovery
-Last activity: 2026-07-17 — Canonical source repinned; Phase 1 reset to planning boundary
+Plan: 0 of 5 in current phase
+Status: Planned; ready for sequential execution
+Last activity: 2026-07-17 — Phase 1 replanned as five source-pinned TDD plans
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -81,5 +81,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-07-17
-Stopped at: Manual recovery repin recorded; Phase 1 awaits replanning
+Stopped at: Phase 1 plans created; execution has not started
 Resume file: None

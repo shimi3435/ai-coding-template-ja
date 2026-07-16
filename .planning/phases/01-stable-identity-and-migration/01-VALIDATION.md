@@ -33,10 +33,12 @@ created: 2026-07-17
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-01 | TBD | TBD | HND-01 | T-01 path/input ambiguity | Stable identity rejects malformed, ambiguous, escaped, aliased, and over-limit inputs | unit + property | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
-| 01-02 | TBD | TBD | HND-01 | T-02 schema confusion | Exact v1/v2 dispatch rejects unknown fields, invalid counters/parents, unknown schemas, and downgrades | unit + property | `uv run pytest tests/test_handoff_manifest_v2.py -q` | ❌ W0 | ⬜ pending |
-| 01-03 | TBD | TBD | HND-01 | T-03 stale approval / partial persistence | Preview remains read-only; apply binds exact hashes and preserves v1 or reports unknown on failure | filesystem integration | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
-| 01-04 | TBD | TBD | HND-01 | — | Existing schema-v1 and public MVP operations remain unchanged | regression | `uv run pytest tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` | ✅ | ⬜ pending |
+| 01-01 | 01-01 | 1 | HND-01 | T-01 path/input ambiguity | Source inventory rejects malformed, ambiguous, escaped, aliased, and over-limit inputs | fixed unit/fixture | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
+| 01-02 | 01-02 | 2 | HND-01 | T-02 ID spoofing/exhaustion | Namespaced allocation preserves order invariants, tombstones, parents, and counter sentinel | unit + property | `uv run pytest tests/test_handoff_identity.py -q` | ❌ W0 | ⬜ pending |
+| 01-03 | 01-03 | 3 | HND-01 | T-03 schema confusion | Exact v1/v2 dispatch rejects unknown fields, invalid counters/parents, unknown schemas, and downgrades | unit + property | `uv run pytest tests/test_handoff_manifest_v2.py -q` | ❌ W0 | ⬜ pending |
+| 01-04 | 01-04 | 4 | HND-01 | T-04 incomplete preview | Preview is complete, deterministic, read-only, and rejects incompatible observations before staging | filesystem example | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
+| 01-05 | 01-05 | 5 | HND-01 | T-05 stale approval / partial persistence | Apply binds exact hashes and preserves v1 or reports unknown on failure | filesystem fault integration | `uv run pytest tests/test_handoff_migration.py -q` | ❌ W0 | ⬜ pending |
+| 01-06 | 01-05 | 5 | HND-01 | — | Existing schema-v1 and public MVP operations remain unchanged | regression | `uv run pytest tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` | ✅ | ⬜ pending |
 
 ## Wave 0 Requirements
 
