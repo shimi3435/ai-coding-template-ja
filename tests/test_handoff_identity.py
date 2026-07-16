@@ -327,6 +327,21 @@ def test_inventory_rejects_noncanonical_source_paths(
     assert result.issue.code == "source-path-invalid"
 
 
+def test_inventory_rejects_markdown_outside_canonical_spec_artifacts(
+    tmp_path: Path,
+) -> None:
+    repository, source_path = _write_source(
+        tmp_path,
+        b"### Requirement: Wrong artifact\nBody.\n",
+        source_path="openspec/changes/fixture/design.md",
+    )
+
+    result = read_source_inventory(repository, [source_path])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-path-noncanonical"
+
+
 def test_inventory_rejects_symlink_escape_without_following_it(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
