@@ -58,6 +58,68 @@ proposal / design / spec delta と `spec-holes` Phase 1 の確定後、`tasks.md
 5. 各 phase に元 change と担当範囲を対応付け、一つの phase に複数 changes を混在させない。
 6. 各 phase 完了後に GSD の進捗を更新し、main 実行主体が対応する OpenSpec 境界ゲートを更新する。
 
+自動化する場合の入口は first-party `execute-openspec-change` skill である。規範は canonical
+OpenSpec の `design.md` §「5. skillはhandoff開始までをオーケストレーションする」/ §「10. GSD
+capability contractは1.5.0 exactの複合signalへ固定する」と、`spec.md` §「Requirement:
+policyとcapabilityのpreflight後にGSD handoffを開始する」のままであり、skill は handoff 開始後の
+lifecycle や最終完了を所有しない。
+
+operator sequence は次の順序に固定する。
+
+1. Phase 1 bridge の read-only inspect と host schema 検査を行い、change ID、全 canonical paths、
+   source commit、manifest path、capabilities、dispatch と決定論的な `input_route` label/state
+   （`json` / `markdown-fallback`）を preview する。bridge seam は fallback 原因を返さないため、理由を
+   推測して表示しない。
+2. preview 全体を見せた後に、新たな明示回答を求める。過去の承認、flag、auto mode、tool の存在は
+   承認の代用にならない。
+3. 承認後だけ同じ frozen inputs を prepare へ渡し、structured result が `ok=true`、
+   `operation=prepare`、`known_state=prepared` をすべて満たしたことを確認する。
+4. 一つの `PARITY_PAYLOAD` に `change_id`、**全** `canonical_paths`、`source_commit`、
+   `completed_boundary_gates`、`unresolved_items`、`one_phase_one_change`、
+   `specification_nonduplication` を一度ずつ保持する。未初期化ならその完全な payload だけから
+   source-pinned brief を作り `$gsd-new-project --auto @<brief>` へ渡し、初期化済みなら完全な payload を
+   change 専用 `$gsd-phase` へ inline で渡す。GSD に仕様・requirement・scenario・受け入れ基準を複製しない。
+5. host workflow の **structured completed-success** と、次の route 固有 read-only postcondition の
+   両方が成功した場合だけ accepted とする。exit 0 や prose marker は補助情報にすぎず、それだけで
+   `started` を許可しない。
+6. accepted 後だけ Phase 1 の started transition を呼ぶ。欠落、checkpoint、空、malformed、partial、
+   ambiguous、dispatch failure、postcondition mismatch は `prepared` を保持する。
+
+未初期化 route の postcondition は、dispatch 後に
+`node ${GSD_HOME}/gsd-core/bin/gsd-tools.cjs init progress --raw` を再実行し、`project_exists` /
+`roadmap_exists` / `state_exists` が true、`project_root` が対象 repository real path、
+`agents_installed=true`、`missing_agents=[]` であることを要求する。さらに `.planning/PROJECT.md`、
+`.planning/REQUIREMENTS.md`、`.planning/ROADMAP.md`、`.planning/STATE.md` が存在し、その集合が exact
+change ID、source commit、全 canonical paths または exact brief reference、completed gates、unresolved
+items、one-phase/one-change、specification nonduplication を保持することを read-only で確認する。
+
+初期化済み route は dispatch 直前に maximum integer phase、phase directories、ROADMAP の snapshot を
+取り、dispatch 後と比較する。新規追加が exactly one max+1 phase と対応 directory だけで、他 phase /
+directory に変化がなく、新 ROADMAP section が inline `PARITY_PAYLOAD` を正確に保持することを要求する。
+選択した語句や要約だけでは postcondition を満たさない。
+
+`agent_type` のない host では `generic-agent workaround` を typed dispatch と同等に扱わない。bridge
+inspect を read-only で先に使って entrypoint を選べるが、preview approval / prepare より前に、導入済み
+local GSD 1.5.0 の選択 entrypoint workflow、選択分岐から到達可能な実 spawn 名すべて、active-config
+配下の対応 TOML と完全な role preamble、全 isolation requirement を解決する。reachability、TOML
+mapping、preamble、isolation が不明、typed-only / worktree-isolated、または generic schema と非互換なら
+fail-closed する。
+
+inspect failure / refusal は pre-prepare で停止し、brief、dispatch、manifest state の mutation を一切
+行わない。prepare 後の dispatch が accepted でなければ `prepared` を保持し、完了済み step と同じ
+frozen inputs による manual continuation evidence を報告する。自動 retry、route switch、rollback は
+行わない。manifest 成功後は常に manifest path と source commit を示し、operator がレビュー後に
+**別の後続 tracking commit**を作るよう案内する。skill 自身は Git commit、push、PR、merge を行わない。
+
+`.planning/openspec/<change-id>/handoff.json` は canonical artifacts を固定した source commit の後続
+commit で feature branch に追跡する復帰用索引であり、仕様の正本ではない。`git check-ignore` と
+repository policy で追跡可能性を確認できなければ prepare 前に停止する。MVP は handoff 後の
+plan / execute / resume / verify / finalize、retry / recovery、cleanup を自動化しない。
+
+Phase 2 の通常 CI が検証するのは静的な SKILL / fixture instruction contract と既存 Phase 1 の動的
+state seam だけである。実 host prompt、generic spawn、実 GSD route mutation、route postcondition は
+Phase 2 では未検証で、Phase 3 の opt-in / manual evidence が所有する。
+
 全 GSD phases の完了だけでは change 完了にならない。main 実行主体は OpenSpec 原本の全
 requirement / scenario / `spec-holes` を実装・テスト・理由付き未検証へ対応付け、
 `task openspec:validate`、`task check`、文書リンクを検証してから最終境界ゲートを完了にする。
@@ -65,7 +127,8 @@ requirement / scenario / `spec-holes` を実装・テスト・理由付き未検
 テンプレート自身は一つの PR に一つの active change だけを載せる。依存 changes は先行 change の
 pre-merge close / merge 後を base とする専用 branches で順番に実装し、main や OpenSpec backlog
 へ proposal を複製しない。各 PR の最終コミットで対象 change directory を削除し、main の
-`openspec/changes/` を空に保つ。
+`openspec/changes/` を空に保つ。追跡manifestも既存close policyに従いpre-mergeで人が削除し、MVPは
+自動finalize / cleanupしない。
 
 ## OpenSpec engine のアクセス形態と Markdown fallback（ADR-0008）
 
@@ -247,6 +310,7 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 | `self-review` | コミット / PR 前の自己 diff 検査（明白な欠陥は修正・判断事項は報告のみ） | 自作（local） |
 | `verify-change` | 変更後の実動作確認（`task check`→個別テスト→実行・未検証は理由付き明記） | 自作（local） |
 | `spec-holes` | 仕様の穴（未定義の振る舞い）の機械的列挙とテスト化（固定タクソノミー 12 分類） | 自作（local） |
+| `execute-openspec-change` | source-pinned OpenSpec change の preview・明示承認・GSD handoff 開始（最終完了や lifecycle は対象外） | 自作（local） |
 
 > `grill-me` / `grill-with-docs` は薄いラッパーで、本体の `grilling`・`domain-modeling`
 > skill に委譲する。再現性のため依存先も同梱している（単体では機能しないため）。

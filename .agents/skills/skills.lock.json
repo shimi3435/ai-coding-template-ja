@@ -110,6 +110,16 @@
       "license_file": "LICENSE",
       "redistribution": "allowed",
       "sha256": "72bf104c4e5f9ea92880e7550c674d261484ef0dbecba2f129e79c8fa9f490b2"
+    },
+    {
+      "name": "execute-openspec-change",
+      "source": "local (first-party)",
+      "source_type": "local",
+      "commit": "local",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "redistribution": "allowed",
+      "sha256": "f456311687c476ec807d5e28eb8e2c89a179a449e99ff69f34f482c62ef4ff51"
     }
   ]
 }

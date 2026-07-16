@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "change_id": "fixture-change",
+  "handoff_state": "prepared",
+  "artifacts": [
+    {
+      "kind": "design",
+      "path": "openspec/changes/fixture-change/design.md",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "kind": "proposal",
+      "path": "openspec/changes/fixture-change/proposal.md",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "kind": "spec",
+      "path": "openspec/changes/fixture-change/specs/fixture-capability/spec.md",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "kind": "tasks",
+      "path": "openspec/changes/fixture-change/tasks.md",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "source_commit": "1111111111111111111111111111111111111111",
+  "progress": {
+    "total": 3,
+    "complete": 1,
+    "remaining": 2,
+    "tasks": [
+      {"id": "1", "description": "1.1 fixture contractを固定する", "done": true},
+      {"id": "2", "description": "1.2 Unicodeの進捗を検証する", "done": false},
+      {"id": "3", "description": "1.3 fallback parityを検証する", "done": false}
+    ]
+  },
+  "capabilities": {
+    "openspec": {
+      "version": "1.3.1",
+      "probe": "instructions-apply-json",
+      "schema_name": "spec-driven",
+      "input_route": "json"
+    },
+    "gsd": {
+      "version": "1.5.0",
+      "probe": "init-progress-raw",
+      "project_initialized": false,
+      "entrypoint": "gsd-new-project-auto"
+    },
+    "host": {
+      "spawn_agent_schema": "generic",
+      "dispatch": "generic-agent-workaround",
+      "agent_role_source": "toml"
+    }
+  }
+}

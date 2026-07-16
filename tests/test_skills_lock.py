@@ -115,6 +115,37 @@ def test_allowed_skill_md_exists_and_sha256_matches() -> None:
         )
 
 
+def test_execute_openspec_change_is_first_party_and_distributed() -> None:
+    """execute-openspec-change の provenance と両 runtime 配布を固定する。"""
+    entries = [
+        entry
+        for entry in _load_lock()
+        if entry.get("name") == "execute-openspec-change"
+    ]
+    assert entries == [
+        {
+            "name": "execute-openspec-change",
+            "source": "local (first-party)",
+            "source_type": "local",
+            "commit": "local",
+            "license": "MIT",
+            "license_file": "LICENSE",
+            "redistribution": "allowed",
+            "sha256": (
+                "f456311687c476ec807d5e28eb8e2c89a179a449e99ff69f34f482c62ef4ff51"
+            ),
+        }
+    ]
+
+    expected_target = Path("../../.agents/skills/execute-openspec-change")
+    canonical_skill = (SKILLS_ROOT / "execute-openspec-change").resolve()
+    for symlink_root in SYMLINK_ROOTS:
+        link = REPO_ROOT / symlink_root / "execute-openspec-change"
+        assert link.is_symlink(), f"{symlink_root}/execute-openspec-change は symlink"
+        assert link.readlink() == expected_target
+        assert link.resolve() == canonical_skill
+
+
 @pytest.mark.parametrize("symlink_root", SYMLINK_ROOTS)
 def test_symlinks_resolve_to_skill_md(symlink_root: str) -> None:
     """.claude/skills・.codex/skills の symlink が解決し SKILL.md に届くこと。"""

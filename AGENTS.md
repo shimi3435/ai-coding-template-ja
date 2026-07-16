@@ -37,6 +37,13 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - GSD への handoff は専用 branch の review 可能な commit から行い、change ID、canonical artifact
   paths、source commit、完了済み境界ゲート、未解決事項を渡す。GSD の利用不能時や途中の経路変更は
   自動 fallback せず、状態と再構成案を提示して承認を得る。
+- OpenSpec で GSD 経路を承認し、canonical artifacts を source-pinned な review 可能 commit に
+  固定した後は、任意の `execute-openspec-change` skill で handoff 開始を自動化できる。read-only preview
+  は決定論的な `input_route` の label/state（`json` / `markdown-fallback`）を表示するが fallback 原因を
+  推測しない。表示後の新たな明示承認だけが prepare と GSD dispatch を許可し、最終完了は引き続き
+  OpenSpec が所有する。
+- Phase 2 の通常 CI が確認するのは静的な SKILL / fixture instruction contract と既存 Phase 1 の動的
+  state seam までである。実 host orchestration は未検証で、Phase 3 の opt-in / manual evidence が所有する。
 - GSD phases 完了後も、OpenSpec 原本の全 requirements / scenarios / `spec-holes` と実装・検証を
   対応付け、`task openspec:validate` と `task check` を通してから最終境界ゲートを完了にする。
 - テンプレート自身では一つの PR に一つの active change だけを置き、依存 changes は専用 branches で

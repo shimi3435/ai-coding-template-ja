@@ -9,9 +9,11 @@
 - README.md / CONTEXT.md / .github/workflows/ci.yml
 - PR2 で追加されるファイル（openspec/project.md / AGENTS.md / CLAUDE.md /
   .codex/config.toml.template / .mcp.json.template）は存在時のみ処理
-- src/**/*.py と tests/**/*.py の import/from・パス文字列
+- src/**/*.py と tests/**/*.py、およびpackage importを持つ固定のsmoke script
+  の import/from・パス文字列
 
-走査しない: scripts/（doctor.py の既定名検出センチネルを書き換えないため）/
+上記固定ファイル以外は走査しない: scripts/（doctor.py の既定名検出センチネルを
+書き換えないため）/
 repo 名 / GitHub remote / Actions secret 名（§17 で対象外と明記）。
 
 置換は module 形と配布形を別パターン・単語境界付きで行い、裸の "ja" 等を巻き込まない。
@@ -43,6 +45,7 @@ WHITELIST_FILES = [
     "CLAUDE.md",
     ".codex/config.toml.template",
     ".mcp.json.template",
+    "scripts/openspec-gsd-handoff-smoke.py",
 ]
 PY_GLOBS = ["src/**/*.py", "tests/**/*.py"]
 
