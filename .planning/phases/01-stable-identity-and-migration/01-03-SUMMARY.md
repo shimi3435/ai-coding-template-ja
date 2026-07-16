@@ -40,7 +40,7 @@ patterns-established:
 requirements-addressed: [HND-01]
 requirements-completed: []
 
-duration: 8 min
+duration: 12 min
 completed: 2026-07-17
 status: complete
 ---
@@ -51,9 +51,9 @@ status: complete
 
 ## Performance
 
-- **Duration:** 8 min
+- **Duration:** 12 min
 - **Started:** 2026-07-16T21:23:39Z
-- **Completed:** 2026-07-16T21:32:04Z
+- **Completed:** 2026-07-16T21:35:24Z
 - **Tasks:** 2
 - **Files modified:** 4
 
@@ -78,6 +78,11 @@ status: complete
 - **GREEN:** `7453ea3` implemented bounded version dispatch and the read-only file facade.
 - **REFACTOR:** No separate refactor commit was needed.
 
+### Post-GREEN collision audit
+
+- **RED:** `7288b80` added a regression where distinct active/tombstone IDs share one normalized source identity.
+- **GREEN:** `5594a1d` rejected normalized identity collisions across both persisted collections.
+
 ## Task Commits
 
 1. **Task 1: Encode and validate the exact schema-2 aggregate**
@@ -86,6 +91,9 @@ status: complete
 2. **Task 2: Dispatch exact schema versions and prove schema-2 round trip**
    - `b2288e5` — test: exact version-dispatch contract RED
    - `7453ea3` — feat: bounded exact version dispatch GREEN
+3. **Post-GREEN collision audit**
+   - `7288b80` — test: active/tombstone identity collision RED
+   - `5594a1d` — fix: cross-state identity collision GREEN
 
 ## Files Created
 
@@ -111,10 +119,18 @@ status: complete
 - **Fix:** Reconciled `STATE.md` to the on-disk 3/5 summary count, 60% progress, Plan 01-04 readiness, and the cumulative performance totals.
 - **Files modified:** `.planning/STATE.md`
 - **Verification:** State and roadmap both report 3/5 plans, while `01-04-SUMMARY.md` remains absent.
-- **Committed in:** Plan metadata commit
+- **Committed in:** `702287d`
 
-**Total deviations:** 1 auto-fixed (1 Rule 1 bug).
-**Impact on plan:** Metadata-only correction; implementation scope and runtime behavior are unchanged.
+**2. [Rule 1 - Bug] Rejected normalized identity collisions across active and tombstone state**
+- **Found during:** Final canonical collision audit
+- **Issue:** Exact IDs were globally unique, but a tombstone with a different ID could duplicate an active item's normalized category/path/heading/parent identity.
+- **Fix:** Validate one combined persisted-identity set across active and tombstone records before returning a schema-2 value.
+- **Files modified:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_v2.py`, `tests/test_handoff_manifest_v2.py`
+- **Verification:** The new RED regression fails before the fix; focused 72 tests and the full 312-test project check pass after it.
+- **Committed in:** `5594a1d`
+
+**Total deviations:** 2 auto-fixed (2 Rule 1 bugs).
+**Impact on plan:** Both fixes are required for accurate progress and fail-closed schema correctness; no scope expansion.
 
 ## Issues Encountered
 
@@ -122,8 +138,8 @@ status: complete
 
 ## Test Results
 
-- `uv run pytest tests/test_handoff_manifest_v2.py tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` — 71 passed.
-- `task check` — ruff format/check, basedpyright, and 311 tests passed.
+- `uv run pytest tests/test_handoff_manifest_v2.py tests/test_handoff_manifest.py tests/test_handoff_cli.py -q` — 72 passed.
+- `task check` — ruff format/check, basedpyright, and 312 tests passed.
 - Focused `ruff` and `basedpyright` checks for both new modules and their tests passed.
 - `python -m ai_coding_template_ja.openspec_gsd_handoff --help` still showed exactly `inspect`, `prepare`, and `mark-started`.
 - `git diff --check` passed.
@@ -155,7 +171,7 @@ Plan 01-04 can consume exact schema-1 or schema-2 reads and construct a complete
 ## Self-Check: PASSED
 
 - All four declared created files exist.
-- All four TDD task commits exist in RED/GREEN order.
+- All six RED/GREEN task and regression commits exist in order.
 - Focused and full project checks pass.
 - Historical manifest, brief, OpenSpec tasks, schema-1 implementation, package root, and CLI remain unchanged.
 
