@@ -238,6 +238,46 @@ class ParentSwapAtReplaceOperations(MutationRecordingOperations):
         parent.symlink_to(self.outside_parent, target_is_directory=True)
 
 
+class ParentCloseAfterEffectOperations(MutationRecordingOperations):
+    """Raise only after the anchored parent descriptor has been closed."""
+
+    def close_parent_directory(self, anchor) -> None:
+        super().close_parent_directory(anchor)
+        raise OSError("injected parent close failure after close")
+
+
+class PostReplaceRereadAndCloseFaultOperations(ParentCloseAfterEffectOperations):
+    """Make the installed target unprovable and then fail parent close."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.replaced = False
+
+    def read_bounded_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        *,
+        limit: int = MAX_MANIFEST_BYTES,
+    ) -> bytes:
+        if self.replaced and name == Path(TARGET_PATH).name:
+            raise OSError("injected installed target reread failure")
+        return super().read_bounded_bytes_at(
+            parent_descriptor,
+            name,
+            limit=limit,
+        )
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        super().replace_at(parent_descriptor, source_name, target_name)
+        self.replaced = True
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -943,3 +983,53 @@ def test_apply_classifies_replace_failure_from_bounded_target_reread(
             assert not target.exists()
         else:
             assert target.stat().st_size == MAX_MANIFEST_BYTES + 1
+
+
+def test_apply_returns_success_when_parent_close_fails_after_candidate_proof(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = ParentCloseAfterEffectOperations()
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, Success)
+    assert applied.value == preview.candidate_manifest
+    assert target.read_bytes() == preview.candidate_bytes
+    assert not any(target.parent.glob(".handoff.*.tmp"))
+    assert operations.mutations == ["create", "write", "replace"]
+
+
+def test_apply_returns_structured_failure_when_replaced_candidate_is_unprovable(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = PostReplaceRereadAndCloseFaultOperations()
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.code == "migration-replaced-target-reread-failed"
+    assert applied.issue.failure_point is MigrationFailurePoint.REREAD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert applied.issue.staging_state is MigrationStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.NOT_NEEDED
+    assert target.read_bytes() == preview.candidate_bytes
+    assert not any(target.parent.glob(".handoff.*.tmp"))
+    assert operations.mutations == ["create", "write", "replace"]
