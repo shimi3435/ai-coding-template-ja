@@ -6,6 +6,7 @@ import hashlib
 import os
 from dataclasses import replace
 from pathlib import Path
+from typing import IO, Any
 
 import pytest
 
@@ -25,6 +26,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
     preview_manifest_migration,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
+from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceIdentityLimits,
     SourceIdentityState,
@@ -238,6 +240,65 @@ class ParentSwapAtReplaceOperations(MutationRecordingOperations):
         parent.symlink_to(self.outside_parent, target_is_directory=True)
 
 
+class PreviewTargetParentSwapOperations(ManifestMigrationFileOperations):
+    """Swap the preview target parent after validation but before its read."""
+
+    def __init__(self, target: Path, outside_parent: Path) -> None:
+        self.target = target
+        self.outside_parent = outside_parent
+        self.moved_parent = target.parent.with_name(f"{target.parent.name}-moved")
+        self.swapped = False
+
+    def _swap_parent(self) -> None:
+        if self.swapped:
+            return
+        self.target.parent.rename(self.moved_parent)
+        self.target.parent.symlink_to(self.outside_parent, target_is_directory=True)
+        self.swapped = True
+
+    def read_bounded_bytes(
+        self, path: Path, *, limit: int = MAX_MANIFEST_BYTES
+    ) -> bytes:
+        if path == self.target:
+            self._swap_parent()
+        return super().read_bounded_bytes(path, limit=limit)
+
+    def read_bounded_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        *,
+        limit: int = MAX_MANIFEST_BYTES,
+    ) -> bytes:
+        if name == self.target.name:
+            self._swap_parent()
+        return super().read_bounded_bytes_at(
+            parent_descriptor,
+            name,
+            limit=limit,
+        )
+
+
+class SourceDriftAtReplaceOperations(MutationRecordingOperations):
+    """Change one canonical artifact at the final pre-replace seam."""
+
+    def __init__(self, artifact: Path, replacement: bytes) -> None:
+        super().__init__()
+        self.artifact = artifact
+        self.replacement = replacement
+
+    def before_replace_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        del parent_descriptor, parent, source_name, target_name
+        self.mutations.append("replace")
+        self.artifact.write_bytes(self.replacement)
+
+
 class ParentCloseAfterEffectOperations(MutationRecordingOperations):
     """Raise only after the anchored parent descriptor has been closed."""
 
@@ -380,6 +441,103 @@ def test_preview_builds_complete_deterministic_schema_v2_without_mutation(
     assert len(preview.preview_sha256) == 64
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_preview_rejects_target_parent_swap_without_adopting_outside_v1(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    outside_parent = tmp_path / "outside-target-parent"
+    outside_parent.mkdir()
+    outside_v1 = EXPECTED_V1.replace(
+        b'"' + b"1" * 40 + b'"',
+        b'"' + b"f" * 40 + b'"',
+    )
+    (outside_parent / target.name).write_bytes(outside_v1)
+    operations = PreviewTargetParentSwapOperations(target, outside_parent)
+
+    result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        operations=operations,
+    )
+
+    assert isinstance(result, Failure)
+    assert (outside_parent / target.name).read_bytes() == outside_v1
+    assert (operations.moved_parent / target.name).read_bytes() == EXPECTED_V1
+
+
+@pytest.mark.parametrize("artifact_path", [PROPOSAL_PATH, TASKS_PATH])
+def test_preview_rejects_canonical_artifact_swap_without_adopting_outside_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    artifact_path: str,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    artifact = repository / artifact_path
+    saved_artifact = artifact.with_name(f"{artifact.name}.saved")
+    outside_artifact = tmp_path / f"outside-{artifact.name}"
+    outside_bytes = (
+        b"# Outside proposal\n"
+        if artifact_path == PROPOSAL_PATH
+        else CANONICAL_CONTENT[TASKS_PATH].replace(b"- [x]", b"- [ ]", 1)
+    )
+    outside_artifact.write_bytes(outside_bytes)
+    v1, expected_artifacts = _inputs()
+    expected_artifacts = tuple(
+        replace(item, sha256=_sha256(outside_bytes))
+        if item.path == artifact_path
+        else item
+        for item in expected_artifacts
+    )
+    expected_progress = v1.progress
+    if artifact_path == TASKS_PATH:
+        parsed_progress = parse_task_progress(outside_bytes.decode())
+        assert isinstance(parsed_progress, Success)
+        expected_progress = parsed_progress.value
+    real_path_open = Path.open
+    real_os_open = os.open
+
+    def swap_for_open(open_file):
+        artifact.rename(saved_artifact)
+        artifact.symlink_to(outside_artifact)
+        try:
+            return open_file()
+        finally:
+            artifact.unlink()
+            saved_artifact.rename(artifact)
+
+    def racing_path_open(path: Path, *args: Any, **kwargs: Any) -> IO[Any]:
+        if path == artifact:
+            return swap_for_open(lambda: real_path_open(path, *args, **kwargs))
+        return real_path_open(path, *args, **kwargs)
+
+    def racing_os_open(path, *args: Any, **kwargs: Any) -> int:
+        if kwargs.get("dir_fd") is not None and Path(path).name == artifact.name:
+            return swap_for_open(lambda: real_os_open(path, *args, **kwargs))
+        return real_os_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", racing_path_open)
+    monkeypatch.setattr(os, "open", racing_os_open)
+
+    result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=expected_artifacts,
+        current_progress=expected_progress,
+        source_paths=(SOURCE_PATH,),
+        operations=ManifestMigrationFileOperations(),
+    )
+
+    assert isinstance(result, Failure)
+    assert target.read_bytes() == EXPECTED_V1
+    assert artifact.read_bytes() == CANONICAL_CONTENT[artifact_path]
+    assert outside_artifact.read_bytes() == outside_bytes
 
 
 def test_preview_rejects_stale_non_source_artifact_without_partial_value(
@@ -814,6 +972,48 @@ def test_apply_rejects_parent_swap_at_replace_without_touching_outside(
     assert outside_target.read_bytes() == outside_bytes
     assert (operations.moved_parent / target.name).read_bytes() == EXPECTED_V1
     assert not any(operations.moved_parent.glob(".handoff.*.tmp"))
+    assert operations.mutations == ["create", "write", "replace", "unlink"]
+
+
+@pytest.mark.parametrize(
+    ("artifact_path", "replacement"),
+    [
+        (SOURCE_PATH, SOURCE + b"\nFinal spec drift.\n"),
+        (PROPOSAL_PATH, b"# Final proposal drift\n"),
+        (
+            TASKS_PATH,
+            CANONICAL_CONTENT[TASKS_PATH].replace(b"- [ ]", b"- [x]", 1),
+        ),
+    ],
+)
+def test_apply_rejects_final_canonical_source_drift_and_cleans_staging(
+    tmp_path: Path,
+    artifact_path: str,
+    replacement: bytes,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = SourceDriftAtReplaceOperations(
+        repository / artifact_path,
+        replacement,
+    )
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert applied.issue.staging_state is MigrationStagingState.VALIDATED
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+    assert target.read_bytes() == EXPECTED_V1
+    assert not any(target.parent.glob(".handoff.*.tmp"))
     assert operations.mutations == ["create", "write", "replace", "unlink"]
 
 
