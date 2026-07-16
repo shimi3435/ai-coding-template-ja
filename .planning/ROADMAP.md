@@ -9,7 +9,7 @@ canonical requirements, scenarios, acceptance criteria, and final completion. GS
 owns the sequential phase, plan, and phase-progress decomposition without copying
 or redefining canonical specification prose.
 
-`PROJECT_MODE=mvp`
+`PROJECT_MODE=standard`
 
 The six phases execute strictly in dependency order. Each phase uses TDD, plan
 check, verifier, Nyquist validation, and source grounding as applicable. Evidence
@@ -35,7 +35,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ### Phase 1: Stable Identity and Migration
 
 **Goal:** Later phases can rely on a stable, source-pinned identity and a reviewable migration boundary for this change.
-**Mode:** mvp
+**Mode:** standard
 **Depends on:** Nothing (first phase)
 **Requirements:** HND-01 (opaque canonical handle: HARD-R1)
 **Success Criteria** (observable planning and verification outcomes):
@@ -48,7 +48,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ### Phase 2: Source-to-Execution Mapping
 
 **Goal:** Reviewers can verify one complete source-to-phase, plan, and evidence mapping for this change.
-**Mode:** mvp
+**Mode:** standard
 **Depends on:** Phase 1
 **Requirements:** HND-02 (opaque canonical handle: HARD-R1)
 **Success Criteria** (observable planning and verification outcomes):
@@ -60,7 +60,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ### Phase 3: Lifecycle Drift Gate
 
 **Goal:** Every lifecycle operation planned after this phase can rely on the same fresh, fail-closed drift decision.
-**Mode:** mvp
+**Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
 **Success Criteria** (observable planning and verification outcomes):
@@ -73,7 +73,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ### Phase 4: Repository-Wide Ownership
 
 **Goal:** Recovery and finalization can use complete repository-wide ownership evidence rather than local or partial assumptions.
-**Mode:** mvp
+**Mode:** standard
 **Depends on:** Phase 3
 **Requirements:** HND-04 (opaque canonical handle: HARD-R3)
 **Success Criteria** (observable planning and verification outcomes):
@@ -86,7 +86,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ### Phase 5: Recovery and Resume
 
 **Goal:** Operators can inspect interruption or partial failure and obtain a read-only resume decision from fresh evidence.
-**Mode:** mvp
+**Mode:** standard
 **Depends on:** Phase 4
 **Requirements:** HND-05 (opaque canonical handle: HARD-R4)
 **Success Criteria** (observable planning and verification outcomes):
@@ -99,7 +99,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ### Phase 6: Finalize Preview and Receipt
 
 **Goal:** Operators can review an immutable finalization preview, authorize exact inputs, and inspect a receipt without conflating it with OpenSpec completion.
-**Mode:** mvp
+**Mode:** standard
 **Depends on:** Phase 5
 **Requirements:** HND-06 (opaque canonical handle: HARD-R5), HND-07 (opaque canonical handle: HARD-R6)
 **Success Criteria** (observable planning and verification outcomes):

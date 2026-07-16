@@ -1,4 +1,5 @@
 {
+  "runtime": "codex",
   "model_profile": "balanced",
   "commit_docs": true,
   "parallelization": false,
@@ -6,10 +7,6 @@
   "brave_search": false,
   "firecrawl": false,
   "exa_search": false,
-  "tavily_search": false,
-  "ref_search": false,
-  "perplexity": false,
-  "jina": false,
   "git": {
     "branching_strategy": "none",
     "create_tag": true,
@@ -18,6 +15,7 @@
     "quick_branch_template": null
   },
   "workflow": {
+    "use_worktrees": false,
     "research": true,
     "plan_check": true,
     "verifier": true,
