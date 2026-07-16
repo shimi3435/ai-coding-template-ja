@@ -12,6 +12,12 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     parse_manifest_bytes,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
+    ManifestMigrationFailure,
+    ManifestMigrationFileOperations,
+    MigrationFailurePoint,
+    MigrationStagingState,
+    MigrationTargetState,
+    apply_manifest_migration,
     preview_manifest_migration,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
@@ -81,6 +87,29 @@ class ReadOnlyCountingOperations(ManifestFileOperations):
 
     def unlink(self, path: Path) -> None:
         raise AssertionError(f"unexpected unlink: {path}")
+
+
+class MutationRecordingOperations(ManifestMigrationFileOperations):
+    """Exercise real persistence while recording every mutating boundary."""
+
+    def __init__(self) -> None:
+        self.mutations: list[str] = []
+
+    def create_staging(self, parent: Path) -> Path:
+        self.mutations.append("create")
+        return super().create_staging(parent)
+
+    def write_bytes(self, path: Path, data: bytes) -> None:
+        self.mutations.append("write")
+        super().write_bytes(path, data)
+
+    def replace(self, source: Path, target: Path) -> None:
+        self.mutations.append("replace")
+        super().replace(source, target)
+
+    def unlink(self, path: Path) -> None:
+        self.mutations.append("unlink")
+        super().unlink(path)
 
 
 def _sha256(data: bytes) -> str:
@@ -416,3 +445,123 @@ def test_preview_retains_ids_and_reports_fingerprint_updates(tmp_path: Path) -> 
         for change in updated.value.changes
     )
     assert target.read_bytes() == EXPECTED_V1
+
+
+def test_apply_requires_exact_fresh_approval_before_any_staging(tmp_path: Path) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+
+    missing_operations = MutationRecordingOperations()
+    missing = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=False,
+        operations=missing_operations,
+    )
+    stale_operations = MutationRecordingOperations()
+    stale = apply_manifest_migration(
+        preview,
+        approved_preview_sha256="0" * 64,
+        approved=True,
+        operations=stale_operations,
+    )
+
+    assert isinstance(missing, ManifestMigrationFailure)
+    assert missing.issue.failure_point is MigrationFailurePoint.APPROVAL
+    assert isinstance(stale, ManifestMigrationFailure)
+    assert stale.issue.failure_point is MigrationFailurePoint.APPROVAL
+    assert missing_operations.mutations == []
+    assert stale_operations.mutations == []
+    assert target.read_bytes() == EXPECTED_V1
+
+
+def test_apply_rejects_preview_replay_and_current_snapshot_drift_before_staging(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    altered = (
+        replace(preview, repository_root=str(tmp_path / "other-repository")),
+        replace(
+            preview,
+            target_path=".planning/openspec/other-change/handoff.json",
+        ),
+    )
+
+    for replay in altered:
+        operations = MutationRecordingOperations()
+        rejected = apply_manifest_migration(
+            replay,
+            approved_preview_sha256=preview.preview_sha256,
+            approved=True,
+            operations=operations,
+        )
+        assert isinstance(rejected, ManifestMigrationFailure)
+        assert rejected.issue.failure_point is MigrationFailurePoint.APPROVAL
+        assert operations.mutations == []
+
+    (repository / SOURCE_PATH).write_bytes(SOURCE + b"\nChanged after preview.\n")
+    drift_operations = MutationRecordingOperations()
+    drift = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=drift_operations,
+    )
+    assert isinstance(drift, ManifestMigrationFailure)
+    assert drift.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert drift.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert drift_operations.mutations == []
+    assert target.read_bytes() == EXPECTED_V1
+
+
+def test_apply_rejects_target_changed_after_preview_before_staging(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    changed = EXPECTED_V1 + b" \n"
+    target.write_bytes(changed)
+    operations = MutationRecordingOperations()
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert applied.issue.staging_state is MigrationStagingState.ABSENT
+    assert operations.mutations == []
+    assert target.read_bytes() == changed
+
+
+def test_apply_exact_preview_validates_staging_then_atomically_replaces_target(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    operations = MutationRecordingOperations()
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, Success)
+    assert applied.value == preview.candidate_manifest
+    assert target.read_bytes() == preview.candidate_bytes
+    assert operations.mutations == ["create", "write", "replace"]
