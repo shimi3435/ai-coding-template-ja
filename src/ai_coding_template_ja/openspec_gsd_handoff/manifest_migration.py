@@ -34,6 +34,7 @@ from .models import (
     Result,
     Success,
 )
+from .progress import parse_task_progress
 from .reader import read_canonical_artifacts
 from .source_identity import (
     DEFAULT_SOURCE_IDENTITY_LIMITS,
@@ -195,7 +196,7 @@ def _read_artifact_snapshot(
     repository: Path,
     change_id: str,
     artifacts: Sequence[ManifestArtifact],
-) -> Result[tuple[ManifestArtifact, ...]]:
+) -> Result[tuple[tuple[ManifestArtifact, ...], Progress]]:
     try:
         claims = tuple(
             ArtifactClaim(
@@ -209,14 +210,25 @@ def _read_artifact_snapshot(
     observed = read_canonical_artifacts(repository, change_id, claims)
     if isinstance(observed, Failure):
         return observed
+    tasks = tuple(
+        artifact for artifact in observed.value if artifact.kind is ArtifactKind.TASKS
+    )
+    if len(tasks) != 1:
+        return _failure("migration-progress-snapshot-invalid")
+    progress = parse_task_progress(tasks[0].content)
+    if isinstance(progress, Failure):
+        return progress
     return Success(
-        tuple(
-            ManifestArtifact(
-                kind=artifact.kind.value,
-                path=artifact.path,
-                sha256=artifact.sha256,
-            )
-            for artifact in observed.value
+        (
+            tuple(
+                ManifestArtifact(
+                    kind=artifact.kind.value,
+                    path=artifact.path,
+                    sha256=artifact.sha256,
+                )
+                for artifact in observed.value
+            ),
+            progress.value,
         )
     )
 
@@ -225,6 +237,7 @@ def _validate_source_snapshot(
     repository: Path,
     source_paths: Sequence[str],
     artifacts: Sequence[ManifestArtifact],
+    progress: Progress,
     *,
     change_id: str,
     limits: SourceIdentityLimits,
@@ -232,8 +245,10 @@ def _validate_source_snapshot(
     first_artifacts = _read_artifact_snapshot(repository, change_id, artifacts)
     if isinstance(first_artifacts, Failure):
         return first_artifacts
-    if first_artifacts.value != tuple(artifacts):
+    if first_artifacts.value[0] != tuple(artifacts):
         return _failure("migration-artifact-snapshot-mismatch")
+    if first_artifacts.value[1] != progress:
+        return _failure("migration-progress-snapshot-mismatch")
     inventory = read_source_inventory(repository, source_paths, limits=limits)
     if isinstance(inventory, Failure):
         return inventory
@@ -372,6 +387,7 @@ def preview_manifest_migration(
         repository,
         canonical_source_paths,
         artifacts,
+        current_progress,
         change_id=source_manifest.change_id,
         limits=limits,
     )
