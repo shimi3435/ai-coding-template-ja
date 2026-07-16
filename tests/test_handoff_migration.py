@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     MAX_MANIFEST_BYTES,
@@ -798,6 +801,58 @@ def test_apply_reports_pre_replace_faults_and_preserves_exact_v1(
         assert target.read_bytes() == EXPECTED_V1
         if operations.staging is not None:
             assert not operations.staging.exists()
+
+
+@pytest.mark.parametrize("fault", ["fstat", "close"])
+def test_apply_cleans_staging_when_creation_fails_after_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = MutationRecordingOperations()
+    real_fstat = os.fstat
+    real_close = os.close
+
+    def is_staging_descriptor(descriptor: int) -> bool:
+        try:
+            opened_path = os.readlink(f"/proc/self/fd/{descriptor}")
+        except OSError:
+            return False
+        return Path(opened_path).name.startswith(".handoff.")
+
+    def fstat_with_fault(descriptor: int) -> os.stat_result:
+        if fault == "fstat" and is_staging_descriptor(descriptor):
+            raise OSError("injected staging fstat failure")
+        return real_fstat(descriptor)
+
+    def close_with_fault(descriptor: int) -> None:
+        fail_after_close = fault == "close" and is_staging_descriptor(descriptor)
+        real_close(descriptor)
+        if fail_after_close:
+            raise OSError("injected staging close failure")
+
+    monkeypatch.setattr(os, "fstat", fstat_with_fault)
+    monkeypatch.setattr(os, "close", close_with_fault)
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.CREATE
+    assert applied.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert applied.issue.staging_state is MigrationStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+    assert target.read_bytes() == EXPECTED_V1
+    assert not any(target.parent.glob(".handoff.*.tmp"))
+    assert operations.mutations == ["create", "unlink"]
 
 
 def test_apply_does_not_claim_v1_preserved_when_write_fault_observes_target_drift(
