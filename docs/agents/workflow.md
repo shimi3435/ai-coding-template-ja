@@ -38,6 +38,56 @@ proposal / design / spec delta と `spec-holes` Phase 1 の確定後、`tasks.md
 3. 上記の大規模条件がなく、単一セッションと単一コンテキストで安全に完了・検証できるなら
    OpenSpec 直接経路とする。
 
+### 実装開始前の実行予算（ADR-0009）
+
+直接 / GSD のどちらの経路でも、仕様と経路の確定後、実装開始前に `tasks.md` へ次の5項目を短く
+記録する。これは token 見積もりではなく、恒久成果に対して計画・証跡・検証を比例させる境界である。
+
+| 項目 | 記録内容 |
+| --- | --- |
+| Route | 直接 / GSD と ADR-0008 の選択理由 |
+| 恒久成果 | close / merge 後も main に残り、下流または保守へ直接価値を持つもの |
+| 一時実行証跡 | planning / handoff / review 用にだけ保持し、close 前に削除するもの |
+| 早期検証 | 最初の環境依存 vertical slice で実行する CI parity / safe dry-run |
+| 停止・再計画 | 当初の change / phase / trust boundary を超える条件 |
+
+固定 token、行数、commit、phase 数の一律上限は、変更ごとの安全性と依存関係を表せないため品質の
+代理にしない。ただし次の追加は material expansion とし、続行前に同じ実行予算を更新する。独立して
+出荷できる恒久成果は先に別 OpenSpec change へ分割し、経路変更は ADR-0008 の承認境界に従う。
+
+- 独立して出荷できる恒久成果または OpenSpec change
+- GSD phase、外部依存、trust boundary
+- 通常 CI、永続データ、公開 API
+
+### evidence economy と検証順序
+
+plan、evidence、test、review は、次のいずれかを満たす場合だけ追加する。
+
+1. 既存 gate では捕捉できない distinct failure / seam / risk を検証する。
+2. セッション跨ぎの復帰に必要である。
+3. 人または agent のレビュー判断に必要である。
+
+該当しなければ新規 artifact を作らず、既存の spec、test、log、review を参照する。通常 CI は main に
+残る恒久成果だけに依存させ、pre-merge close で削除する change directory / `.planning/`、または
+squash / 履歴なし配布で到達不能になる Git commit を前提にしない。GSD を使う場合も、各 phase / plan
+には依存順、隔離レビュー、復帰のいずれかの利用者を要求し、生成可能であることだけを作成理由にしない。
+
+検証は次の順で優先する。上位 seam を安全に実行できない場合は理由付き未検証を記録できるが、その
+代替として下位の静的証跡を無制限に増やさない。
+
+1. 高リスクな実動作または safe dry-run seam
+2. 公開 interface / integration behavior
+3. security property / 境界条件
+4. 静的 fixture / prose contract
+
+Git 履歴、rename、offline / tool availability、OS 固有機構へ依存する最初の vertical slice では、該当する
+shallow / historyless check、rename-smoke、offline check、実行対象 OS の smoke を全実装完了前に行う。
+実行不能なら理由、未検証範囲、代替確認を記録し、成功へ読み替えない。
+
+受け入れ基準と project checks が green で blocker がなければ、nit、独立 hardening、測定 tooling、
+自動 token accounting は別 change / 提案へ送り、現在 change の実装と証跡を拡張しない。同じ blocker の
+反復または material expansion は追加生成の理由ではなく、停止・再計画の signal とする。
+
 直接実行中に大規模条件を満たした場合は、完了済み checkbox を保持し、未完了範囲を境界ゲートへ
 再構成する。理由と状態を提示して承認を得た後にだけ GSD へ昇格する。GSD が利用不能または安全に
 継続できない場合も直接経路へ自動で戻さず、既存 commits、完了済み phases、未完了範囲、詳細

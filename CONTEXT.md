@@ -23,3 +23,19 @@ _Avoid_: スキル本体, オリジナル
 **green（doctor / check が通る状態）**:
 `task doctor` と `task check` がともに exit 0 の状態を指す。`task doctor` では FAIL（機械コアの破損）がゼロであること（WARN・INFO は green を壊さない。到達性チェックは既定で行わず、作成直後・CI・オフラインでも green になる）。`task check`（ruff / basedpyright / pytest）は全て通ること。
 _Avoid_: 成功, パス, OK
+
+**恒久成果**:
+change の close / merge 後も main に残り、下流利用者または将来の保守へ直接価値を持つコード、テスト、仕様、運用文書。
+_Avoid_: product artifact, 最終ファイル
+
+**一時実行証跡**:
+計画、復帰、レビュー、判断のため change branch または作業環境だけで保持し、close 前に削除する記録。
+_Avoid_: 恒久成果, 成果物
+
+**実行予算**:
+change の開始前に定める、想定する実行経路、恒久成果、一時実行証跡、早期検証、停止・再計画条件の境界。
+_Avoid_: token budget, 見積もり
+
+**検証価値**:
+既存 gate と異なる failure、seam、risk を捕捉するか、復帰・レビュー判断に必要な根拠を与える性質。
+_Avoid_: coverage 数, evidence 量
