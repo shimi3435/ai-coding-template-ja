@@ -114,6 +114,38 @@ def test_expected_fixture_round_trips_to_deterministic_bytes() -> None:
     assert first.value == second.value == EXPECTED
 
 
+def test_manifest_round_trip_accepts_prefix_related_spec_capabilities() -> None:
+    manifest = replace(
+        _manifest(),
+        artifacts=(
+            ManifestArtifact(
+                "design", "openspec/changes/fixture-change/design.md", "2" * 64
+            ),
+            ManifestArtifact(
+                "proposal", "openspec/changes/fixture-change/proposal.md", "1" * 64
+            ),
+            ManifestArtifact(
+                "spec",
+                "openspec/changes/fixture-change/specs/auth-tokens/spec.md",
+                "4" * 64,
+            ),
+            ManifestArtifact(
+                "spec",
+                "openspec/changes/fixture-change/specs/auth/spec.md",
+                "3" * 64,
+            ),
+            ManifestArtifact(
+                "tasks", "openspec/changes/fixture-change/tasks.md", "5" * 64
+            ),
+        ),
+    )
+
+    serialized = serialize_manifest(manifest)
+
+    assert isinstance(serialized, Success)
+    assert parse_manifest_bytes(serialized.value) == Success(manifest)
+
+
 def test_parser_rejects_malformed_or_non_minimal_manifest() -> None:
     malformed = parse_manifest_bytes(b"{not-json")
     unsupported = parse_manifest_bytes(

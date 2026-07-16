@@ -217,7 +217,7 @@ def _parse_artifacts(
     if result != tuple(
         sorted(
             result,
-            key=lambda artifact: (artifact.kind, PurePosixPath(artifact.path)),
+            key=lambda artifact: (artifact.kind, artifact.path),
         )
     ):
         return None
