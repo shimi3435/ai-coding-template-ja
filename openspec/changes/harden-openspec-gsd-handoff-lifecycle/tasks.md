@@ -1,4 +1,4 @@
-# Execution route: GSD（dependency-gates-satisfied / handoff-approval-pending）
+# Execution route: GSD
 
 この change は stable mapping、複数 manifest の ownership、操作前検査、failure recovery、finalize を
 依存順序を持つ複数 phase で実装するため GSD 経路とする。OpenSpec `tasks.md` は境界ゲートだけを持ち、
@@ -8,6 +8,7 @@
 
 - [x] 1.1 `revise-openspec-gsd-execution-boundary` と `automate-openspec-gsd-handoff` がmerge済みであること、MVP manifest schema、`handoff.json` 追跡・保持方針、対応 tool contracts を確認し、MVP merge後のbaseから本 change だけを載せる専用 branch / PRを用意する
 - [x] 1.2 本 change の各 enforcement と参照する `adaptive-change-execution` requirement / scenario の対応、manifest migration / rollback contract、実装時の spec-holes Phase 2 計画を確定し、strict validate 後に source-pinned handoff previewを提示できる状態にする
+- [ ] 1.3 previewへの新たな明示承認後にだけprepared manifestを永続化し、GSD 1.5.0 entrypointのstructured acceptanceとroute別postconditionを確認して`mark-started`を完了する
 
 ## 2. Stable identity and mapping gates
 

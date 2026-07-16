@@ -2,9 +2,7 @@
 
 ## Status
 
-**Dependency and contract gates satisfied / handoff approval pending.** 先行2 changesのmerge、MVP manifest
-schema v1、`handoff.json`追跡・保持方針、tool contracts、hardening schema migration、policy参照契約、
-spec-holes Phase 2計画を確認済み。source-pinned commitとhandoff preview後の新たな明示承認までは実装しない。
+実行経路と進捗の正本は`tasks.md`の境界checkboxとする。この節では承認待ち・handoff状態・phase進捗を複製しない。
 
 ## Why
 

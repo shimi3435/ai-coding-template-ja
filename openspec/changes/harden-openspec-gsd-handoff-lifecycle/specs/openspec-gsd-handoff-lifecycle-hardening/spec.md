@@ -1,6 +1,6 @@
 ## ADDED Requirements
 
-### Requirement: stable source identity と requirement mapping を維持する
+### Requirement: HARD-R1 stable source identity と requirement mapping を維持する
 bridge は MUST MVP manifest の source identity を決定論的に拡張し、OpenSpec requirements / scenarios と
 GSD phases / plans / verification evidence の対応を、再実行と並び替えを越えて検査可能にする。
 
@@ -36,7 +36,7 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
 - **WHEN** source mappingまたはenforcement evidenceが`adaptive-change-execution` policyを参照する
 - **THEN** bridgeはcurrent-tree stable reference recordのID一意性、source path、section hash、参照存在を検査し、通常CIでGit履歴上の旧spec blobを要求しない
 
-### Requirement: lifecycle 操作前に source と派生状態の drift を検査する
+### Requirement: HARD-R2 lifecycle 操作前に source と派生状態の drift を検査する
 bridge は MUST plan、execute、resume、verify、finalize の各操作前に、canonical source、source commit、
 manifest、stable mapping、phase state、capability evidence を同じ検査契約で照合する。
 
@@ -56,7 +56,7 @@ manifest、stable mapping、phase state、capability evidence を同じ検査契
 - **WHEN** artifact read、Git inspection、manifest parse、phase inspection、または capability probe の一部が失敗・timeout・切捨てになる
 - **THEN** bridge は部分的な green 判定を採用せず、drift state を unknown として操作を停止する
 
-### Requirement: 複数 manifests 間の artifact ownership を検査する
+### Requirement: HARD-R3 複数 manifests 間の artifact ownership を検査する
 bridge は MUST repository 内で有効な全 handoff manifests を照合し、各派生 artifact の所有と参照を
 単独所有、共有参照、競合所有、由来不明に分類してから変更候補を作る。
 
@@ -84,7 +84,7 @@ bridge は MUST repository 内で有効な全 handoff manifests を照合し、�
 - **WHEN** 対象changeと追跡manifestをpre-mergeで削除するpreviewを生成する
 - **THEN** bridgeは同じchangeが所有するcheckpoint、receipt、一時archiveとbriefを同じownership graphで列挙し、shared referenceまたは出荷archiveの明示的な再分類が残る間は削除を拒否する
 
-### Requirement: interruption と partial failure から検査可能に再開する
+### Requirement: HARD-R4 interruption と partial failure から検査可能に再開する
 skill と bridge は MUST lifecycle 操作の checkpoint、completed effects、pending effects、failure evidence を
 永続化し、resume 前に現在状態との一致を再検査する。
 
@@ -104,7 +104,7 @@ skill と bridge は MUST lifecycle 操作の checkpoint、completed effects、p
 - **WHEN** effect の成否が不明、rollback が破壊的、route 変更が必要、または ownership を証明できない
 - **THEN** skill は自動 rollback、自動 route switch、自動修復を行わず、既知状態と人が選べる回復案を報告する
 
-### Requirement: finalize と cleanup を preview と承認で制御する
+### Requirement: HARD-R5 finalize と cleanup を preview と承認で制御する
 bridge は MUST finalize / cleanup の対象、所有根拠、参照更新、実行順序、予想差分を副作用なしで preview し、
 preview に結び付いた明示承認と直前再検査後にだけ実行する。
 
@@ -124,7 +124,7 @@ preview に結び付いた明示承認と直前再検査後にだけ実行する
 - **WHEN** 承認済み操作列の途中で filesystem、Git、archive、reference validation のいずれかが失敗する
 - **THEN** bridge は以後の操作を停止し、完了・未完了・不明な effects と再開 checkpoint を receipt に記録する
 
-### Requirement: hardening を deterministic tests と opt-in smoke で検証する
+### Requirement: HARD-R6 hardening を deterministic tests と opt-in smoke で検証する
 プロジェクトは MUST stable identity、drift、mapping、ownership、recovery、finalize を固定 fixtures で検証し、
 実 OpenSpec / GSD 互換性の確認を通常 CI から分離する。
 
@@ -139,6 +139,10 @@ preview に結び付いた明示承認と直前再検査後にだけ実行する
 #### Scenario: property tests を実行する
 - **WHEN** pure allocator、normalizer、manifest round-trip、ownership graph、preview builder を任意の有効入力で検証する
 - **THEN** stable assignment、order independence、round-trip、idempotence、ownership safety の不変条件を満たす
+
+#### Scenario: filesystem と Git の integration tests を実行する
+- **WHEN** migration persistence、repository-wide ownership、recovery、またはfinalizeの副作用境界を検証する
+- **THEN** testsはisolated repositoryとfault injectionを使い、path escape、partial failure、v1保持、receipt、再実行のpostconditionを外部OpenSpec / GSD toolsなしで検証する
 
 #### Scenario: 実 tools の smoke を実行する
 - **WHEN** 開発者が対応 versions と隔離 workspace を用意して opt-in smoke を明示する

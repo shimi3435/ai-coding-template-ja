@@ -141,24 +141,30 @@ stable reference namespaceは次に固定する。
 `ACE-R3` は current policy で有効だが GSD lifecycle enforcement の参照対象ではないため、scenario IDを本 change で
 新設せずrequirement IDだけをstable namespaceに保持する。
 
-hardening scenarioからpolicy referenceへの対応は次のとおりである。これはenforcementの由来であり、
-hardening requirementの振る舞いをpolicyへ逆輸入しない。
+hardening scenarioからpolicy referenceへの対応は次のとおりである。`HARD-R1`〜`HARD-R6`はspec deltaの
+stable requirement IDであり、要件の並び順とは独立して参照する。これはenforcementの由来であり、
+hardening requirementの振る舞いをpolicyへ逆輸入しない。adaptive policyを直接enforceしないmigration等の
+mechanical contractも、参照対象外である理由を表へ明記する。
 
 | hardening scenario | stable policy references |
 | --- | --- |
-| R1: 新規ID / 順序・空白 / 曖昧衝突 | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S2-SPEC-CHANGE-REPLAN` |
-| R1: phase mapping完全性 | `ACE-S2-ONE-PHASE-ONE-CHANGE`, `ACE-S4-CONTEXT-PARITY` |
-| R2: canonical specification変化 / checkbox-only | `ACE-S2-SPEC-CHANGE-REPLAN`, `ACE-S5-REVALIDATE-ON-DRIFT` |
-| R2: phase graph / capability変化 | `ACE-S4-SOURCE-PINNED`, `ACE-S4-NO-AUTO-FALLBACK` |
-| R2: 検査不能 | `ACE-S1-START-GATES`, `ACE-S4-NO-AUTO-FALLBACK` |
-| R3: 単独所有 / 共有参照 / 競合・不明 | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
-| R3: ownership境界外path | `ACE-S4-SOURCE-PINNED`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
-| R4: 副作用前 / 部分成功の中断 | `ACE-S4-RESUME`, `ACE-S4-SOURCE-PINNED` |
-| R4: source / capability変化 | `ACE-S2-SPEC-CHANGE-REPLAN`, `ACE-S4-NO-AUTO-FALLBACK` |
-| R4: 自動回復不能 | `ACE-S4-NO-AUTO-FALLBACK`, `ACE-S4-RESUME` |
-| R5: preview / no-op | `ACE-S5-OPEN-SPEC-FINAL`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
-| R5: stale preview / 部分失敗 | `ACE-S5-REVALIDATE-ON-DRIFT`, `ACE-S4-RESUME`, `ACE-S4-NO-AUTO-FALLBACK` |
-| R6: optional toolsなし / fixtures / properties / smoke | `ACE-S1-START-GATES`, `ACE-S5-OPEN-SPEC-FINAL` |
+| `HARD-R1`: 新規ID / 順序・空白 / 曖昧衝突 | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S2-SPEC-CHANGE-REPLAN` |
+| `HARD-R1`: phase mapping完全性 | `ACE-S2-ONE-PHASE-ONE-CHANGE`, `ACE-S4-CONTEXT-PARITY` |
+| `HARD-R1`: v1 migration preview / staging failure / unknown schema | 適用なし。MVP schema互換性とatomic persistenceのmechanical contract |
+| `HARD-R1`: policy reference traceability | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S5-OPEN-SPEC-FINAL` |
+| `HARD-R2`: canonical specification変化 / checkbox-only | `ACE-S2-SPEC-CHANGE-REPLAN`, `ACE-S5-REVALIDATE-ON-DRIFT` |
+| `HARD-R2`: phase graph / capability変化 | `ACE-S4-SOURCE-PINNED`, `ACE-S4-NO-AUTO-FALLBACK` |
+| `HARD-R2`: 検査不能 | `ACE-S1-START-GATES`, `ACE-S4-NO-AUTO-FALLBACK` |
+| `HARD-R3`: 単独所有 / 共有参照 / 競合・不明 | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
+| `HARD-R3`: ownership境界外path | `ACE-S4-SOURCE-PINNED`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
+| `HARD-R3`: lifecycle record owner | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S2-ONE-PHASE-ONE-CHANGE` |
+| `HARD-R3`: template pre-merge close | `ACE-S5-SINGLE-ACTIVE-CLOSE`, `ACE-S5-OPEN-SPEC-FINAL` |
+| `HARD-R4`: 副作用前 / 部分成功の中断 | `ACE-S4-RESUME`, `ACE-S4-SOURCE-PINNED` |
+| `HARD-R4`: source / capability変化 | `ACE-S2-SPEC-CHANGE-REPLAN`, `ACE-S4-NO-AUTO-FALLBACK` |
+| `HARD-R4`: 自動回復不能 | `ACE-S4-NO-AUTO-FALLBACK`, `ACE-S4-RESUME` |
+| `HARD-R5`: preview / no-op | `ACE-S5-OPEN-SPEC-FINAL`, `ACE-S5-SINGLE-ACTIVE-CLOSE` |
+| `HARD-R5`: stale preview / 部分失敗 | `ACE-S5-REVALIDATE-ON-DRIFT`, `ACE-S4-RESUME`, `ACE-S4-NO-AUTO-FALLBACK` |
+| `HARD-R6`: fixtures / properties / integration / smoke | `ACE-S1-START-GATES`, `ACE-S5-OPEN-SPEC-FINAL` |
 
 ### 1. stable ID は単調増加し、曖昧一致を拒否する
 
@@ -236,7 +242,7 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 
 全6要件へ固定12分類を順番に適用した。「1」は spec scenario への明記、「2」は明示的スコープ外を示す。
 
-### R1: stable source identity と requirement mapping を維持する
+### HARD-R1: stable source identity と requirement mapping を維持する
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
@@ -253,7 +259,7 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | 11 | 巨大入力・リソース枯渇 | 該当 | tombstone / mappingの肥大 | 1: 切捨てず上限超過を報告 |
 | 12 | 状態遷移の未定義パス | 該当 | deleted ID の復活・再利用 | 1: tombstone保持、再利用禁止 |
 
-### R2: lifecycle 操作前に source と派生状態の drift を検査する
+### HARD-R2: lifecycle 操作前に source と派生状態の drift を検査する
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
@@ -270,7 +276,7 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | 11 | 巨大入力・リソース枯渇 | 該当 | 全artifact/phase検査不能 | 1: 切捨て時はunknownとして停止 |
 | 12 | 状態遷移の未定義パス | 該当 | drift中のexecute/finalize | 1: 再同期まで対象操作を禁止 |
 
-### R3: 複数 manifests 間の artifact ownership を検査する
+### HARD-R3: 複数 manifests 間の artifact ownership を検査する
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
@@ -287,7 +293,7 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | 11 | 巨大入力・リソース枯渇 | 該当 | manifests/references大量 | 1: bounded scan超過は停止 |
 | 12 | 状態遷移の未定義パス | 該当 | owner削除後にorphan化 | 1: finalize前後にgraphを再検査 |
 
-### R4: interruption と partial failure から検査可能に再開する
+### HARD-R4: interruption と partial failure から検査可能に再開する
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
@@ -304,7 +310,7 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | 11 | 巨大入力・リソース枯渇 | 該当 | journal/evidence巨大 | 1: 証拠切捨てならunknownとして停止 |
 | 12 | 状態遷移の未定義パス | 該当 | unknown→completedの飛越 | 1: 新preflight/preview/承認を要求 |
 
-### R5: finalize と cleanup を preview と承認で制御する
+### HARD-R5: finalize と cleanup を preview と承認で制御する
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
@@ -321,7 +327,7 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | 11 | 巨大入力・リソース枯渇 | 該当 | preview全件表示不能 | 1: 完全機械出力不能なら実行禁止 |
 | 12 | 状態遷移の未定義パス | 該当 | preview後drift・failed→finalized | 1: approval失効、再検査と再開要求 |
 
-### R6: hardening を deterministic tests と opt-in smoke で検証する
+### HARD-R6: hardening を deterministic tests と opt-in smoke で検証する
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
@@ -386,12 +392,12 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 
 | requirement | H01 | H02 | H03 | H04 | H05 | H06 | H07 | H08 | H09 | H10 | H11 | H12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| R1 stable identity / mapping | `E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC` | `P-MANIFEST-RT`,`E-MAPPING` | `E-MIGRATION` | `P-ALLOC`,`P-MANIFEST-RT` | N/A: identityへ時刻不使用 | `P-ALLOC`,`E-MAPPING` | `E-BOUNDS` | `E-BOUNDS` | `P-ALLOC`,`E-MIGRATION` |
-| R2 drift | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `P-NORMALIZER`,`E-DRIFT` | N/A: mtime判定なし | `P-NORMALIZER`,`E-DRIFT` | N/A: fuzzy判定なし | `E-BOUNDS`,`E-DRIFT` | `E-DRIFT` |
-| R3 ownership | `P-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP` | `I-OWNERSHIP` | `I-OWNERSHIP` | `P-OWNERSHIP` | N/A: 時刻優先なし | `I-OWNERSHIP` | N/A: score推定なし | `E-BOUNDS`,`I-OWNERSHIP` | `I-OWNERSHIP`,`I-FINALIZE` |
-| R4 recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |
-| R5 finalize | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | N/A: TTL失効なし | `I-FINALIZE`,`I-OWNERSHIP` | N/A: 件数自動承認なし | `E-BOUNDS`,`P-PREVIEW` | `I-FINALIZE`,`E-DRIFT` |
-| R6 verification | `E-MAPPING` | `E-BOUNDS` | `E-MAPPING`,`I-OWNERSHIP` | `P-ALLOC`,`P-OWNERSHIP`,`P-PREVIEW` | `P-MANIFEST-RT`,`I-RECOVERY` | `E-MIGRATION`,`I-RECOVERY`,`I-FINALIZE` | `P-ALLOC`,`P-NORMALIZER`,`P-MANIFEST-RT`,`P-OWNERSHIP`,`P-PREVIEW` | `S-TOOLS`（通常CIはclock固定） | `E-MAPPING`,`I-OWNERSHIP` | `E-BOUNDS` | `E-BOUNDS`,`I-RECOVERY` | `S-TOOLS`（明示opt-inのみ） |
+| `HARD-R1` stable identity / mapping | `E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC` | `P-MANIFEST-RT`,`E-MAPPING` | `E-MIGRATION` | `P-ALLOC`,`P-MANIFEST-RT` | N/A: identityへ時刻不使用 | `P-ALLOC`,`E-MAPPING` | `E-BOUNDS` | `E-BOUNDS` | `P-ALLOC`,`E-MIGRATION` |
+| `HARD-R2` drift | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `P-NORMALIZER`,`E-DRIFT` | N/A: mtime判定なし | `P-NORMALIZER`,`E-DRIFT` | N/A: fuzzy判定なし | `E-BOUNDS`,`E-DRIFT` | `E-DRIFT` |
+| `HARD-R3` ownership | `P-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP` | `I-OWNERSHIP` | `I-OWNERSHIP` | `P-OWNERSHIP` | N/A: 時刻優先なし | `I-OWNERSHIP` | N/A: score推定なし | `E-BOUNDS`,`I-OWNERSHIP` | `I-OWNERSHIP`,`I-FINALIZE` |
+| `HARD-R4` recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |
+| `HARD-R5` finalize | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | N/A: TTL失効なし | `I-FINALIZE`,`I-OWNERSHIP` | N/A: 件数自動承認なし | `E-BOUNDS`,`P-PREVIEW` | `I-FINALIZE`,`E-DRIFT` |
+| `HARD-R6` verification | `E-MAPPING` | `E-BOUNDS` | `E-MAPPING`,`I-OWNERSHIP` | `P-ALLOC`,`P-OWNERSHIP`,`P-PREVIEW` | `P-MANIFEST-RT`,`I-RECOVERY` | `E-MIGRATION`,`I-RECOVERY`,`I-FINALIZE` | `P-ALLOC`,`P-NORMALIZER`,`P-MANIFEST-RT`,`P-OWNERSHIP`,`P-PREVIEW` | `S-TOOLS`（通常CIはclock固定） | `E-MAPPING`,`I-OWNERSHIP` | `E-BOUNDS` | `E-BOUNDS`,`I-RECOVERY` | `S-TOOLS`（明示opt-inのみ） |
 
 実装完了時はevidence IDを実在するtest node ID / fixture pathへ置換または併記する。opt-in smokeを実行できない
 場合は`S-TOOLS`を検証済みにせず、環境または安全なdry-run seam不在を理由付き未検証として残す。
