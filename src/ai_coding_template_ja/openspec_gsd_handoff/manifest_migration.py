@@ -1,4 +1,4 @@
-"""Read-only, source-bound manifest migration previews."""
+"""Source-bound manifest migration preview and approved atomic apply."""
 
 from __future__ import annotations
 
@@ -326,6 +326,44 @@ def _cleanup_staging(
     except OSError:
         return MigrationCleanupOutcome.FAILED
     return MigrationCleanupOutcome.REMOVED
+
+
+def _observe_target_state(
+    operations: ManifestMigrationFileOperations,
+    target: Path,
+    expected_v1_sha256: str,
+) -> MigrationTargetState:
+    try:
+        target_bytes = operations.read_bounded_bytes(target)
+    except (ManifestSizeLimitExceeded, OSError):
+        return MigrationTargetState.UNKNOWN
+    if _sha256(target_bytes) == expected_v1_sha256:
+        return MigrationTargetState.V1_PRESERVED
+    return MigrationTargetState.UNKNOWN
+
+
+def _migration_failure_after_staging(
+    code: str,
+    failure_point: MigrationFailurePoint,
+    staging_state: MigrationStagingState,
+    *,
+    operations: ManifestMigrationFileOperations,
+    target: Path,
+    expected_v1_sha256: str,
+    staging: Path | None,
+) -> ManifestMigrationFailure:
+    cleanup = (
+        MigrationCleanupOutcome.NOT_NEEDED
+        if staging is None
+        else _cleanup_staging(operations, staging)
+    )
+    return _migration_failure(
+        code,
+        failure_point,
+        _observe_target_state(operations, target, expected_v1_sha256),
+        staging_state,
+        cleanup,
+    )
 
 
 def _staging_path_is_safe(staging: Path, target: Path) -> bool:
@@ -727,7 +765,7 @@ def apply_manifest_migration(
         return _migration_failure(
             "migration-current-snapshot-changed",
             MigrationFailurePoint.STATE_GUARD,
-            MigrationTargetState.V1_PRESERVED,
+            _observe_target_state(filesystem, target, preview.v1_sha256),
             MigrationStagingState.ABSENT,
         )
     confirmed = _resolve_target(
@@ -739,45 +777,55 @@ def apply_manifest_migration(
         return _migration_failure(
             "migration-target-identity-changed",
             MigrationFailurePoint.STATE_GUARD,
-            MigrationTargetState.V1_PRESERVED,
+            _observe_target_state(filesystem, target, preview.v1_sha256),
             MigrationStagingState.ABSENT,
         )
 
     try:
         staging = filesystem.create_staging(target.parent)
     except OSError:
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-staging-create-failed",
             MigrationFailurePoint.CREATE,
-            MigrationTargetState.V1_PRESERVED,
             MigrationStagingState.UNKNOWN,
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=None,
         )
     if not _staging_path_is_safe(staging, target):
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-staging-path-unsafe",
             MigrationFailurePoint.CREATE,
-            MigrationTargetState.V1_PRESERVED,
             MigrationStagingState.UNKNOWN,
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=None,
         )
     try:
         filesystem.write_bytes(staging, preview.candidate_bytes)
     except (ManifestSizeLimitExceeded, OSError):
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-staging-write-failed",
             MigrationFailurePoint.WRITE,
-            MigrationTargetState.V1_PRESERVED,
             MigrationStagingState.UNKNOWN,
-            _cleanup_staging(filesystem, staging),
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=staging,
         )
     try:
         staged_bytes = filesystem.read_bounded_bytes(staging)
     except (ManifestSizeLimitExceeded, OSError):
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-staging-reread-failed",
             MigrationFailurePoint.REREAD,
-            MigrationTargetState.V1_PRESERVED,
             MigrationStagingState.UNKNOWN,
-            _cleanup_staging(filesystem, staging),
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=staging,
         )
     staged = parse_manifest_v2_bytes(staged_bytes)
     if (
@@ -785,12 +833,14 @@ def apply_manifest_migration(
         or isinstance(staged, Failure)
         or staged.value != preview.candidate_manifest
     ):
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-staging-validation-failed",
             MigrationFailurePoint.VALIDATE,
-            MigrationTargetState.V1_PRESERVED,
             MigrationStagingState.INVALID,
-            _cleanup_staging(filesystem, staging),
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=staging,
         )
 
     confirmed = _resolve_target(
@@ -816,25 +866,25 @@ def apply_manifest_migration(
         or isinstance(snapshot_before_replace, Failure)
         or _sha256(target_before_replace) != preview.v1_sha256
     ):
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-state-changed-before-replace",
             MigrationFailurePoint.STATE_GUARD,
-            (
-                MigrationTargetState.V1_PRESERVED
-                if _sha256(target_before_replace) == preview.v1_sha256
-                else MigrationTargetState.UNKNOWN
-            ),
             MigrationStagingState.VALIDATED,
-            _cleanup_staging(filesystem, staging),
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=staging,
         )
     try:
         filesystem.replace(staging, target)
     except OSError:
-        return _migration_failure(
+        return _migration_failure_after_staging(
             "migration-replace-failed",
             MigrationFailurePoint.REPLACE,
-            MigrationTargetState.UNKNOWN,
             MigrationStagingState.VALIDATED,
-            _cleanup_staging(filesystem, staging),
+            operations=filesystem,
+            target=target,
+            expected_v1_sha256=preview.v1_sha256,
+            staging=staging,
         )
     return Success(preview.candidate_manifest)

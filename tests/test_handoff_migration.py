@@ -623,7 +623,7 @@ def test_apply_exact_preview_validates_staging_then_atomically_replaces_target(
 
 
 def test_apply_rejects_repository_alias_change_before_staging(tmp_path: Path) -> None:
-    repository, target = _write_repository(tmp_path)
+    repository, _ = _write_repository(tmp_path)
     result = _preview(repository)
     assert isinstance(result, Success)
     preview = result.value
@@ -644,7 +644,6 @@ def test_apply_rejects_repository_alias_change_before_staging(tmp_path: Path) ->
     assert applied.issue.target_state is MigrationTargetState.UNKNOWN
     assert operations.mutations == []
     assert (moved / TARGET_PATH).read_bytes() == EXPECTED_V1
-    assert target == repository / TARGET_PATH
 
 
 def test_apply_reports_pre_replace_faults_and_preserves_exact_v1(
