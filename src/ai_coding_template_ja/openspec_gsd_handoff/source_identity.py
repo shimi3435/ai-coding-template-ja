@@ -747,7 +747,7 @@ def _validate_source_state(state: SourceIdentityState) -> None:
     ids: set[str] = set()
     active_requirement_ids: set[str] = set()
     all_requirement_ids: set[str] = set()
-    active_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
+    persisted_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
     aggregate_bytes = 0
 
     for item in (*state.active, *state.tombstones):
@@ -794,16 +794,18 @@ def _validate_source_state(state: SourceIdentityState) -> None:
         if aggregate_bytes > _MAX_SOURCE_STATE_BYTES:
             raise _SourceInputError("source-state-limit-exceeded")
 
-        if isinstance(item, ActiveSourceItem):
-            identity = (
-                item.category,
-                source_path,
-                normalized_heading,
-                parent_id,
-            )
-            if identity in active_identities:
+        identity = (
+            item.category,
+            source_path,
+            normalized_heading,
+            parent_id,
+        )
+        if identity in persisted_identities:
+            if isinstance(item, SourceTombstone):
+                raise _SourceInputError("source-tombstone-identity-collision")
+            else:
                 raise _SourceInputError("source-state-identity-duplicate")
-            active_identities.add(identity)
+        persisted_identities.add(identity)
 
     if next_requirement_id != state.next_requirement_id:
         raise _SourceInputError("source-state-counter-invalid")
