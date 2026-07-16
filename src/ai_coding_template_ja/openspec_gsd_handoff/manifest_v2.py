@@ -33,6 +33,7 @@ from .source_identity import (
     SourceCategory,
     SourceIdentityState,
     SourceTombstone,
+    _source_path_alias_key,
 )
 
 _ROOT_FIELDS = {
@@ -319,6 +320,7 @@ def _parse_source_items(
     active_requirement_ids: set[str] = set()
     all_requirement_ids: set[str] = set()
     persisted_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
+    persisted_paths_by_alias: dict[str, str] = {}
 
     for raw in active_raw:
         item = _exact_fields(
@@ -360,6 +362,11 @@ def _parse_source_items(
             return None
         source_id = str(item["id"])
         ids.add(source_id)
+        path_alias = _source_path_alias_key(path)
+        existing_path = persisted_paths_by_alias.get(path_alias)
+        if existing_path is not None and existing_path != path:
+            return None
+        persisted_paths_by_alias[path_alias] = path
         if category is SourceCategory.REQUIREMENT:
             all_requirement_ids.add(source_id)
             active_requirement_ids.add(source_id)
@@ -418,6 +425,11 @@ def _parse_source_items(
             return None
         source_id = str(item["id"])
         ids.add(source_id)
+        path_alias = _source_path_alias_key(path)
+        existing_path = persisted_paths_by_alias.get(path_alias)
+        if existing_path is not None and existing_path != path:
+            return None
+        persisted_paths_by_alias[path_alias] = path
         if category is SourceCategory.REQUIREMENT:
             all_requirement_ids.add(source_id)
         identity = (category, path, heading, parent_id)

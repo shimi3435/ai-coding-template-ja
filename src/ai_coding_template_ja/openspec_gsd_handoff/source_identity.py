@@ -424,6 +424,12 @@ def _canonical_source_path(path: str | Path) -> tuple[tuple[str, ...], str]:
     return raw_segments, "/".join(normalized_segments)
 
 
+def _source_path_alias_key(source_path: str) -> str:
+    """Return the platform-independent alias key for one canonical source path."""
+
+    return unicodedata.normalize("NFC", source_path).casefold()
+
+
 def _entry_is_symlink(parent_fd: int, name: str) -> bool:
     try:
         entry = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
@@ -549,7 +555,7 @@ def _read_inventory_from_repository_fd(
             raw_segments, canonical_path = _canonical_source_path(source_path)
         except _SourceInputError as error:
             return _failure(error.code, category=IssueCategory.INPUT)
-        alias = canonical_path.casefold()
+        alias = _source_path_alias_key(canonical_path)
         if alias in aliases:
             return _failure("source-path-alias")
         aliases.add(alias)
@@ -748,6 +754,7 @@ def _validate_source_state(state: SourceIdentityState) -> None:
     active_requirement_ids: set[str] = set()
     all_requirement_ids: set[str] = set()
     persisted_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
+    persisted_paths_by_alias: dict[str, str] = {}
     aggregate_bytes = 0
 
     for item in (*state.active, *state.tombstones):
@@ -776,6 +783,11 @@ def _validate_source_state(state: SourceIdentityState) -> None:
             raise _SourceInputError("source-state-item-invalid")
 
         _validate_persisted_path(source_path)
+        path_alias = _source_path_alias_key(source_path)
+        existing_path = persisted_paths_by_alias.get(path_alias)
+        if existing_path is not None and existing_path != source_path:
+            raise _SourceInputError("source-path-alias")
+        persisted_paths_by_alias[path_alias] = source_path
         normalized_heading = _normalized_persisted_heading(
             raw_heading,
             item.category,
