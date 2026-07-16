@@ -260,6 +260,30 @@ def test_schema_v2_rejects_malformed_ids_counters_parents_and_duplicates(
 
 
 @pytest.mark.parametrize(
+    ("first_path", "second_path"),
+    [
+        (
+            "openspec/changes/fixture-change/specs/Fixture-Capability/spec.md",
+            "openspec/changes/fixture-change/specs/fixture-capability/spec.md",
+        ),
+        (
+            "openspec/changes/fixture-change/specs/Café/spec.md",
+            "openspec/changes/fixture-change/specs/CAFÉ/spec.md",
+        ),
+    ],
+)
+def test_schema_v2_rejects_casefolded_source_path_aliases(
+    first_path: str,
+    second_path: str,
+) -> None:
+    raw = _raw_v2()
+    raw["source_items"]["active"][0]["source_path"] = first_path
+    raw["source_items"]["active"][1]["source_path"] = second_path
+
+    _assert_failure(raw)
+
+
+@pytest.mark.parametrize(
     "field",
     ["mappings", "ownership", "lifecycle"],
 )

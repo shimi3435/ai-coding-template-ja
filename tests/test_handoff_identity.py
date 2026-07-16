@@ -764,6 +764,37 @@ def test_reconcile_rejects_identity_collisions_including_tombstones(
     assert not hasattr(result, "value")
 
 
+@pytest.mark.parametrize(
+    ("first_path", "second_path"),
+    [
+        (
+            "openspec/changes/fixture/specs/Case/spec.md",
+            "openspec/changes/fixture/specs/case/spec.md",
+        ),
+        (
+            "openspec/changes/fixture/specs/Café/spec.md",
+            "openspec/changes/fixture/specs/CAFÉ/spec.md",
+        ),
+    ],
+)
+def test_reconcile_rejects_casefolded_persisted_source_path_aliases(
+    first_path: str,
+    second_path: str,
+) -> None:
+    inventory = identity.SourceInventory(
+        items=(
+            _requirement_observation("First", source_path=first_path),
+            _requirement_observation("Second", source_path=second_path),
+        )
+    )
+
+    result = identity.reconcile_source_items(inventory, _empty_source_state())
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-path-alias"
+    assert not hasattr(result, "value")
+
+
 def test_reconcile_refuses_allocation_at_exhausted_sentinel() -> None:
     inventory = identity.SourceInventory(
         items=(
