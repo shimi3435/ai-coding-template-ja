@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 1
 current_phase_name: Stable Identity and Migration
 status: planning
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-07-16T21:52:24.845Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-07-16T22:08:18.642Z"
 last_activity: 2026-07-17
-last_activity_desc: Read-only schema migration preview completed
+last_activity_desc: Approval-bound atomic migration implementation completed
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 0
 ---
 
 # Project State
@@ -32,29 +32,29 @@ See: .planning/PROJECT.md (updated 2026-07-17)
 ## Current Position
 
 Phase: 1 of 6 (Stable Identity and Migration)
-Plan: 4 of 5 in current phase
-Status: In progress; Plan 01-04 complete and Plan 01-05 ready
-Last activity: 2026-07-17 — Read-only schema migration preview completed
+Plan: 5 of 5 in current phase
+Status: Plan implementation complete; independent Phase 1 verification pending
+Last activity: 2026-07-17 — Approval-bound atomic migration implementation completed
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100% of Phase 1 plans
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 10 min
-- Total execution time: 39 min
+- Total execution time: 48 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| Phase 1 | 4 | 39 min | 10 min |
+| Phase 1 | 5 | 48 min | 10 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 7 min, 8 min, 12 min, 12 min
+- Last 5 plans: 7 min, 8 min, 12 min, 12 min, 9 min
 - Trend: Stable
 
 ## Accumulated Context
@@ -68,6 +68,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Preserve TDD, plan check, verifier, Nyquist validation, and source grounding.
 - Keep optional real-tool smoke outside normal CI and avoid duplicate evidence.
 - Stop on failure; do not automatically switch route, roll back, or repair.
+- [Phase 1]: Migration apply accepts only an exact immutable preview, literal approval, and its matching approval hash. — Prevents stale approval, cross-target replay, and unreviewed candidate substitution.
+- [Phase 1]: A failed migration reports v1-preserved only after bounded post-failure hash proof; otherwise target state is unknown. — Avoids inferred success or automatic rollback after partial persistence.
 
 ### Pending Todos
 
@@ -90,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-16T21:52:24.840Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-07-16T22:08:18.638Z
+Stopped at: Completed 01-05-PLAN.md
 Resume file: None
