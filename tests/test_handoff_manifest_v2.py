@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
+from ai_coding_template_ja.openspec_gsd_handoff.versioned_manifest import (
+    parse_versioned_manifest_bytes,
+    read_versioned_manifest_file,
+)
+from hypothesis import given
+from hypothesis import strategies as st
+
+from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
+    MAX_MANIFEST_BYTES,
+    ManifestFileOperations,
+    parse_manifest_bytes,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     HandoffManifestV2,
     LifecycleRecordReference,
@@ -19,9 +32,12 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     parse_manifest_v2_bytes,
     serialize_manifest_v2,
 )
-
-from ai_coding_template_ja.openspec_gsd_handoff.manifest import MAX_MANIFEST_BYTES
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
+from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
+    ActiveSourceItem,
+    SourceCategory,
+    SourceIdentityState,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_V2 = (
@@ -31,6 +47,14 @@ EXPECTED_V2 = (
     / "openspec_gsd_handoff"
     / "manifest"
     / "expected-migrated-v2.json"
+).read_bytes()
+EXPECTED_V1 = (
+    REPO_ROOT
+    / "tests"
+    / "fixtures"
+    / "openspec_gsd_handoff"
+    / "manifest"
+    / "expected-prepared.json"
 ).read_bytes()
 ROOT_FIELDS_V2 = {
     "schema_version",
@@ -311,3 +335,134 @@ def test_schema_v2_serializer_rejects_invalid_complete_values() -> None:
     assert isinstance(result, Failure)
     assert result.issue.code == "manifest-v2-serialization-invalid"
     assert isinstance(parsed.value, HandoffManifestV2)
+
+
+class _ReadCountingOperations(ManifestFileOperations):
+    def __init__(self) -> None:
+        self.read_calls = 0
+
+    def read_bounded_bytes(
+        self,
+        path: Path,
+        *,
+        limit: int = MAX_MANIFEST_BYTES,
+    ) -> bytes:
+        self.read_calls += 1
+        return super().read_bounded_bytes(path, limit=limit)
+
+
+def test_versioned_parser_dispatches_to_both_exact_schema_parsers() -> None:
+    parsed_v1 = parse_versioned_manifest_bytes(EXPECTED_V1)
+    parsed_v2 = parse_versioned_manifest_bytes(EXPECTED_V2)
+
+    assert parsed_v1 == parse_manifest_bytes(EXPECTED_V1)
+    assert parsed_v2 == parse_manifest_v2_bytes(EXPECTED_V2)
+
+    extended_v1 = json.loads(EXPECTED_V1)
+    extended_v1["source_items"] = {}
+    rejected = parse_versioned_manifest_bytes(json.dumps(extended_v1).encode())
+    assert isinstance(rejected, Failure)
+    assert rejected.issue.code == "manifest-fields-invalid"
+
+
+def test_versioned_file_reader_observes_manifest_bytes_once(tmp_path: Path) -> None:
+    path = tmp_path / "handoff.json"
+    path.write_bytes(EXPECTED_V2)
+    operations = _ReadCountingOperations()
+
+    result = read_versioned_manifest_file(path, operations=operations)
+
+    assert result == parse_manifest_v2_bytes(EXPECTED_V2)
+    assert operations.read_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("data", "requested_schema_version", "code"),
+    [
+        (b"{not-json", None, "manifest-json-invalid"),
+        (b"{}", None, "manifest-schema-unsupported"),
+        (b'{"schema_version": true}', None, "manifest-schema-unsupported"),
+        (b'{"schema_version": 3}', None, "manifest-schema-unsupported"),
+        (EXPECTED_V2, 1, "manifest-downgrade-rejected"),
+        (EXPECTED_V2, True, "manifest-requested-schema-invalid"),
+        (EXPECTED_V1, 3, "manifest-requested-schema-invalid"),
+    ],
+)
+def test_versioned_parser_rejects_malformed_unknown_and_downgrade_requests(
+    data: bytes,
+    requested_schema_version: int | None,
+    code: str,
+) -> None:
+    result = parse_versioned_manifest_bytes(
+        data,
+        requested_schema_version=requested_schema_version,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == code
+
+
+def test_versioned_parser_accepts_non_downgrade_supported_requests() -> None:
+    requested_current = parse_versioned_manifest_bytes(
+        EXPECTED_V2,
+        requested_schema_version=2,
+    )
+    requested_upgrade_target = parse_versioned_manifest_bytes(
+        EXPECTED_V1,
+        requested_schema_version=2,
+    )
+
+    assert requested_current == parse_manifest_v2_bytes(EXPECTED_V2)
+    assert requested_upgrade_target == parse_manifest_bytes(EXPECTED_V1)
+
+
+@given(
+    st.lists(
+        st.text(
+            alphabet=st.sampled_from(tuple("abcdefghijklmnopqrstuvwxyz0123456789")),
+            min_size=1,
+            max_size=12,
+        ),
+        min_size=1,
+        max_size=8,
+        unique=True,
+    )
+)
+def test_schema_v2_complete_values_round_trip_to_the_same_value_and_bytes(
+    generated_names: list[str],
+) -> None:
+    parsed = parse_manifest_v2_bytes(EXPECTED_V2)
+    assert isinstance(parsed, Success)
+    names = tuple(sorted(generated_names))
+    active = tuple(
+        ActiveSourceItem(
+            id=f"REQ-{index:06d}",
+            category=SourceCategory.REQUIREMENT,
+            source_path=(
+                "openspec/changes/fixture-change/specs/"
+                f"generated-{index:06d}-{name}/spec.md"
+            ),
+            raw_heading=f"### Requirement: Generated {index:06d} {name}",
+            parent_id=None,
+            fingerprint=hashlib.sha256(name.encode()).hexdigest(),
+        )
+        for index, name in enumerate(names, start=1)
+    )
+    manifest = replace(
+        parsed.value,
+        source_items=SourceIdentityState(
+            next_requirement_id=len(active) + 1,
+            next_scenario_id=1,
+            active=active,
+            tombstones=(),
+        ),
+    )
+
+    serialized = serialize_manifest_v2(manifest)
+
+    assert isinstance(serialized, Success)
+    reparsed = parse_versioned_manifest_bytes(serialized.value)
+    assert reparsed == Success(manifest)
+    reserialized = serialize_manifest_v2(reparsed.value)
+    assert isinstance(reserialized, Success)
+    assert reserialized.value == serialized.value
