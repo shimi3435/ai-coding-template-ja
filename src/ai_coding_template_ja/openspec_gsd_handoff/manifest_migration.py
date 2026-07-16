@@ -164,6 +164,19 @@ class _MigrationDirectoryAnchor:
     inode: int
 
 
+class _StagingCreationError(OSError):
+    """A post-open staging failure with adapter-owned cleanup evidence."""
+
+    def __init__(
+        self,
+        staging_name: str,
+        cleanup_outcome: MigrationCleanupOutcome,
+    ) -> None:
+        super().__init__("migration staging creation failed after open")
+        self.staging_name = staging_name
+        self.cleanup_outcome = cleanup_outcome
+
+
 class ManifestMigrationFileOperations(ManifestFileOperations):
     """No-follow bounded reads and durable staging writes for migration apply."""
 
@@ -274,11 +287,28 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
                 )
             except FileExistsError:
                 continue
+            creation_error: OSError | None = None
             try:
                 if not stat.S_ISREG(os.fstat(descriptor).st_mode):
                     raise OSError("migration staging path is not a regular file")
-            finally:
+            except OSError as error:
+                creation_error = error
+            try:
                 os.close(descriptor)
+            except OSError as error:
+                if creation_error is None:
+                    creation_error = error
+            if creation_error is not None:
+                try:
+                    self.unlink_at(parent_descriptor, name)
+                except OSError:
+                    cleanup_outcome = MigrationCleanupOutcome.FAILED
+                else:
+                    cleanup_outcome = MigrationCleanupOutcome.REMOVED
+                raise _StagingCreationError(
+                    name,
+                    cleanup_outcome,
+                ) from creation_error
             return name
         raise OSError("could not allocate migration staging file")
 
@@ -883,6 +913,23 @@ def _apply_anchored_manifest_migration(
         staging_name = operations.create_staging_at(
             anchor.descriptor,
             anchor.path,
+        )
+    except _StagingCreationError as error:
+        return _migration_failure(
+            "migration-staging-create-failed",
+            MigrationFailurePoint.CREATE,
+            _observe_target_state_at(
+                operations,
+                anchor.descriptor,
+                target_name,
+                preview.v1_sha256,
+            ),
+            (
+                MigrationStagingState.ABSENT
+                if error.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+                else MigrationStagingState.UNKNOWN
+            ),
+            error.cleanup_outcome,
         )
     except OSError:
         return _migration_failure_after_staging_at(
