@@ -643,6 +643,58 @@ def test_apply_requires_exact_fresh_approval_before_any_staging(tmp_path: Path) 
     assert target.read_bytes() == EXPECTED_V1
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "change-entry",
+        "artifact-entry",
+        "progress-task",
+        "source-path-entry",
+        "candidate-mismatch",
+    ],
+)
+def test_apply_rejects_malformed_nested_preview_without_partial_evidence(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    malformed = {
+        "change-entry": replace(preview, changes=("bad",)),
+        "artifact-entry": replace(preview, current_artifacts=("bad",)),
+        "progress-task": replace(
+            preview,
+            current_progress=replace(preview.current_progress, tasks=("bad",)),
+        ),
+        "source-path-entry": replace(preview, source_paths=(object(),)),
+        "candidate-mismatch": replace(
+            preview,
+            candidate_manifest=replace(preview.candidate_manifest, artifacts=()),
+        ),
+    }[mutation]
+    before = _tree_bytes(repository)
+    operations = MutationRecordingOperations()
+
+    applied = apply_manifest_migration(
+        malformed,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.code == "migration-preview-invalid"
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert applied.issue.staging_state is MigrationStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.NOT_NEEDED
+    assert operations.mutations == []
+    assert target.read_bytes() == EXPECTED_V1
+    assert _tree_bytes(repository) == before
+
+
 def test_apply_rejects_preview_replay_and_current_snapshot_drift_before_staging(
     tmp_path: Path,
 ) -> None:
