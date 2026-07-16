@@ -318,7 +318,7 @@ def _parse_source_items(
     ids: set[str] = set()
     active_requirement_ids: set[str] = set()
     all_requirement_ids: set[str] = set()
-    active_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
+    persisted_identities: set[tuple[SourceCategory, str, str, str | None]] = set()
 
     for raw in active_raw:
         item = _exact_fields(
@@ -364,9 +364,9 @@ def _parse_source_items(
             all_requirement_ids.add(source_id)
             active_requirement_ids.add(source_id)
         identity = (category, path, heading, parent_id)
-        if identity in active_identities:
+        if identity in persisted_identities:
             return None
-        active_identities.add(identity)
+        persisted_identities.add(identity)
         active.append(
             ActiveSourceItem(
                 id=source_id,
@@ -420,6 +420,10 @@ def _parse_source_items(
         ids.add(source_id)
         if category is SourceCategory.REQUIREMENT:
             all_requirement_ids.add(source_id)
+        identity = (category, path, heading, parent_id)
+        if identity in persisted_identities:
+            return None
+        persisted_identities.add(identity)
         tombstones.append(
             SourceTombstone(
                 id=source_id,
