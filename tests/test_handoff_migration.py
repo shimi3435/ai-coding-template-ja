@@ -6,13 +6,12 @@ import hashlib
 from dataclasses import replace
 from pathlib import Path
 
-from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
-    preview_manifest_migration,
-)
-
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     ManifestFileOperations,
     parse_manifest_bytes,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
+    preview_manifest_migration,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import Success
 
@@ -194,10 +193,8 @@ def test_preview_retains_ids_and_reports_fingerprint_updates(tmp_path: Path) -> 
         tuple(item.id for item in updated.value.candidate_manifest.source_items.active)
         == initial_ids
     )
-    assert [change.kind for change in updated.value.changes] == [
-        "updated",
-        "updated",
-    ]
+    assert [change.kind for change in updated.value.changes] == ["updated"]
+    assert updated.value.changes[0].source_id == "REQ-000001"
     assert all(
         change.previous_fingerprint != change.candidate_fingerprint
         for change in updated.value.changes
