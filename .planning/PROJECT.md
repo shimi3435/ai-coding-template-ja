@@ -17,8 +17,8 @@ OpenSpec に残す。
 
 - ✓ MVP handoff bridge と schema v1 が `d96e451` で `origin/main` に統合済み
 - ✓ canonical hardening artifacts が source commit
-  `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd` に固定済み
-- ✓ handoff preview が明示承認され、prepared manifest が生成済み
+  `2cbb127917feaa637ef5eac439478227ac5f717b` に再固定済み
+- ✓ 旧 source commit の handoff は started 状態の監査証跡として保持し、manual recovery が明示承認済み
 
 ### Active
 
@@ -47,8 +47,12 @@ OpenSpec に残す。
 - Handoff brief:
   `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - OpenSpec source commit:
-  `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+  `2cbb127917feaa637ef5eac439478227ac5f717b`
 - OpenSpec が WHAT / WHY と最終完了を所有し、GSD は詳細な実行分解だけを所有する。
+- 旧 started manifest / brief は旧 dispatch の historical / stale evidence であり、再prepare、
+  `mark-started`、上書き、削除の対象にしない。
+- Manual recovery は Phase 1 の再計画から再開し、Phase 1 verification 完了まで Phase 2〜6 を
+  blocked とする。Phase 7 は追加しない。
 
 ## Constraints
 
@@ -65,7 +69,7 @@ OpenSpec に残す。
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| OpenSpec artifactsをsource commitに固定して参照する | GSD側で仕様を複製せずdriftを検出するため | — Pending |
+| OpenSpec artifactsをsource commitに固定して参照する | GSD側で仕様を複製せずdriftを検出するため | `2cbb127917feaa637ef5eac439478227ac5f717b` へ manual recovery repin |
 | 6つの依存phaseを逐次実行する | stable identityからfinalizeまでの前提関係を保つため | — Pending |
 | planning docsをGit追跡する | interruption後の再開とレビュー可能性を保つため | — Pending |
 | generic-agent workaroundを明示する | visible hostにtyped dispatchがなく、同等性を主張できないため | — Pending |
@@ -89,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-16 after GSD initialization*
+*Last updated: 2026-07-17 after approved manual recovery repin*

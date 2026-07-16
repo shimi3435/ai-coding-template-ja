@@ -1,7 +1,7 @@
 # Phase 1: Stable Identity and Migration - Context
 
 **Gathered:** 2026-07-16
-**Status:** Ready for planning
+**Status:** Pending replanning after approved manual recovery
 **Mode:** Auto-generated (infrastructure-only smart discuss)
 
 <domain>
@@ -51,7 +51,11 @@ source-to-phase mapping、drift、ownership、recovery、finalize は後続 phas
 ## Specific Ideas
 
 No additional requirements — canonical OpenSpec artifacts and source commit
-`7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd` are authoritative.
+`2cbb127917feaa637ef5eac439478227ac5f717b` are authoritative.
+
+The old started handoff manifest and brief are unchanged historical / stale audit
+evidence. Phase 1 must be replanned against the current source pin. Phases 2–6 stay
+blocked until Phase 1 is verified, and no Phase 7 is added.
 
 </specifics>
 

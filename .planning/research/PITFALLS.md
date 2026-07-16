@@ -2,7 +2,7 @@
 
 **Domain:** OpenSpec–GSD handoff lifecycle hardening
 **Researched:** 2026-07-16
-**Source pin:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Source pin:** `2cbb127917feaa637ef5eac439478227ac5f717b`
 **Overall confidence:** HIGH — source-pinned canonical artifacts, current implementation, fixed
 fixtures, and public-seam tests were cross-checked directly. No external ecosystem claims are
 needed for this repository-specific analysis.
@@ -12,8 +12,8 @@ the applicable `HARD-R1`–`HARD-R6` handle.
 
 ## Current Baseline Observations
 
-- The exact source commit exists, and the canonical hardening artifacts inspected in the current
-  tree have not diverged from that source pin.
+- The current source commit exists. Phase 1 replanning must read its canonical hardening artifacts;
+  the old started handoff remains historical / stale evidence.
 - The implementation under `src/ai_coding_template_ja/openspec_gsd_handoff/` is deliberately v1:
   its parser rejects schema v2 and its persistent transition is limited to `prepared` → `started`.
   Hardening must extend this boundary without weakening the v1 reader or silently changing v1.
@@ -464,7 +464,7 @@ Use these rules to avoid both coverage gaps and low-value duplication:
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff.json`
 - `openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md` at source commit
-  `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+  `2cbb127917feaa637ef5eac439478227ac5f717b`
 - `openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md`
 - `src/ai_coding_template_ja/openspec_gsd_handoff/`
 - `tests/test_handoff_*.py`

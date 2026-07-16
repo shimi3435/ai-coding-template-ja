@@ -3,7 +3,7 @@
 **Project:** OpenSpec–GSD Handoff Lifecycle Hardening
 **Domain:** source-pinned workflow lifecycle enforcement
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Canonical source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Canonical source:** `2cbb127917feaa637ef5eac439478227ac5f717b`
 **Canonical artifacts:** `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` に列挙された paths
 **Researched:** 2026-07-16
 **Confidence:** HIGH
@@ -297,7 +297,7 @@ OpenSpec final validationとGSD phase verificationは独立させ、どちらも
 - `.planning/PROJECT.md` — project scope、constraints、ownership boundaries
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` — exact change ID、
   canonical paths、source commit、boundary gates
-- source commit `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd` — canonical reference point
+- source commit `2cbb127917feaa637ef5eac439478227ac5f717b` — canonical reference point after approved manual recovery
 - [STACK.md](STACK.md) — stack、versions、reuse seams、verification performed
 - [FEATURES.md](FEATURES.md) — capability chain、evidence model、anti-features
 - [ARCHITECTURE.md](ARCHITECTURE.md) — component boundaries、data flow、build order

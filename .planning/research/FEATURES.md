@@ -2,7 +2,7 @@
 
 **Domain:** source-pinned workflow lifecycle enforcement
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Source commit:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Source commit:** `2cbb127917feaa637ef5eac439478227ac5f717b`
 **Researched:** 2026-07-16
 **Confidence:** HIGH
 
@@ -336,7 +336,6 @@ Primary repository evidence:
 - `tests/test_handoff_*.py`
 - `tests/fixtures/openspec_gsd_handoff/`
 
-All four canonical artifact hashes in `handoff.json` were verified against the working
-tree and the exact source commit above. No external ecosystem claim is needed for this
-feature dimension; the exact change artifacts and merged MVP seams are the authoritative
-inputs.
+The unchanged `handoff.json` records the original dispatch and is historical / stale
+evidence after manual recovery. Current planning is grounded in the source commit above
+and the canonical paths; no external ecosystem claim is needed for this feature dimension.

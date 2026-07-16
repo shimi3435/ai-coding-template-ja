@@ -1,10 +1,10 @@
 # Technology Stack: OpenSpec–GSD Handoff Lifecycle Hardening
 
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Canonical source:** `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+**Canonical source:** `2cbb127917feaa637ef5eac439478227ac5f717b`
 **Canonical artifacts:** `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md` と `handoff.json` に列挙された paths
 **Researched:** 2026-07-16
-**Confidence:** HIGH（source commit から現 HEAD まで対象 stack / modules / tests に差分がなく、対象テスト 153 件を実行済み）
+**Confidence:** HIGH（implementation baseline調査は旧dispatch時点。manual recovery後のPhase 1 planningはcurrent source pinを再読する）
 
 ## Recommendation
 
@@ -204,9 +204,9 @@ Reconsider a dependency only if an implementation phase demonstrates a specific 
 
 ## Verification Performed
 
-- Confirmed exact change ID and source commit from the prepared handoff files.
-- Confirmed source commit exists.
-- Confirmed no changes between source commit and current HEAD for `pyproject.toml`, `uv.lock`, `Taskfile.yml`, CI, handoff package, scripts, and relevant tests.
+- Confirmed exact change ID and the original source commit from the historical handoff files.
+- Confirmed the current canonical source commit exists.
+- Confirmed the implementation baseline at original research time; Phase 1 replanning must ground contract details in the current canonical source.
 - Read all current handoff package modules and relevant tests / fixtures.
 - Ran:
 
@@ -231,7 +231,7 @@ Repository-primary evidence:
 - `.planning/PROJECT.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff.json`
-- canonical OpenSpec handles `HARD-R1`〜`HARD-R6` at source commit `7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`
+- canonical OpenSpec handles `HARD-R1`〜`HARD-R6` at source commit `2cbb127917feaa637ef5eac439478227ac5f717b`
 - `pyproject.toml`, `uv.lock`, `Taskfile.yml`, `.github/workflows/ci.yml`
 - `src/ai_coding_template_ja/openspec_gsd_handoff/`
 - `tests/test_handoff_*.py`, `tests/test_execute_openspec_change_skill.py`, `tests/test_taskfile.py`

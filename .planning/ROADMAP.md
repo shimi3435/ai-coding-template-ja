@@ -4,7 +4,7 @@
 
 This roadmap plans only OpenSpec change
 `harden-openspec-gsd-handoff-lifecycle`, pinned to source commit
-`7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd`. OpenSpec owns WHAT / WHY,
+`2cbb127917feaa637ef5eac439478227ac5f717b`. OpenSpec owns WHAT / WHY,
 canonical requirements, scenarios, acceptance criteria, and final completion. GSD
 owns the sequential phase, plan, and phase-progress decomposition without copying
 or redefining canonical specification prose.
@@ -17,6 +17,11 @@ is assigned to the closest useful seam without duplicating the same failure or r
 Real OpenSpec, GSD, or host smoke remains optional, opt-in, and separate from normal
 CI. Failure preserves inspectable state and stops; no automatic route switch,
 rollback, repair, or downstream phase advance is allowed.
+
+Manual recovery from the stale started handoff is approved. Phase 1 must be replanned
+against the current source pin. Phases 2–6 remain blocked until Phase 1 is verified,
+and no Phase 7 is added. The old handoff manifest and brief remain unchanged audit
+evidence rather than the current planning authority.
 
 The success criteria below are observable planning and verification outcomes. They
 do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
@@ -130,9 +135,9 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Stable Identity and Migration | 0/TBD | Not started | - |
-| 2. Source-to-Execution Mapping | 0/TBD | Not started | - |
-| 3. Lifecycle Drift Gate | 0/TBD | Not started | - |
-| 4. Repository-Wide Ownership | 0/TBD | Not started | - |
-| 5. Recovery and Resume | 0/TBD | Not started | - |
-| 6. Finalize Preview and Receipt | 0/TBD | Not started | - |
+| 1. Stable Identity and Migration | 0/TBD | Pending replanning | - |
+| 2. Source-to-Execution Mapping | 0/TBD | Blocked on Phase 1 verification | - |
+| 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 1 verification | - |
+| 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 1 verification | - |
+| 5. Recovery and Resume | 0/TBD | Blocked on Phase 1 verification | - |
+| 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 1 verification | - |
