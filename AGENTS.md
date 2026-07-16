@@ -24,8 +24,10 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - Codex / Claude Code の両方がこのファイルを正とする。
 - Claude Code 固有の補足のみ CLAUDE.md にある。
 
-## Workflow（OpenSpec / GSD の適応型実行境界 / ADR-0008）
+## Workflow（OpenSpec / GSD の適応型実行境界 / ADR-0008・0009）
 - 「何を・なぜ作るか」と最終完了は OpenSpec で確定する（仕様・受け入れ基準・`spec-holes`）。
+- 実装開始前に、経路、恒久成果、一時実行証跡、最初に行う CI parity、停止・再計画条件を
+  `tasks.md` の実行予算として記録する。固定 token・行数・commit・phase 数だけを品質判定に使わない。
 - 独立出荷可能な成果は先に OpenSpec changes へ分割する。一体の成果について、単一セッションかつ
   単一コンテキストで安全に実装・検証でき、依存 phases や有益な隔離並列単位がなければ小規模、
   それ以外は大規模の GSD 候補とし、経路と理由を `tasks.md` に記録する。
@@ -46,6 +48,13 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
   state seam までである。実 host orchestration は未検証で、Phase 3 の opt-in / manual evidence が所有する。
 - GSD phases 完了後も、OpenSpec 原本の全 requirements / scenarios / `spec-holes` と実装・検証を
   対応付け、`task openspec:validate` と `task check` を通してから最終境界ゲートを完了にする。
+- plan / evidence / test / review は、distinct failure / seam / risk の検出、セッション復帰、レビュー
+  判断のいずれかへ価値を持つ場合だけ追加する。通常 CI を削除予定 artifacts や到達不能な Git 履歴へ
+  依存させない。
+- 検証は高リスクな実動作 / safe dry-run、公開 interface、security property、静的 prose contract の順に
+  優先する。環境依存を持つ最初の vertical slice で、該当する CI parity を全実装完了前に確認する。
+- 独立成果、GSD phase、外部依存、trust boundary、通常 CI、永続データ、公開 API の追加は実行予算を
+  再計画する。受け入れと checks が green なら、blocker でない nit / hardening は別 change へ送る。
 - テンプレート自身では一つの PR に一つの active change だけを置き、依存 changes は専用 branches で
   段階的に close / merge する。main の `openspec/changes/` には blocked proposal を残さない。
 - change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
