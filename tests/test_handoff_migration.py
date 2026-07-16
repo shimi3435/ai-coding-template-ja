@@ -55,7 +55,12 @@ CANONICAL_CONTENT = {
     DESIGN_PATH: b"# Design\n",
     PROPOSAL_PATH: b"# Proposal\n",
     SOURCE_PATH: SOURCE,
-    TASKS_PATH: b"# Tasks\n\n- [ ] 1. First\n",
+    TASKS_PATH: (
+        "# Tasks\n\n"
+        "- [x] 1.1 fixture contractを固定する\n"
+        "- [ ] 1.2 Unicodeの進捗を検証する\n"
+        "- [ ] 1.3 fallback parityを検証する\n"
+    ).encode(),
 }
 
 
@@ -204,6 +209,33 @@ def test_preview_rejects_stale_non_source_artifact_without_partial_value(
     assert result.issue.code == "migration-artifact-snapshot-mismatch"
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_preview_rejects_progress_not_derived_from_current_tasks_snapshot(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    v1, current_artifacts = _inputs()
+    stale_progress = replace(
+        v1.progress,
+        complete=0,
+        remaining=3,
+        tasks=tuple(replace(task, done=False) for task in v1.progress.tasks),
+    )
+
+    result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=current_artifacts,
+        current_progress=stale_progress,
+        source_paths=(SOURCE_PATH,),
+        operations=ReadOnlyCountingOperations(),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "migration-progress-snapshot-mismatch"
+    assert target.read_bytes() == EXPECTED_V1
 
 
 def test_preview_rejects_unknown_schema_and_schema2_downgrade_without_mutation(
