@@ -36,6 +36,7 @@ from .models import (
     Failure,
     IssueCategory,
     KnownState,
+    NormalizedTask,
     Progress,
     Result,
     Success,
@@ -56,6 +57,10 @@ from .source_identity import (
 from .versioned_manifest import parse_versioned_manifest_bytes
 
 _CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_HEX_40 = re.compile(r"[0-9a-f]{40}\Z")
+_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
+_SOURCE_ID = re.compile(r"(?:REQ|SCN)-[0-9]{6}\Z")
+_MAX_PREVIEW_ITEMS = 4096
 _EMPTY_SOURCE_ITEMS = SourceIdentityState(
     next_requirement_id=1,
     next_scenario_id=1,
@@ -445,6 +450,131 @@ def _change_object(change: MigrationCandidateChange) -> dict[str, object]:
     }
 
 
+def _bounded_preview_text(value: object, *, allow_empty: bool = False) -> bool:
+    if type(value) is not str or (not allow_empty and not value):
+        return False
+    try:
+        return len(value.encode("utf-8")) <= MAX_MANIFEST_BYTES
+    except UnicodeEncodeError:
+        return False
+
+
+def _preview_has_valid_shape(preview: object) -> bool:
+    if type(preview) is not ManifestMigrationPreview:
+        return False
+    scalar_text = (
+        preview.repository_root,
+        preview.target_path,
+        preview.observed_source_commit,
+        preview.current_source_commit,
+        preview.current_artifacts_sha256,
+        preview.current_progress_sha256,
+        preview.v1_sha256,
+        preview.v2_sha256,
+    )
+    if not all(_bounded_preview_text(value) for value in scalar_text):
+        return False
+    if (
+        _HEX_40.fullmatch(preview.observed_source_commit) is None
+        or _HEX_40.fullmatch(preview.current_source_commit) is None
+        or any(
+            _HEX_64.fullmatch(value) is None
+            for value in (
+                preview.current_artifacts_sha256,
+                preview.current_progress_sha256,
+                preview.v1_sha256,
+                preview.v2_sha256,
+            )
+        )
+        or type(preview.candidate_bytes) is not bytes
+        or not preview.candidate_bytes
+        or len(preview.candidate_bytes) > MAX_MANIFEST_BYTES
+        or type(preview.candidate_manifest) is not HandoffManifestV2
+        or type(preview.current_artifacts) is not tuple
+        or not 1 <= len(preview.current_artifacts) <= 64
+        or type(preview.current_progress) is not Progress
+        or type(preview.current_progress.tasks) is not tuple
+        or not 1 <= len(preview.current_progress.tasks) <= _MAX_PREVIEW_ITEMS
+        or type(preview.source_paths) is not tuple
+        or not 1 <= len(preview.source_paths) <= _MAX_PREVIEW_ITEMS
+        or type(preview.changes) is not tuple
+        or len(preview.changes) > _MAX_PREVIEW_ITEMS
+        or type(preview.exclusions) is not tuple
+        or len(preview.exclusions) > _MAX_PREVIEW_ITEMS
+    ):
+        return False
+    if any(
+        type(artifact) is not ManifestArtifact
+        or not all(
+            _bounded_preview_text(value)
+            for value in (artifact.kind, artifact.path, artifact.sha256)
+        )
+        or _HEX_64.fullmatch(artifact.sha256) is None
+        for artifact in preview.current_artifacts
+    ):
+        return False
+    if any(
+        type(task) is not NormalizedTask
+        or not _bounded_preview_text(task.id)
+        or not _bounded_preview_text(task.description)
+        or type(task.done) is not bool
+        for task in preview.current_progress.tasks
+    ):
+        return False
+    if any(
+        not _bounded_preview_text(source_path) for source_path in preview.source_paths
+    ):
+        return False
+    if any(
+        type(change) is not MigrationCandidateChange
+        or change.kind not in {"created", "updated", "tombstoned"}
+        or type(change.category) is not SourceCategory
+        or not _bounded_preview_text(change.source_id)
+        or _SOURCE_ID.fullmatch(change.source_id) is None
+        or not _bounded_preview_text(change.source_path)
+        or (
+            change.previous_fingerprint is not None
+            and (
+                type(change.previous_fingerprint) is not str
+                or _HEX_64.fullmatch(change.previous_fingerprint) is None
+            )
+        )
+        or type(change.candidate_fingerprint) is not str
+        or _HEX_64.fullmatch(change.candidate_fingerprint) is None
+        or not _bounded_preview_text(change.reason)
+        for change in preview.changes
+    ):
+        return False
+    if not all(_bounded_preview_text(exclusion) for exclusion in preview.exclusions):
+        return False
+
+    text_values = list(scalar_text)
+    for artifact in preview.current_artifacts:
+        text_values.extend((artifact.kind, artifact.path, artifact.sha256))
+    for task in preview.current_progress.tasks:
+        text_values.extend((task.id, task.description))
+    text_values.extend(preview.source_paths)
+    for change in preview.changes:
+        text_values.extend(
+            (
+                change.kind,
+                change.source_id,
+                change.source_path,
+                change.candidate_fingerprint,
+                change.reason,
+            )
+        )
+        if change.previous_fingerprint is not None:
+            text_values.append(change.previous_fingerprint)
+    text_values.extend(preview.exclusions)
+    aggregate_bytes = 0
+    for value in text_values:
+        aggregate_bytes += len(value.encode("utf-8"))
+        if aggregate_bytes > MAX_MANIFEST_BYTES:
+            return False
+    return len(set(preview.source_paths)) == len(preview.source_paths)
+
+
 def _preview_machine_view(preview: ManifestMigrationPreview) -> dict[str, object]:
     return {
         "repository_root": preview.repository_root,
@@ -461,8 +591,27 @@ def _preview_machine_view(preview: ManifestMigrationPreview) -> dict[str, object
     }
 
 
-def _preview_identity(preview: ManifestMigrationPreview) -> str:
-    return _sha256(_compact_json(_preview_machine_view(preview)))
+def _preview_identity(preview: object) -> str | None:
+    """Return one validated preview identity without leaking input exceptions."""
+
+    if not _preview_has_valid_shape(preview):
+        return None
+    try:
+        if not _preview_is_consistent(preview):
+            return None
+        machine_bytes = _compact_json(_preview_machine_view(preview))
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        UnicodeEncodeError,
+        OverflowError,
+        RecursionError,
+    ):
+        return None
+    if len(machine_bytes) > MAX_MANIFEST_BYTES:
+        return None
+    return _sha256(machine_bytes)
 
 
 def _migration_failure(
@@ -877,7 +1026,10 @@ def preview_manifest_migration(
         exclusions=reconciliation.value.exclusions,
         preview_sha256="",
     )
-    return Success(replace(preview, preview_sha256=_preview_identity(preview)))
+    preview_identity = _preview_identity(preview)
+    if preview_identity is None:
+        return _failure("migration-preview-invalid")
+    return Success(replace(preview, preview_sha256=preview_identity))
 
 
 def _apply_anchored_manifest_migration(
@@ -1141,21 +1293,26 @@ def apply_manifest_migration(
     """Apply only the exact approved preview through validated atomic replacement."""
 
     filesystem = operations or ManifestMigrationFileOperations()
+    preview_identity = _preview_identity(preview)
+    if (
+        preview_identity is None
+        or type(preview.preview_sha256) is not str
+        or _HEX_64.fullmatch(preview.preview_sha256) is None
+    ):
+        return _migration_failure(
+            "migration-preview-invalid",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
     if (
         approved is not True
         or approved_preview_sha256 != preview.preview_sha256
-        or preview.preview_sha256 != _preview_identity(preview)
+        or preview.preview_sha256 != preview_identity
     ):
         return _migration_failure(
             "migration-approval-rejected",
             MigrationFailurePoint.APPROVAL,
-            MigrationTargetState.UNKNOWN,
-            MigrationStagingState.ABSENT,
-        )
-    if not _preview_is_consistent(preview):
-        return _migration_failure(
-            "migration-preview-invalid",
-            MigrationFailurePoint.STATE_GUARD,
             MigrationTargetState.UNKNOWN,
             MigrationStagingState.ABSENT,
         )
