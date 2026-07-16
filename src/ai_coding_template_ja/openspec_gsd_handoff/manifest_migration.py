@@ -594,7 +594,9 @@ def _preview_machine_view(preview: ManifestMigrationPreview) -> dict[str, object
 def _preview_identity(preview: object) -> str | None:
     """Return one validated preview identity without leaking input exceptions."""
 
-    if not _preview_has_valid_shape(preview):
+    if not isinstance(
+        preview, ManifestMigrationPreview
+    ) or not _preview_has_valid_shape(preview):
         return None
     try:
         if not _preview_is_consistent(preview):
