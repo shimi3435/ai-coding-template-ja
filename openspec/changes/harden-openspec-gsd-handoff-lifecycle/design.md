@@ -145,6 +145,38 @@ target v1 bytesを一切変更せず、staging cleanup結果を報告する。re
 v1保持、一致を証明できなければ`unknown`として停止し、自動rollbackしない。unknown schema、v2→v1、callerがdisk
 schemaより低いschemaを要求するdowngradeはpreviewもapplyもfail-closedし、既存bytesを変更しない。
 
+Phase 2はmigration済みのstarted schema v2に対し、全active source IDへexactly oneの`phase_id` / `phase_path`を
+割り当てるphase-assignment baselineを作る。mapping entryの`phase_path`はrepository root内のcanonical POSIX relative
+pathとして常に宣言し、空、repo外、symlink escape、Unicode / platform case aliasを拒否する。structural validationは
+将来phaseのpath実在を要求しないが、対象phaseがoperationのreadiness horizonへ入った時点で宣言先の実在と同じchangeへの
+所属を要求する。`plan_paths` / `evidence_paths`は未実体化の将来phaseでは空を許すが、その空をoperation-ready successに
+使わない。activeからtombstoneへ移ったsource IDはbaseline coverageに数えず、tombstoneを参照するmappingはstaleとして
+structured non-successにする。複数active source IDsが同じphaseを共有することは許すが、同じsource IDの複数entries、
+同じ`phase_id`に対する異なる`phase_path`、または同じcanonical phase pathに対する異なる`phase_id`はconflictとして拒否する。
+
+readiness horizonは次に固定する。各rowの範囲内でunknown、cross-change、duplicate、conflict、path不在が一件でもあれば、
+部分的なgreenを返さずstructured non-successにする。
+
+| operation | readiness horizon | operation-readyに必要な実体 |
+| --- | --- | --- |
+| `plan` | 全active source IDから対象phaseへの割当 | 対象phaseのexactly one `phase_id` / 実在`phase_path`。plan / evidenceは未作成でよい |
+| `execute` | 対象phaseと、そのphaseへ割り当てた全active source ID | 対象phaseの実在pathと実行対象の全`plan_paths`。evidenceは未作成でよい |
+| `verify` | 対象phaseの全active source ID、全plans、必要evidence | 対象phaseの実在path、全plan paths、各source / planに要求される全`evidence_paths` |
+| `finalize` | 全active source ID、全phases、全plans、全required evidence | repository-wideに実在し同じchangeへ属する完全なmapping graph |
+
+started v2へsource identity、phase assignment、canonical artifact hash、source commit、checkbox progressを反映する操作は、
+v1 migrationとは別のPhase 2 application seamとする。read-only refresh previewは現在のv2 bytes hash、更新前後のsource /
+artifact / progress / mapping、生成予定v2 hash、除外理由、immutable preview hashを完全に返す。差分0件も完全なno-op preview
+として返す。target v2、各canonical artifact、candidate v2、serialized machine previewはそれぞれ8 MiBのlimit+1を適用し、
+完全に生成できない場合は切り捨てたpreviewを返さずnon-successにする。applyはpreview表示後に得た
+exact preview hashへの新たな明示承認と、disk bytes、source commit、canonical source、phase assignmentのstate guardを
+再検査する。`handoff_state=started`、capabilities、既存ownership、既存lifecycleは各subtreeのcanonical bytesを候補生成前後で
+比較して保持し、v2を同directoryのbounded stagingへwrite、limit+1再読、strict v2 validationしてからだけatomic replaceする。
+stale approval、unknown state、staging / reread / validation / replaceのpartial failureはtargetを変更しないか、
+変更前hashの維持を証明できない
+場合は`unknown`として停止し、自動retry / rollback / repairを行わない。このseamはPhase 2のmapping refreshに限定し、MVPの
+public `inspect` / `prepare` / `mark-started`の入力、状態遷移、CLI surfaceを変更しない。
+
 ### Gate C. adaptive policyはcurrent-tree stable reference recordで参照する
 
 policy本文の正はcurrent treeの`docs/agents/workflow.md`とし、
@@ -158,6 +190,16 @@ blobへ到達できない環境でも契約判定を変えず、runtime / 通常
 全stable IDの必須anchorはprune後も残る`docs/agents/workflow.md`に置くため、`task prune-template-docs`で
 `docs/template/`を削除した下流repositoryでも参照検査を継続できる。ADR-0008の存在やhashは通常CIの成功条件にしない。
 policy本文をrecord、manifest、GSD artifactsへ複製しない。
+
+section fingerprintはversioned `adaptive-policy-section-v1` normalizerで生成する。source fileは8 MiBのlimit+1 read後に
+strict UTF-8 decodeし、CRLF / CRをLFへ変換してUnicode NFCにする。fenced code block外で、source normalizerと同じ規則で
+正規化したheadingに一致するATX headingをexactly one要求し、そのheading line直後からfence外にある次の同level以上の
+ATX heading直前までをsection bodyとする。horizontal whitespaceはsource normalizerと同じU+0009とUnicode category `Zs`に
+限定する。bodyは各line末尾のhorizontal whitespaceだけを除去し、leading indentation、
+内部改行、先頭・内部blank lineを保持して末尾LFをexactly oneにする。version tag
+`adaptive-policy-section-v1\0`、canonical POSIX source path、normalized heading、normalized bodyをこの順に、各componentを
+8-byte unsigned big-endian lengthとUTF-8 bytesの組にして結合し、SHA-256 lowercase hexを記録する。duplicate heading、
+unclosed fence、repo外path / symlink escape、Unicode / platform case alias、oversizeはsection hashを作らずfail-closedする。
 
 stable reference namespaceは次に固定する。
 
@@ -196,6 +238,7 @@ mechanical contractも、参照対象外である理由を表へ明記する。
 | `HARD-R1`: exact ID・counter・親参照・source normalizer | 適用なし。stable identity wire formatとbounded parsingのmechanical contract |
 | `HARD-R1`: phase mapping完全性 | `ACE-S2-ONE-PHASE-ONE-CHANGE`, `ACE-S4-CONTEXT-PARITY` |
 | `HARD-R1`: v1 migration preview / staging failure / unknown schema | 適用なし。MVP schema互換性とatomic persistenceのmechanical contract |
+| `HARD-R1`: started v2 refresh / no-op / bounded failure / stale approval / persistence failure | 適用なし。mapping applicationとatomic persistenceのmechanical contract |
 | `HARD-R1`: policy reference traceability | `ACE-S2-OPEN-SPEC-AUTHORITY`, `ACE-S5-OPEN-SPEC-FINAL` |
 | `HARD-R2`: canonical specification変化 / checkbox-only | `ACE-S2-SPEC-CHANGE-REPLAN`, `ACE-S5-REVALIDATE-ON-DRIFT` |
 | `HARD-R2`: phase graph / capability変化 | `ACE-S4-SOURCE-PINNED`, `ACE-S4-NO-AUTO-FALLBACK` |
@@ -222,7 +265,8 @@ normalized identityまたは明示された一意な対応を優先し、新し�
 
 各 phase / plan / evidence mapping は source stable ID に加え、検査対象の
 `adaptive-change-execution` requirement / scenario identifier を持つ。bridge は参照の存在、一意性、change 所属、
-被覆だけを検査し、policy 文を manifest や GSD artifacts へ複製しない。
+被覆だけを検査し、policy 文を manifest や GSD artifacts へ複製しない。全active source IDのphase-assignment baselineと
+operation別readiness horizon、started v2のapproval-bound refreshはGate Bの表と永続化契約を単一の正とする。
 
 ### 3. lifecycle operation は共通 preflight matrix を通す
 
@@ -292,18 +336,18 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
-| 1 | 空・ゼロ長・None | 該当 | source item / mapping / evidence が空 | 1: 必須 item 欠落として mapping を拒否 |
-| 2 | 境界値 | 該当 | 初回ID、`999999`、exhausted sentinel、番号枯渇 | 1: counterは`1..1000000`、sentinelからは割り当てず停止 |
-| 3 | 重複・衝突 | 該当 | active / tombstoneを跨ぐID、normalized identity、親参照の衝突 | 1: global uniquenessとcategory / prefix一致を検査し自動mergeしない |
-| 4 | 順序 | 該当 | source並び替えで再番号付け | 1: normalized identity一致時は既存IDを再利用 |
-| 5 | 型・形式不正 | 該当 | malformed ID / counter / category / parent / fingerprint / Markdown | 1: exact schemaとstrict parserで停止 |
-| 6 | エラー経路 | 該当 | migration の部分失敗 | 1: stagingを採用せず旧manifestを保持 |
-| 7 | 冪等性・再実行 | 該当 | 再実行でIDが変わる | 1: 同じsource/mappingは同じ出力 |
+| 1 | 空・ゼロ長・None | 該当 | source item / phase assignmentが空、将来phaseのplan / evidenceが空、refresh候補が空 | 1: 全active sourceのphase割当は必須。将来pathの空はschema上許すがoperation horizon到達時はnon-success。no-op refreshは完全previewで明示 |
+| 2 | 境界値 | 該当 | 初回ID、`999999`、exhausted sentinel、番号枯渇、0/1/N phases / plans / evidence | 1: counterは`1..1000000`、sentinelからは割り当てず停止。operation別horizonで必要件数を検査 |
+| 3 | 重複・衝突 | 該当 | active / tombstoneを跨ぐID、normalized identity、親参照、phase assignment、cross-change pathの衝突 | 1: global uniquenessとcategory / prefix / change所属を検査し自動mergeしない |
+| 4 | 順序 | 該当 | source並び替えで再番号付け、mapping入力順でcoverage判定が変わる | 1: normalized identity一致時は既存IDを再利用し、同じ集合は同じ判定 |
+| 5 | 型・形式不正 | 該当 | malformed ID / counter / category / parent / fingerprint / Markdown / phase path / policy section | 1: exact schema、strict parser、versioned normalizerで停止 |
+| 6 | エラー経路 | 該当 | migration / started v2 refreshの部分失敗 | 1: stagingを採用せずtarget bytesを保持。不明ならunknown停止 |
+| 7 | 冪等性・再実行 | 該当 | 再実行でIDが変わる、stale approvalで旧refreshを適用する | 1: 同じsource/mappingは同じpreview。exact hashとstate guardsを再検査し、自動retryしない |
 | 8 | 時刻・タイムゾーン | 非該当 | IDへ時刻を含めない | 2: timestampによるidentity判定は対象外 |
-| 9 | 文字列 | 該当 | invalid UTF-8、NFC、改行、heading空白、fence内見出し、path alias | 1: exact canonicalization、raw heading保持、曖昧Markdown停止 |
+| 9 | 文字列 | 該当 | invalid UTF-8、NFC、改行、heading空白、fence内見出し、source / phase / policy path alias | 1: exact canonicalization、raw heading保持、曖昧Markdownとaliasを停止 |
 | 10 | 数値 | 該当 | 0・負数・非整数・overflow・noncanonical padding | 1: suffix`1..999999`とcounter`1..1000000`だけ許容 |
-| 11 | 巨大入力・リソース枯渇 | 該当 | source block / tombstone / mappingの肥大 | 1: 8 MiB / 4096 / counter上限で切捨てず停止 |
-| 12 | 状態遷移の未定義パス | 該当 | deleted ID の復活・親消失・再利用 | 1: `last_parent_id`付きtombstoneを保持し再利用禁止 |
+| 11 | 巨大入力・リソース枯渇 | 該当 | source / policy section / refresh preview / tombstone / mappingの肥大 | 1: 8 MiB / 4096 / counter上限で切捨てず停止 |
+| 12 | 状態遷移の未定義パス | 該当 | deleted ID の復活・親消失・再利用、started v2をMVP transitionでrefresh | 1: tombstoneをcoverage外のstale参照として扱い、専用refresh seamだけを許可 |
 
 ### HARD-R2: lifecycle 操作前に source と派生状態の drift を検査する
 
@@ -403,7 +447,8 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 迂回したimplementation-detail testは追加しない。
 
 1. v1 / v2 manifest read、read-only migration preview、approved migration apply。
-2. canonical sourceからのstable identity allocationとsource-to-phase / plan / evidence mapping validation。
+2. canonical sourceからのstable identity allocation、source-to-phase / plan / evidence mapping validation、started v2の
+   read-only refresh previewとapproval-bound atomic apply。
 3. plan / execute / resume / verify / finalize共通のlifecycle preflightとdrift result。
 4. repository rootからの全manifest ownership scanとownership graph result。
 5. checkpoint / receiptを入力にしたresume plan result。
@@ -420,13 +465,14 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 | `P-OWNERSHIP` | Hypothesis property | ownership graphの順序不変、単独owner安全性、alias衝突停止 |
 | `P-PREVIEW` | Hypothesis property | preview builderの決定性、冪等性、hash binding |
 | `E-MIGRATION` | fixture / example | v1読取、read-only preview、staging failure時v1保持、unknown / downgrade拒否 |
-| `E-MAPPING` | fixture / example | category / ID prefix / parent整合、空・重複・cross-change・policy ref不整合・coverage不足 |
+| `E-REFRESH` | fixture / filesystem integration | started v2のempty / stale / partial / oversized refresh、新previewと別承認によるmanual retry、state / capabilities / ownership / lifecycle保持、atomic replace |
+| `E-MAPPING` | fixture / example | category / ID prefix / parent整合、全active sourceのphase baseline、operation別horizon、空・重複・cross-change・tombstone・path不在・policy ref不整合 |
 | `E-DRIFT` | fixture / example | source / phase / capability drift、checkbox-only除外、unknown停止 |
 | `I-OWNERSHIP` | filesystem / Git integration | 全manifest scan、shared reference、symlink / traversal / Unicode / case alias |
 | `I-RECOVERY` | filesystem integration | 0/1/N effects、中断、corrupt journal、resume再検査、巨大evidence |
 | `I-FINALIZE` | filesystem / Git integration | no-op、stale approval、dependency順、partial failure receipt、再実行 |
-| `E-POLICY` | fixture / example | current-tree stable record、ID一意性、section hash、history非依存 |
-| `E-BOUNDS` | bounded example | suffix`1..999999`、counter sentinel`1000000`、source / item / manifest / journal / previewの境界とlimit+1停止 |
+| `E-POLICY` | fixture / example | current-tree stable record、ID一意性、`adaptive-policy-section-v1`のexact section hash、duplicate / fence / alias拒否、history非依存 |
+| `E-BOUNDS` | bounded example | suffix`1..999999`、counter sentinel`1000000`、source / policy section / item / manifest / journal / previewの境界とlimit+1停止 |
 | `S-TOOLS` | opt-in smoke | 実OpenSpec / GSD probe、drift、中断resume、no-op finalize、未検証報告 |
 
 ### Spec-holes Phase 1 → Phase 2 一対一対応
@@ -438,7 +484,7 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 
 | requirement | H01 | H02 | H03 | H04 | H05 | H06 | H07 | H08 | H09 | H10 | H11 | H12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `HARD-R1` stable identity / mapping | `E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC`,`P-NORMALIZER` | `P-MANIFEST-RT`,`E-MAPPING`,`P-NORMALIZER` | `E-MIGRATION` | `P-ALLOC`,`P-MANIFEST-RT`,`P-NORMALIZER` | N/A: identityへ時刻不使用 | `P-NORMALIZER`,`E-MAPPING` | `P-ALLOC`,`E-BOUNDS` | `E-BOUNDS`,`P-NORMALIZER` | `P-ALLOC`,`E-MIGRATION`,`E-MAPPING` |
+| `HARD-R1` stable identity / mapping | `E-MAPPING`,`E-REFRESH` | `P-ALLOC`,`E-BOUNDS`,`E-MAPPING` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC`,`P-NORMALIZER`,`E-MAPPING` | `P-MANIFEST-RT`,`E-MAPPING`,`P-NORMALIZER`,`E-POLICY` | `E-MIGRATION`,`E-REFRESH` | `P-ALLOC`,`P-MANIFEST-RT`,`P-NORMALIZER`,`E-REFRESH` | N/A: identityへ時刻不使用 | `P-NORMALIZER`,`E-MAPPING`,`E-POLICY` | `P-ALLOC`,`E-BOUNDS` | `E-BOUNDS`,`P-NORMALIZER`,`E-REFRESH` | `P-ALLOC`,`E-MIGRATION`,`E-MAPPING`,`E-REFRESH` |
 | `HARD-R2` drift | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `P-NORMALIZER`,`E-DRIFT` | N/A: mtime判定なし | `P-NORMALIZER`,`E-DRIFT` | N/A: fuzzy判定なし | `E-BOUNDS`,`E-DRIFT` | `E-DRIFT` |
 | `HARD-R3` ownership | `P-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP` | `I-OWNERSHIP` | `I-OWNERSHIP` | `P-OWNERSHIP` | N/A: 時刻優先なし | `I-OWNERSHIP` | N/A: score推定なし | `E-BOUNDS`,`I-OWNERSHIP` | `I-OWNERSHIP`,`I-FINALIZE` |
 | `HARD-R4` recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |

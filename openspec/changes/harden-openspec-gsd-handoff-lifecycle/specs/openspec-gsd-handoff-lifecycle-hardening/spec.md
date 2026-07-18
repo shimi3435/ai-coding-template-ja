@@ -53,6 +53,19 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
 - **WHEN** GSD phase、plan、または verification evidence を handoff source へ対応付ける
 - **THEN** bridge は stable ID 参照の存在、一意性、change 所属、必要 evidence の被覆を検査し、欠落・重複・cross-change 参照を拒否する
 
+#### Scenario: phase assignment baseline を作る
+- **WHEN** migration済みのstarted schema v2へsource-to-execution mappingを初めて固定する
+- **THEN** bridgeは全active source IDへexactly oneの`phase_id`とcanonical repository-relative `phase_path`を割り当て、
+  複数source IDsによる同じphaseの共有と未実体化の将来phaseで空の`plan_paths` / `evidence_paths`をschema-validとして
+  許すが、同じsource IDの複数entries、phase ID / pathの不整合、unknown、cross-change、repo外・symlink・Unicode /
+  case alias path、tombstone参照をstructured non-successとして報告する
+
+#### Scenario: operation ごとの mapping readiness を検査する
+- **WHEN** plan、execute、verify、またはfinalizeのoperation-ready判定を要求する
+- **THEN** bridgeはplanでは全active sourceから対象phaseへの割当と対象`phase_path`の実在、executeでは対象phaseの
+  全`plan_paths`、verifyでは対象phaseの必要`evidence_paths`、finalizeでは全active source / 全phase / 全plan / 全required
+  evidenceの実在と同じchangeへの所属を要求し、horizon外の将来pathが空であることをgreen判定へ流用しない
+
 #### Scenario: MVP schema v1 の migration をpreviewする
 - **WHEN** exact MVP schema v1 manifestからhardening schema v2へのmigrationを要求する
 - **THEN** bridgeはv1 bytesを変更せず、stable ID割当、生成予定v2 hash、作成・更新候補、除外理由を持つ完全なread-only previewを返す
@@ -65,9 +78,38 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
 - **WHEN** disk schemaが未知、v2からv1を要求する、またはcallerがdisk schemaより低いversionを要求する
 - **THEN** bridgeは既存bytesを変更せずfail-closedし、対応readerまたは明示的なmanual migrationを要求する
 
+#### Scenario: started schema v2 の refresh をpreviewする
+- **WHEN** started v2へcurrent source identity、phase assignment、canonical artifact hashes、source commit、checkbox progressを
+  反映するrefreshを要求する
+- **THEN** bridgeはtarget bytesを変更せず、更新前後のsource / artifact / progress / mapping、生成予定v2 hash、除外理由、
+  immutable preview hashを完全に返し、`handoff_state=started`、capabilities、既存ownership、既存lifecycleを保持する
+
+#### Scenario: started schema v2 のrefresh候補が空である
+- **WHEN** current source、artifacts、progress、mappingがdisk上のstarted v2と一致する
+- **THEN** bridgeはtarget bytesを変更せず、差分0件を明示した完全なno-op previewを決定論的に返す
+
+#### Scenario: started schema v2 のrefresh previewをboundedに生成できない
+- **WHEN** target v2、canonical artifact、candidate v2、またはserialized machine previewが8 MiBのlimit+1を超え、
+  完全なrefresh previewを生成できない
+- **THEN** bridgeはpreviewを切り捨てずstructured non-successを返し、target bytesを変更せずapplyを許可しない
+
+#### Scenario: started schema v2 のrefresh承認がstaleである
+- **WHEN** 承認されたpreview hash、disk bytes、source commit、canonical source、またはphase assignmentがapply直前のstateと一致しない
+- **THEN** bridgeはtarget bytesを変更せずstructured non-successを返し、新しいread-only previewと別の明示承認を要求して
+  自動retry、MVP state transition、repairを行わない
+
+#### Scenario: started schema v2 のrefresh persistenceが失敗する
+- **WHEN** approved refreshのbounded staging write、limit+1再読、strict v2 validation、またはatomic replaceが失敗する
+- **THEN** bridgeはtargetの変更前hash維持を検証して停止し、維持を証明できなければstateをunknownとして報告し、
+  自動rollbackを行わない
+
 #### Scenario: policy reference のtraceabilityを検査する
 - **WHEN** source mappingまたはenforcement evidenceが`adaptive-change-execution` policyを参照する
-- **THEN** bridgeはcurrent-tree stable reference recordのID一意性、source path、section hash、参照存在を検査し、通常CIでGit履歴上の旧spec blobを要求しない
+- **THEN** bridgeはcurrent-tree stable reference recordのID一意性と参照存在を検査し、strict UTF-8・8 MiB limit+1・
+  LF・NFC、fence外のexactly one normalized ATX heading、同level以上の次heading境界、行末horizontal whitespaceだけの除去、
+  末尾LF exactly oneを使う`adaptive-policy-section-v1`のcanonical path / heading / body length-prefixed SHA-256と
+  source pathを照合し、duplicate heading、unclosed fence、path / symlink escape、Unicode / case alias、oversizeを拒否して、
+  通常CIでGit履歴上の旧spec blobを要求しない
 
 ### Requirement: HARD-R2 lifecycle 操作前に source と派生状態の drift を検査する
 bridge は MUST plan、execute、resume、verify、finalize の各操作前に、canonical source、source commit、
