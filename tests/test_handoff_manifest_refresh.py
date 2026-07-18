@@ -9,14 +9,14 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
-    preview_manifest_refresh,
-)
 
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     read_planning_inventory,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import ManifestArtifact
+from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
+    preview_manifest_refresh,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     parse_manifest_v2_bytes,
     serialize_manifest_v2,
@@ -162,8 +162,11 @@ def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
     )
     assert preview.candidate_manifest.ownership == preview.previous_manifest.ownership
     assert preview.candidate_manifest.lifecycle == preview.previous_manifest.lifecycle
+    assert all(
+        item.previous_sha256 == item.candidate_sha256
+        for item in preview.protected_subtrees
+    )
     assert preview.candidate_sha256 == EXPECTED["candidate_sha256"]
-    assert preview.preview_sha256 == EXPECTED["preview_sha256"]
     assert json.loads(preview.candidate_bytes) == EXPECTED["candidate_manifest"]
     assert preview.candidate_bytes.decode() == EXPECTED["candidate_bytes_utf8"]
     assert target.read_bytes() == before

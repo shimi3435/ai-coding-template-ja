@@ -1,13 +1,1060 @@
 {
   "old_target_sha256": "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914",
-  "created": ["SCN-000037", "SCN-000038", "SCN-000039", "SCN-000040", "SCN-000041", "SCN-000042", "SCN-000043"],
-  "updated": ["REQ-000001", "SCN-000018"],
+  "created": [
+    "SCN-000037",
+    "SCN-000038",
+    "SCN-000039",
+    "SCN-000040",
+    "SCN-000041",
+    "SCN-000042",
+    "SCN-000043"
+  ],
+  "updated": [
+    "REQ-000001",
+    "SCN-000018"
+  ],
   "updated_fingerprints": {
-    "REQ-000001": ["ed1fdf2fb03ad6ba086ccabe6b2977545fb42fa3c5f7c8f1c680fceff0a8fdca", "d721198e60e6cab0f9d54a9317e397c2fd47b581787d72450dfa1cc43c45eb32"],
-    "SCN-000018": ["c1eecd96205fc756ae48fe83f23865ac1f0933282eeb20335a76b8788eb3feee", "46843242f7ab1f230919ca8ff5915859cd6aee9e243714ec63d3aa9ae4a2c025"]
+    "REQ-000001": [
+      "ed1fdf2fb03ad6ba086ccabe6b2977545fb42fa3c5f7c8f1c680fceff0a8fdca",
+      "d721198e60e6cab0f9d54a9317e397c2fd47b581787d72450dfa1cc43c45eb32"
+    ],
+    "SCN-000018": [
+      "c1eecd96205fc756ae48fe83f23865ac1f0933282eeb20335a76b8788eb3feee",
+      "46843242f7ab1f230919ca8ff5915859cd6aee9e243714ec63d3aa9ae4a2c025"
+    ]
   },
-  "candidate_sha256": "pending-red",
-  "preview_sha256": "pending-red",
-  "candidate_manifest": null,
-  "candidate_bytes_utf8": "pending-red"
+  "candidate_sha256": "7c55fa4acee5ce69a294a0cb8c7449008eb6958e693f17a159eaeb3e3ca84558",
+  "preview_sha256": "b2573887d73f4f4952077cb14649bf2e1e7a0d785ad273cd9fcb7f433746aca3",
+  "candidate_manifest": {
+    "schema_version": 2,
+    "change_id": "harden-openspec-gsd-handoff-lifecycle",
+    "handoff_state": "started",
+    "artifacts": [
+      {
+        "kind": "design",
+        "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md",
+        "sha256": "ae7284262b1947df177a618f8dad88211b15ad4683d1424a1f636503025d96a2"
+      },
+      {
+        "kind": "proposal",
+        "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/proposal.md",
+        "sha256": "d8a53d581a0e69f9aa730d61166bfbaf14dcf7e488e267b6f123e76c2e60856a"
+      },
+      {
+        "kind": "spec",
+        "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "sha256": "548d4d8e474eebe2a937cf9d3ac81512d5f949f36c65fc6d0fa1f8f7d3ab67cd"
+      },
+      {
+        "kind": "tasks",
+        "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md",
+        "sha256": "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
+      }
+    ],
+    "source_commit": "fbe7f714f734d714480583ab90f41ec0d2077f50",
+    "progress": {
+      "total": 12,
+      "complete": 4,
+      "remaining": 8,
+      "tasks": [
+        {
+          "id": "1",
+          "description": "1.1 `revise-openspec-gsd-execution-boundary` と `automate-openspec-gsd-handoff` がmerge済みであること、MVP manifest schema、`handoff.json` 追跡・保持方針、対応 tool contracts を確認し、MVP merge後のbaseから本 change だけを載せる専用 branch / PRを用意する",
+          "done": true
+        },
+        {
+          "id": "2",
+          "description": "1.2 source-to-execution mappingのoperation別readiness、started v2 refresh、policy section fingerprint契約を再確定し、spec-holes Phase 1とstrict validateを再実行してcanonical artifactsをsource-pinned commitへ固定する",
+          "done": true
+        },
+        {
+          "id": "3",
+          "description": "1.3 previewへの新たな明示承認後にだけprepared manifestを永続化し、GSD 1.5.0 entrypointのstructured acceptanceとroute別postconditionを確認して`mark-started`を完了する",
+          "done": true
+        },
+        {
+          "id": "4",
+          "description": "2.1 manifest migration と stable source identity の phase を完了し、対応する OpenSpec scenarios の検証を通す",
+          "done": true
+        },
+        {
+          "id": "5",
+          "description": "2.2 source-to-phase / plan / evidence mapping の phase を完了し、対応する OpenSpec scenarios の検証を通す",
+          "done": false
+        },
+        {
+          "id": "6",
+          "description": "3.1 lifecycle operation 前の drift 検査 phase を完了し、対応する OpenSpec scenarios の検証を通す",
+          "done": false
+        },
+        {
+          "id": "7",
+          "description": "3.2 repository-wide multi-manifest ownership phase を完了し、対応する OpenSpec scenarios の検証を通す",
+          "done": false
+        },
+        {
+          "id": "8",
+          "description": "4.1 interruption / partial failure からの resume / recovery phase を完了し、対応する OpenSpec scenarios の検証を通す",
+          "done": false
+        },
+        {
+          "id": "9",
+          "description": "4.2 finalize / cleanup preview と receipt の phase を完了し、対応する OpenSpec scenarios の検証を通す",
+          "done": false
+        },
+        {
+          "id": "10",
+          "description": "5.1 全 spec-holes Phase 1 の該当項目を fixture test、例示 test、property test、または理由付き未検証へ一対一で対応付け、通常 CI と opt-in OpenSpec / GSD smoke を通す",
+          "done": false
+        },
+        {
+          "id": "11",
+          "description": "5.2 GSD verification と独立して OpenSpec 原本との対応を確認し、`openspec validate harden-openspec-gsd-handoff-lifecycle --strict`、`task openspec:validate`、`task check`、drift・ownership・broken-reference 検査を通す",
+          "done": false
+        },
+        {
+          "id": "12",
+          "description": "6.1 `self-review` と close policy の確認後、finalize preview と承認 receipt を検証し、本 change の所有範囲だけを close する",
+          "done": false
+        }
+      ]
+    },
+    "capabilities": {
+      "openspec": {
+        "version": "1.3.1",
+        "probe": "instructions-apply-json",
+        "schema_name": "spec-driven",
+        "input_route": "json"
+      },
+      "gsd": {
+        "version": "1.5.0",
+        "probe": "init-progress-raw",
+        "project_initialized": false,
+        "entrypoint": "gsd-new-project-auto"
+      },
+      "host": {
+        "spawn_agent_schema": "generic",
+        "dispatch": "generic-agent-workaround",
+        "agent_role_source": "toml"
+      }
+    },
+    "source_items": {
+      "next_requirement_id": 7,
+      "next_scenario_id": 44,
+      "active": [
+        {
+          "id": "REQ-000001",
+          "category": "requirement",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "### Requirement: HARD-R1 stable source identity と requirement mapping を維持する",
+          "parent_id": null,
+          "fingerprint": "d721198e60e6cab0f9d54a9317e397c2fd47b581787d72450dfa1cc43c45eb32"
+        },
+        {
+          "id": "REQ-000002",
+          "category": "requirement",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "### Requirement: HARD-R2 lifecycle 操作前に source と派生状態の drift を検査する",
+          "parent_id": null,
+          "fingerprint": "1c4c714d25e1124b346f5b2aaefa8bdd4fed155295c3f24c1f25e886fa74ba57"
+        },
+        {
+          "id": "REQ-000003",
+          "category": "requirement",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "### Requirement: HARD-R3 複数 manifests 間の artifact ownership を検査する",
+          "parent_id": null,
+          "fingerprint": "723b30eade10553c3a932ff307b36bbfb94240c27cc07ded2d368e5d695951b0"
+        },
+        {
+          "id": "REQ-000004",
+          "category": "requirement",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "### Requirement: HARD-R4 interruption と partial failure から検査可能に再開する",
+          "parent_id": null,
+          "fingerprint": "ea5a35ce2eb767807accb7d4697d5a6e0982bf6c0c6b2b8e7afc45c152477fe6"
+        },
+        {
+          "id": "REQ-000005",
+          "category": "requirement",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "### Requirement: HARD-R5 finalize と cleanup を preview と承認で制御する",
+          "parent_id": null,
+          "fingerprint": "42d1d6d5ccc72f89e74d6b930f96b1d498401c29804cd46b07f94c788fab5fa0"
+        },
+        {
+          "id": "REQ-000006",
+          "category": "requirement",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "### Requirement: HARD-R6 hardening を deterministic tests と opt-in smoke で検証する",
+          "parent_id": null,
+          "fingerprint": "626ea63277c4e534131a0081dcdaaab9aac4267a6c8dc5994a57e2a5c92c4297"
+        },
+        {
+          "id": "SCN-000001",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: MVP schema v1 の migration をpreviewする",
+          "parent_id": "REQ-000001",
+          "fingerprint": "b81ea727db8f8886fa6faffb2c7548661907bef640181dba201c807dbc195dff"
+        },
+        {
+          "id": "SCN-000002",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: artifact が一つの manifest に所有される",
+          "parent_id": "REQ-000003",
+          "fingerprint": "8903da8a9bff24970cadf7d8b06ed43c949413a74e8a7891d23e4a3bea801a2a"
+        },
+        {
+          "id": "SCN-000003",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: artifact が共有参照される",
+          "parent_id": "REQ-000003",
+          "fingerprint": "1a8abc22bc575621ffa8619e9bd319e36ff179f618a364453df32d8cc3e82144"
+        },
+        {
+          "id": "SCN-000004",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: canonical specification が変化する",
+          "parent_id": "REQ-000002",
+          "fingerprint": "450d2712e813c0581578bd302779da6af97d469c48e036c92de195f6dd7bc3be"
+        },
+        {
+          "id": "SCN-000005",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: filesystem と Git の integration tests を実行する",
+          "parent_id": "REQ-000006",
+          "fingerprint": "34303f9ce9b55a9c1e294dfdd11867bfc345e6aa61906d2736c538749c747719"
+        },
+        {
+          "id": "SCN-000006",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: finalize preview を生成する",
+          "parent_id": "REQ-000005",
+          "fingerprint": "3ec2d048ed79e5157531ed6edb043b2bb4a1e5f53eee244011cb83f1e33a58bd"
+        },
+        {
+          "id": "SCN-000007",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: finalize が部分失敗する",
+          "parent_id": "REQ-000005",
+          "fingerprint": "5f87c10f52ba84b53db3a997ac39944cc417a2a19282bfd847b6abfd109942d4"
+        },
+        {
+          "id": "SCN-000008",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: heading path または親が変化する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "b14622ab377d5bdda9ed081945d21a4e1eeeadd9992b8049932ae2af3958f82a"
+        },
+        {
+          "id": "SCN-000009",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: lifecycle record のownerを分類する",
+          "parent_id": "REQ-000003",
+          "fingerprint": "fbcffd1b3509c4a8f3f30c1aa72090045ffb1c534f0e191dbe8ee1e67f857440"
+        },
+        {
+          "id": "SCN-000010",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: malformed・境界・順序違い fixtures を検証する",
+          "parent_id": "REQ-000006",
+          "fingerprint": "345b2cd3411e8be9690c039c1f7d6a4a1ce339856feefead7b1d99049b620970"
+        },
+        {
+          "id": "SCN-000011",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: manifest migration のstagingが失敗する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "f3f7ed9aa18a9740dcf0ec9933698a35ecb1d2e3c307228e141cce53b00b8b50"
+        },
+        {
+          "id": "SCN-000012",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: mapping が曖昧または衝突する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "72a02614dc88bb0dbb9e05402b117d89783d848ef4ff2b5b526676d4fc655d0c"
+        },
+        {
+          "id": "SCN-000037",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: operation ごとの mapping readiness を検査する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "74ab9f1966807b82412c8c0d2e57a82de8a6ecf117328ebf758653f1b1532e56"
+        },
+        {
+          "id": "SCN-000013",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: optional tools なしで通常 CI を実行する",
+          "parent_id": "REQ-000006",
+          "fingerprint": "93374640b4cee9817414055315c93e77ed7069bc09674edd677a187c977f869e"
+        },
+        {
+          "id": "SCN-000014",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: ownership が競合または不明である",
+          "parent_id": "REQ-000003",
+          "fingerprint": "7bf59b77dd5623ec806f1068668fd98c49a5a1ef6554d93b06c352d91eb15c44"
+        },
+        {
+          "id": "SCN-000015",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: path が所有境界外へ解決される",
+          "parent_id": "REQ-000003",
+          "fingerprint": "8578b3f01603ba14629c5df779cfbe433094da67e3e9ea845660bc506b9ac79a"
+        },
+        {
+          "id": "SCN-000038",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: phase assignment baseline を作る",
+          "parent_id": "REQ-000001",
+          "fingerprint": "77f6f25273d01b9a076d1d6e08a50eb987dae18563ddd57ac381d2b3b64dad6a"
+        },
+        {
+          "id": "SCN-000016",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: phase graph または capability evidence が変化する",
+          "parent_id": "REQ-000002",
+          "fingerprint": "6a5f284f32abb1d79967af4efc6959c271509d56b9de9e9e7b6dbf6f6e2bf11e"
+        },
+        {
+          "id": "SCN-000017",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: phase mapping の完全性を検査する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "48a46e0c5432ae9c44473cad2413aa29418e471d3457bde28ff3d6e598b056f9"
+        },
+        {
+          "id": "SCN-000018",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: policy reference のtraceabilityを検査する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "46843242f7ab1f230919ca8ff5915859cd6aee9e243714ec63d3aa9ae4a2c025"
+        },
+        {
+          "id": "SCN-000019",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: preview 対象が空である",
+          "parent_id": "REQ-000005",
+          "fingerprint": "db197958cafe8f6f326aa6d3603c4234cc6c9e52aa327bcd8dc70bc0ad61ea15"
+        },
+        {
+          "id": "SCN-000020",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: preview 後に状態が変化する",
+          "parent_id": "REQ-000005",
+          "fingerprint": "b2fc90d8cf1bcb79336f0a1ab1c1d4171851ad96bf2471a409c61b07767edf49"
+        },
+        {
+          "id": "SCN-000021",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: property tests を実行する",
+          "parent_id": "REQ-000006",
+          "fingerprint": "f51c5ef49374c5e042081768e8bc4a07898e31b70a07e3e37789f4b5a2b53fd7"
+        },
+        {
+          "id": "SCN-000022",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: resume 時に source または capability が変化する",
+          "parent_id": "REQ-000004",
+          "fingerprint": "ab45a8dd6c21729383be9b7968feae06e64ff9527b441ad24daa59f7128f34c9"
+        },
+        {
+          "id": "SCN-000023",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: source identity を正規化する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "0394fe6c41d11905423f010b16491ef244b4921c9325218886570a8c52de6650"
+        },
+        {
+          "id": "SCN-000024",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: source item schema または counter が不正である",
+          "parent_id": "REQ-000001",
+          "fingerprint": "b0850f946c9b722dabf601e2aa8fda04ab41a407c02bd7f4bf4ad98d5c4cfda1"
+        },
+        {
+          "id": "SCN-000025",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: source item の親参照を検査する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "6442de337d3e03cba6e51383d98f76c96cab7fccac86c19badf8fcf9524b91c2"
+        },
+        {
+          "id": "SCN-000026",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: source の順序または表示上の空白だけが変わる",
+          "parent_id": "REQ-000001",
+          "fingerprint": "2113db41624c029e2a512951b1b7db7106ecda3f5df33ea5f79b1690eb54e4e8"
+        },
+        {
+          "id": "SCN-000039",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: started schema v2 の refresh をpreviewする",
+          "parent_id": "REQ-000001",
+          "fingerprint": "29a69973c02ddc4531086d8cc99b130f6ab27d624edb8a9908944082c721389b"
+        },
+        {
+          "id": "SCN-000040",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: started schema v2 のrefresh persistenceが失敗する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "04165f99efa4c7a1508000bc05c73137247994bcdf2123be6e6a750887d53546"
+        },
+        {
+          "id": "SCN-000041",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: started schema v2 のrefresh previewをboundedに生成できない",
+          "parent_id": "REQ-000001",
+          "fingerprint": "7ba80b119c183f45335da816030b22bc1a87d6493102892c712e872eaf3da39b"
+        },
+        {
+          "id": "SCN-000042",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: started schema v2 のrefresh候補が空である",
+          "parent_id": "REQ-000001",
+          "fingerprint": "85bb17bc1a4d82311f3c0449c6b9f4a9294c64358c14de043c8303daedaf4eb1"
+        },
+        {
+          "id": "SCN-000043",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: started schema v2 のrefresh承認がstaleである",
+          "parent_id": "REQ-000001",
+          "fingerprint": "22e25348d815d3432dbf06f6bec864039cadd2e609c5c1176203bda7dd5fb879"
+        },
+        {
+          "id": "SCN-000027",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: tasks の checkbox 状態だけが変化する",
+          "parent_id": "REQ-000002",
+          "fingerprint": "25c904dc506621621d93c1d5649bbea8a6f5935cf7a552606ad67e5a02e194a2"
+        },
+        {
+          "id": "SCN-000028",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: template change をpre-merge closeする",
+          "parent_id": "REQ-000003",
+          "fingerprint": "26154528797dd5f054b6b7b41900cd988f29de7c0ae42a051e74e2db099e3d4d"
+        },
+        {
+          "id": "SCN-000029",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: unknown schema またはdowngradeを要求する",
+          "parent_id": "REQ-000001",
+          "fingerprint": "f0f8f88bb0b930ac3308aea3c523579aa1d44779c2c02c50e36625e901e4df0d"
+        },
+        {
+          "id": "SCN-000030",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 同じ source identity の意味内容が変わる",
+          "parent_id": "REQ-000001",
+          "fingerprint": "28886f1af8c1f7af634e2957f66f9709ad578cddfb32ce25cbdc54173c20d05a"
+        },
+        {
+          "id": "SCN-000031",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 実 tools の smoke を実行する",
+          "parent_id": "REQ-000006",
+          "fingerprint": "3577c9ff0943947d9d627a45cf27cf9edd80fd382c457aae8b984f1f0d423088"
+        },
+        {
+          "id": "SCN-000032",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 操作が一部成功して中断する",
+          "parent_id": "REQ-000004",
+          "fingerprint": "1942e8d2711d1d4d8283fa4ab0603bb2cd4150e95f4ea923d8b1330b0375d858"
+        },
+        {
+          "id": "SCN-000033",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 操作が副作用前に中断する",
+          "parent_id": "REQ-000004",
+          "fingerprint": "650a8429557307208f990661aa9526e89c8724348a72e2152d90ed598f5e8848"
+        },
+        {
+          "id": "SCN-000034",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 新しい source item に ID を割り当てる",
+          "parent_id": "REQ-000001",
+          "fingerprint": "12c4ab9559766b4a20578f8eb0a7acdf446e992473a3c1217bccb34be8168085"
+        },
+        {
+          "id": "SCN-000035",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 検査を完了できない",
+          "parent_id": "REQ-000002",
+          "fingerprint": "186ba40604fcd1fb933af729ba6bac305ba4acccbedb15ac4839ab57e8d6363a"
+        },
+        {
+          "id": "SCN-000036",
+          "category": "scenario",
+          "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+          "raw_heading": "#### Scenario: 自動回復で収束できない",
+          "parent_id": "REQ-000004",
+          "fingerprint": "d088843a901e039d6d7636643c1bcc423e6e9374b603846763f479149d85da48"
+        }
+      ],
+      "tombstones": []
+    },
+    "mappings": [
+      {
+        "source_id": "REQ-000001",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S4-CONTEXT-PARITY"
+        ]
+      },
+      {
+        "source_id": "REQ-000002",
+        "phase_id": "03",
+        "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-SPEC-CHANGE-REPLAN",
+          "ACE-S5-REVALIDATE-ON-DRIFT"
+        ]
+      },
+      {
+        "source_id": "REQ-000003",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "REQ-000004",
+        "phase_id": "05",
+        "phase_path": ".planning/phases/05-recovery-and-resume",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-NO-AUTO-FALLBACK",
+          "ACE-S4-RESUME"
+        ]
+      },
+      {
+        "source_id": "REQ-000005",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S5-OPEN-SPEC-FINAL",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "REQ-000006",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000001",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000002",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000003",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000004",
+        "phase_id": "03",
+        "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-SPEC-CHANGE-REPLAN",
+          "ACE-S5-REVALIDATE-ON-DRIFT"
+        ]
+      },
+      {
+        "source_id": "SCN-000005",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000006",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S5-OPEN-SPEC-FINAL",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000007",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-NO-AUTO-FALLBACK",
+          "ACE-S4-RESUME",
+          "ACE-S5-REVALIDATE-ON-DRIFT"
+        ]
+      },
+      {
+        "source_id": "SCN-000008",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S2-SPEC-CHANGE-REPLAN"
+        ]
+      },
+      {
+        "source_id": "SCN-000009",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-ONE-PHASE-ONE-CHANGE",
+          "ACE-S2-OPEN-SPEC-AUTHORITY"
+        ]
+      },
+      {
+        "source_id": "SCN-000010",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000011",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000012",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S2-SPEC-CHANGE-REPLAN"
+        ]
+      },
+      {
+        "source_id": "SCN-000013",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000014",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000015",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-SOURCE-PINNED",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000016",
+        "phase_id": "03",
+        "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-NO-AUTO-FALLBACK",
+          "ACE-S4-SOURCE-PINNED"
+        ]
+      },
+      {
+        "source_id": "SCN-000017",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-ONE-PHASE-ONE-CHANGE",
+          "ACE-S4-CONTEXT-PARITY"
+        ]
+      },
+      {
+        "source_id": "SCN-000018",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000019",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S5-OPEN-SPEC-FINAL",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000020",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-RESUME",
+          "ACE-S5-REVALIDATE-ON-DRIFT"
+        ]
+      },
+      {
+        "source_id": "SCN-000021",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000022",
+        "phase_id": "05",
+        "phase_path": ".planning/phases/05-recovery-and-resume",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-SPEC-CHANGE-REPLAN",
+          "ACE-S4-NO-AUTO-FALLBACK"
+        ]
+      },
+      {
+        "source_id": "SCN-000023",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000024",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000025",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000026",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S2-SPEC-CHANGE-REPLAN"
+        ]
+      },
+      {
+        "source_id": "SCN-000027",
+        "phase_id": "03",
+        "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-SPEC-CHANGE-REPLAN",
+          "ACE-S5-REVALIDATE-ON-DRIFT"
+        ]
+      },
+      {
+        "source_id": "SCN-000028",
+        "phase_id": "04",
+        "phase_path": ".planning/phases/04-repository-wide-ownership",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S5-OPEN-SPEC-FINAL",
+          "ACE-S5-SINGLE-ACTIVE-CLOSE"
+        ]
+      },
+      {
+        "source_id": "SCN-000029",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000030",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S2-SPEC-CHANGE-REPLAN"
+        ]
+      },
+      {
+        "source_id": "SCN-000031",
+        "phase_id": "06",
+        "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S5-OPEN-SPEC-FINAL"
+        ]
+      },
+      {
+        "source_id": "SCN-000032",
+        "phase_id": "05",
+        "phase_path": ".planning/phases/05-recovery-and-resume",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-RESUME",
+          "ACE-S4-SOURCE-PINNED"
+        ]
+      },
+      {
+        "source_id": "SCN-000033",
+        "phase_id": "05",
+        "phase_path": ".planning/phases/05-recovery-and-resume",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-RESUME",
+          "ACE-S4-SOURCE-PINNED"
+        ]
+      },
+      {
+        "source_id": "SCN-000034",
+        "phase_id": "01",
+        "phase_path": ".planning/phases/01-stable-identity-and-migration",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-OPEN-SPEC-AUTHORITY",
+          "ACE-S2-SPEC-CHANGE-REPLAN"
+        ]
+      },
+      {
+        "source_id": "SCN-000035",
+        "phase_id": "03",
+        "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S1-START-GATES",
+          "ACE-S4-NO-AUTO-FALLBACK"
+        ]
+      },
+      {
+        "source_id": "SCN-000036",
+        "phase_id": "05",
+        "phase_path": ".planning/phases/05-recovery-and-resume",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S4-NO-AUTO-FALLBACK",
+          "ACE-S4-RESUME"
+        ]
+      },
+      {
+        "source_id": "SCN-000037",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-ONE-PHASE-ONE-CHANGE",
+          "ACE-S4-CONTEXT-PARITY"
+        ]
+      },
+      {
+        "source_id": "SCN-000038",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": [
+          "ACE-S2-ONE-PHASE-ONE-CHANGE",
+          "ACE-S4-CONTEXT-PARITY"
+        ]
+      },
+      {
+        "source_id": "SCN-000039",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000040",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000041",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000042",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      },
+      {
+        "source_id": "SCN-000043",
+        "phase_id": "02",
+        "phase_path": ".planning/phases/02-source-to-execution-mapping",
+        "plan_paths": [],
+        "evidence_paths": [],
+        "policy_references": []
+      }
+    ],
+    "ownership": {
+      "owned": [],
+      "referenced": []
+    },
+    "lifecycle": {
+      "checkpoints": [],
+      "receipts": [],
+      "archives": []
+    }
+  },
+  "candidate_bytes_utf8": "{\n  \"schema_version\": 2,\n  \"change_id\": \"harden-openspec-gsd-handoff-lifecycle\",\n  \"handoff_state\": \"started\",\n  \"artifacts\": [\n    {\n      \"kind\": \"design\",\n      \"path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md\",\n      \"sha256\": \"ae7284262b1947df177a618f8dad88211b15ad4683d1424a1f636503025d96a2\"\n    },\n    {\n      \"kind\": \"proposal\",\n      \"path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/proposal.md\",\n      \"sha256\": \"d8a53d581a0e69f9aa730d61166bfbaf14dcf7e488e267b6f123e76c2e60856a\"\n    },\n    {\n      \"kind\": \"spec\",\n      \"path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n      \"sha256\": \"548d4d8e474eebe2a937cf9d3ac81512d5f949f36c65fc6d0fa1f8f7d3ab67cd\"\n    },\n    {\n      \"kind\": \"tasks\",\n      \"path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md\",\n      \"sha256\": \"cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220\"\n    }\n  ],\n  \"source_commit\": \"fbe7f714f734d714480583ab90f41ec0d2077f50\",\n  \"progress\": {\n    \"total\": 12,\n    \"complete\": 4,\n    \"remaining\": 8,\n    \"tasks\": [\n      {\n        \"id\": \"1\",\n        \"description\": \"1.1 `revise-openspec-gsd-execution-boundary` と `automate-openspec-gsd-handoff` がmerge済みであること、MVP manifest schema、`handoff.json` 追跡・保持方針、対応 tool contracts を確認し、MVP merge後のbaseから本 change だけを載せる専用 branch / PRを用意する\",\n        \"done\": true\n      },\n      {\n        \"id\": \"2\",\n        \"description\": \"1.2 source-to-execution mappingのoperation別readiness、started v2 refresh、policy section fingerprint契約を再確定し、spec-holes Phase 1とstrict validateを再実行してcanonical artifactsをsource-pinned commitへ固定する\",\n        \"done\": true\n      },\n      {\n        \"id\": \"3\",\n        \"description\": \"1.3 previewへの新たな明示承認後にだけprepared manifestを永続化し、GSD 1.5.0 entrypointのstructured acceptanceとroute別postconditionを確認して`mark-started`を完了する\",\n        \"done\": true\n      },\n      {\n        \"id\": \"4\",\n        \"description\": \"2.1 manifest migration と stable source identity の phase を完了し、対応する OpenSpec scenarios の検証を通す\",\n        \"done\": true\n      },\n      {\n        \"id\": \"5\",\n        \"description\": \"2.2 source-to-phase / plan / evidence mapping の phase を完了し、対応する OpenSpec scenarios の検証を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"6\",\n        \"description\": \"3.1 lifecycle operation 前の drift 検査 phase を完了し、対応する OpenSpec scenarios の検証を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"7\",\n        \"description\": \"3.2 repository-wide multi-manifest ownership phase を完了し、対応する OpenSpec scenarios の検証を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"8\",\n        \"description\": \"4.1 interruption / partial failure からの resume / recovery phase を完了し、対応する OpenSpec scenarios の検証を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"9\",\n        \"description\": \"4.2 finalize / cleanup preview と receipt の phase を完了し、対応する OpenSpec scenarios の検証を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"10\",\n        \"description\": \"5.1 全 spec-holes Phase 1 の該当項目を fixture test、例示 test、property test、または理由付き未検証へ一対一で対応付け、通常 CI と opt-in OpenSpec / GSD smoke を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"11\",\n        \"description\": \"5.2 GSD verification と独立して OpenSpec 原本との対応を確認し、`openspec validate harden-openspec-gsd-handoff-lifecycle --strict`、`task openspec:validate`、`task check`、drift・ownership・broken-reference 検査を通す\",\n        \"done\": false\n      },\n      {\n        \"id\": \"12\",\n        \"description\": \"6.1 `self-review` と close policy の確認後、finalize preview と承認 receipt を検証し、本 change の所有範囲だけを close する\",\n        \"done\": false\n      }\n    ]\n  },\n  \"capabilities\": {\n    \"openspec\": {\n      \"version\": \"1.3.1\",\n      \"probe\": \"instructions-apply-json\",\n      \"schema_name\": \"spec-driven\",\n      \"input_route\": \"json\"\n    },\n    \"gsd\": {\n      \"version\": \"1.5.0\",\n      \"probe\": \"init-progress-raw\",\n      \"project_initialized\": false,\n      \"entrypoint\": \"gsd-new-project-auto\"\n    },\n    \"host\": {\n      \"spawn_agent_schema\": \"generic\",\n      \"dispatch\": \"generic-agent-workaround\",\n      \"agent_role_source\": \"toml\"\n    }\n  },\n  \"source_items\": {\n    \"next_requirement_id\": 7,\n    \"next_scenario_id\": 44,\n    \"active\": [\n      {\n        \"id\": \"REQ-000001\",\n        \"category\": \"requirement\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"### Requirement: HARD-R1 stable source identity と requirement mapping を維持する\",\n        \"parent_id\": null,\n        \"fingerprint\": \"d721198e60e6cab0f9d54a9317e397c2fd47b581787d72450dfa1cc43c45eb32\"\n      },\n      {\n        \"id\": \"REQ-000002\",\n        \"category\": \"requirement\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"### Requirement: HARD-R2 lifecycle 操作前に source と派生状態の drift を検査する\",\n        \"parent_id\": null,\n        \"fingerprint\": \"1c4c714d25e1124b346f5b2aaefa8bdd4fed155295c3f24c1f25e886fa74ba57\"\n      },\n      {\n        \"id\": \"REQ-000003\",\n        \"category\": \"requirement\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"### Requirement: HARD-R3 複数 manifests 間の artifact ownership を検査する\",\n        \"parent_id\": null,\n        \"fingerprint\": \"723b30eade10553c3a932ff307b36bbfb94240c27cc07ded2d368e5d695951b0\"\n      },\n      {\n        \"id\": \"REQ-000004\",\n        \"category\": \"requirement\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"### Requirement: HARD-R4 interruption と partial failure から検査可能に再開する\",\n        \"parent_id\": null,\n        \"fingerprint\": \"ea5a35ce2eb767807accb7d4697d5a6e0982bf6c0c6b2b8e7afc45c152477fe6\"\n      },\n      {\n        \"id\": \"REQ-000005\",\n        \"category\": \"requirement\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"### Requirement: HARD-R5 finalize と cleanup を preview と承認で制御する\",\n        \"parent_id\": null,\n        \"fingerprint\": \"42d1d6d5ccc72f89e74d6b930f96b1d498401c29804cd46b07f94c788fab5fa0\"\n      },\n      {\n        \"id\": \"REQ-000006\",\n        \"category\": \"requirement\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"### Requirement: HARD-R6 hardening を deterministic tests と opt-in smoke で検証する\",\n        \"parent_id\": null,\n        \"fingerprint\": \"626ea63277c4e534131a0081dcdaaab9aac4267a6c8dc5994a57e2a5c92c4297\"\n      },\n      {\n        \"id\": \"SCN-000001\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: MVP schema v1 の migration をpreviewする\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"b81ea727db8f8886fa6faffb2c7548661907bef640181dba201c807dbc195dff\"\n      },\n      {\n        \"id\": \"SCN-000002\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: artifact が一つの manifest に所有される\",\n        \"parent_id\": \"REQ-000003\",\n        \"fingerprint\": \"8903da8a9bff24970cadf7d8b06ed43c949413a74e8a7891d23e4a3bea801a2a\"\n      },\n      {\n        \"id\": \"SCN-000003\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: artifact が共有参照される\",\n        \"parent_id\": \"REQ-000003\",\n        \"fingerprint\": \"1a8abc22bc575621ffa8619e9bd319e36ff179f618a364453df32d8cc3e82144\"\n      },\n      {\n        \"id\": \"SCN-000004\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: canonical specification が変化する\",\n        \"parent_id\": \"REQ-000002\",\n        \"fingerprint\": \"450d2712e813c0581578bd302779da6af97d469c48e036c92de195f6dd7bc3be\"\n      },\n      {\n        \"id\": \"SCN-000005\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: filesystem と Git の integration tests を実行する\",\n        \"parent_id\": \"REQ-000006\",\n        \"fingerprint\": \"34303f9ce9b55a9c1e294dfdd11867bfc345e6aa61906d2736c538749c747719\"\n      },\n      {\n        \"id\": \"SCN-000006\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: finalize preview を生成する\",\n        \"parent_id\": \"REQ-000005\",\n        \"fingerprint\": \"3ec2d048ed79e5157531ed6edb043b2bb4a1e5f53eee244011cb83f1e33a58bd\"\n      },\n      {\n        \"id\": \"SCN-000007\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: finalize が部分失敗する\",\n        \"parent_id\": \"REQ-000005\",\n        \"fingerprint\": \"5f87c10f52ba84b53db3a997ac39944cc417a2a19282bfd847b6abfd109942d4\"\n      },\n      {\n        \"id\": \"SCN-000008\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: heading path または親が変化する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"b14622ab377d5bdda9ed081945d21a4e1eeeadd9992b8049932ae2af3958f82a\"\n      },\n      {\n        \"id\": \"SCN-000009\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: lifecycle record のownerを分類する\",\n        \"parent_id\": \"REQ-000003\",\n        \"fingerprint\": \"fbcffd1b3509c4a8f3f30c1aa72090045ffb1c534f0e191dbe8ee1e67f857440\"\n      },\n      {\n        \"id\": \"SCN-000010\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: malformed・境界・順序違い fixtures を検証する\",\n        \"parent_id\": \"REQ-000006\",\n        \"fingerprint\": \"345b2cd3411e8be9690c039c1f7d6a4a1ce339856feefead7b1d99049b620970\"\n      },\n      {\n        \"id\": \"SCN-000011\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: manifest migration のstagingが失敗する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"f3f7ed9aa18a9740dcf0ec9933698a35ecb1d2e3c307228e141cce53b00b8b50\"\n      },\n      {\n        \"id\": \"SCN-000012\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: mapping が曖昧または衝突する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"72a02614dc88bb0dbb9e05402b117d89783d848ef4ff2b5b526676d4fc655d0c\"\n      },\n      {\n        \"id\": \"SCN-000037\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: operation ごとの mapping readiness を検査する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"74ab9f1966807b82412c8c0d2e57a82de8a6ecf117328ebf758653f1b1532e56\"\n      },\n      {\n        \"id\": \"SCN-000013\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: optional tools なしで通常 CI を実行する\",\n        \"parent_id\": \"REQ-000006\",\n        \"fingerprint\": \"93374640b4cee9817414055315c93e77ed7069bc09674edd677a187c977f869e\"\n      },\n      {\n        \"id\": \"SCN-000014\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: ownership が競合または不明である\",\n        \"parent_id\": \"REQ-000003\",\n        \"fingerprint\": \"7bf59b77dd5623ec806f1068668fd98c49a5a1ef6554d93b06c352d91eb15c44\"\n      },\n      {\n        \"id\": \"SCN-000015\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: path が所有境界外へ解決される\",\n        \"parent_id\": \"REQ-000003\",\n        \"fingerprint\": \"8578b3f01603ba14629c5df779cfbe433094da67e3e9ea845660bc506b9ac79a\"\n      },\n      {\n        \"id\": \"SCN-000038\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: phase assignment baseline を作る\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"77f6f25273d01b9a076d1d6e08a50eb987dae18563ddd57ac381d2b3b64dad6a\"\n      },\n      {\n        \"id\": \"SCN-000016\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: phase graph または capability evidence が変化する\",\n        \"parent_id\": \"REQ-000002\",\n        \"fingerprint\": \"6a5f284f32abb1d79967af4efc6959c271509d56b9de9e9e7b6dbf6f6e2bf11e\"\n      },\n      {\n        \"id\": \"SCN-000017\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: phase mapping の完全性を検査する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"48a46e0c5432ae9c44473cad2413aa29418e471d3457bde28ff3d6e598b056f9\"\n      },\n      {\n        \"id\": \"SCN-000018\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: policy reference のtraceabilityを検査する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"46843242f7ab1f230919ca8ff5915859cd6aee9e243714ec63d3aa9ae4a2c025\"\n      },\n      {\n        \"id\": \"SCN-000019\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: preview 対象が空である\",\n        \"parent_id\": \"REQ-000005\",\n        \"fingerprint\": \"db197958cafe8f6f326aa6d3603c4234cc6c9e52aa327bcd8dc70bc0ad61ea15\"\n      },\n      {\n        \"id\": \"SCN-000020\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: preview 後に状態が変化する\",\n        \"parent_id\": \"REQ-000005\",\n        \"fingerprint\": \"b2fc90d8cf1bcb79336f0a1ab1c1d4171851ad96bf2471a409c61b07767edf49\"\n      },\n      {\n        \"id\": \"SCN-000021\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: property tests を実行する\",\n        \"parent_id\": \"REQ-000006\",\n        \"fingerprint\": \"f51c5ef49374c5e042081768e8bc4a07898e31b70a07e3e37789f4b5a2b53fd7\"\n      },\n      {\n        \"id\": \"SCN-000022\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: resume 時に source または capability が変化する\",\n        \"parent_id\": \"REQ-000004\",\n        \"fingerprint\": \"ab45a8dd6c21729383be9b7968feae06e64ff9527b441ad24daa59f7128f34c9\"\n      },\n      {\n        \"id\": \"SCN-000023\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: source identity を正規化する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"0394fe6c41d11905423f010b16491ef244b4921c9325218886570a8c52de6650\"\n      },\n      {\n        \"id\": \"SCN-000024\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: source item schema または counter が不正である\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"b0850f946c9b722dabf601e2aa8fda04ab41a407c02bd7f4bf4ad98d5c4cfda1\"\n      },\n      {\n        \"id\": \"SCN-000025\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: source item の親参照を検査する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"6442de337d3e03cba6e51383d98f76c96cab7fccac86c19badf8fcf9524b91c2\"\n      },\n      {\n        \"id\": \"SCN-000026\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: source の順序または表示上の空白だけが変わる\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"2113db41624c029e2a512951b1b7db7106ecda3f5df33ea5f79b1690eb54e4e8\"\n      },\n      {\n        \"id\": \"SCN-000039\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: started schema v2 の refresh をpreviewする\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"29a69973c02ddc4531086d8cc99b130f6ab27d624edb8a9908944082c721389b\"\n      },\n      {\n        \"id\": \"SCN-000040\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: started schema v2 のrefresh persistenceが失敗する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"04165f99efa4c7a1508000bc05c73137247994bcdf2123be6e6a750887d53546\"\n      },\n      {\n        \"id\": \"SCN-000041\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: started schema v2 のrefresh previewをboundedに生成できない\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"7ba80b119c183f45335da816030b22bc1a87d6493102892c712e872eaf3da39b\"\n      },\n      {\n        \"id\": \"SCN-000042\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: started schema v2 のrefresh候補が空である\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"85bb17bc1a4d82311f3c0449c6b9f4a9294c64358c14de043c8303daedaf4eb1\"\n      },\n      {\n        \"id\": \"SCN-000043\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: started schema v2 のrefresh承認がstaleである\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"22e25348d815d3432dbf06f6bec864039cadd2e609c5c1176203bda7dd5fb879\"\n      },\n      {\n        \"id\": \"SCN-000027\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: tasks の checkbox 状態だけが変化する\",\n        \"parent_id\": \"REQ-000002\",\n        \"fingerprint\": \"25c904dc506621621d93c1d5649bbea8a6f5935cf7a552606ad67e5a02e194a2\"\n      },\n      {\n        \"id\": \"SCN-000028\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: template change をpre-merge closeする\",\n        \"parent_id\": \"REQ-000003\",\n        \"fingerprint\": \"26154528797dd5f054b6b7b41900cd988f29de7c0ae42a051e74e2db099e3d4d\"\n      },\n      {\n        \"id\": \"SCN-000029\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: unknown schema またはdowngradeを要求する\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"f0f8f88bb0b930ac3308aea3c523579aa1d44779c2c02c50e36625e901e4df0d\"\n      },\n      {\n        \"id\": \"SCN-000030\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 同じ source identity の意味内容が変わる\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"28886f1af8c1f7af634e2957f66f9709ad578cddfb32ce25cbdc54173c20d05a\"\n      },\n      {\n        \"id\": \"SCN-000031\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 実 tools の smoke を実行する\",\n        \"parent_id\": \"REQ-000006\",\n        \"fingerprint\": \"3577c9ff0943947d9d627a45cf27cf9edd80fd382c457aae8b984f1f0d423088\"\n      },\n      {\n        \"id\": \"SCN-000032\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 操作が一部成功して中断する\",\n        \"parent_id\": \"REQ-000004\",\n        \"fingerprint\": \"1942e8d2711d1d4d8283fa4ab0603bb2cd4150e95f4ea923d8b1330b0375d858\"\n      },\n      {\n        \"id\": \"SCN-000033\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 操作が副作用前に中断する\",\n        \"parent_id\": \"REQ-000004\",\n        \"fingerprint\": \"650a8429557307208f990661aa9526e89c8724348a72e2152d90ed598f5e8848\"\n      },\n      {\n        \"id\": \"SCN-000034\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 新しい source item に ID を割り当てる\",\n        \"parent_id\": \"REQ-000001\",\n        \"fingerprint\": \"12c4ab9559766b4a20578f8eb0a7acdf446e992473a3c1217bccb34be8168085\"\n      },\n      {\n        \"id\": \"SCN-000035\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 検査を完了できない\",\n        \"parent_id\": \"REQ-000002\",\n        \"fingerprint\": \"186ba40604fcd1fb933af729ba6bac305ba4acccbedb15ac4839ab57e8d6363a\"\n      },\n      {\n        \"id\": \"SCN-000036\",\n        \"category\": \"scenario\",\n        \"source_path\": \"openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md\",\n        \"raw_heading\": \"#### Scenario: 自動回復で収束できない\",\n        \"parent_id\": \"REQ-000004\",\n        \"fingerprint\": \"d088843a901e039d6d7636643c1bcc423e6e9374b603846763f479149d85da48\"\n      }\n    ],\n    \"tombstones\": []\n  },\n  \"mappings\": [\n    {\n      \"source_id\": \"REQ-000001\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S4-CONTEXT-PARITY\"\n      ]\n    },\n    {\n      \"source_id\": \"REQ-000002\",\n      \"phase_id\": \"03\",\n      \"phase_path\": \".planning/phases/03-lifecycle-drift-gate\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-SPEC-CHANGE-REPLAN\",\n        \"ACE-S5-REVALIDATE-ON-DRIFT\"\n      ]\n    },\n    {\n      \"source_id\": \"REQ-000003\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"REQ-000004\",\n      \"phase_id\": \"05\",\n      \"phase_path\": \".planning/phases/05-recovery-and-resume\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-NO-AUTO-FALLBACK\",\n        \"ACE-S4-RESUME\"\n      ]\n    },\n    {\n      \"source_id\": \"REQ-000005\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S5-OPEN-SPEC-FINAL\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"REQ-000006\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000001\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000002\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000003\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000004\",\n      \"phase_id\": \"03\",\n      \"phase_path\": \".planning/phases/03-lifecycle-drift-gate\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-SPEC-CHANGE-REPLAN\",\n        \"ACE-S5-REVALIDATE-ON-DRIFT\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000005\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000006\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S5-OPEN-SPEC-FINAL\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000007\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-NO-AUTO-FALLBACK\",\n        \"ACE-S4-RESUME\",\n        \"ACE-S5-REVALIDATE-ON-DRIFT\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000008\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S2-SPEC-CHANGE-REPLAN\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000009\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-ONE-PHASE-ONE-CHANGE\",\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000010\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000011\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000012\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S2-SPEC-CHANGE-REPLAN\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000013\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000014\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000015\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-SOURCE-PINNED\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000016\",\n      \"phase_id\": \"03\",\n      \"phase_path\": \".planning/phases/03-lifecycle-drift-gate\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-NO-AUTO-FALLBACK\",\n        \"ACE-S4-SOURCE-PINNED\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000017\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-ONE-PHASE-ONE-CHANGE\",\n        \"ACE-S4-CONTEXT-PARITY\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000018\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000019\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S5-OPEN-SPEC-FINAL\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000020\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-RESUME\",\n        \"ACE-S5-REVALIDATE-ON-DRIFT\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000021\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000022\",\n      \"phase_id\": \"05\",\n      \"phase_path\": \".planning/phases/05-recovery-and-resume\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-SPEC-CHANGE-REPLAN\",\n        \"ACE-S4-NO-AUTO-FALLBACK\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000023\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000024\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000025\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000026\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S2-SPEC-CHANGE-REPLAN\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000027\",\n      \"phase_id\": \"03\",\n      \"phase_path\": \".planning/phases/03-lifecycle-drift-gate\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-SPEC-CHANGE-REPLAN\",\n        \"ACE-S5-REVALIDATE-ON-DRIFT\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000028\",\n      \"phase_id\": \"04\",\n      \"phase_path\": \".planning/phases/04-repository-wide-ownership\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S5-OPEN-SPEC-FINAL\",\n        \"ACE-S5-SINGLE-ACTIVE-CLOSE\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000029\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000030\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S2-SPEC-CHANGE-REPLAN\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000031\",\n      \"phase_id\": \"06\",\n      \"phase_path\": \".planning/phases/06-finalize-preview-and-receipt\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S5-OPEN-SPEC-FINAL\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000032\",\n      \"phase_id\": \"05\",\n      \"phase_path\": \".planning/phases/05-recovery-and-resume\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-RESUME\",\n        \"ACE-S4-SOURCE-PINNED\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000033\",\n      \"phase_id\": \"05\",\n      \"phase_path\": \".planning/phases/05-recovery-and-resume\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-RESUME\",\n        \"ACE-S4-SOURCE-PINNED\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000034\",\n      \"phase_id\": \"01\",\n      \"phase_path\": \".planning/phases/01-stable-identity-and-migration\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-OPEN-SPEC-AUTHORITY\",\n        \"ACE-S2-SPEC-CHANGE-REPLAN\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000035\",\n      \"phase_id\": \"03\",\n      \"phase_path\": \".planning/phases/03-lifecycle-drift-gate\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S1-START-GATES\",\n        \"ACE-S4-NO-AUTO-FALLBACK\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000036\",\n      \"phase_id\": \"05\",\n      \"phase_path\": \".planning/phases/05-recovery-and-resume\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S4-NO-AUTO-FALLBACK\",\n        \"ACE-S4-RESUME\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000037\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-ONE-PHASE-ONE-CHANGE\",\n        \"ACE-S4-CONTEXT-PARITY\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000038\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": [\n        \"ACE-S2-ONE-PHASE-ONE-CHANGE\",\n        \"ACE-S4-CONTEXT-PARITY\"\n      ]\n    },\n    {\n      \"source_id\": \"SCN-000039\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000040\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000041\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000042\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    },\n    {\n      \"source_id\": \"SCN-000043\",\n      \"phase_id\": \"02\",\n      \"phase_path\": \".planning/phases/02-source-to-execution-mapping\",\n      \"plan_paths\": [],\n      \"evidence_paths\": [],\n      \"policy_references\": []\n    }\n  ],\n  \"ownership\": {\n    \"owned\": [],\n    \"referenced\": []\n  },\n  \"lifecycle\": {\n    \"checkpoints\": [],\n    \"receipts\": [],\n    \"archives\": []\n  }\n}\n"
 }
