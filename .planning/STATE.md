@@ -4,11 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 2
 current_phase_name: Source-to-Execution Mapping
-status: ready
+status: executing
 stopped_at: Phase 1 verified; Phase 2 not started
-last_updated: "2026-07-19T00:00:00Z"
+last_updated: "2026-07-18T16:56:16.757Z"
 last_activity: 2026-07-19
-last_activity_desc: Phase 2 contracts approved and planning authority repinned to fbe7f71
+last_activity_desc: Phase 2 contracts approved and planning authority repinned to `fbe7f71…`
 progress:
   total_phases: 6
   completed_phases: 1
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-07-17)
 
 Phase: 2 of 6 (Source-to-Execution Mapping)
 Plan: Not started
-Status: Phase 1 complete and verified; Phase 2 ready but not started
+Status: Ready to execute
 Last activity: 2026-07-19 — Phase 2 contracts approved and planning authority repinned to `fbe7f71…`
 
 Progress: [██░░░░░░░░] 1 of 6 phases complete (17%)

@@ -68,11 +68,19 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 1
 **Requirements:** HND-02 (opaque canonical handle: HARD-R1)
+**Plans:** 0/4 plans complete
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Every in-scope source item has a deterministic execution reference, and incomplete or cross-change references are reported as structured non-success.
 2. The mapping can be reviewed against the pinned canonical paths without copying canonical requirement, scenario, or acceptance text.
 3. Fixed positive and negative examples provide the primary evidence, with no broad property suite added where it would duplicate the same seam.
+
+Plans:
+
+- [ ] 02-01-PLAN.md — Validate the exact current-tree policy registry and section anchors.
+- [ ] 02-02-PLAN.md — Build the explicit 49-ID assignment baseline and operation readiness gates.
+- [ ] 02-03-PLAN.md — Reconcile canonical source and build the bounded read-only refresh preview.
+- [ ] 02-04-PLAN.md — Verify isolated approval-bound apply and generate the real read-only preview evidence.
 
 ### Phase 3: Lifecycle Drift Gate
 
@@ -148,7 +156,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
-| 2. Source-to-Execution Mapping | 0/TBD | Ready (not started) | - |
+| 2. Source-to-Execution Mapping | 0/4 | Planned | - |
 | 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 2 | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
