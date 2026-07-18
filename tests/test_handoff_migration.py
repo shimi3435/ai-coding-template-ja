@@ -431,6 +431,31 @@ class ReplaceCreatedStagingWithTargetLinkOperations(MutationRecordingOperations)
         return name
 
 
+class ReplaceCreatedStagingWithUnownedFileOperations(MutationRecordingOperations):
+    """Swap a newly created staging name to an unrelated unique file."""
+
+    def __init__(self, unowned: Path) -> None:
+        super().__init__()
+        self.unowned = unowned
+        self.displaced_path: Path | None = None
+
+    def create_staging_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+    ) -> str:
+        name = super().create_staging_at(parent_descriptor, parent)
+        os.unlink(name, dir_fd=parent_descriptor)
+        os.rename(
+            self.unowned.name,
+            name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        self.displaced_path = parent / name
+        return name
+
+
 class SelectedCloseFaultOperations(ReadOnlyCountingOperations):
     """Raise after closing one selected preview directory descriptor."""
 
@@ -1049,7 +1074,71 @@ def test_apply_does_not_write_through_a_replaced_staging_name(
     assert result.issue.target_state is MigrationTargetState.V1_PRESERVED
     assert target.read_bytes() == EXPECTED_V1
     assert not any(target.parent.glob(".handoff.*.tmp"))
+
+
+def test_apply_does_not_cleanup_an_unowned_replacement_staging_file(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    unowned = target.parent / "unowned-evidence.txt"
+    unowned_bytes = b"must remain byte-for-byte intact"
+    unowned.write_bytes(unowned_bytes)
+    operations = ReplaceCreatedStagingWithUnownedFileOperations(unowned)
+
+    result = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(result, ManifestMigrationFailure)
+    assert result.issue.failure_point is MigrationFailurePoint.WRITE
+    assert result.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert result.issue.cleanup_outcome is MigrationCleanupOutcome.FAILED
     assert target.read_bytes() == EXPECTED_V1
+    assert operations.displaced_path is not None
+    assert operations.displaced_path.read_bytes() == unowned_bytes
+
+
+def test_preview_contains_repository_and_target_parent_symlink_loops(
+    tmp_path: Path,
+) -> None:
+    repository_loop = tmp_path / "repository-loop"
+    repository_loop.symlink_to(repository_loop.name, target_is_directory=True)
+
+    repository_result = preview_manifest_migration(
+        repository_loop,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        operations=ReadOnlyCountingOperations(),
+    )
+
+    repository, target = _write_repository(tmp_path, name="target-loop")
+    moved_parent = target.parent.with_name("fixture-change-saved")
+    target.parent.rename(moved_parent)
+    target.parent.symlink_to(target.parent.name, target_is_directory=True)
+    target_result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        operations=ReadOnlyCountingOperations(),
+    )
+
+    assert isinstance(repository_result, Failure)
+    assert repository_result.issue.code == "migration-repository-unreadable"
+    assert isinstance(target_result, Failure)
+    assert target_result.issue.code == "manifest-target-unsafe"
+    assert (moved_parent / target.name).read_bytes() == EXPECTED_V1
 
 
 @pytest.mark.parametrize(

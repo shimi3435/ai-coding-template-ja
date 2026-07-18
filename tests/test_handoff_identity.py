@@ -371,6 +371,16 @@ def test_inventory_rejects_symlink_escape_without_following_it(tmp_path: Path) -
     assert result.issue.code == "source-path-symlink"
 
 
+def test_inventory_contains_repository_root_symlink_loop(tmp_path: Path) -> None:
+    repository_loop = tmp_path / "repository-loop"
+    repository_loop.symlink_to(repository_loop.name, target_is_directory=True)
+
+    result = read_source_inventory(repository_loop, [SOURCE_PATH])
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-root-unreadable"
+
+
 def test_inventory_rejects_parent_swap_before_source_open(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
