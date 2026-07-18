@@ -449,6 +449,19 @@ def test_schema_v2_parser_contains_bounded_non_total_json_inputs(data: bytes) ->
     }
 
 
+def test_schema_v2_parser_rejects_embedded_surrogate_in_otherwise_valid_heading() -> (
+    None
+):
+    raw = _raw_v2()
+    raw["source_items"]["active"][0]["raw_heading"] = "### Requirement: Valid\ud800"
+    data = json.dumps(raw, ensure_ascii=True).encode()
+
+    result = parse_manifest_v2_bytes(data)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-v2-value-invalid"
+
+
 def test_schema_v2_serializer_contains_non_total_complete_values() -> None:
     parsed = parse_manifest_v2_bytes(EXPECTED_V2)
     assert isinstance(parsed, Success)
@@ -470,6 +483,29 @@ def test_schema_v2_serializer_contains_non_total_complete_values() -> None:
     assert huge_integer.issue.code == "manifest-v2-serialization-invalid"
     assert isinstance(lone_surrogate, Failure)
     assert lone_surrogate.issue.code == "manifest-v2-serialization-invalid"
+
+
+def test_schema_v2_serializer_rejects_embedded_surrogate_in_valid_value() -> None:
+    parsed = parse_manifest_v2_bytes(EXPECTED_V2)
+    assert isinstance(parsed, Success)
+    source_items = parsed.value.source_items
+    invalid_source_items = replace(
+        source_items,
+        active=(
+            replace(
+                source_items.active[0],
+                raw_heading="### Requirement: Valid\ud800",
+            ),
+            *source_items.active[1:],
+        ),
+    )
+
+    result = serialize_manifest_v2(
+        replace(parsed.value, source_items=invalid_source_items)
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-v2-serialization-invalid"
 
 
 def test_schema_v2_serializer_rejects_invalid_complete_values() -> None:

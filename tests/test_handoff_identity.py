@@ -259,6 +259,15 @@ def test_fingerprint_rejects_parent_mismatch_without_partial_value(
     assert scenario_result.issue.code == "source-parent-id-invalid"
 
 
+def test_fingerprint_rejects_embedded_surrogate_as_structured_failure() -> None:
+    observation = _requirement_observation("Valid\ud800")
+
+    result = fingerprint_source_observation(observation, parent_id=None)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-unicode-invalid"
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "code"),
     [
@@ -598,6 +607,18 @@ def test_reconcile_allocates_namespaced_ids_in_canonical_identity_order(
     assert first.parent_id is None
     assert second.parent_id is None
     assert scenario.parent_id == "REQ-000001"
+
+
+def test_reconcile_rejects_embedded_surrogate_without_partial_state() -> None:
+    inventory = identity.SourceInventory(
+        items=(_requirement_observation("Valid\ud800"),)
+    )
+
+    result = identity.reconcile_source_items(inventory, _empty_source_state())
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-unicode-invalid"
+    assert not hasattr(result, "value")
 
 
 @pytest.mark.parametrize("counter", [0, True, 1_000_001])

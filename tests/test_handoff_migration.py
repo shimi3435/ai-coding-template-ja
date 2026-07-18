@@ -339,6 +339,112 @@ class PostReplaceRereadAndCloseFaultOperations(ParentCloseAfterEffectOperations)
         self.replaced = True
 
 
+class SpecSwapBetweenSnapshotOperations(ReadOnlyCountingOperations):
+    """Expose whether one preview combines different spec byte observations."""
+
+    def __init__(self, source: Path, replacement: bytes) -> None:
+        self.source = source
+        self.original = source.read_bytes()
+        self.replacement = replacement
+        self.spec_reads = 0
+
+    def read_repository_bytes_at(
+        self,
+        repository_anchor,
+        relative_path: Path,
+        *,
+        limit: int,
+    ) -> bytes:
+        if relative_path.as_posix() == SOURCE_PATH:
+            self.spec_reads += 1
+            if self.spec_reads == 2:
+                self.source.write_bytes(self.original)
+            data = super().read_repository_bytes_at(
+                repository_anchor,
+                relative_path,
+                limit=limit,
+            )
+            if self.spec_reads == 1:
+                self.source.write_bytes(self.replacement)
+            return data
+        return super().read_repository_bytes_at(
+            repository_anchor,
+            relative_path,
+            limit=limit,
+        )
+
+    def close_parent_directory(self, anchor) -> None:
+        try:
+            super().close_parent_directory(anchor)
+        finally:
+            self.source.write_bytes(self.original)
+
+
+class SwapTargetBeforeAnchorOperations(MutationRecordingOperations):
+    """Replace the target parent before an owned target descriptor exists."""
+
+    def __init__(self, target: Path, outside_parent: Path) -> None:
+        super().__init__()
+        self.target = target
+        self.outside_parent = outside_parent
+        self.moved_parent = target.parent.with_name(f"{target.parent.name}-owned")
+        self.swapped = False
+
+    def open_directory_at(
+        self,
+        repository_anchor,
+        relative_path: Path,
+        repository: Path,
+    ):
+        if relative_path == Path(TARGET_PATH).parent and not self.swapped:
+            self.target.parent.rename(self.moved_parent)
+            (self.moved_parent / self.target.name).write_bytes(b"owned target changed")
+            self.target.parent.symlink_to(self.outside_parent, target_is_directory=True)
+            self.swapped = True
+        return super().open_directory_at(
+            repository_anchor,
+            relative_path,
+            repository,
+        )
+
+
+class ReplaceCreatedStagingWithTargetLinkOperations(MutationRecordingOperations):
+    """Swap a newly created staging name to a hard link of the v1 target."""
+
+    def __init__(self, target: Path) -> None:
+        super().__init__()
+        self.target = target
+
+    def create_staging_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+    ) -> str:
+        name = super().create_staging_at(parent_descriptor, parent)
+        os.unlink(name, dir_fd=parent_descriptor)
+        os.link(
+            self.target.name,
+            name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        return name
+
+
+class SelectedCloseFaultOperations(ReadOnlyCountingOperations):
+    """Raise after closing one selected preview directory descriptor."""
+
+    def __init__(self, fault_call: int) -> None:
+        self.fault_call = fault_call
+        self.close_calls = 0
+
+    def close_parent_directory(self, anchor) -> None:
+        super().close_parent_directory(anchor)
+        self.close_calls += 1
+        if self.close_calls == self.fault_call:
+            raise OSError("injected preview close failure after close")
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -473,6 +579,67 @@ def test_preview_builds_complete_deterministic_schema_v2_without_mutation(
     assert len(preview.preview_sha256) == 64
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_preview_uses_exact_artifact_spec_bytes_for_source_identity(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    baseline = _preview(repository)
+    assert isinstance(baseline, Success)
+    changed_source = SOURCE.replace(b"without mutation", b"from different bytes")
+    operations = SpecSwapBetweenSnapshotOperations(
+        repository / SOURCE_PATH,
+        changed_source,
+    )
+
+    raced = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        operations=operations,
+    )
+
+    assert isinstance(raced, Success)
+    assert raced.value.current_artifacts == baseline.value.current_artifacts
+    assert (
+        raced.value.candidate_manifest.source_items
+        == baseline.value.candidate_manifest.source_items
+    )
+    assert repository.joinpath(SOURCE_PATH).read_bytes() == SOURCE
+    assert target.read_bytes() == EXPECTED_V1
+
+
+@pytest.mark.parametrize(
+    ("fault_call", "expected_code"),
+    [(1, "migration-target-close-failed"), (2, "migration-repository-unreadable")],
+)
+def test_preview_contains_descriptor_close_failures_without_leaking_fds(
+    tmp_path: Path,
+    fault_call: int,
+    expected_code: str,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    operations = SelectedCloseFaultOperations(fault_call)
+    before_fds = len(os.listdir("/proc/self/fd"))
+
+    result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=_inputs()[1],
+        current_progress=_inputs()[0].progress,
+        source_paths=(SOURCE_PATH,),
+        operations=operations,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == expected_code
+    assert len(os.listdir("/proc/self/fd")) == before_fds
+    assert target.read_bytes() == EXPECTED_V1
 
 
 def test_preview_rejects_target_parent_swap_without_adopting_outside_v1(
@@ -831,6 +998,57 @@ def test_apply_requires_exact_fresh_approval_before_any_staging(tmp_path: Path) 
     assert stale.issue.failure_point is MigrationFailurePoint.APPROVAL
     assert missing_operations.mutations == []
     assert stale_operations.mutations == []
+
+
+def test_apply_reports_unknown_when_target_anchor_cannot_be_established(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    outside_parent = tmp_path / "outside-target"
+    outside_parent.mkdir()
+    (outside_parent / target.name).write_bytes(EXPECTED_V1)
+    operations = SwapTargetBeforeAnchorOperations(target, outside_parent)
+
+    result = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(result, ManifestMigrationFailure)
+    assert result.issue.target_state is MigrationTargetState.UNKNOWN
+    assert (
+        operations.moved_parent / target.name
+    ).read_bytes() == b"owned target changed"
+    assert (outside_parent / target.name).read_bytes() == EXPECTED_V1
+    assert operations.mutations == []
+
+
+def test_apply_does_not_write_through_a_replaced_staging_name(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = ReplaceCreatedStagingWithTargetLinkOperations(target)
+
+    result = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(result, ManifestMigrationFailure)
+    assert result.issue.failure_point is MigrationFailurePoint.WRITE
+    assert result.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert target.read_bytes() == EXPECTED_V1
+    assert not any(target.parent.glob(".handoff.*.tmp"))
     assert target.read_bytes() == EXPECTED_V1
 
 
