@@ -9,13 +9,17 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     read_planning_inventory,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import ManifestArtifact
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
+    RefreshLimits,
     preview_manifest_refresh,
+    serialize_manifest_refresh_preview,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     parse_manifest_v2_bytes,
@@ -214,3 +218,128 @@ def test_refresh_rejects_incomplete_or_stale_inputs_without_mutation(
     assert isinstance(result, Failure)
     assert result.issue.code == expected_code
     assert target.read_bytes() == before
+
+
+def test_preview_machine_bytes_are_deterministic_complete_and_hash_bound(
+    tmp_path: Path,
+) -> None:
+    repository, _ = _repository(tmp_path)
+
+    first = _preview(repository)
+    second = _preview(repository)
+
+    assert isinstance(first, Success)
+    assert second == first
+    machine = serialize_manifest_refresh_preview(first.value)
+    assert isinstance(machine, Success)
+    assert machine.value.endswith(b"\n")
+    assert not machine.value.endswith(b"\n\n")
+    assert _sha256(machine.value) == first.value.preview_sha256
+    assert (
+        json.loads(machine.value)["candidate_bytes_utf8"]
+        == first.value.candidate_bytes.decode()
+    )
+
+    changed = _preview(repository, current_source_commit="e" * 40)
+    assert isinstance(changed, Success)
+    assert changed.value.preview_sha256 != first.value.preview_sha256
+
+
+def test_equal_target_and_candidate_return_complete_explicit_no_op(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    initial = _preview(repository)
+    assert isinstance(initial, Success)
+    target.write_bytes(initial.value.candidate_bytes)
+
+    result = _preview(repository)
+
+    assert isinstance(result, Success)
+    assert result.value.no_op is True
+    assert result.value.changes == ()
+    assert result.value.exclusions == ()
+    assert result.value.old_target_sha256 == result.value.candidate_sha256
+    assert result.value.preview_sha256 != initial.value.preview_sha256
+
+
+@pytest.mark.parametrize(
+    ("surface", "expected_code"),
+    [
+        ("target", "refresh-target-limit-exceeded"),
+        ("artifact", "refresh-artifact-limit-exceeded"),
+        ("candidate", "refresh-candidate-limit-exceeded"),
+        ("preview", "refresh-preview-limit-exceeded"),
+    ],
+)
+def test_each_bounded_surface_rejects_limit_plus_one_without_partial_preview(
+    tmp_path: Path, surface: str, expected_code: str
+) -> None:
+    repository, target = _repository(tmp_path)
+    baseline = _preview(repository)
+    assert isinstance(baseline, Success)
+    limits = {
+        "target": replace(RefreshLimits(), target_bytes=len(target.read_bytes()) - 1),
+        "artifact": replace(
+            RefreshLimits(),
+            artifact_bytes=max(
+                len((repository / item.path).read_bytes())
+                for item in baseline.value.current_artifacts
+            )
+            - 1,
+        ),
+        "candidate": replace(
+            RefreshLimits(), candidate_bytes=len(baseline.value.candidate_bytes) - 1
+        ),
+        "preview": replace(
+            RefreshLimits(),
+            preview_bytes=len(
+                serialize_manifest_refresh_preview(baseline.value).value  # type: ignore[union-attr]
+            )
+            - 1,
+        ),
+    }[surface]
+    before = target.read_bytes()
+
+    result = _preview(repository, limits=limits)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == expected_code
+    assert target.read_bytes() == before
+
+
+@settings(
+    max_examples=4,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(reverse_assignments=st.booleans(), reverse_phases=st.booleans())
+def test_preview_builder_normalizes_declared_order_and_binds_identity(
+    tmp_path: Path, reverse_assignments: bool, reverse_phases: bool
+) -> None:
+    repository, _ = _repository(tmp_path)
+    baseline = _preview(repository)
+    assert isinstance(baseline, Success)
+    inventory = baseline.value.planning_inventory
+    reordered = replace(
+        inventory,
+        assignments=(
+            tuple(reversed(inventory.assignments))
+            if reverse_assignments
+            else inventory.assignments
+        ),
+        phases=(
+            tuple(reversed(inventory.phases)) if reverse_phases else inventory.phases
+        ),
+    )
+
+    first = _preview(repository, planning_inventory=reordered)
+    second = _preview(repository, planning_inventory=reordered)
+
+    assert isinstance(first, Success)
+    assert second == first
+    assert first.value.candidate_bytes == baseline.value.candidate_bytes
+    assert first.value.preview_sha256 == baseline.value.preview_sha256
+    machine = serialize_manifest_refresh_preview(first.value)
+    assert isinstance(machine, Success)
+    assert _sha256(machine.value) == first.value.preview_sha256
