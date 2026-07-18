@@ -4,7 +4,7 @@
 
 This roadmap plans only OpenSpec change
 `harden-openspec-gsd-handoff-lifecycle`, pinned to source commit
-`2cbb127917feaa637ef5eac439478227ac5f717b`. OpenSpec owns WHAT / WHY,
+`fbe7f714f734d714480583ab90f41ec0d2077f50`. OpenSpec owns WHAT / WHY,
 canonical requirements, scenarios, acceptance criteria, and final completion. GSD
 owns the sequential phase, plan, and phase-progress decomposition without copying
 or redefining canonical specification prose.
@@ -19,7 +19,9 @@ CI. Failure preserves inspectable state and stops; no automatic route switch,
 rollback, repair, or downstream phase advance is allowed.
 
 Manual recovery from the stale started handoff is approved. Phase 1 was replanned and
-verified against the current source pin. Phase 2 is ready but not started; Phases 3–6
+verified against its `2cbb127…` source pin. The approved Phase 2 mapping horizon,
+started-v2 refresh, and policy-fingerprint contracts are pinned at `fbe7f71…` without
+adding a phase or switching route. Phase 2 is ready but not started; Phases 3–6
 remain blocked by the strict dependency order, and no Phase 7 is added. The old handoff
 manifest and brief remain unchanged audit evidence rather than the current planning
 authority.

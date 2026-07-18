@@ -4,7 +4,7 @@
 **Core Value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
 **Authority:** This file is non-normative GSD traceability metadata. Requirement text,
 scenarios, acceptance criteria, and final completion remain in the canonical OpenSpec
-artifacts pinned at `2cbb127917feaa637ef5eac439478227ac5f717b`.
+artifacts pinned at `fbe7f714f734d714480583ab90f41ec0d2077f50`.
 The old started handoff manifest and brief remain unchanged as historical / stale dispatch
 evidence; they are not the current canonical source pin.
 
