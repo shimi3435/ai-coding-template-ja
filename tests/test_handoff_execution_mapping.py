@@ -8,10 +8,15 @@ from pathlib import Path
 import pytest
 
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
+    EvidenceDeclaration,
+    MappingIssue,
+    MappingOperation,
     PhaseAssignment,
     PhaseDeclaration,
+    PlanDeclaration,
     build_manifest_mappings,
     read_planning_inventory,
+    validate_mapping_readiness,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     parse_manifest_v2_bytes,
@@ -227,3 +232,245 @@ def test_builder_rejects_invalid_declarations_without_partial_mappings(
     assert isinstance(result, Failure)
     assert result.issue.code == expected_code
     assert not hasattr(result, "value")
+
+
+def _inventory_with_execution_declarations(inventory, phase_ids=("02",)):
+    plans = tuple(
+        PlanDeclaration(
+            change_id=inventory.change_id,
+            phase_id=phase_id,
+            path=next(
+                phase.phase_path
+                for phase in inventory.phases
+                if phase.phase_id == phase_id
+            )
+            + f"/{phase_id}-01-PLAN.md",
+        )
+        for phase_id in phase_ids
+    )
+    evidence = tuple(
+        EvidenceDeclaration(
+            change_id=inventory.change_id,
+            phase_id=assignment.phase_id,
+            path=f".planning/evidence/{assignment.source_id}.json",
+            source_id=assignment.source_id,
+        )
+        for assignment in inventory.assignments
+        if assignment.phase_id in phase_ids
+    ) + tuple(
+        EvidenceDeclaration(
+            change_id=inventory.change_id,
+            phase_id=plan.phase_id,
+            path=f".planning/evidence/plan-{plan.phase_id}.json",
+            plan_path=plan.path,
+        )
+        for plan in plans
+    )
+    return replace(inventory, plans=plans, evidence=evidence)
+
+
+def _write_declared_paths(repository: Path, inventory, *, evidence: bool) -> None:
+    for phase in inventory.phases:
+        (repository / phase.phase_path).mkdir(parents=True, exist_ok=True)
+    for plan in inventory.plans:
+        path = repository / plan.path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("plan\n", encoding="utf-8")
+    if evidence:
+        for declaration in inventory.evidence:
+            path = repository / declaration.path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("evidence\n", encoding="utf-8")
+
+
+def _mappings(source_items, registry, inventory):
+    result = build_manifest_mappings(source_items, inventory, registry)
+    assert isinstance(result, Success)
+    return result.value
+
+
+def test_plan_requires_only_complete_assignments_and_selected_phase(
+    tmp_path: Path,
+) -> None:
+    source_items, registry, inventory = _baseline()
+    mappings = _mappings(source_items, registry, inventory)
+    selected = next(phase for phase in inventory.phases if phase.phase_id == "02")
+    (tmp_path / selected.phase_path).mkdir(parents=True)
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.PLAN,
+        target_phase_id="02",
+    )
+
+    assert isinstance(result, Success)
+    assert result.value.ready
+    assert result.value.issues == ()
+
+
+def test_execute_requires_declared_plan_but_not_evidence(tmp_path: Path) -> None:
+    source_items, registry, baseline = _baseline()
+    empty = _mappings(source_items, registry, baseline)
+    missing_declaration = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        empty,
+        baseline,
+        operation=MappingOperation.EXECUTE,
+        target_phase_id="02",
+    )
+    assert isinstance(missing_declaration, Success)
+    assert not missing_declaration.value.ready
+    assert MappingIssue("mapping-plan-declarations-empty") in (
+        missing_declaration.value.issues
+    )
+
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=False)
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.EXECUTE,
+        target_phase_id="02",
+    )
+
+    assert isinstance(result, Success)
+    assert result.value.ready
+
+
+def test_verify_requires_every_selected_source_and_plan_evidence(
+    tmp_path: Path,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=True)
+
+    ready = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+    assert isinstance(ready, Success)
+    assert ready.value.ready
+
+    missing_path = tmp_path / inventory.evidence[0].path
+    missing_path.unlink()
+    not_ready = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+    assert isinstance(not_ready, Success)
+    assert not not_ready.value.ready
+    assert MappingIssue("mapping-path-missing", inventory.evidence[0].path) in (
+        not_ready.value.issues
+    )
+
+
+def test_finalize_requires_nonempty_declarations_for_every_phase(
+    tmp_path: Path,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    baseline_mappings = _mappings(source_items, registry, baseline)
+    not_ready = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        baseline_mappings,
+        baseline,
+        operation=MappingOperation.FINALIZE,
+    )
+    assert isinstance(not_ready, Success)
+    assert not not_ready.value.ready
+    assert MappingIssue("mapping-plan-declarations-empty", "01") in (
+        not_ready.value.issues
+    )
+
+    inventory = _inventory_with_execution_declarations(
+        baseline, tuple(phase.phase_id for phase in baseline.phases)
+    )
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=True)
+    ready = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.FINALIZE,
+    )
+    assert isinstance(ready, Success)
+    assert ready.value.ready
+
+
+@pytest.mark.parametrize(
+    ("operation", "target_phase_id", "expected_code"),
+    [
+        ("unknown", "02", "mapping-operation-invalid"),
+        (MappingOperation.PLAN, "99", "mapping-phase-unknown"),
+    ],
+)
+def test_readiness_rejects_unknown_operation_or_phase(
+    tmp_path: Path, operation, target_phase_id: str, expected_code: str
+) -> None:
+    source_items, registry, inventory = _baseline()
+    mappings = _mappings(source_items, registry, inventory)
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=operation,
+        target_phase_id=target_phase_id,
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == expected_code
+
+
+@pytest.mark.parametrize("path_kind", ["symlink", "directory", "limit-plus-one"])
+def test_verify_rejects_unsafe_evidence_observation(
+    tmp_path: Path, path_kind: str
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=True)
+    evidence_path = tmp_path / inventory.evidence[0].path
+    evidence_path.unlink()
+    if path_kind == "symlink":
+        evidence_path.symlink_to(tmp_path / inventory.evidence[1].path)
+        expected_code = "mapping-path-symlink"
+    elif path_kind == "directory":
+        evidence_path.mkdir()
+        expected_code = "mapping-path-non-regular"
+    else:
+        evidence_path.write_bytes(b"x" * (8_388_608 + 1))
+        expected_code = "mapping-path-byte-limit-exceeded"
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+
+    assert isinstance(result, Success)
+    assert not result.value.ready
+    assert (
+        MappingIssue(expected_code, inventory.evidence[0].path) in result.value.issues
+    )
