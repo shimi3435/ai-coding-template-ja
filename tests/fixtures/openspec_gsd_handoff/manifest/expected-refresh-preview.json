@@ -1,0 +1,13 @@
+{
+  "old_target_sha256": "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914",
+  "created": ["SCN-000037", "SCN-000038", "SCN-000039", "SCN-000040", "SCN-000041", "SCN-000042", "SCN-000043"],
+  "updated": ["REQ-000001", "SCN-000018"],
+  "updated_fingerprints": {
+    "REQ-000001": ["ed1fdf2fb03ad6ba086ccabe6b2977545fb42fa3c5f7c8f1c680fceff0a8fdca", "d721198e60e6cab0f9d54a9317e397c2fd47b581787d72450dfa1cc43c45eb32"],
+    "SCN-000018": ["c1eecd96205fc756ae48fe83f23865ac1f0933282eeb20335a76b8788eb3feee", "46843242f7ab1f230919ca8ff5915859cd6aee9e243714ec63d3aa9ae4a2c025"]
+  },
+  "candidate_sha256": "pending-red",
+  "preview_sha256": "pending-red",
+  "candidate_manifest": null,
+  "candidate_bytes_utf8": "pending-red"
+}
