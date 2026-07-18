@@ -98,6 +98,23 @@ def decode_json_without_duplicate_object_names(data: bytes) -> object:
     return json.loads(data, object_pairs_hook=_unique_json_object)
 
 
+def _all_strings_are_utf8_scalars(value: object) -> bool:
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            try:
+                current.encode("utf-8")
+            except UnicodeEncodeError:
+                return False
+        elif isinstance(current, Mapping):
+            pending.extend(current.keys())
+            pending.extend(current.values())
+        elif isinstance(current, Sequence) and not isinstance(current, bytes):
+            pending.extend(current)
+    return True
+
+
 @dataclass(frozen=True)
 class ManifestMapping:
     """One stable source-to-execution reference declaration."""
@@ -694,6 +711,8 @@ def parse_manifest_v2_bytes(data: bytes) -> Result[HandoffManifestV2]:
         RecursionError,
     ):
         return _failure("manifest-v2-json-invalid")
+    if not _all_strings_are_utf8_scalars(raw):
+        return _failure("manifest-v2-value-invalid")
     try:
         root = _exact_fields(raw, _ROOT_FIELDS)
         if root is None:

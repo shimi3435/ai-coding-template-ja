@@ -168,6 +168,13 @@ def _failure(
     )
 
 
+def _utf8_bytes(value: str) -> bytes:
+    try:
+        return value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise _SourceInputError("source-unicode-invalid") from error
+
+
 def _is_horizontal_whitespace(character: str) -> bool:
     return character == "\t" or unicodedata.category(character) == "Zs"
 
@@ -601,6 +608,61 @@ def _read_inventory_from_repository_fd(
     return Success(SourceInventory(items=tuple(observations)))
 
 
+def source_inventory_from_bytes(
+    source_files: Sequence[tuple[str | Path, bytes]],
+    *,
+    limits: SourceIdentityLimits = DEFAULT_SOURCE_IDENTITY_LIMITS,
+) -> Result[SourceInventory]:
+    """Build one complete inventory from already descriptor-anchored source bytes."""
+
+    if not _valid_limits(limits):
+        return _failure("source-limits-invalid", category=IssueCategory.INPUT)
+    if not source_files:
+        return _failure("source-paths-empty", category=IssueCategory.INPUT)
+    if len(source_files) > limits.max_items:
+        return _failure("source-path-count-limit-exceeded")
+
+    prepared: list[tuple[str, bytes]] = []
+    aliases: set[str] = set()
+    aggregate_bytes = 0
+    for source_path, content_bytes in source_files:
+        try:
+            _, canonical_path = _canonical_source_path(source_path)
+        except _SourceInputError as error:
+            return _failure(error.code, category=IssueCategory.INPUT)
+        if type(content_bytes) is not bytes:
+            return _failure("source-bytes-invalid", category=IssueCategory.INPUT)
+        alias = _source_path_alias_key(canonical_path)
+        if alias in aliases:
+            return _failure("source-path-alias")
+        aliases.add(alias)
+        if len(content_bytes) > limits.bytes_per_file:
+            return _failure("source-file-limit-exceeded")
+        aggregate_bytes += len(content_bytes)
+        if aggregate_bytes > limits.bytes_total:
+            return _failure("source-total-limit-exceeded")
+        prepared.append((canonical_path, content_bytes))
+
+    observations: list[SourceObservation] = []
+    identities: set[tuple[object, ...]] = set()
+    for canonical_path, content_bytes in prepared:
+        try:
+            parsed = _observations_from_source(
+                canonical_path,
+                content_bytes,
+                max_items=limits.max_items - len(observations),
+            )
+        except _SourceInputError as error:
+            return _failure(error.code)
+        for observation in parsed:
+            identity = _observation_key(observation)
+            if identity in identities:
+                return _failure("source-identity-duplicate")
+            identities.add(identity)
+            observations.append(observation)
+    return Success(SourceInventory(items=tuple(observations)))
+
+
 def read_source_inventory(
     repository_root: Path,
     source_paths: Sequence[str | Path],
@@ -679,10 +741,13 @@ def fingerprint_source_observation(
         observation.normalized_block,
     )
     framed = bytearray()
-    for component in components:
-        encoded = component.encode("utf-8")
-        framed.extend(len(encoded).to_bytes(8, "big"))
-        framed.extend(encoded)
+    try:
+        for component in components:
+            encoded = _utf8_bytes(component)
+            framed.extend(len(encoded).to_bytes(8, "big"))
+            framed.extend(encoded)
+    except _SourceInputError as error:
+        return _failure(error.code, category=IssueCategory.INPUT)
     return Success(hashlib.sha256(framed).hexdigest())
 
 
@@ -794,7 +859,7 @@ def _validate_source_state(state: SourceIdentityState) -> None:
         )
         _validate_fingerprint(item.fingerprint)
         aggregate_bytes += sum(
-            len(value.encode("utf-8"))
+            len(_utf8_bytes(value))
             for value in (
                 item.id,
                 source_path,
@@ -901,7 +966,7 @@ def _validate_inventory(inventory: SourceInventory) -> None:
             raise _SourceInputError("source-identity-duplicate")
         identities.add(identity)
         aggregate_bytes += sum(
-            len(value.encode("utf-8"))
+            len(_utf8_bytes(value))
             for value in (
                 observation.source_path,
                 observation.raw_heading,

@@ -51,8 +51,8 @@ from .source_identity import (
     SourceIdentityState,
     SourceInventory,
     SourceReconciliation,
-    read_source_inventory,
     reconcile_source_items,
+    source_inventory_from_bytes,
 )
 from .versioned_manifest import parse_versioned_manifest_bytes
 
@@ -326,8 +326,17 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
                 continue
             creation_error: OSError | None = None
             try:
-                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                created = os.fstat(descriptor)
+                if not stat.S_ISREG(created.st_mode) or created.st_nlink != 1:
                     raise OSError("migration staging path is not a regular file")
+                identities = getattr(self, "_staging_identities", None)
+                if identities is None:
+                    identities = {}
+                    self._staging_identities = identities
+                identities[(parent_descriptor, name)] = (
+                    created.st_dev,
+                    created.st_ino,
+                )
             except OSError as error:
                 creation_error = error
             try:
@@ -362,10 +371,31 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
             dir_fd=parent_descriptor,
         )
         try:
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            opened = os.fstat(descriptor)
+            expected = getattr(self, "_staging_identities", {}).get(
+                (parent_descriptor, name)
+            )
+            if not stat.S_ISREG(opened.st_mode) or (
+                expected is not None
+                and (
+                    opened.st_nlink != 1
+                    or (opened.st_dev, opened.st_ino) != expected
+                    or not self._entry_is_current(
+                        parent_descriptor,
+                        name,
+                        descriptor,
+                    )
+                )
+            ):
                 raise OSError("migration path is not a regular file")
             with os.fdopen(descriptor, "rb", closefd=False) as stream:
                 data = stream.read(limit + 1)
+            if expected is not None and not self._entry_is_current(
+                parent_descriptor,
+                name,
+                descriptor,
+            ):
+                raise OSError("migration staging identity changed")
         finally:
             os.close(descriptor)
         if len(data) > limit:
@@ -469,12 +499,23 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
             raise ManifestSizeLimitExceeded
         descriptor = os.open(
             name,
-            self._open_flags(os.O_WRONLY | os.O_TRUNC),
+            self._open_flags(os.O_WRONLY),
             dir_fd=parent_descriptor,
         )
         try:
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-                raise OSError("migration staging path is not a regular file")
+            opened = os.fstat(descriptor)
+            expected = getattr(self, "_staging_identities", {}).get(
+                (parent_descriptor, name)
+            )
+            if (
+                expected is None
+                or not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or (opened.st_dev, opened.st_ino) != expected
+                or not self._entry_is_current(parent_descriptor, name, descriptor)
+            ):
+                raise OSError("migration staging identity changed")
+            os.ftruncate(descriptor, 0)
             with os.fdopen(descriptor, "wb", closefd=False) as stream:
                 stream.write(data)
                 stream.flush()
@@ -497,15 +538,44 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
         source_name: str,
         target_name: str,
     ) -> None:
+        descriptor = os.open(
+            source_name,
+            self._open_flags(os.O_RDONLY),
+            dir_fd=parent_descriptor,
+        )
+        try:
+            opened = os.fstat(descriptor)
+            expected = getattr(self, "_staging_identities", {}).get(
+                (parent_descriptor, source_name)
+            )
+            if (
+                expected is None
+                or opened.st_nlink != 1
+                or (opened.st_dev, opened.st_ino) != expected
+                or not self._entry_is_current(
+                    parent_descriptor, source_name, descriptor
+                )
+            ):
+                raise OSError("migration staging identity changed")
+        finally:
+            os.close(descriptor)
         os.replace(
             source_name,
             target_name,
             src_dir_fd=parent_descriptor,
             dst_dir_fd=parent_descriptor,
         )
+        getattr(self, "_staging_identities", {}).pop(
+            (parent_descriptor, source_name), None
+        )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
-        os.unlink(name, dir_fd=parent_descriptor)
+        try:
+            os.unlink(name, dir_fd=parent_descriptor)
+        finally:
+            getattr(self, "_staging_identities", {}).pop(
+                (parent_descriptor, name), None
+            )
 
 
 def _failure(code: str, *, category: IssueCategory = IssueCategory.PERSISTENCE):
@@ -887,20 +957,6 @@ def _observe_target_state_at(
     return MigrationTargetState.UNKNOWN
 
 
-def _observe_target_state_path(
-    operations: ManifestMigrationFileOperations,
-    target: Path,
-    expected_v1_sha256: str,
-) -> MigrationTargetState:
-    try:
-        target_bytes = operations.read_bounded_bytes(target)
-    except (ManifestSizeLimitExceeded, OSError):
-        return MigrationTargetState.UNKNOWN
-    if _sha256(target_bytes) == expected_v1_sha256:
-        return MigrationTargetState.V1_PRESERVED
-    return MigrationTargetState.UNKNOWN
-
-
 def _migration_failure_after_staging_at(
     code: str,
     failure_point: MigrationFailurePoint,
@@ -985,7 +1041,13 @@ def _read_artifact_snapshot(
     artifacts: Sequence[ManifestArtifact],
     *,
     operations: ManifestMigrationFileOperations,
-) -> Result[tuple[tuple[ManifestArtifact, ...], Progress]]:
+) -> Result[
+    tuple[
+        tuple[ManifestArtifact, ...],
+        Progress,
+        tuple[tuple[str, bytes], ...],
+    ]
+]:
     try:
         claims = tuple(
             ArtifactClaim(
@@ -998,7 +1060,7 @@ def _read_artifact_snapshot(
         return _failure("migration-artifact-snapshot-invalid")
     if not claims or len(claims) > DEFAULT_ARTIFACT_LIMITS.max_files:
         return _failure("migration-artifact-snapshot-invalid")
-    observed: list[tuple[ArtifactKind, str, str, str]] = []
+    observed: list[tuple[ArtifactKind, str, str, str, bytes]] = []
     aggregate_bytes = 0
     seen_paths: set[str] = set()
     for claim in claims:
@@ -1047,7 +1109,9 @@ def _read_artifact_snapshot(
             content = content_bytes.decode("utf-8")
         except UnicodeDecodeError:
             return _failure("artifact-utf8-invalid")
-        observed.append((claim.kind, raw_path, _sha256(content_bytes), content))
+        observed.append(
+            (claim.kind, raw_path, _sha256(content_bytes), content, content_bytes)
+        )
     tasks = tuple(
         artifact for artifact in observed if artifact[0] is ArtifactKind.TASKS
     )
@@ -1064,9 +1128,14 @@ def _read_artifact_snapshot(
                     path=path,
                     sha256=sha256,
                 )
-                for kind, path, sha256, _ in observed
+                for kind, path, sha256, _, _ in observed
             ),
             progress.value,
+            tuple(
+                (path, content_bytes)
+                for kind, path, _, _, content_bytes in observed
+                if kind is ArtifactKind.SPEC
+            ),
         )
     )
 
@@ -1095,12 +1164,12 @@ def _validate_source_snapshot(
         return _failure("migration-artifact-snapshot-mismatch")
     if first_artifacts.value[1] != progress:
         return _failure("migration-progress-snapshot-mismatch")
-    inventory = read_source_inventory(repository, source_paths, limits=limits)
+    inventory = source_inventory_from_bytes(
+        first_artifacts.value[2],
+        limits=limits,
+    )
     if isinstance(inventory, Failure):
         return inventory
-    confirmed_inventory = read_source_inventory(repository, source_paths, limits=limits)
-    if isinstance(confirmed_inventory, Failure):
-        return confirmed_inventory
     confirmed_artifacts = _read_artifact_snapshot(
         repository,
         repository_anchor,
@@ -1111,8 +1180,7 @@ def _validate_source_snapshot(
     if isinstance(confirmed_artifacts, Failure):
         return confirmed_artifacts
     if (
-        confirmed_inventory.value != inventory.value
-        or confirmed_artifacts.value != first_artifacts.value
+        confirmed_artifacts.value != first_artifacts.value
         or not operations.parent_directory_is_current(
             repository_anchor,
             repository,
@@ -1121,7 +1189,7 @@ def _validate_source_snapshot(
         return _failure("migration-source-changed-during-preview")
 
     spec_paths = {artifact.path for artifact in artifacts if artifact.kind == "spec"}
-    if spec_paths != set(source_paths):
+    if len(source_paths) != len(spec_paths) or spec_paths != set(source_paths):
         return _failure("migration-source-snapshot-mismatch")
     return inventory
 
@@ -1247,6 +1315,7 @@ def _read_preview_snapshot_at_root(
         )
     except OSError:
         return _failure("manifest-target-unsafe")
+    target_snapshot: Result[bytes]
     try:
         try:
             v1_bytes = operations.read_bounded_bytes_at(
@@ -1254,18 +1323,32 @@ def _read_preview_snapshot_at_root(
                 Path(canonical_target).name,
             )
         except ManifestSizeLimitExceeded:
-            return _failure("manifest-size-limit-exceeded")
+            target_snapshot = _failure("manifest-size-limit-exceeded")
         except OSError:
-            return _failure("manifest-read-failed")
-        if not operations.parent_directory_is_current(
-            target_anchor, repository
-        ) or not operations.parent_directory_is_current(
-            repository_anchor,
-            repository,
-        ):
-            return _failure("manifest-target-unsafe")
-    finally:
+            target_snapshot = _failure("manifest-read-failed")
+        else:
+            if not operations.parent_directory_is_current(
+                target_anchor, repository
+            ) or not operations.parent_directory_is_current(
+                repository_anchor,
+                repository,
+            ):
+                target_snapshot = _failure("manifest-target-unsafe")
+            else:
+                target_snapshot = Success(v1_bytes)
+    except BaseException:
+        try:
+            operations.close_parent_directory(target_anchor)
+        except OSError:
+            pass
+        raise
+    try:
         operations.close_parent_directory(target_anchor)
+    except OSError:
+        return _failure("migration-target-close-failed")
+    if isinstance(target_snapshot, Failure):
+        return target_snapshot
+    v1_bytes = target_snapshot.value
 
     parsed = parse_versioned_manifest_bytes(
         v1_bytes,
@@ -1738,52 +1821,72 @@ def apply_manifest_migration(
             MigrationTargetState.UNKNOWN,
             MigrationStagingState.ABSENT,
         )
-    target = repository.joinpath(*Path(canonical_target).parts)
-    try:
-        target_bytes = filesystem.read_bounded_bytes(target)
-    except (ManifestSizeLimitExceeded, OSError):
-        return _migration_failure(
-            "migration-target-reread-failed",
-            MigrationFailurePoint.STATE_GUARD,
-            MigrationTargetState.UNKNOWN,
-            MigrationStagingState.ABSENT,
-        )
-    if _sha256(target_bytes) != preview.v1_sha256:
-        return _migration_failure(
-            "migration-target-changed",
-            MigrationFailurePoint.STATE_GUARD,
-            MigrationTargetState.UNKNOWN,
-            MigrationStagingState.ABSENT,
-        )
-    parsed_target = parse_versioned_manifest_bytes(
-        target_bytes,
-        requested_schema_version=2,
-    )
-    if (
-        isinstance(parsed_target, Failure)
-        or not isinstance(parsed_target.value, HandoffManifest)
-        or parsed_target.value.change_id != target_change_id
-        or parsed_target.value.source_commit != preview.observed_source_commit
-    ):
-        return _migration_failure(
-            "migration-target-schema-changed",
-            MigrationFailurePoint.STATE_GUARD,
-            MigrationTargetState.UNKNOWN,
-            MigrationStagingState.ABSENT,
-        )
-
     try:
         repository_anchor = filesystem.open_parent_directory(repository, Path())
     except OSError:
         return _migration_failure(
             "migration-repository-open-failed",
             MigrationFailurePoint.STATE_GUARD,
-            _observe_target_state_path(filesystem, target, preview.v1_sha256),
+            MigrationTargetState.UNKNOWN,
             MigrationStagingState.ABSENT,
         )
     result: ManifestMigrationResult | None = None
     anchor: _MigrationDirectoryAnchor | None = None
     try:
+        try:
+            anchor = filesystem.open_directory_at(
+                repository_anchor,
+                Path(canonical_target).parent,
+                repository,
+            )
+        except OSError:
+            return _migration_failure(
+                "migration-target-parent-open-failed",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationTargetState.UNKNOWN,
+                MigrationStagingState.ABSENT,
+            )
+        target_name = Path(canonical_target).name
+        try:
+            target_bytes = filesystem.read_bounded_bytes_at(
+                anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _migration_failure(
+                "migration-target-reread-failed",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationTargetState.UNKNOWN,
+                MigrationStagingState.ABSENT,
+            )
+        if _sha256(target_bytes) != preview.v1_sha256:
+            return _migration_failure(
+                "migration-target-changed",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationTargetState.UNKNOWN,
+                MigrationStagingState.ABSENT,
+            )
+        parsed_target = parse_versioned_manifest_bytes(
+            target_bytes,
+            requested_schema_version=2,
+        )
+        if (
+            isinstance(parsed_target, Failure)
+            or not isinstance(parsed_target.value, HandoffManifest)
+            or parsed_target.value.change_id != target_change_id
+            or parsed_target.value.source_commit != preview.observed_source_commit
+        ):
+            return _migration_failure(
+                "migration-target-schema-changed",
+                MigrationFailurePoint.STATE_GUARD,
+                _observe_target_state_at(
+                    filesystem,
+                    anchor.descriptor,
+                    target_name,
+                    preview.v1_sha256,
+                ),
+                MigrationStagingState.ABSENT,
+            )
         source_snapshot = _validate_source_snapshot(
             repository,
             repository_anchor,
@@ -1798,7 +1901,12 @@ def apply_manifest_migration(
             return _migration_failure(
                 "migration-current-snapshot-changed",
                 MigrationFailurePoint.STATE_GUARD,
-                _observe_target_state_path(filesystem, target, preview.v1_sha256),
+                _observe_target_state_at(
+                    filesystem,
+                    anchor.descriptor,
+                    target_name,
+                    preview.v1_sha256,
+                ),
                 MigrationStagingState.ABSENT,
             )
         current_reconciliation = reconcile_source_items(
@@ -1820,7 +1928,12 @@ def apply_manifest_migration(
             return _migration_failure(
                 "migration-preview-source-evidence-changed",
                 MigrationFailurePoint.STATE_GUARD,
-                _observe_target_state_path(filesystem, target, preview.v1_sha256),
+                _observe_target_state_at(
+                    filesystem,
+                    anchor.descriptor,
+                    target_name,
+                    preview.v1_sha256,
+                ),
                 MigrationStagingState.ABSENT,
             )
         confirmed = _resolve_target(
@@ -1832,20 +1945,12 @@ def apply_manifest_migration(
             return _migration_failure(
                 "migration-target-identity-changed",
                 MigrationFailurePoint.STATE_GUARD,
-                _observe_target_state_path(filesystem, target, preview.v1_sha256),
-                MigrationStagingState.ABSENT,
-            )
-        try:
-            anchor = filesystem.open_directory_at(
-                repository_anchor,
-                Path(canonical_target).parent,
-                repository,
-            )
-        except OSError:
-            return _migration_failure(
-                "migration-target-parent-open-failed",
-                MigrationFailurePoint.STATE_GUARD,
-                _observe_target_state_path(filesystem, target, preview.v1_sha256),
+                _observe_target_state_at(
+                    filesystem,
+                    anchor.descriptor,
+                    target_name,
+                    preview.v1_sha256,
+                ),
                 MigrationStagingState.ABSENT,
             )
         result = _apply_anchored_manifest_migration(
