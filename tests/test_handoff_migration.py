@@ -359,6 +359,41 @@ class PostReplaceParentRebindOperations(MutationRecordingOperations):
         self.target.write_bytes(EXPECTED_V1)
 
 
+class PostReplaceFreshRereadFaultOperations(MutationRecordingOperations):
+    """Fail only the freshly anchored canonical target reread."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.replaced = False
+        self.post_replace_reads = 0
+
+    def read_bounded_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        *,
+        limit: int = MAX_MANIFEST_BYTES,
+    ) -> bytes:
+        if self.replaced and name == Path(TARGET_PATH).name:
+            self.post_replace_reads += 1
+            if self.post_replace_reads == 2:
+                raise OSError("injected fresh canonical target reread failure")
+        return super().read_bounded_bytes_at(
+            parent_descriptor,
+            name,
+            limit=limit,
+        )
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        super().replace_at(parent_descriptor, source_name, target_name)
+        self.replaced = True
+
+
 class SpecSwapBetweenSnapshotOperations(ReadOnlyCountingOperations):
     """Expose whether one preview combines different spec byte observations."""
 
@@ -1742,4 +1777,28 @@ def test_apply_rejects_post_replace_canonical_parent_rebind(
     assert (operations.moved_parent / target.name).read_bytes() == (
         preview.candidate_bytes
     )
+    assert operations.mutations == ["create", "write", "replace"]
+
+
+def test_apply_contains_fresh_canonical_target_reread_failure(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = PostReplaceFreshRereadFaultOperations()
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.code == "migration-replaced-canonical-target-reread-failed"
+    assert applied.issue.failure_point is MigrationFailurePoint.REREAD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert target.read_bytes() == preview.candidate_bytes
     assert operations.mutations == ["create", "write", "replace"]

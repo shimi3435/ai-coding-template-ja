@@ -1789,6 +1789,84 @@ def _apply_anchored_manifest_migration(
             MigrationTargetState.UNKNOWN,
             MigrationStagingState.ABSENT,
         )
+
+    repository_is_current = operations.parent_directory_is_current(
+        repository_anchor,
+        repository,
+    )
+    target_parent_is_current = operations.parent_directory_is_current(
+        anchor,
+        repository,
+    )
+    try:
+        fresh_anchor = operations.open_directory_at(
+            repository_anchor,
+            Path(preview.target_path).parent,
+            repository,
+        )
+    except OSError:
+        return _migration_failure(
+            "migration-replaced-target-identity-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    fresh_bytes: bytes | None = None
+    fresh_parent_is_current = False
+    try:
+        try:
+            fresh_bytes = operations.read_bounded_bytes_at(
+                fresh_anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            pass
+        fresh_parent_is_current = operations.parent_directory_is_current(
+            fresh_anchor,
+            repository,
+        )
+    finally:
+        try:
+            operations.close_parent_directory(fresh_anchor)
+        except OSError:
+            # Candidate bytes and directory identity were already observed.
+            pass
+
+    same_parent_identity = (fresh_anchor.device, fresh_anchor.inode) == (
+        anchor.device,
+        anchor.inode,
+    )
+    if (
+        not repository_is_current
+        or not target_parent_is_current
+        or not fresh_parent_is_current
+        or not same_parent_identity
+    ):
+        return _migration_failure(
+            "migration-replaced-target-identity-changed",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    if fresh_bytes is None:
+        return _migration_failure(
+            "migration-replaced-canonical-target-reread-failed",
+            MigrationFailurePoint.REREAD,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
+    fresh_installed = parse_manifest_v2_bytes(fresh_bytes)
+    if (
+        fresh_bytes != preview.candidate_bytes
+        or isinstance(fresh_installed, Failure)
+        or fresh_installed.value != preview.candidate_manifest
+    ):
+        return _migration_failure(
+            "migration-replaced-canonical-target-validation-failed",
+            MigrationFailurePoint.VALIDATE,
+            MigrationTargetState.UNKNOWN,
+            MigrationStagingState.ABSENT,
+        )
     return Success(preview.candidate_manifest)
 
 
