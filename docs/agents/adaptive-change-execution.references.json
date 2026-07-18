@@ -1,0 +1,22 @@
+{
+  "version": "adaptive-policy-references-v1",
+  "references": [
+    {"id":"ACE-R1","source_path":"docs/agents/workflow.md","heading":"実行経路の判定","body_length":1188,"sha256":"503950a413fb7f4f93f05f3588827cb432930e8e47bc80f53863a59c2b361a09","historical_provenance":"a2eb744"},
+    {"id":"ACE-R2","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-R3","source_path":"docs/agents/workflow.md","heading":"実行経路の判定","body_length":1188,"sha256":"503950a413fb7f4f93f05f3588827cb432930e8e47bc80f53863a59c2b361a09","historical_provenance":"a2eb744"},
+    {"id":"ACE-R4","source_path":"docs/agents/workflow.md","heading":"大規模 change の手動 handoff","body_length":7342,"sha256":"579cef65bd742d231d7c6711a6aa8b347e603848051450037fc7a4a6a36dbe0b","historical_provenance":"a2eb744"},
+    {"id":"ACE-R5","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S1-START-GATES","source_path":"docs/agents/workflow.md","heading":"実行経路の判定","body_length":1188,"sha256":"503950a413fb7f4f93f05f3588827cb432930e8e47bc80f53863a59c2b361a09","historical_provenance":"a2eb744"},
+    {"id":"ACE-S2-GSD-PROGRESS","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S2-ONE-PHASE-ONE-CHANGE","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S2-OPEN-SPEC-AUTHORITY","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S2-SPEC-CHANGE-REPLAN","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S4-CONTEXT-PARITY","source_path":"docs/agents/workflow.md","heading":"大規模 change の手動 handoff","body_length":7342,"sha256":"579cef65bd742d231d7c6711a6aa8b347e603848051450037fc7a4a6a36dbe0b","historical_provenance":"a2eb744"},
+    {"id":"ACE-S4-NO-AUTO-FALLBACK","source_path":"docs/agents/workflow.md","heading":"大規模 change の手動 handoff","body_length":7342,"sha256":"579cef65bd742d231d7c6711a6aa8b347e603848051450037fc7a4a6a36dbe0b","historical_provenance":"a2eb744"},
+    {"id":"ACE-S4-RESUME","source_path":"docs/agents/workflow.md","heading":"大規模 change の手動 handoff","body_length":7342,"sha256":"579cef65bd742d231d7c6711a6aa8b347e603848051450037fc7a4a6a36dbe0b","historical_provenance":"a2eb744"},
+    {"id":"ACE-S4-SOURCE-PINNED","source_path":"docs/agents/workflow.md","heading":"大規模 change の手動 handoff","body_length":7342,"sha256":"579cef65bd742d231d7c6711a6aa8b347e603848051450037fc7a4a6a36dbe0b","historical_provenance":"a2eb744"},
+    {"id":"ACE-S5-OPEN-SPEC-FINAL","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S5-REVALIDATE-ON-DRIFT","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"},
+    {"id":"ACE-S5-SINGLE-ACTIVE-CLOSE","source_path":"docs/agents/workflow.md","heading":"OpenSpec / GSD の責務境界（ADR-0008）","body_length":10194,"sha256":"0ac7721473db8872dcd057626745011bf26a35516b07e546cf650bebf94b2e4f","historical_provenance":"a2eb744"}
+  ]
+}

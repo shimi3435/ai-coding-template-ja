@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
-from dataclasses import FrozenInstanceError
+import shutil
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,8 @@ from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
     PolicyReferenceLimits,
     PolicyReferenceRegistry,
     observe_policy_sections,
+    read_policy_reference_registry,
+    validate_policy_references,
 )
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "openspec_gsd_handoff" / "policy"
@@ -354,3 +358,313 @@ def test_observer_does_not_use_git_history(
     result = _observe(repository)
 
     assert isinstance(result, Success)
+
+
+TRACKED_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
+EXPECTED_POLICY_IDS = {
+    "ACE-R1",
+    "ACE-R2",
+    "ACE-R3",
+    "ACE-R4",
+    "ACE-R5",
+    "ACE-S1-START-GATES",
+    "ACE-S2-GSD-PROGRESS",
+    "ACE-S2-ONE-PHASE-ONE-CHANGE",
+    "ACE-S2-OPEN-SPEC-AUTHORITY",
+    "ACE-S2-SPEC-CHANGE-REPLAN",
+    "ACE-S4-CONTEXT-PARITY",
+    "ACE-S4-NO-AUTO-FALLBACK",
+    "ACE-S4-RESUME",
+    "ACE-S4-SOURCE-PINNED",
+    "ACE-S5-OPEN-SPEC-FINAL",
+    "ACE-S5-REVALIDATE-ON-DRIFT",
+    "ACE-S5-SINGLE-ACTIVE-CLOSE",
+}
+
+
+def _write_registry_json(tmp_path: Path, payload: object) -> tuple[Path, str]:
+    repository = tmp_path / "registry-repository"
+    target = repository / TRACKED_REGISTRY_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    return repository, TRACKED_REGISTRY_PATH
+
+
+def _reference_payload(
+    *,
+    reference_id: str = "ACE-TEST",
+    source_path: str = POLICY_PATH,
+    heading: str = TARGET_HEADING,
+    body_length: int = 80,
+    sha256: str = EXPECTED_SHA256,
+) -> dict[str, object]:
+    return {
+        "id": reference_id,
+        "source_path": source_path,
+        "heading": heading,
+        "body_length": body_length,
+        "sha256": sha256,
+        "historical_provenance": None,
+    }
+
+
+def _registry_payload(*references: dict[str, object]) -> dict[str, object]:
+    return {
+        "version": "adaptive-policy-references-v1",
+        "references": list(references or (_reference_payload(),)),
+    }
+
+
+def test_tracked_registry_has_complete_stable_namespace_and_current_anchors() -> None:
+    repository = Path(__file__).parents[1]
+
+    registry_result = read_policy_reference_registry(repository, TRACKED_REGISTRY_PATH)
+
+    assert isinstance(registry_result, Success)
+    registry = registry_result.value
+    assert registry.version == "adaptive-policy-references-v1"
+    assert {reference.id for reference in registry.references} == EXPECTED_POLICY_IDS
+    assert tuple(reference.id for reference in registry.references) == tuple(
+        sorted(EXPECTED_POLICY_IDS)
+    )
+    assert {reference.source_path for reference in registry.references} == {
+        "docs/agents/workflow.md"
+    }
+    assert all(
+        reference.historical_provenance == "a2eb744"
+        for reference in registry.references
+    )
+
+    observations = observe_policy_sections(repository, registry)
+    assert isinstance(observations, Success)
+    validation = validate_policy_references(
+        registry,
+        observations.value,
+        (
+            "ACE-S2-OPEN-SPEC-AUTHORITY",
+            "ACE-S5-OPEN-SPEC-FINAL",
+            "ACE-S4-NO-AUTO-FALLBACK",
+        ),
+    )
+    assert isinstance(validation, Success)
+    assert tuple(reference.id for reference in validation.value) == (
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S5-OPEN-SPEC-FINAL",
+    )
+
+
+def test_tracked_registry_validation_needs_neither_git_nor_template_docs(
+    tmp_path: Path,
+) -> None:
+    source_repository = Path(__file__).parents[1]
+    repository = tmp_path / "pruned-repository"
+    for relative_path in (TRACKED_REGISTRY_PATH, "docs/agents/workflow.md"):
+        target = repository / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_repository / relative_path, target)
+
+    registry_result = read_policy_reference_registry(repository, TRACKED_REGISTRY_PATH)
+    assert isinstance(registry_result, Success)
+    observations = observe_policy_sections(repository, registry_result.value)
+    assert isinstance(observations, Success)
+
+    result = validate_policy_references(
+        registry_result.value,
+        observations.value,
+        tuple(sorted(EXPECTED_POLICY_IDS)),
+    )
+
+    assert isinstance(result, Success)
+    assert not (repository / ".git").exists()
+    assert not (repository / "docs/template").exists()
+
+
+@pytest.mark.parametrize(
+    ("payload", "code"),
+    [
+        (
+            {
+                **_registry_payload(),
+                "unknown": True,
+            },
+            "policy-registry-fields-invalid",
+        ),
+        (
+            {
+                "version": 1,
+                "references": [_reference_payload()],
+            },
+            "policy-registry-version-invalid",
+        ),
+        (
+            {
+                "version": "future-version",
+                "references": [_reference_payload()],
+            },
+            "policy-registry-version-invalid",
+        ),
+        (
+            _registry_payload(
+                {
+                    **_reference_payload(),
+                    "unknown": True,
+                }
+            ),
+            "policy-reference-fields-invalid",
+        ),
+        (
+            _registry_payload(
+                {
+                    **_reference_payload(),
+                    "body_length": True,
+                }
+            ),
+            "policy-reference-length-invalid",
+        ),
+    ],
+)
+def test_registry_rejects_unknown_fields_wrong_types_and_versions(
+    tmp_path: Path,
+    payload: object,
+    code: str,
+) -> None:
+    repository, registry_path = _write_registry_json(tmp_path, payload)
+
+    result = read_policy_reference_registry(repository, registry_path)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == code
+
+
+def test_registry_rejects_duplicate_json_keys(tmp_path: Path) -> None:
+    repository = tmp_path / "duplicate-key-repository"
+    target = repository / TRACKED_REGISTRY_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        '{"version":"adaptive-policy-references-v1",'
+        '"version":"adaptive-policy-references-v1","references":[]}',
+        encoding="utf-8",
+    )
+
+    result = read_policy_reference_registry(repository, TRACKED_REGISTRY_PATH)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "policy-registry-json-duplicate-key"
+
+
+def test_registry_rejects_duplicate_ids_and_aliased_paths(tmp_path: Path) -> None:
+    duplicate_repository, duplicate_path = _write_registry_json(
+        tmp_path / "duplicate",
+        _registry_payload(
+            _reference_payload(),
+            _reference_payload(),
+        ),
+    )
+    alias_repository, alias_path = _write_registry_json(
+        tmp_path / "alias",
+        _registry_payload(
+            _reference_payload(reference_id="ACE-FIRST", source_path="docs/Café.md"),
+            _reference_payload(
+                reference_id="ACE-SECOND",
+                source_path="docs/Café.md",
+            ),
+        ),
+    )
+
+    duplicate = read_policy_reference_registry(duplicate_repository, duplicate_path)
+    alias = read_policy_reference_registry(alias_repository, alias_path)
+
+    assert isinstance(duplicate, Failure)
+    assert duplicate.issue.code == "policy-reference-id-duplicate"
+    assert isinstance(alias, Failure)
+    assert alias.issue.code == "policy-path-alias"
+
+
+def test_registry_returns_records_in_deterministic_id_order(tmp_path: Path) -> None:
+    repository, registry_path = _write_registry_json(
+        tmp_path,
+        _registry_payload(
+            _reference_payload(reference_id="ACE-Z"),
+            _reference_payload(reference_id="ACE-A"),
+        ),
+    )
+
+    result = read_policy_reference_registry(repository, registry_path)
+
+    assert isinstance(result, Success)
+    assert tuple(reference.id for reference in result.value.references) == (
+        "ACE-A",
+        "ACE-Z",
+    )
+
+
+def test_registry_enforces_record_and_byte_limit_plus_one(tmp_path: Path) -> None:
+    payload = _registry_payload(
+        _reference_payload(reference_id="ACE-A"),
+        _reference_payload(reference_id="ACE-B"),
+    )
+    repository, registry_path = _write_registry_json(tmp_path, payload)
+    registry_bytes = (repository / registry_path).read_bytes()
+
+    record_limit = read_policy_reference_registry(
+        repository,
+        registry_path,
+        limits=PolicyReferenceLimits(max_records=1),
+    )
+    byte_limit = read_policy_reference_registry(
+        repository,
+        registry_path,
+        limits=PolicyReferenceLimits(registry_bytes=len(registry_bytes) - 1),
+    )
+
+    assert isinstance(record_limit, Failure)
+    assert record_limit.issue.code == "policy-record-limit-exceeded"
+    assert isinstance(byte_limit, Failure)
+    assert byte_limit.issue.code == "policy-registry-limit-exceeded"
+
+
+def test_validation_rejects_unknown_missing_and_mismatched_references(
+    tmp_path: Path,
+) -> None:
+    repository, _ = _write_policy(
+        tmp_path,
+        (FIXTURE_ROOT / "valid-policy.md").read_bytes(),
+    )
+    registry = _registry()
+    observations = observe_policy_sections(repository, registry)
+    assert isinstance(observations, Success)
+    missing_observations = ()
+    wrong_length = PolicyReferenceRegistry(
+        registry.version,
+        (replace(registry.references[0], body_length=79),),
+    )
+    wrong_hash = PolicyReferenceRegistry(
+        registry.version,
+        (replace(registry.references[0], sha256="0" * 64),),
+    )
+
+    unknown = validate_policy_references(registry, observations.value, ("ACE-UNKNOWN",))
+    missing = validate_policy_references(registry, missing_observations, ("ACE-TEST",))
+    length_mismatch = validate_policy_references(
+        wrong_length,
+        observations.value,
+        ("ACE-TEST",),
+    )
+    hash_mismatch = validate_policy_references(
+        wrong_hash,
+        observations.value,
+        ("ACE-TEST",),
+    )
+
+    assert isinstance(unknown, Failure)
+    assert unknown.issue.code == "policy-reference-unknown"
+    assert isinstance(missing, Failure)
+    assert missing.issue.code == "policy-observation-missing"
+    assert isinstance(length_mismatch, Failure)
+    assert length_mismatch.issue.code == "policy-reference-length-mismatch"
+    assert isinstance(hash_mismatch, Failure)
+    assert hash_mismatch.issue.code == "policy-reference-hash-mismatch"
