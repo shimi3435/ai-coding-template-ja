@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -535,3 +537,249 @@ def build_manifest_mappings(
         for assignment in sorted(assignments, key=lambda item: item.source_id)
     )
     return Success(mappings)
+
+
+def _expected_mappings(
+    inventory: PlanningInventory,
+) -> tuple[ManifestMapping, ...]:
+    phases = {phase.phase_id: phase for phase in inventory.phases}
+    return tuple(
+        ManifestMapping(
+            source_id=assignment.source_id,
+            phase_id=assignment.phase_id,
+            phase_path=phases[assignment.phase_id].phase_path,
+            plan_paths=tuple(
+                sorted(
+                    (
+                        plan.path
+                        for plan in inventory.plans
+                        if plan.phase_id == assignment.phase_id
+                    ),
+                    key=str.encode,
+                )
+            ),
+            evidence_paths=tuple(
+                sorted(
+                    (
+                        evidence.path
+                        for evidence in inventory.evidence
+                        if evidence.phase_id == assignment.phase_id
+                        and (
+                            evidence.source_id == assignment.source_id
+                            or evidence.plan_path is not None
+                        )
+                    ),
+                    key=str.encode,
+                )
+            ),
+            policy_references=assignment.policy_references,
+        )
+        for assignment in sorted(inventory.assignments, key=lambda item: item.source_id)
+    )
+
+
+def _observe_declared_path(
+    root: Path,
+    declared_path: str,
+    *,
+    expect_directory: bool,
+) -> tuple[MappingIssue | None, int]:
+    """Observe one exact path from an anchored descriptor without following links."""
+
+    parts = PurePosixPath(declared_path).parts
+    descriptors: list[int] = []
+    try:
+        descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        descriptors.append(descriptor)
+        for index, part in enumerate(parts):
+            names = os.listdir(descriptor)
+            aliases = [name for name in names if _alias_key(name) == _alias_key(part)]
+            if part not in names:
+                code = "mapping-path-alias" if aliases else "mapping-path-missing"
+                return MappingIssue(code, declared_path), 0
+            if any(name != part for name in aliases):
+                return MappingIssue("mapping-path-alias", declared_path), 0
+
+            entry = os.stat(part, dir_fd=descriptor, follow_symlinks=False)
+            if stat.S_ISLNK(entry.st_mode):
+                return MappingIssue("mapping-path-symlink", declared_path), 0
+            final = index == len(parts) - 1
+            if not final:
+                if not stat.S_ISDIR(entry.st_mode):
+                    return MappingIssue("mapping-path-non-directory", declared_path), 0
+                descriptor = os.open(
+                    part,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=descriptor,
+                )
+                descriptors.append(descriptor)
+                continue
+            if expect_directory:
+                if not stat.S_ISDIR(entry.st_mode):
+                    return MappingIssue("mapping-path-non-directory", declared_path), 0
+                return None, 0
+            if not stat.S_ISREG(entry.st_mode):
+                return MappingIssue("mapping-path-non-regular", declared_path), 0
+            file_descriptor = os.open(
+                part,
+                os.O_RDONLY | os.O_NOFOLLOW,
+                dir_fd=descriptor,
+            )
+            descriptors.append(file_descriptor)
+            observed = os.read(file_descriptor, _MAX_BYTES + 1)
+            if len(observed) > _MAX_BYTES:
+                return MappingIssue(
+                    "mapping-path-byte-limit-exceeded", declared_path
+                ), 0
+            return None, len(observed)
+        return MappingIssue("mapping-path-missing", declared_path), 0
+    except (OSError, UnicodeError, ValueError):
+        return MappingIssue("mapping-path-unreadable", declared_path), 0
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def _readiness_issues(
+    root: Path,
+    inventory: PlanningInventory,
+    operation: MappingOperation,
+    target_phase_id: str | None,
+) -> tuple[MappingIssue, ...]:
+    phases = {phase.phase_id: phase for phase in inventory.phases}
+    selected_phase_ids = (
+        tuple(sorted(phases, key=str.encode))
+        if operation is MappingOperation.FINALIZE
+        else (target_phase_id,)
+    )
+    issues: list[MappingIssue] = []
+    paths: dict[str, bool] = {}
+    for phase_id in selected_phase_ids:
+        assert phase_id is not None
+        phase = phases[phase_id]
+        paths[phase.phase_path] = True
+        if operation is MappingOperation.PLAN:
+            continue
+        phase_plans = [plan for plan in inventory.plans if plan.phase_id == phase_id]
+        if not phase_plans:
+            issues.append(MappingIssue("mapping-plan-declarations-empty", phase_id))
+        for plan in phase_plans:
+            paths[plan.path] = False
+        if operation is MappingOperation.EXECUTE:
+            continue
+
+        phase_evidence = [
+            evidence for evidence in inventory.evidence if evidence.phase_id == phase_id
+        ]
+        if not phase_evidence:
+            issues.append(MappingIssue("mapping-evidence-declarations-empty", phase_id))
+        for evidence in phase_evidence:
+            paths[evidence.path] = False
+
+        assigned_sources = {
+            assignment.source_id
+            for assignment in inventory.assignments
+            if assignment.phase_id == phase_id
+        }
+        evidenced_sources = {
+            evidence.source_id
+            for evidence in phase_evidence
+            if evidence.source_id is not None
+        }
+        for source_id in sorted(assigned_sources - evidenced_sources, key=str.encode):
+            issues.append(MappingIssue("mapping-source-evidence-missing", source_id))
+        evidenced_plans = {
+            evidence.plan_path
+            for evidence in phase_evidence
+            if evidence.plan_path is not None
+        }
+        for plan in phase_plans:
+            if plan.path not in evidenced_plans:
+                issues.append(MappingIssue("mapping-plan-evidence-missing", plan.path))
+
+    observed_bytes = 0
+    for path, expect_directory in sorted(
+        paths.items(), key=lambda item: item[0].encode()
+    ):
+        issue, byte_count = _observe_declared_path(
+            root, path, expect_directory=expect_directory
+        )
+        if issue is not None:
+            issues.append(issue)
+            continue
+        observed_bytes += byte_count
+        if observed_bytes > _MAX_BYTES:
+            issues.append(MappingIssue("mapping-observation-limit-exceeded", path))
+            break
+    return tuple(
+        sorted(set(issues), key=lambda item: ((item.path or "").encode(), item.code))
+    )
+
+
+def validate_mapping_readiness(
+    repository_root: Path,
+    source_items: SourceIdentityState,
+    mappings: tuple[ManifestMapping, ...],
+    planning_inventory: PlanningInventory,
+    *,
+    operation: MappingOperation,
+    target_phase_id: str | None = None,
+) -> Result[MappingReadiness]:
+    """Evaluate one exact readiness horizon over a complete explicit mapping set."""
+
+    if not isinstance(operation, MappingOperation):
+        return _failure("mapping-operation-invalid")
+    if not isinstance(source_items, SourceIdentityState) or not isinstance(
+        planning_inventory, PlanningInventory
+    ):
+        return _failure("mapping-input-invalid")
+    if type(mappings) is not tuple or len(mappings) > _MAX_ENTRIES:
+        return _failure("mapping-set-invalid")
+    try:
+        _validate_declarations(planning_inventory)
+        root = repository_root.resolve(strict=True)
+        if not root.is_dir():
+            raise OSError
+    except _InventoryError as error:
+        return _failure(error.code)
+    except (OSError, RuntimeError, ValueError):
+        return _failure("mapping-repository-root-invalid")
+
+    active_ids = {item.id for item in source_items.active}
+    tombstone_ids = {item.id for item in source_items.tombstones}
+    assignment_ids = {item.source_id for item in planning_inventory.assignments}
+    if assignment_ids & tombstone_ids:
+        return _failure("mapping-tombstone-reference")
+    if assignment_ids - active_ids:
+        return _failure("mapping-source-unknown")
+    if assignment_ids != active_ids:
+        return _failure("mapping-source-coverage-incomplete")
+    if any(not isinstance(mapping, ManifestMapping) for mapping in mappings):
+        return _failure("mapping-set-invalid")
+    mapping_ids = [mapping.source_id for mapping in mappings]
+    if len(mapping_ids) != len(set(mapping_ids)):
+        return _failure("mapping-source-duplicate")
+    if set(mapping_ids) & tombstone_ids:
+        return _failure("mapping-tombstone-reference")
+    if mappings != _expected_mappings(planning_inventory):
+        return _failure("mapping-set-conflict")
+
+    phases = {phase.phase_id: phase for phase in planning_inventory.phases}
+    if operation is MappingOperation.FINALIZE:
+        if target_phase_id is not None:
+            return _failure("mapping-target-phase-invalid")
+    elif target_phase_id not in phases:
+        return _failure("mapping-phase-unknown")
+
+    issues = _readiness_issues(root, planning_inventory, operation, target_phase_id)
+    return Success(
+        MappingReadiness(
+            operation=operation,
+            target_phase_id=target_phase_id,
+            ready=not issues,
+            issues=issues,
+        )
+    )

@@ -324,7 +324,7 @@ def test_execute_requires_declared_plan_but_not_evidence(tmp_path: Path) -> None
     )
     assert isinstance(missing_declaration, Success)
     assert not missing_declaration.value.ready
-    assert MappingIssue("mapping-plan-declarations-empty") in (
+    assert MappingIssue("mapping-plan-declarations-empty", "02") in (
         missing_declaration.value.issues
     )
 
