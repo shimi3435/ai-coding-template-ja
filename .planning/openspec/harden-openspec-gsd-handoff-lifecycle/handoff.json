@@ -1,47 +1,95 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "change_id": "harden-openspec-gsd-handoff-lifecycle",
   "handoff_state": "started",
   "artifacts": [
     {
       "kind": "design",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md",
-      "sha256": "e09bf2eaf0b4051258ba7f2acf7b44631e9ac1ac56c580d3cee9388c421e77e1"
+      "sha256": "129b48e8b27e3c59cc7e730529682533c29d49d7270a7248aba53d3c64beb4af"
     },
     {
       "kind": "proposal",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/proposal.md",
-      "sha256": "8bca292932f8b6698ad27ba5aa060f434ec96b45ef01f1cb6473bb2a2cfee51a"
+      "sha256": "d8a53d581a0e69f9aa730d61166bfbaf14dcf7e488e267b6f123e76c2e60856a"
     },
     {
       "kind": "spec",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
-      "sha256": "decccfcac95a26e6a5268c34a8049ddf84bf3c3552af4128a6e6e775cba2e66b"
+      "sha256": "523c70ee6134bd10bdc36bd560aa2aa175ad36502388916fbbed1439d8373300"
     },
     {
       "kind": "tasks",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md",
-      "sha256": "1ee3fb1648068361b982aba425596136f2736c7dca4b9067be08fb53e77d56f5"
+      "sha256": "f9d3c8f6716003ae8375610edc659a3635ed7af29784064b155d59463bd9b459"
     }
   ],
-  "source_commit": "7e4c3ac5d6fc7f75716794ff1b805d9c1d6381bd",
+  "source_commit": "2cbb127917feaa637ef5eac439478227ac5f717b",
   "progress": {
     "total": 12,
-    "complete": 2,
-    "remaining": 10,
+    "complete": 4,
+    "remaining": 8,
     "tasks": [
-      {"id": "1", "description": "1.1 `revise-openspec-gsd-execution-boundary` と `automate-openspec-gsd-handoff` がmerge済みであること、MVP manifest schema、`handoff.json` 追跡・保持方針、対応 tool contracts を確認し、MVP merge後のbaseから本 change だけを載せる専用 branch / PRを用意する", "done": true},
-      {"id": "2", "description": "1.2 本 change の各 enforcement と参照する `adaptive-change-execution` requirement / scenario の対応、manifest migration / rollback contract、実装時の spec-holes Phase 2 計画を確定し、strict validate 後に source-pinned handoff previewを提示できる状態にする", "done": true},
-      {"id": "3", "description": "1.3 previewへの新たな明示承認後にだけprepared manifestを永続化し、GSD 1.5.0 entrypointのstructured acceptanceとroute別postconditionを確認して`mark-started`を完了する", "done": false},
-      {"id": "4", "description": "2.1 manifest migration と stable source identity の phase を完了し、対応する OpenSpec scenarios の検証を通す", "done": false},
-      {"id": "5", "description": "2.2 source-to-phase / plan / evidence mapping の phase を完了し、対応する OpenSpec scenarios の検証を通す", "done": false},
-      {"id": "6", "description": "3.1 lifecycle operation 前の drift 検査 phase を完了し、対応する OpenSpec scenarios の検証を通す", "done": false},
-      {"id": "7", "description": "3.2 repository-wide multi-manifest ownership phase を完了し、対応する OpenSpec scenarios の検証を通す", "done": false},
-      {"id": "8", "description": "4.1 interruption / partial failure からの resume / recovery phase を完了し、対応する OpenSpec scenarios の検証を通す", "done": false},
-      {"id": "9", "description": "4.2 finalize / cleanup preview と receipt の phase を完了し、対応する OpenSpec scenarios の検証を通す", "done": false},
-      {"id": "10", "description": "5.1 全 spec-holes Phase 1 の該当項目を fixture test、例示 test、property test、または理由付き未検証へ一対一で対応付け、通常 CI と opt-in OpenSpec / GSD smoke を通す", "done": false},
-      {"id": "11", "description": "5.2 GSD verification と独立して OpenSpec 原本との対応を確認し、`openspec validate harden-openspec-gsd-handoff-lifecycle --strict`、`task openspec:validate`、`task check`、drift・ownership・broken-reference 検査を通す", "done": false},
-      {"id": "12", "description": "6.1 `self-review` と close policy の確認後、finalize preview と承認 receipt を検証し、本 change の所有範囲だけを close する", "done": false}
+      {
+        "id": "1",
+        "description": "1.1 `revise-openspec-gsd-execution-boundary` と `automate-openspec-gsd-handoff` がmerge済みであること、MVP manifest schema、`handoff.json` 追跡・保持方針、対応 tool contracts を確認し、MVP merge後のbaseから本 change だけを載せる専用 branch / PRを用意する",
+        "done": true
+      },
+      {
+        "id": "2",
+        "description": "1.2 本 change の各 enforcement と参照する `adaptive-change-execution` requirement / scenario の対応、manifest migration / rollback contract、実装時の spec-holes Phase 2 計画を確定し、strict validate 後に source-pinned handoff previewを提示できる状態にする",
+        "done": true
+      },
+      {
+        "id": "3",
+        "description": "1.3 previewへの新たな明示承認後にだけprepared manifestを永続化し、GSD 1.5.0 entrypointのstructured acceptanceとroute別postconditionを確認して`mark-started`を完了する",
+        "done": true
+      },
+      {
+        "id": "4",
+        "description": "2.1 manifest migration と stable source identity の phase を完了し、対応する OpenSpec scenarios の検証を通す",
+        "done": true
+      },
+      {
+        "id": "5",
+        "description": "2.2 source-to-phase / plan / evidence mapping の phase を完了し、対応する OpenSpec scenarios の検証を通す",
+        "done": false
+      },
+      {
+        "id": "6",
+        "description": "3.1 lifecycle operation 前の drift 検査 phase を完了し、対応する OpenSpec scenarios の検証を通す",
+        "done": false
+      },
+      {
+        "id": "7",
+        "description": "3.2 repository-wide multi-manifest ownership phase を完了し、対応する OpenSpec scenarios の検証を通す",
+        "done": false
+      },
+      {
+        "id": "8",
+        "description": "4.1 interruption / partial failure からの resume / recovery phase を完了し、対応する OpenSpec scenarios の検証を通す",
+        "done": false
+      },
+      {
+        "id": "9",
+        "description": "4.2 finalize / cleanup preview と receipt の phase を完了し、対応する OpenSpec scenarios の検証を通す",
+        "done": false
+      },
+      {
+        "id": "10",
+        "description": "5.1 全 spec-holes Phase 1 の該当項目を fixture test、例示 test、property test、または理由付き未検証へ一対一で対応付け、通常 CI と opt-in OpenSpec / GSD smoke を通す",
+        "done": false
+      },
+      {
+        "id": "11",
+        "description": "5.2 GSD verification と独立して OpenSpec 原本との対応を確認し、`openspec validate harden-openspec-gsd-handoff-lifecycle --strict`、`task openspec:validate`、`task check`、drift・ownership・broken-reference 検査を通す",
+        "done": false
+      },
+      {
+        "id": "12",
+        "description": "6.1 `self-review` と close policy の確認後、finalize preview と承認 receipt を検証し、本 change の所有範囲だけを close する",
+        "done": false
+      }
     ]
   },
   "capabilities": {
@@ -62,5 +110,358 @@
       "dispatch": "generic-agent-workaround",
       "agent_role_source": "toml"
     }
+  },
+  "source_items": {
+    "next_requirement_id": 7,
+    "next_scenario_id": 37,
+    "active": [
+      {
+        "id": "REQ-000001",
+        "category": "requirement",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "### Requirement: HARD-R1 stable source identity と requirement mapping を維持する",
+        "parent_id": null,
+        "fingerprint": "ed1fdf2fb03ad6ba086ccabe6b2977545fb42fa3c5f7c8f1c680fceff0a8fdca"
+      },
+      {
+        "id": "REQ-000002",
+        "category": "requirement",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "### Requirement: HARD-R2 lifecycle 操作前に source と派生状態の drift を検査する",
+        "parent_id": null,
+        "fingerprint": "1c4c714d25e1124b346f5b2aaefa8bdd4fed155295c3f24c1f25e886fa74ba57"
+      },
+      {
+        "id": "REQ-000003",
+        "category": "requirement",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "### Requirement: HARD-R3 複数 manifests 間の artifact ownership を検査する",
+        "parent_id": null,
+        "fingerprint": "723b30eade10553c3a932ff307b36bbfb94240c27cc07ded2d368e5d695951b0"
+      },
+      {
+        "id": "REQ-000004",
+        "category": "requirement",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "### Requirement: HARD-R4 interruption と partial failure から検査可能に再開する",
+        "parent_id": null,
+        "fingerprint": "ea5a35ce2eb767807accb7d4697d5a6e0982bf6c0c6b2b8e7afc45c152477fe6"
+      },
+      {
+        "id": "REQ-000005",
+        "category": "requirement",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "### Requirement: HARD-R5 finalize と cleanup を preview と承認で制御する",
+        "parent_id": null,
+        "fingerprint": "42d1d6d5ccc72f89e74d6b930f96b1d498401c29804cd46b07f94c788fab5fa0"
+      },
+      {
+        "id": "REQ-000006",
+        "category": "requirement",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "### Requirement: HARD-R6 hardening を deterministic tests と opt-in smoke で検証する",
+        "parent_id": null,
+        "fingerprint": "626ea63277c4e534131a0081dcdaaab9aac4267a6c8dc5994a57e2a5c92c4297"
+      },
+      {
+        "id": "SCN-000001",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: MVP schema v1 の migration をpreviewする",
+        "parent_id": "REQ-000001",
+        "fingerprint": "b81ea727db8f8886fa6faffb2c7548661907bef640181dba201c807dbc195dff"
+      },
+      {
+        "id": "SCN-000002",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: artifact が一つの manifest に所有される",
+        "parent_id": "REQ-000003",
+        "fingerprint": "8903da8a9bff24970cadf7d8b06ed43c949413a74e8a7891d23e4a3bea801a2a"
+      },
+      {
+        "id": "SCN-000003",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: artifact が共有参照される",
+        "parent_id": "REQ-000003",
+        "fingerprint": "1a8abc22bc575621ffa8619e9bd319e36ff179f618a364453df32d8cc3e82144"
+      },
+      {
+        "id": "SCN-000004",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: canonical specification が変化する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "450d2712e813c0581578bd302779da6af97d469c48e036c92de195f6dd7bc3be"
+      },
+      {
+        "id": "SCN-000005",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: filesystem と Git の integration tests を実行する",
+        "parent_id": "REQ-000006",
+        "fingerprint": "34303f9ce9b55a9c1e294dfdd11867bfc345e6aa61906d2736c538749c747719"
+      },
+      {
+        "id": "SCN-000006",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: finalize preview を生成する",
+        "parent_id": "REQ-000005",
+        "fingerprint": "3ec2d048ed79e5157531ed6edb043b2bb4a1e5f53eee244011cb83f1e33a58bd"
+      },
+      {
+        "id": "SCN-000007",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: finalize が部分失敗する",
+        "parent_id": "REQ-000005",
+        "fingerprint": "5f87c10f52ba84b53db3a997ac39944cc417a2a19282bfd847b6abfd109942d4"
+      },
+      {
+        "id": "SCN-000008",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: heading path または親が変化する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "b14622ab377d5bdda9ed081945d21a4e1eeeadd9992b8049932ae2af3958f82a"
+      },
+      {
+        "id": "SCN-000009",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: lifecycle record のownerを分類する",
+        "parent_id": "REQ-000003",
+        "fingerprint": "fbcffd1b3509c4a8f3f30c1aa72090045ffb1c534f0e191dbe8ee1e67f857440"
+      },
+      {
+        "id": "SCN-000010",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: malformed・境界・順序違い fixtures を検証する",
+        "parent_id": "REQ-000006",
+        "fingerprint": "345b2cd3411e8be9690c039c1f7d6a4a1ce339856feefead7b1d99049b620970"
+      },
+      {
+        "id": "SCN-000011",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: manifest migration のstagingが失敗する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "f3f7ed9aa18a9740dcf0ec9933698a35ecb1d2e3c307228e141cce53b00b8b50"
+      },
+      {
+        "id": "SCN-000012",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: mapping が曖昧または衝突する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "72a02614dc88bb0dbb9e05402b117d89783d848ef4ff2b5b526676d4fc655d0c"
+      },
+      {
+        "id": "SCN-000013",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: optional tools なしで通常 CI を実行する",
+        "parent_id": "REQ-000006",
+        "fingerprint": "93374640b4cee9817414055315c93e77ed7069bc09674edd677a187c977f869e"
+      },
+      {
+        "id": "SCN-000014",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: ownership が競合または不明である",
+        "parent_id": "REQ-000003",
+        "fingerprint": "7bf59b77dd5623ec806f1068668fd98c49a5a1ef6554d93b06c352d91eb15c44"
+      },
+      {
+        "id": "SCN-000015",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: path が所有境界外へ解決される",
+        "parent_id": "REQ-000003",
+        "fingerprint": "8578b3f01603ba14629c5df779cfbe433094da67e3e9ea845660bc506b9ac79a"
+      },
+      {
+        "id": "SCN-000016",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: phase graph または capability evidence が変化する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "6a5f284f32abb1d79967af4efc6959c271509d56b9de9e9e7b6dbf6f6e2bf11e"
+      },
+      {
+        "id": "SCN-000017",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: phase mapping の完全性を検査する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "48a46e0c5432ae9c44473cad2413aa29418e471d3457bde28ff3d6e598b056f9"
+      },
+      {
+        "id": "SCN-000018",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: policy reference のtraceabilityを検査する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "c1eecd96205fc756ae48fe83f23865ac1f0933282eeb20335a76b8788eb3feee"
+      },
+      {
+        "id": "SCN-000019",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: preview 対象が空である",
+        "parent_id": "REQ-000005",
+        "fingerprint": "db197958cafe8f6f326aa6d3603c4234cc6c9e52aa327bcd8dc70bc0ad61ea15"
+      },
+      {
+        "id": "SCN-000020",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: preview 後に状態が変化する",
+        "parent_id": "REQ-000005",
+        "fingerprint": "b2fc90d8cf1bcb79336f0a1ab1c1d4171851ad96bf2471a409c61b07767edf49"
+      },
+      {
+        "id": "SCN-000021",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: property tests を実行する",
+        "parent_id": "REQ-000006",
+        "fingerprint": "f51c5ef49374c5e042081768e8bc4a07898e31b70a07e3e37789f4b5a2b53fd7"
+      },
+      {
+        "id": "SCN-000022",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: resume 時に source または capability が変化する",
+        "parent_id": "REQ-000004",
+        "fingerprint": "ab45a8dd6c21729383be9b7968feae06e64ff9527b441ad24daa59f7128f34c9"
+      },
+      {
+        "id": "SCN-000023",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: source identity を正規化する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "0394fe6c41d11905423f010b16491ef244b4921c9325218886570a8c52de6650"
+      },
+      {
+        "id": "SCN-000024",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: source item schema または counter が不正である",
+        "parent_id": "REQ-000001",
+        "fingerprint": "b0850f946c9b722dabf601e2aa8fda04ab41a407c02bd7f4bf4ad98d5c4cfda1"
+      },
+      {
+        "id": "SCN-000025",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: source item の親参照を検査する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "6442de337d3e03cba6e51383d98f76c96cab7fccac86c19badf8fcf9524b91c2"
+      },
+      {
+        "id": "SCN-000026",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: source の順序または表示上の空白だけが変わる",
+        "parent_id": "REQ-000001",
+        "fingerprint": "2113db41624c029e2a512951b1b7db7106ecda3f5df33ea5f79b1690eb54e4e8"
+      },
+      {
+        "id": "SCN-000027",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: tasks の checkbox 状態だけが変化する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "25c904dc506621621d93c1d5649bbea8a6f5935cf7a552606ad67e5a02e194a2"
+      },
+      {
+        "id": "SCN-000028",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: template change をpre-merge closeする",
+        "parent_id": "REQ-000003",
+        "fingerprint": "26154528797dd5f054b6b7b41900cd988f29de7c0ae42a051e74e2db099e3d4d"
+      },
+      {
+        "id": "SCN-000029",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: unknown schema またはdowngradeを要求する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "f0f8f88bb0b930ac3308aea3c523579aa1d44779c2c02c50e36625e901e4df0d"
+      },
+      {
+        "id": "SCN-000030",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 同じ source identity の意味内容が変わる",
+        "parent_id": "REQ-000001",
+        "fingerprint": "28886f1af8c1f7af634e2957f66f9709ad578cddfb32ce25cbdc54173c20d05a"
+      },
+      {
+        "id": "SCN-000031",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 実 tools の smoke を実行する",
+        "parent_id": "REQ-000006",
+        "fingerprint": "3577c9ff0943947d9d627a45cf27cf9edd80fd382c457aae8b984f1f0d423088"
+      },
+      {
+        "id": "SCN-000032",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 操作が一部成功して中断する",
+        "parent_id": "REQ-000004",
+        "fingerprint": "1942e8d2711d1d4d8283fa4ab0603bb2cd4150e95f4ea923d8b1330b0375d858"
+      },
+      {
+        "id": "SCN-000033",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 操作が副作用前に中断する",
+        "parent_id": "REQ-000004",
+        "fingerprint": "650a8429557307208f990661aa9526e89c8724348a72e2152d90ed598f5e8848"
+      },
+      {
+        "id": "SCN-000034",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 新しい source item に ID を割り当てる",
+        "parent_id": "REQ-000001",
+        "fingerprint": "12c4ab9559766b4a20578f8eb0a7acdf446e992473a3c1217bccb34be8168085"
+      },
+      {
+        "id": "SCN-000035",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 検査を完了できない",
+        "parent_id": "REQ-000002",
+        "fingerprint": "186ba40604fcd1fb933af729ba6bac305ba4acccbedb15ac4839ab57e8d6363a"
+      },
+      {
+        "id": "SCN-000036",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 自動回復で収束できない",
+        "parent_id": "REQ-000004",
+        "fingerprint": "d088843a901e039d6d7636643c1bcc423e6e9374b603846763f479149d85da48"
+      }
+    ],
+    "tombstones": []
+  },
+  "mappings": [],
+  "ownership": {
+    "owned": [],
+    "referenced": []
+  },
+  "lifecycle": {
+    "checkpoints": [],
+    "receipts": [],
+    "archives": []
   }
 }
