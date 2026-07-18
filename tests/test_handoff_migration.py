@@ -339,6 +339,26 @@ class PostReplaceRereadAndCloseFaultOperations(ParentCloseAfterEffectOperations)
         self.replaced = True
 
 
+class PostReplaceParentRebindOperations(MutationRecordingOperations):
+    """Rebind the canonical target parent immediately after replacement."""
+
+    def __init__(self, target: Path) -> None:
+        super().__init__()
+        self.target = target
+        self.moved_parent = target.parent.with_name(f"{target.parent.name}-installed")
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        super().replace_at(parent_descriptor, source_name, target_name)
+        self.target.parent.rename(self.moved_parent)
+        self.target.parent.mkdir()
+        self.target.write_bytes(EXPECTED_V1)
+
+
 class SpecSwapBetweenSnapshotOperations(ReadOnlyCountingOperations):
     """Expose whether one preview combines different spec byte observations."""
 
@@ -1694,4 +1714,32 @@ def test_apply_returns_structured_failure_when_replaced_candidate_is_unprovable(
     assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.NOT_NEEDED
     assert target.read_bytes() == preview.candidate_bytes
     assert not any(target.parent.glob(".handoff.*.tmp"))
+    assert operations.mutations == ["create", "write", "replace"]
+
+
+def test_apply_rejects_post_replace_canonical_parent_rebind(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    operations = PostReplaceParentRebindOperations(target)
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert applied.issue.staging_state is MigrationStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.NOT_NEEDED
+    assert target.read_bytes() == EXPECTED_V1
+    assert (operations.moved_parent / target.name).read_bytes() == (
+        preview.candidate_bytes
+    )
     assert operations.mutations == ["create", "write", "replace"]
