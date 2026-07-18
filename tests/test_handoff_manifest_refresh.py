@@ -17,7 +17,14 @@ from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import ManifestArtifact
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
+    ManifestRefreshFailure,
+    ManifestRefreshFileOperations,
+    RefreshCleanupOutcome,
+    RefreshFailurePoint,
     RefreshLimits,
+    RefreshStagingState,
+    RefreshTargetState,
+    apply_manifest_refresh,
     preview_manifest_refresh,
     serialize_manifest_refresh_preview,
 )
@@ -98,6 +105,17 @@ def _repository(
         target = repository / artifact.path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPOSITORY_ROOT / artifact.path, target)
+    registry = read_policy_reference_registry(REPOSITORY_ROOT, POLICY_REGISTRY_PATH)
+    assert isinstance(registry, Success)
+    for relative_path in {
+        POLICY_REGISTRY_PATH,
+        ASSIGNMENT_PATH,
+        *(item.source_path for item in registry.value.references),
+    }:
+        source = REPOSITORY_ROOT / relative_path
+        destination = repository / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
     target = repository / HANDOFF_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(
@@ -109,6 +127,113 @@ def _repository(
         parents=True, exist_ok=True
     )
     return repository, target
+
+
+class MutationRecordingRefreshOperations(ManifestRefreshFileOperations):
+    """Use real isolated persistence while recording every mutating boundary."""
+
+    def __init__(self) -> None:
+        self.mutations: list[str] = []
+
+    def create_staging_at(self, parent_descriptor: int, parent: Path) -> str:
+        self.mutations.append("create")
+        return super().create_staging_at(parent_descriptor, parent)
+
+    def write_bytes_at(self, parent_descriptor: int, name: str, data: bytes) -> None:
+        self.mutations.append("write")
+        super().write_bytes_at(parent_descriptor, name, data)
+
+    def replace_at(
+        self, parent_descriptor: int, source_name: str, target_name: str
+    ) -> None:
+        self.mutations.append("replace")
+        super().replace_at(parent_descriptor, source_name, target_name)
+
+    def unlink_at(self, parent_descriptor: int, name: str) -> None:
+        self.mutations.append("unlink")
+        super().unlink_at(parent_descriptor, name)
+
+
+class FaultInjectingRefreshOperations(MutationRecordingRefreshOperations):
+    """Inject exactly one refresh persistence fault in an isolated repository."""
+
+    def __init__(self, fault: str, target: Path) -> None:
+        super().__init__()
+        self.fault = fault
+        self.target = target
+        self.staging_name: str | None = None
+
+    def create_staging_at(self, parent_descriptor: int, parent: Path) -> str:
+        if self.fault == "create":
+            self.mutations.append("create")
+            raise OSError("injected refresh create failure")
+        name = super().create_staging_at(parent_descriptor, parent)
+        self.staging_name = name
+        return name
+
+    def write_bytes_at(self, parent_descriptor: int, name: str, data: bytes) -> None:
+        if self.fault in {"write", "cleanup"}:
+            self.mutations.append("write")
+            ManifestRefreshFileOperations.write_bytes_at(
+                self, parent_descriptor, name, b"{"
+            )
+            raise OSError("injected refresh write failure")
+        if self.fault == "validate":
+            self.mutations.append("write")
+            ManifestRefreshFileOperations.write_bytes_at(
+                self, parent_descriptor, name, b"{}"
+            )
+            return
+        super().write_bytes_at(parent_descriptor, name, data)
+
+    def read_bounded_bytes_at(
+        self,
+        parent_descriptor: int,
+        name: str,
+        *,
+        limit: int = 8 * 1024 * 1024,
+    ) -> bytes:
+        if self.fault == "reread" and name == self.staging_name:
+            raise OSError("injected refresh staging reread failure")
+        return super().read_bounded_bytes_at(parent_descriptor, name, limit=limit)
+
+    def replace_at(
+        self, parent_descriptor: int, source_name: str, target_name: str
+    ) -> None:
+        if self.fault.startswith("replace-"):
+            self.mutations.append("replace")
+            if self.fault == "replace-changed":
+                self.target.write_bytes(b"changed during refresh replace")
+            elif self.fault == "replace-unreadable":
+                self.target.unlink()
+            elif self.fault == "replace-oversized":
+                self.target.write_bytes(b"x" * (8 * 1024 * 1024 + 1))
+            raise OSError("injected refresh replace failure")
+        super().replace_at(parent_descriptor, source_name, target_name)
+
+    def unlink_at(self, parent_descriptor: int, name: str) -> None:
+        if self.fault == "cleanup":
+            self.mutations.append("unlink")
+            raise OSError("injected refresh cleanup failure")
+        super().unlink_at(parent_descriptor, name)
+
+
+class DriftAtReplaceRefreshOperations(MutationRecordingRefreshOperations):
+    """Change one preview-bound file after staging and before replacement."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self.path = path
+
+    def before_replace_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        del parent_descriptor, parent, source_name, target_name
+        self.path.write_bytes(self.path.read_bytes() + b"\nreplace-boundary drift\n")
 
 
 def _preview(repository: Path, **overrides):
@@ -346,3 +471,291 @@ def test_preview_builder_normalizes_declared_order_and_binds_identity(
     machine = serialize_manifest_refresh_preview(first.value)
     assert isinstance(machine, Success)
     assert _sha256(machine.value) == first.value.preview_sha256
+
+
+def test_apply_requires_exact_fresh_approval_before_any_mutation(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    malformed = replace(preview, candidate_bytes=b"{}")
+    replayed = (
+        replace(preview, repository_root=str(tmp_path / "other-repository")),
+        replace(
+            preview,
+            target_path=f".planning/openspec/{CHANGE_ID}-other/handoff.json",
+        ),
+    )
+
+    rejected_inputs = (
+        (preview, preview.preview_sha256, False, RefreshFailurePoint.APPROVAL),
+        (preview, "0" * 64, True, RefreshFailurePoint.APPROVAL),
+        (malformed, preview.preview_sha256, True, RefreshFailurePoint.STATE_GUARD),
+        *(
+            (item, preview.preview_sha256, True, RefreshFailurePoint.APPROVAL)
+            for item in replayed
+        ),
+    )
+    before = target.read_bytes()
+    for candidate, approved_hash, approved, failure_point in rejected_inputs:
+        operations = MutationRecordingRefreshOperations()
+        applied = apply_manifest_refresh(
+            candidate,
+            approved_preview_sha256=approved_hash,
+            approved=approved,
+            operations=operations,
+        )
+        assert isinstance(applied, ManifestRefreshFailure)
+        assert applied.issue.failure_point is failure_point
+        assert applied.issue.staging_state is RefreshStagingState.ABSENT
+        assert operations.mutations == []
+        assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "drift",
+    ["target", "source", "artifact", "progress", "assignment", "policy"],
+)
+def test_apply_rejects_every_preview_bound_state_drift_before_staging(
+    tmp_path: Path, drift: str
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    candidate = preview
+    if drift == "target":
+        target.write_bytes(target.read_bytes() + b" ")
+    elif drift == "source":
+        source = repository / SOURCE_PATH
+        source.write_bytes(source.read_bytes() + b"\nsource drift\n")
+    elif drift == "artifact":
+        artifact = repository / preview.current_artifacts[0].path
+        artifact.write_bytes(artifact.read_bytes() + b"\nartifact drift\n")
+    elif drift == "progress":
+        tasks = repository / f"openspec/changes/{CHANGE_ID}/tasks.md"
+        tasks.write_text(
+            tasks.read_text(encoding="utf-8").replace("- [ ]", "- [x]", 1),
+            encoding="utf-8",
+        )
+    elif drift == "assignment":
+        candidate = replace(
+            preview,
+            planning_inventory=replace(
+                preview.planning_inventory,
+                assignments=preview.planning_inventory.assignments[:-1],
+            ),
+        )
+    else:
+        policy = repository / preview.policy_registry.references[0].source_path
+        policy.write_bytes(policy.read_bytes() + b"\npolicy drift\n")
+    before = target.read_bytes()
+    operations = MutationRecordingRefreshOperations()
+
+    applied = apply_manifest_refresh(
+        candidate,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.failure_point in {
+        RefreshFailurePoint.APPROVAL,
+        RefreshFailurePoint.STATE_GUARD,
+    }
+    assert applied.issue.staging_state is RefreshStagingState.ABSENT
+    assert operations.mutations == []
+    assert target.read_bytes() == before
+
+
+def test_apply_exact_preview_stages_validates_and_atomically_replaces(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    operations = MutationRecordingRefreshOperations()
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, Success)
+    assert applied.value == preview.candidate_manifest
+    assert target.read_bytes() == preview.candidate_bytes
+    assert operations.mutations == ["create", "write", "replace"]
+    assert not tuple(target.parent.glob(".handoff.*.tmp"))
+    assert applied.value.handoff_state is HandoffState.STARTED
+    assert applied.value.capabilities == preview.previous_manifest.capabilities
+    assert applied.value.ownership == preview.previous_manifest.ownership
+    assert applied.value.lifecycle == preview.previous_manifest.lifecycle
+
+
+def test_apply_complete_no_op_succeeds_without_create_write_or_replace(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    initial = _preview(repository)
+    assert isinstance(initial, Success)
+    target.write_bytes(initial.value.candidate_bytes)
+    no_op = _preview(repository)
+    assert isinstance(no_op, Success)
+    assert no_op.value.no_op is True
+    before = target.read_bytes()
+    operations = MutationRecordingRefreshOperations()
+
+    applied = apply_manifest_refresh(
+        no_op.value,
+        approved_preview_sha256=no_op.value.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, Success)
+    assert applied.value == no_op.value.candidate_manifest
+    assert operations.mutations == []
+    assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("fault", "point", "staging", "cleanup", "mutations"),
+    [
+        (
+            "create",
+            RefreshFailurePoint.CREATE,
+            RefreshStagingState.UNKNOWN,
+            RefreshCleanupOutcome.NOT_NEEDED,
+            ["create"],
+        ),
+        (
+            "write",
+            RefreshFailurePoint.WRITE,
+            RefreshStagingState.UNKNOWN,
+            RefreshCleanupOutcome.REMOVED,
+            ["create", "write", "unlink"],
+        ),
+        (
+            "reread",
+            RefreshFailurePoint.REREAD,
+            RefreshStagingState.UNKNOWN,
+            RefreshCleanupOutcome.REMOVED,
+            ["create", "write", "unlink"],
+        ),
+        (
+            "validate",
+            RefreshFailurePoint.VALIDATE,
+            RefreshStagingState.INVALID,
+            RefreshCleanupOutcome.REMOVED,
+            ["create", "write", "unlink"],
+        ),
+        (
+            "cleanup",
+            RefreshFailurePoint.WRITE,
+            RefreshStagingState.UNKNOWN,
+            RefreshCleanupOutcome.FAILED,
+            ["create", "write", "unlink"],
+        ),
+    ],
+)
+def test_apply_fault_matrix_proves_old_v2_and_classifies_staging_cleanup(
+    tmp_path: Path,
+    fault: str,
+    point: RefreshFailurePoint,
+    staging: RefreshStagingState,
+    cleanup: RefreshCleanupOutcome,
+    mutations: list[str],
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    before = target.read_bytes()
+    operations = FaultInjectingRefreshOperations(fault, target)
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.failure_point is point
+    assert applied.issue.target_state is RefreshTargetState.V2_PRESERVED
+    assert applied.issue.staging_state is staging
+    assert applied.issue.cleanup_outcome is cleanup
+    assert operations.mutations == mutations
+    assert target.read_bytes() == before
+    if fault == "cleanup":
+        retained = tuple(target.parent.glob(".handoff.*.tmp"))
+        assert len(retained) == 1
+        retained[0].unlink()
+    else:
+        assert not tuple(target.parent.glob(".handoff.*.tmp"))
+
+
+@pytest.mark.parametrize(
+    ("fault", "target_state"),
+    [
+        ("replace-unchanged", RefreshTargetState.V2_PRESERVED),
+        ("replace-changed", RefreshTargetState.UNKNOWN),
+        ("replace-unreadable", RefreshTargetState.UNKNOWN),
+        ("replace-oversized", RefreshTargetState.UNKNOWN),
+    ],
+)
+def test_apply_replace_failure_uses_fresh_bounded_target_proof(
+    tmp_path: Path, fault: str, target_state: RefreshTargetState
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    operations = FaultInjectingRefreshOperations(fault, target)
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.failure_point is RefreshFailurePoint.REPLACE
+    assert applied.issue.target_state is target_state
+    assert applied.issue.staging_state is RefreshStagingState.VALIDATED
+    assert applied.issue.cleanup_outcome is RefreshCleanupOutcome.REMOVED
+    assert operations.mutations == ["create", "write", "replace", "unlink"]
+
+
+@pytest.mark.parametrize("drift_path", [SOURCE_PATH, POLICY_REGISTRY_PATH])
+def test_apply_rechecks_source_and_policy_after_staging_before_replace(
+    tmp_path: Path, drift_path: str
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    before = target.read_bytes()
+    operations = DriftAtReplaceRefreshOperations(repository / drift_path)
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.failure_point is RefreshFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is RefreshTargetState.V2_PRESERVED
+    assert applied.issue.staging_state is RefreshStagingState.VALIDATED
+    assert applied.issue.cleanup_outcome is RefreshCleanupOutcome.REMOVED
+    assert operations.mutations == ["create", "write", "unlink"]
+    assert target.read_bytes() == before
