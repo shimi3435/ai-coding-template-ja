@@ -15,7 +15,7 @@ reinterpret canonical requirement prose.
 
 ### Canonical Coverage
 
-- [ ] **HND-01**: Stable identity and migration coverage pointer to canonical `HARD-R1`
+- [x] **HND-01**: Stable identity and migration coverage pointer to canonical `HARD-R1`
 - [ ] **HND-02**: Source-to-execution mapping coverage pointer to canonical `HARD-R1`
 - [ ] **HND-03**: Coverage pointer to canonical `HARD-R2`
 - [ ] **HND-04**: Coverage pointer to canonical `HARD-R3`
@@ -45,7 +45,7 @@ Updated during roadmap creation. Each GSD handle maps to exactly one primary pha
 
 | Requirement | Canonical Handle | Phase | Status |
 |-------------|------------------|-------|--------|
-| HND-01 | HARD-R1 | Phase 1 | Pending |
+| HND-01 | HARD-R1 | Phase 1 | Complete |
 | HND-02 | HARD-R1 | Phase 2 | Pending |
 | HND-03 | HARD-R2 | Phase 3 | Pending |
 | HND-04 | HARD-R3 | Phase 4 | Pending |
@@ -60,4 +60,4 @@ Updated during roadmap creation. Each GSD handle maps to exactly one primary pha
 
 ---
 *Requirements registry defined: 2026-07-16*
-*Last updated: 2026-07-17 after approved manual recovery repin*
+*Last updated: 2026-07-18 after independent Phase 1 verification*
