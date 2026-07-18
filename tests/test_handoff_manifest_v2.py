@@ -402,6 +402,70 @@ def test_schema_v2_parser_rejects_duplicate_object_names(data: bytes) -> None:
     assert result.issue.code == "manifest-v2-json-invalid"
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        b'{"schema_version":' + b"9" * 5000 + b"}",
+        json.dumps(
+            {
+                **_raw_v2(),
+                "progress": {
+                    **_raw_v2()["progress"],
+                    "tasks": [
+                        {
+                            **_raw_v2()["progress"]["tasks"][0],
+                            "description": "\ud800",
+                        },
+                        *_raw_v2()["progress"]["tasks"][1:],
+                    ],
+                },
+            }
+        ).encode(),
+        json.dumps(
+            {
+                **_raw_v2(),
+                "source_items": {
+                    **_raw_v2()["source_items"],
+                    "active": [
+                        {
+                            **_raw_v2()["source_items"]["active"][0],
+                            "raw_heading": "\ud800",
+                        },
+                        *_raw_v2()["source_items"]["active"][1:],
+                    ],
+                },
+            }
+        ).encode(),
+    ],
+    ids=["huge-integer", "common-lone-surrogate", "source-lone-surrogate"],
+)
+def test_schema_v2_parser_contains_bounded_non_total_json_inputs(data: bytes) -> None:
+    result = parse_manifest_v2_bytes(data)
+
+    assert isinstance(result, Failure)
+
+
+def test_schema_v2_serializer_contains_non_total_complete_values() -> None:
+    parsed = parse_manifest_v2_bytes(EXPECTED_V2)
+    assert isinstance(parsed, Success)
+    source_items = parsed.value.source_items
+    invalid_source_items = replace(
+        source_items,
+        active=(
+            replace(source_items.active[0], raw_heading="\ud800"),
+            *source_items.active[1:],
+        ),
+    )
+
+    huge_integer = serialize_manifest_v2(replace(parsed.value, schema_version=10**4999))
+    lone_surrogate = serialize_manifest_v2(
+        replace(parsed.value, source_items=invalid_source_items)
+    )
+
+    assert isinstance(huge_integer, Failure)
+    assert isinstance(lone_surrogate, Failure)
+
+
 def test_schema_v2_serializer_rejects_invalid_complete_values() -> None:
     parsed = parse_manifest_v2_bytes(EXPECTED_V2)
     assert isinstance(parsed, Success)
@@ -513,6 +577,15 @@ def test_versioned_parser_rejects_deeply_nested_json_as_structured_failure(
     ids=["root", "nested"],
 )
 def test_versioned_parser_rejects_duplicate_object_names(data: bytes) -> None:
+    result = parse_versioned_manifest_bytes(data)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "manifest-json-invalid"
+
+
+def test_versioned_parser_contains_huge_integer_json_failure() -> None:
+    data = b'{"schema_version":' + b"9" * 5000 + b"}"
+
     result = parse_versioned_manifest_bytes(data)
 
     assert isinstance(result, Failure)

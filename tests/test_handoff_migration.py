@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -12,7 +13,6 @@ import pytest
 
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     MAX_MANIFEST_BYTES,
-    ManifestFileOperations,
     parse_manifest_bytes,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
@@ -76,7 +76,7 @@ CANONICAL_CONTENT = {
 }
 
 
-class ReadOnlyCountingOperations(ManifestFileOperations):
+class ReadOnlyCountingOperations(ManifestMigrationFileOperations):
     """Fail loudly if a read-only preview reaches a mutation operation."""
 
     def make_parent(self, path: Path) -> None:
@@ -343,6 +343,37 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _reviewed_preview_sha256(preview) -> str:
+    machine_view = {
+        "repository_root": preview.repository_root,
+        "target_path": preview.target_path,
+        "observed_source_commit": preview.observed_source_commit,
+        "current_source_commit": preview.current_source_commit,
+        "v1_sha256": preview.v1_sha256,
+        "current_artifacts_sha256": preview.current_artifacts_sha256,
+        "current_progress_sha256": preview.current_progress_sha256,
+        "source_paths": list(preview.source_paths),
+        "v2_sha256": preview.v2_sha256,
+        "changes": [
+            {
+                "kind": change.kind,
+                "source_id": change.source_id,
+                "category": change.category.value,
+                "source_path": change.source_path,
+                "previous_fingerprint": change.previous_fingerprint,
+                "candidate_fingerprint": change.candidate_fingerprint,
+                "reason": change.reason,
+            }
+            for change in preview.changes
+        ],
+        "exclusions": list(preview.exclusions),
+    }
+    reviewed_bytes = (
+        json.dumps(machine_view, ensure_ascii=False, separators=(",", ":")) + "\n"
+    ).encode()
+    return _sha256(reviewed_bytes)
+
+
 def _tree_bytes(repository: Path) -> dict[str, bytes]:
     return {
         path.relative_to(repository).as_posix(): path.read_bytes()
@@ -535,6 +566,7 @@ def test_preview_rejects_canonical_artifact_swap_without_adopting_outside_bytes(
     )
 
     assert isinstance(result, Failure)
+    monkeypatch.undo()
     assert target.read_bytes() == EXPECTED_V1
     assert artifact.read_bytes() == CANONICAL_CONTENT[artifact_path]
     assert outside_artifact.read_bytes() == outside_bytes
@@ -851,6 +883,66 @@ def test_apply_rejects_malformed_nested_preview_without_partial_evidence(
     assert operations.mutations == []
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["missing", "extra", "fingerprint", "source-path", "exclusion"],
+)
+def test_apply_rejects_reviewed_change_evidence_not_derived_from_candidate(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    first = preview.changes[0]
+    altered_changes = {
+        "missing": preview.changes[1:],
+        "extra": (*preview.changes, first),
+        "fingerprint": (
+            replace(first, candidate_fingerprint="f" * 64),
+            *preview.changes[1:],
+        ),
+        "source-path": (
+            replace(
+                first,
+                source_path=("openspec/changes/fixture-change/specs/other/spec.md"),
+            ),
+            *preview.changes[1:],
+        ),
+        "exclusion": preview.changes,
+    }[mutation]
+    altered_exclusions = (
+        ("source-observation-excluded",)
+        if mutation == "exclusion"
+        else preview.exclusions
+    )
+    tampered = replace(
+        preview,
+        changes=altered_changes,
+        exclusions=altered_exclusions,
+        preview_sha256="",
+    )
+    tampered = replace(
+        tampered,
+        preview_sha256=_reviewed_preview_sha256(tampered),
+    )
+    operations = MutationRecordingOperations()
+
+    applied = apply_manifest_migration(
+        tampered,
+        approved_preview_sha256=tampered.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.code == "migration-preview-invalid"
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert operations.mutations == []
+    assert target.read_bytes() == EXPECTED_V1
 
 
 def test_apply_rejects_preview_replay_and_current_snapshot_drift_before_staging(
