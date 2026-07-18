@@ -261,6 +261,26 @@ def _policy_object(
     }
 
 
+def _normalized_inventory(inventory: PlanningInventory) -> PlanningInventory:
+    """Normalize declaration order before candidate and approval binding."""
+
+    return replace(
+        inventory,
+        phases=tuple(sorted(inventory.phases, key=lambda item: item.phase_id)),
+        assignments=tuple(
+            sorted(inventory.assignments, key=lambda item: item.source_id)
+        ),
+        plans=tuple(sorted(inventory.plans, key=lambda item: item.path.encode())),
+        evidence=tuple(sorted(inventory.evidence, key=lambda item: item.path.encode())),
+        policy_observations=tuple(
+            sorted(
+                inventory.policy_observations,
+                key=lambda item: item.reference_id.encode(),
+            )
+        ),
+    )
+
+
 def _protected_objects(manifest: HandoffManifestV2) -> tuple[tuple[str, object], ...]:
     encoded = json.loads(serialize_manifest_v2(manifest).value)  # type: ignore[union-attr]
     return tuple(
@@ -411,6 +431,7 @@ def preview_manifest_refresh(
     artifacts = tuple(current_artifacts)
     paths = tuple(str(path) for path in source_paths)
     matches = tuple(explicit_matches)
+    normalized_inventory = _normalized_inventory(planning_inventory)
     try:
         observed_artifacts: list[ManifestArtifact] = []
         artifact_bytes: dict[str, bytes] = {}
@@ -464,7 +485,7 @@ def preview_manifest_refresh(
         return _failure("refresh-canonical-snapshot-stale", IssueCategory.INPUT)
 
     mappings = build_manifest_mappings(
-        source_items, planning_inventory, policy_registry
+        source_items, normalized_inventory, policy_registry
     )
     if isinstance(mappings, Failure):
         return _failure(f"refresh-{mappings.issue.code}", mappings.issue.category)
@@ -472,7 +493,7 @@ def preview_manifest_refresh(
         repository,
         source_items,
         mappings.value,
-        planning_inventory,
+        normalized_inventory,
         operation=MappingOperation.PLAN,
         target_phase_id="02",
     )
@@ -508,8 +529,8 @@ def preview_manifest_refresh(
     source_after = _compact(_source_object(source_items))
     mappings_before = _compact([_mapping_object(item) for item in previous.mappings])
     mappings_after = _compact([_mapping_object(item) for item in mappings.value])
-    inventory_bytes = _compact(_inventory_object(planning_inventory))
-    policy_bytes = _compact(_policy_object(policy_registry, planning_inventory))
+    inventory_bytes = _compact(_inventory_object(normalized_inventory))
+    policy_bytes = _compact(_policy_object(policy_registry, normalized_inventory))
     preview = ManifestRefreshPreview(
         repository_root=str(repository),
         target_path=canonical_target,
@@ -518,7 +539,7 @@ def preview_manifest_refresh(
         current_artifacts=artifacts,
         current_progress=current_progress,
         source_paths=paths,
-        planning_inventory=planning_inventory,
+        planning_inventory=normalized_inventory,
         policy_registry=policy_registry,
         explicit_matches=matches,
         old_target_sha256=_sha256(target_bytes),
