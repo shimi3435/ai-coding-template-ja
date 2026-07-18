@@ -443,6 +443,10 @@ def test_schema_v2_parser_contains_bounded_non_total_json_inputs(data: bytes) ->
     result = parse_manifest_v2_bytes(data)
 
     assert isinstance(result, Failure)
+    assert result.issue.code in {
+        "manifest-v2-json-invalid",
+        "manifest-v2-value-invalid",
+    }
 
 
 def test_schema_v2_serializer_contains_non_total_complete_values() -> None:
@@ -463,7 +467,9 @@ def test_schema_v2_serializer_contains_non_total_complete_values() -> None:
     )
 
     assert isinstance(huge_integer, Failure)
+    assert huge_integer.issue.code == "manifest-v2-serialization-invalid"
     assert isinstance(lone_surrogate, Failure)
+    assert lone_surrogate.issue.code == "manifest-v2-serialization-invalid"
 
 
 def test_schema_v2_serializer_rejects_invalid_complete_values() -> None:

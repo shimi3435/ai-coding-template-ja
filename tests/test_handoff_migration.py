@@ -354,6 +354,7 @@ def _reviewed_preview_sha256(preview) -> str:
         "current_progress_sha256": preview.current_progress_sha256,
         "source_paths": list(preview.source_paths),
         "v2_sha256": preview.v2_sha256,
+        "source_context_sha256": preview.source_context_sha256,
         "changes": [
             {
                 "kind": change.kind,

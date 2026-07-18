@@ -689,24 +689,36 @@ def parse_manifest_v2_bytes(data: bytes) -> Result[HandoffManifestV2]:
         json.JSONDecodeError,
         UnicodeDecodeError,
         TypeError,
+        ValueError,
+        OverflowError,
         RecursionError,
     ):
         return _failure("manifest-v2-json-invalid")
-    root = _exact_fields(raw, _ROOT_FIELDS)
-    if root is None:
-        return _failure("manifest-v2-fields-invalid")
-    if root["schema_version"] != 2 or type(root["schema_version"]) is not int:
-        return _failure("manifest-v2-schema-unsupported")
-    common = _parse_common_manifest(root)
-    if common is None:
-        return _failure("manifest-v2-value-invalid")
-    source_items = _parse_source_items(root["source_items"], common.change_id)
-    if source_items is None:
-        return _failure("manifest-v2-value-invalid")
-    mappings = _parse_mappings(root["mappings"], source_items)
-    ownership = _parse_ownership(root["ownership"])
-    lifecycle = _parse_lifecycle(root["lifecycle"])
-    if mappings is None or ownership is None or lifecycle is None:
+    try:
+        root = _exact_fields(raw, _ROOT_FIELDS)
+        if root is None:
+            return _failure("manifest-v2-fields-invalid")
+        if root["schema_version"] != 2 or type(root["schema_version"]) is not int:
+            return _failure("manifest-v2-schema-unsupported")
+        common = _parse_common_manifest(root)
+        if common is None:
+            return _failure("manifest-v2-value-invalid")
+        source_items = _parse_source_items(root["source_items"], common.change_id)
+        if source_items is None:
+            return _failure("manifest-v2-value-invalid")
+        mappings = _parse_mappings(root["mappings"], source_items)
+        ownership = _parse_ownership(root["ownership"])
+        lifecycle = _parse_lifecycle(root["lifecycle"])
+        if mappings is None or ownership is None or lifecycle is None:
+            return _failure("manifest-v2-value-invalid")
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        UnicodeEncodeError,
+        OverflowError,
+        RecursionError,
+    ):
         return _failure("manifest-v2-value-invalid")
     return Success(
         HandoffManifestV2(
@@ -874,7 +886,14 @@ def serialize_manifest_v2(manifest: HandoffManifestV2) -> Result[bytes]:
             )
             + "\n"
         ).encode()
-    except (AttributeError, TypeError, UnicodeEncodeError):
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        UnicodeEncodeError,
+        OverflowError,
+        RecursionError,
+    ):
         return _failure("manifest-v2-serialization-invalid")
     parsed = parse_manifest_v2_bytes(data)
     if isinstance(parsed, Failure) or parsed.value != manifest:

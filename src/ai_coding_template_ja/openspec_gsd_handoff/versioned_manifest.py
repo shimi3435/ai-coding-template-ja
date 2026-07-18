@@ -61,6 +61,8 @@ def parse_versioned_manifest_bytes(
         json.JSONDecodeError,
         UnicodeDecodeError,
         TypeError,
+        ValueError,
+        OverflowError,
         RecursionError,
     ):
         return _failure("manifest-json-invalid")

@@ -99,6 +99,9 @@ class ManifestMigrationPreview:
     v2_sha256: str
     candidate_bytes: bytes
     candidate_manifest: HandoffManifestV2
+    previous_source_items: SourceIdentityState
+    explicit_matches: tuple[ExplicitSourceMatch, ...]
+    source_context_sha256: str
     changes: tuple[MigrationCandidateChange, ...]
     exclusions: tuple[str, ...]
     preview_sha256: str
@@ -566,6 +569,61 @@ def _change_object(change: MigrationCandidateChange) -> dict[str, object]:
     }
 
 
+def _source_state_object(state: SourceIdentityState) -> dict[str, object]:
+    return {
+        "next_requirement_id": state.next_requirement_id,
+        "next_scenario_id": state.next_scenario_id,
+        "active": [
+            {
+                "id": item.id,
+                "category": item.category.value,
+                "source_path": item.source_path,
+                "raw_heading": item.raw_heading,
+                "parent_id": item.parent_id,
+                "fingerprint": item.fingerprint,
+            }
+            for item in state.active
+        ],
+        "tombstones": [
+            {
+                "id": item.id,
+                "category": item.category.value,
+                "last_source_path": item.last_source_path,
+                "last_raw_heading": item.last_raw_heading,
+                "last_parent_id": item.last_parent_id,
+                "fingerprint": item.fingerprint,
+            }
+            for item in state.tombstones
+        ],
+    }
+
+
+def _explicit_match_object(match: ExplicitSourceMatch) -> dict[str, object]:
+    parent = match.parent_locator
+    return {
+        "source_path": match.source_path,
+        "normalized_heading": match.normalized_heading,
+        "parent_locator": (
+            None
+            if parent is None
+            else {
+                "source_path": parent.source_path,
+                "normalized_heading": parent.normalized_heading,
+            }
+        ),
+        "source_id": match.source_id,
+    }
+
+
+def _source_context_object(preview: ManifestMigrationPreview) -> dict[str, object]:
+    return {
+        "previous_source_items": _source_state_object(preview.previous_source_items),
+        "explicit_matches": [
+            _explicit_match_object(match) for match in preview.explicit_matches
+        ],
+    }
+
+
 def _bounded_preview_text(value: object, *, allow_empty: bool = False) -> bool:
     if type(value) is not str or (not allow_empty and not value):
         return False
@@ -587,6 +645,7 @@ def _preview_has_valid_shape(preview: object) -> bool:
         preview.current_progress_sha256,
         preview.v1_sha256,
         preview.v2_sha256,
+        preview.source_context_sha256,
     )
     if not all(_bounded_preview_text(value) for value in scalar_text):
         return False
@@ -606,6 +665,9 @@ def _preview_has_valid_shape(preview: object) -> bool:
         or not preview.candidate_bytes
         or len(preview.candidate_bytes) > MAX_MANIFEST_BYTES
         or type(preview.candidate_manifest) is not HandoffManifestV2
+        or type(preview.previous_source_items) is not SourceIdentityState
+        or type(preview.explicit_matches) is not tuple
+        or len(preview.explicit_matches) > _MAX_PREVIEW_ITEMS
         or type(preview.current_artifacts) is not tuple
         or not 1 <= len(preview.current_artifacts) <= 64
         or type(preview.current_progress) is not Progress
@@ -661,6 +723,10 @@ def _preview_has_valid_shape(preview: object) -> bool:
         for change in preview.changes
     ):
         return False
+    if any(
+        type(match) is not ExplicitSourceMatch for match in preview.explicit_matches
+    ):
+        return False
     if not all(_bounded_preview_text(exclusion) for exclusion in preview.exclusions):
         return False
 
@@ -702,6 +768,7 @@ def _preview_machine_view(preview: ManifestMigrationPreview) -> dict[str, object
         "current_progress_sha256": preview.current_progress_sha256,
         "source_paths": list(preview.source_paths),
         "v2_sha256": preview.v2_sha256,
+        "source_context_sha256": preview.source_context_sha256,
         "changes": [_change_object(change) for change in preview.changes],
         "exclusions": list(preview.exclusions),
     }
@@ -759,6 +826,8 @@ def _preview_is_consistent(preview: ManifestMigrationPreview) -> bool:
         _sha256(_compact_json(artifact_snapshot)) != preview.current_artifacts_sha256
         or _sha256(_compact_json(progress_snapshot)) != preview.current_progress_sha256
         or _sha256(preview.candidate_bytes) != preview.v2_sha256
+        or _sha256(_compact_json(_source_context_object(preview)))
+        != preview.source_context_sha256
         or preview.candidate_manifest.artifacts != preview.current_artifacts
         or preview.candidate_manifest.progress != preview.current_progress
         or preview.candidate_manifest.source_commit != preview.current_source_commit
@@ -768,8 +837,23 @@ def _preview_is_consistent(preview: ManifestMigrationPreview) -> bool:
     if isinstance(parsed, Failure) or parsed.value != preview.candidate_manifest:
         return False
     serialized = serialize_manifest_v2(preview.candidate_manifest)
+    previous_validation = serialize_manifest_v2(
+        replace(
+            preview.candidate_manifest,
+            source_items=preview.previous_source_items,
+        )
+    )
+    expected_changes = _candidate_changes_from_states(
+        preview.previous_source_items,
+        preview.candidate_manifest.source_items,
+    )
     return (
-        isinstance(serialized, Success) and serialized.value == preview.candidate_bytes
+        isinstance(serialized, Success)
+        and serialized.value == preview.candidate_bytes
+        and isinstance(previous_validation, Success)
+        and expected_changes is not None
+        and preview.changes == expected_changes
+        and preview.exclusions == ()
     )
 
 
@@ -1046,11 +1130,51 @@ def _candidate_changes(
     reconciliation: SourceReconciliation,
     previous: SourceIdentityState,
 ) -> tuple[MigrationCandidateChange, ...]:
+    changes = _candidate_changes_from_states(previous, reconciliation.state)
+    if changes is None:  # pragma: no cover - reconciliation guarantees this transition
+        raise AssertionError("source reconciliation produced an invalid transition")
+    return changes
+
+
+def _candidate_changes_from_states(
+    previous: SourceIdentityState,
+    candidate: SourceIdentityState,
+) -> tuple[MigrationCandidateChange, ...] | None:
     previous_active = {item.id: item for item in previous.active}
-    candidate_active = {item.id: item for item in reconciliation.state.active}
-    candidate_tombstones = {item.id: item for item in reconciliation.state.tombstones}
+    previous_tombstones = {item.id: item for item in previous.tombstones}
+    candidate_active = {item.id: item for item in candidate.active}
+    candidate_tombstones = {item.id: item for item in candidate.tombstones}
+    if (
+        len(previous_active) != len(previous.active)
+        or len(previous_tombstones) != len(previous.tombstones)
+        or len(candidate_active) != len(candidate.active)
+        or len(candidate_tombstones) != len(candidate.tombstones)
+        or any(
+            candidate_tombstones.get(key) != value
+            for key, value in previous_tombstones.items()
+        )
+    ):
+        return None
+    created = candidate_active.keys() - previous_active.keys()
+    updated = {
+        source_id
+        for source_id in candidate_active.keys() & previous_active.keys()
+        if candidate_active[source_id] != previous_active[source_id]
+    }
+    tombstoned = previous_active.keys() - candidate_active.keys()
+    for source_id in tombstoned:
+        prior = previous_active[source_id]
+        current = candidate_tombstones.get(source_id)
+        if current is None or (
+            current.category != prior.category
+            or current.last_source_path != prior.source_path
+            or current.last_raw_heading != prior.raw_heading
+            or current.last_parent_id != prior.parent_id
+            or current.fingerprint != prior.fingerprint
+        ):
+            return None
     changes: list[MigrationCandidateChange] = []
-    for source_id in reconciliation.created:
+    for source_id in created:
         current = candidate_active[source_id]
         changes.append(
             MigrationCandidateChange(
@@ -1063,7 +1187,7 @@ def _candidate_changes(
                 reason="source-identity-allocated",
             )
         )
-    for source_id in reconciliation.updated:
+    for source_id in updated:
         prior = previous_active[source_id]
         current = candidate_active[source_id]
         changes.append(
@@ -1077,7 +1201,7 @@ def _candidate_changes(
                 reason="source-observation-updated",
             )
         )
-    for source_id in reconciliation.tombstoned:
+    for source_id in tombstoned:
         prior = previous_active[source_id]
         current = candidate_tombstones[source_id]
         changes.append(
@@ -1225,10 +1349,11 @@ def preview_manifest_migration(
         return snapshot
     v1_bytes, source_manifest, source_inventory = snapshot.value
     previous = previous_source_items or _EMPTY_SOURCE_ITEMS
+    frozen_explicit_matches = tuple(explicit_matches)
     reconciliation = reconcile_source_items(
         source_inventory,
         previous,
-        explicit_matches=explicit_matches,
+        explicit_matches=frozen_explicit_matches,
     )
     if isinstance(reconciliation, Failure):
         return reconciliation
@@ -1269,9 +1394,16 @@ def preview_manifest_migration(
         v2_sha256=v2_sha256,
         candidate_bytes=serialized.value,
         candidate_manifest=candidate,
+        previous_source_items=previous,
+        explicit_matches=frozen_explicit_matches,
+        source_context_sha256="",
         changes=changes,
         exclusions=reconciliation.value.exclusions,
         preview_sha256="",
+    )
+    preview = replace(
+        preview,
+        source_context_sha256=_sha256(_compact_json(_source_context_object(preview))),
     )
     preview_identity = _preview_identity(preview)
     if preview_identity is None:
@@ -1665,6 +1797,28 @@ def apply_manifest_migration(
         if isinstance(source_snapshot, Failure):
             return _migration_failure(
                 "migration-current-snapshot-changed",
+                MigrationFailurePoint.STATE_GUARD,
+                _observe_target_state_path(filesystem, target, preview.v1_sha256),
+                MigrationStagingState.ABSENT,
+            )
+        current_reconciliation = reconcile_source_items(
+            source_snapshot.value,
+            preview.previous_source_items,
+            explicit_matches=preview.explicit_matches,
+        )
+        if (
+            isinstance(current_reconciliation, Failure)
+            or current_reconciliation.value.state
+            != preview.candidate_manifest.source_items
+            or _candidate_changes(
+                current_reconciliation.value,
+                preview.previous_source_items,
+            )
+            != preview.changes
+            or current_reconciliation.value.exclusions != preview.exclusions
+        ):
+            return _migration_failure(
+                "migration-preview-source-evidence-changed",
                 MigrationFailurePoint.STATE_GUARD,
                 _observe_target_state_path(filesystem, target, preview.v1_sha256),
                 MigrationStagingState.ABSENT,
