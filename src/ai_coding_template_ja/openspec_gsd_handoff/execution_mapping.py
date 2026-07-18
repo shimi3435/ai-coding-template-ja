@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .manifest_v2 import ManifestMapping
 from .models import (
@@ -27,6 +29,10 @@ from .source_identity import SourceIdentityState
 _INVENTORY_VERSION = "openspec-gsd-planning-inventory-v1"
 _MAX_ENTRIES = 4096
 _MAX_BYTES = 8_388_608
+_CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+_SOURCE_ID = re.compile(r"(?:REQ|SCN)-[0-9]{6}\Z")
+_PHASE_ID = re.compile(r"[0-9]{2}\Z")
+_POLICY_ID = re.compile(r"ACE-[A-Z0-9]+(?:-[A-Z0-9]+)*\Z")
 
 
 class MappingOperation(StrEnum):
@@ -161,6 +167,183 @@ def _records(value: object) -> list[object]:
     return value
 
 
+def _canonical_path(value: str) -> str:
+    if not value or value.startswith("/") or "\\" in value or "\0" in value:
+        raise _InventoryError("mapping-path-invalid")
+    path = PurePosixPath(value)
+    if (
+        path.is_absolute()
+        or path.as_posix() != value
+        or any(part in {"", ".", ".."} for part in path.parts)
+        or any(unicodedata.normalize("NFC", part) != part for part in path.parts)
+    ):
+        raise _InventoryError("mapping-path-invalid")
+    return value
+
+
+def _alias_key(value: str) -> str:
+    return unicodedata.normalize("NFC", value).casefold()
+
+
+def _inventory_bytes(inventory: PlanningInventory) -> int:
+    values: list[str] = [inventory.version, inventory.change_id]
+    for phase in inventory.phases:
+        values.extend((phase.change_id, phase.phase_id, phase.phase_path))
+    for assignment in inventory.assignments:
+        values.extend(
+            (
+                assignment.change_id,
+                assignment.source_id,
+                assignment.phase_id,
+                *assignment.policy_references,
+            )
+        )
+    for plan in inventory.plans:
+        values.extend((plan.change_id, plan.phase_id, plan.path))
+    for evidence in inventory.evidence:
+        values.extend(
+            (
+                evidence.change_id,
+                evidence.phase_id,
+                evidence.path,
+                evidence.source_id or "",
+                evidence.plan_path or "",
+            )
+        )
+    try:
+        return sum(len(value.encode("utf-8")) for value in values)
+    except UnicodeEncodeError as error:
+        raise _InventoryError("mapping-inventory-value-invalid") from error
+
+
+def _validate_declarations(inventory: PlanningInventory) -> None:
+    if (
+        inventory.version != _INVENTORY_VERSION
+        or _CHANGE_ID.fullmatch(inventory.change_id) is None
+    ):
+        raise _InventoryError("mapping-inventory-value-invalid")
+    collections = (
+        inventory.phases,
+        inventory.assignments,
+        inventory.plans,
+        inventory.evidence,
+        inventory.policy_observations,
+    )
+    if any(type(items) is not tuple for items in collections):
+        raise _InventoryError("mapping-inventory-value-invalid")
+    if any(len(items) > _MAX_ENTRIES for items in collections):
+        raise _InventoryError("mapping-inventory-limit-exceeded")
+    if _inventory_bytes(inventory) > _MAX_BYTES:
+        raise _InventoryError("mapping-inventory-byte-limit-exceeded")
+    if any(
+        declaration.change_id != inventory.change_id
+        for declarations in (
+            inventory.phases,
+            inventory.assignments,
+            inventory.plans,
+            inventory.evidence,
+        )
+        for declaration in declarations
+    ):
+        raise _InventoryError("mapping-cross-change-reference")
+
+    phases_by_id: dict[str, PhaseDeclaration] = {}
+    phase_ids_by_path: dict[str, str] = {}
+    aliases: dict[str, str] = {}
+    for phase in inventory.phases:
+        if not isinstance(phase, PhaseDeclaration):
+            raise _InventoryError("mapping-inventory-value-invalid")
+        if _PHASE_ID.fullmatch(phase.phase_id) is None:
+            raise _InventoryError("mapping-phase-invalid")
+        if phase.phase_id in phases_by_id:
+            raise _InventoryError("mapping-phase-conflict")
+        phase_path = _canonical_path(phase.phase_path)
+        if phase_path in phase_ids_by_path:
+            raise _InventoryError("mapping-phase-path-conflict")
+        alias = _alias_key(phase_path)
+        if alias in aliases and aliases[alias] != phase_path:
+            raise _InventoryError("mapping-path-alias")
+        parts = PurePosixPath(phase_path).parts
+        if (
+            len(parts) != 3
+            or parts[:2] != (".planning", "phases")
+            or not parts[2].startswith(f"{phase.phase_id}-")
+        ):
+            raise _InventoryError("mapping-phase-path-invalid")
+        phases_by_id[phase.phase_id] = phase
+        phase_ids_by_path[phase_path] = phase.phase_id
+        aliases[alias] = phase_path
+
+    assignment_ids: set[str] = set()
+    for assignment in inventory.assignments:
+        if not isinstance(assignment, PhaseAssignment):
+            raise _InventoryError("mapping-inventory-value-invalid")
+        if _SOURCE_ID.fullmatch(assignment.source_id) is None:
+            raise _InventoryError("mapping-source-invalid")
+        if assignment.source_id in assignment_ids:
+            raise _InventoryError("mapping-source-duplicate")
+        assignment_ids.add(assignment.source_id)
+        if assignment.phase_id not in phases_by_id:
+            raise _InventoryError("mapping-phase-unknown")
+        if (
+            type(assignment.policy_references) is not tuple
+            or assignment.policy_references
+            != tuple(sorted(set(assignment.policy_references), key=str.encode))
+            or any(
+                _POLICY_ID.fullmatch(reference_id) is None
+                for reference_id in assignment.policy_references
+            )
+        ):
+            raise _InventoryError("mapping-policy-reference-invalid")
+
+    plan_paths: set[str] = set()
+    plans_by_phase: dict[str, set[str]] = {}
+    for plan in inventory.plans:
+        if not isinstance(plan, PlanDeclaration) or plan.phase_id not in phases_by_id:
+            raise _InventoryError("mapping-plan-invalid")
+        plan_path = _canonical_path(plan.path)
+        phase = phases_by_id[plan.phase_id]
+        if (
+            not plan_path.startswith(f"{phase.phase_path}/")
+            or not PurePosixPath(plan_path).name.startswith(f"{plan.phase_id}-")
+            or not plan_path.endswith("-PLAN.md")
+        ):
+            raise _InventoryError("mapping-plan-path-invalid")
+        if plan_path in plan_paths:
+            raise _InventoryError("mapping-plan-duplicate")
+        alias = _alias_key(plan_path)
+        if alias in aliases and aliases[alias] != plan_path:
+            raise _InventoryError("mapping-path-alias")
+        aliases[alias] = plan_path
+        plan_paths.add(plan_path)
+        plans_by_phase.setdefault(plan.phase_id, set()).add(plan_path)
+
+    evidence_paths: set[str] = set()
+    for evidence in inventory.evidence:
+        if (
+            not isinstance(evidence, EvidenceDeclaration)
+            or evidence.phase_id not in phases_by_id
+        ):
+            raise _InventoryError("mapping-evidence-invalid")
+        evidence_path = _canonical_path(evidence.path)
+        if evidence.source_id is None and evidence.plan_path is None:
+            raise _InventoryError("mapping-evidence-owner-missing")
+        if evidence.source_id is not None and evidence.source_id not in assignment_ids:
+            raise _InventoryError("mapping-source-unknown")
+        if (
+            evidence.plan_path is not None
+            and evidence.plan_path not in plans_by_phase.get(evidence.phase_id, set())
+        ):
+            raise _InventoryError("mapping-plan-unknown")
+        if evidence_path in evidence_paths:
+            raise _InventoryError("mapping-evidence-duplicate")
+        alias = _alias_key(evidence_path)
+        if alias in aliases and aliases[alias] != evidence_path:
+            raise _InventoryError("mapping-path-alias")
+        aliases[alias] = evidence_path
+        evidence_paths.add(evidence_path)
+
+
 def _parse_inventory(
     content: bytes,
     policy_observations: tuple[PolicySectionObservation, ...],
@@ -262,7 +445,9 @@ def read_planning_inventory(
             raise _InventoryError("mapping-inventory-byte-limit-exceeded")
         if type(policy_observations) is not tuple:
             raise _InventoryError("mapping-policy-observations-invalid")
-        return Success(_parse_inventory(content, policy_observations))
+        inventory = _parse_inventory(content, policy_observations)
+        _validate_declarations(inventory)
+        return Success(inventory)
     except _InventoryError as error:
         return _failure(error.code)
     except (OSError, RuntimeError, ValueError):
@@ -280,35 +465,24 @@ def build_manifest_mappings(
         planning_inventory, PlanningInventory
     ):
         return _failure("mapping-input-invalid")
+    try:
+        _validate_declarations(planning_inventory)
+    except _InventoryError as error:
+        return _failure(error.code)
     active_ids = {item.id for item in source_items.active}
     tombstone_ids = {item.id for item in source_items.tombstones}
     assignments = planning_inventory.assignments
     assignment_ids = [assignment.source_id for assignment in assignments]
-    if len(assignments) > _MAX_ENTRIES:
-        return _failure("mapping-inventory-limit-exceeded")
-    if len(set(assignment_ids)) != len(assignment_ids):
-        return _failure("mapping-source-duplicate")
-    if set(assignment_ids) != active_ids:
-        if set(assignment_ids) & tombstone_ids:
-            return _failure("mapping-tombstone-reference")
+    declared_ids = set(assignment_ids)
+    if declared_ids & tombstone_ids:
+        return _failure("mapping-tombstone-reference")
+    if declared_ids - active_ids:
+        return _failure("mapping-source-unknown")
+    if declared_ids != active_ids:
         return _failure("mapping-source-coverage-incomplete")
     phases = {phase.phase_id: phase for phase in planning_inventory.phases}
     if len(phases) != len(planning_inventory.phases):
         return _failure("mapping-phase-conflict")
-    if any(
-        declaration.change_id != planning_inventory.change_id
-        for declarations in (
-            planning_inventory.phases,
-            planning_inventory.assignments,
-            planning_inventory.plans,
-            planning_inventory.evidence,
-        )
-        for declaration in declarations
-    ):
-        return _failure("mapping-cross-change-reference")
-    if any(assignment.phase_id not in phases for assignment in assignments):
-        return _failure("mapping-phase-unknown")
-
     referenced_ids = tuple(
         sorted(
             {
@@ -333,17 +507,27 @@ def build_manifest_mappings(
             phase_id=assignment.phase_id,
             phase_path=phases[assignment.phase_id].phase_path,
             plan_paths=tuple(
-                plan.path
-                for plan in planning_inventory.plans
-                if plan.phase_id == assignment.phase_id
+                sorted(
+                    (
+                        plan.path
+                        for plan in planning_inventory.plans
+                        if plan.phase_id == assignment.phase_id
+                    ),
+                    key=str.encode,
+                )
             ),
             evidence_paths=tuple(
-                evidence.path
-                for evidence in planning_inventory.evidence
-                if evidence.phase_id == assignment.phase_id
-                and (
-                    evidence.source_id == assignment.source_id
-                    or evidence.plan_path is not None
+                sorted(
+                    (
+                        evidence.path
+                        for evidence in planning_inventory.evidence
+                        if evidence.phase_id == assignment.phase_id
+                        and (
+                            evidence.source_id == assignment.source_id
+                            or evidence.plan_path is not None
+                        )
+                    ),
+                    key=str.encode,
                 )
             ),
             policy_references=assignment.policy_references,
