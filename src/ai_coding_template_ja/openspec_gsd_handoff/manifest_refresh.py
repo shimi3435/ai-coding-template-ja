@@ -7,15 +7,26 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
 from .execution_mapping import (
     MappingOperation,
     PlanningInventory,
     build_manifest_mappings,
+    read_planning_inventory,
     validate_mapping_readiness,
 )
-from .manifest import MAX_MANIFEST_BYTES, ManifestArtifact
+from .manifest import (
+    MAX_MANIFEST_BYTES,
+    ManifestArtifact,
+    ManifestSizeLimitExceeded,
+)
+from .manifest_migration import (
+    ManifestMigrationFileOperations,
+    MigrationCleanupOutcome,
+    _StagingCreationError,
+)
 from .manifest_v2 import (
     HandoffManifestV2,
     ManifestMapping,
@@ -32,7 +43,11 @@ from .models import (
     Result,
     Success,
 )
-from .policy_reference import PolicyReferenceRegistry
+from .policy_reference import (
+    PolicyReferenceRegistry,
+    observe_policy_sections,
+    read_policy_reference_registry,
+)
 from .progress import parse_task_progress
 from .source_identity import (
     ExplicitSourceMatch,
@@ -46,6 +61,10 @@ _HEX_40 = re.compile(r"[0-9a-f]{40}\Z")
 _TARGET = re.compile(r"\.planning/openspec/([a-z0-9]+(?:-[a-z0-9]+)*)/handoff\.json\Z")
 _EXPECTED_CREATED = tuple(f"SCN-{number:06d}" for number in range(37, 44))
 _EXPECTED_UPDATED = ("REQ-000001", "SCN-000018")
+_ASSIGNMENT_PATH = (
+    "tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json"
+)
+_POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
 
 
 @dataclass(frozen=True)
@@ -121,6 +140,67 @@ class ManifestRefreshPreview:
     protected_subtrees: tuple[ProtectedSubtreeEvidence, ...]
     no_op: bool
     preview_sha256: str
+
+
+class RefreshFailurePoint(StrEnum):
+    """Stable approval, guard, and persistence failure boundaries."""
+
+    APPROVAL = "approval"
+    STATE_GUARD = "state-guard"
+    CREATE = "create"
+    WRITE = "write"
+    REREAD = "reread"
+    VALIDATE = "validate"
+    REPLACE = "replace"
+
+
+class RefreshTargetState(StrEnum):
+    """What a failed apply proved about the previewed schema-2 target."""
+
+    V2_PRESERVED = "v2-preserved"
+    UNKNOWN = "unknown"
+
+
+class RefreshStagingState(StrEnum):
+    """What a failed apply proved about its staging file."""
+
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
+    INVALID = "invalid"
+    VALIDATED = "validated"
+
+
+class RefreshCleanupOutcome(StrEnum):
+    """Evidence from at most one staging cleanup attempt."""
+
+    NOT_NEEDED = "not-needed"
+    REMOVED = "removed"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class ManifestRefreshIssue:
+    """Structured refresh failure evidence without a recovery claim."""
+
+    code: str
+    failure_point: RefreshFailurePoint
+    target_state: RefreshTargetState
+    staging_state: RefreshStagingState
+    cleanup_outcome: RefreshCleanupOutcome
+
+
+@dataclass(frozen=True)
+class ManifestRefreshFailure:
+    """A failed refresh apply with no partial success value."""
+
+    issue: ManifestRefreshIssue
+
+
+type ManifestRefreshResult = Success[HandoffManifestV2] | ManifestRefreshFailure
+
+
+class ManifestRefreshFileOperations(ManifestMigrationFileOperations):
+    """Refresh-specific durable no-follow filesystem boundary."""
 
 
 def _failure(code: str, category: IssueCategory = IssueCategory.PERSISTENCE) -> Failure:
@@ -641,3 +721,448 @@ def preview_manifest_refresh(
     ):
         return _failure("refresh-source-changed", IssueCategory.ARTIFACT)
     return Success(replace(preview, preview_sha256=_sha256(machine.value)))
+
+
+def _refresh_failure(
+    code: str,
+    failure_point: RefreshFailurePoint,
+    target_state: RefreshTargetState,
+    staging_state: RefreshStagingState,
+    cleanup_outcome: RefreshCleanupOutcome = RefreshCleanupOutcome.NOT_NEEDED,
+) -> ManifestRefreshFailure:
+    return ManifestRefreshFailure(
+        ManifestRefreshIssue(
+            code=code,
+            failure_point=failure_point,
+            target_state=target_state,
+            staging_state=staging_state,
+            cleanup_outcome=cleanup_outcome,
+        )
+    )
+
+
+def _preview_identity(preview: object) -> str | None:
+    if type(preview) is not ManifestRefreshPreview:
+        return None
+    try:
+        machine = serialize_manifest_refresh_preview(preview)
+        parsed = parse_manifest_v2_bytes(preview.candidate_bytes)
+        serialized = serialize_manifest_v2(preview.candidate_manifest)
+        if (
+            isinstance(machine, Failure)
+            or isinstance(parsed, Failure)
+            or parsed.value != preview.candidate_manifest
+            or isinstance(serialized, Failure)
+            or serialized.value != preview.candidate_bytes
+            or _sha256(preview.candidate_bytes) != preview.candidate_sha256
+            or _HEX_40.fullmatch(preview.observed_source_commit) is None
+            or _HEX_40.fullmatch(preview.current_source_commit) is None
+            or re.fullmatch(r"[0-9a-f]{64}", preview.old_target_sha256) is None
+        ):
+            return None
+    except (AttributeError, TypeError, ValueError, UnicodeError, RecursionError):
+        return None
+    return _sha256(machine.value)
+
+
+def _current_preview(
+    preview: ManifestRefreshPreview,
+) -> Result[ManifestRefreshPreview]:
+    repository = Path(preview.repository_root)
+    registry = read_policy_reference_registry(repository, _POLICY_REGISTRY_PATH)
+    if isinstance(registry, Failure) or registry.value != preview.policy_registry:
+        return _failure("refresh-policy-changed", IssueCategory.INPUT)
+    observations = observe_policy_sections(repository, registry.value)
+    if isinstance(observations, Failure):
+        return _failure("refresh-policy-changed", IssueCategory.INPUT)
+    inventory = read_planning_inventory(
+        repository,
+        _ASSIGNMENT_PATH,
+        policy_observations=observations.value,
+    )
+    if isinstance(inventory, Failure) or inventory.value != preview.planning_inventory:
+        return _failure("refresh-assignment-changed", IssueCategory.INPUT)
+    return preview_manifest_refresh(
+        repository,
+        Path(preview.target_path),
+        current_source_commit=preview.current_source_commit,
+        current_artifacts=preview.current_artifacts,
+        current_progress=preview.current_progress,
+        source_paths=preview.source_paths,
+        planning_inventory=inventory.value,
+        policy_registry=registry.value,
+        explicit_matches=preview.explicit_matches,
+    )
+
+
+def _cleanup_staging(
+    operations: ManifestRefreshFileOperations,
+    parent_descriptor: int,
+    staging_name: str,
+) -> RefreshCleanupOutcome:
+    try:
+        operations.unlink_at(parent_descriptor, staging_name)
+    except OSError:
+        return RefreshCleanupOutcome.FAILED
+    return RefreshCleanupOutcome.REMOVED
+
+
+def _observe_target_state(
+    operations: ManifestRefreshFileOperations,
+    parent_descriptor: int,
+    target_name: str,
+    expected_sha256: str,
+) -> RefreshTargetState:
+    try:
+        target_bytes = operations.read_bounded_bytes_at(
+            parent_descriptor,
+            target_name,
+        )
+    except (ManifestSizeLimitExceeded, OSError):
+        return RefreshTargetState.UNKNOWN
+    return (
+        RefreshTargetState.V2_PRESERVED
+        if _sha256(target_bytes) == expected_sha256
+        else RefreshTargetState.UNKNOWN
+    )
+
+
+def _failure_after_staging(
+    code: str,
+    failure_point: RefreshFailurePoint,
+    staging_state: RefreshStagingState,
+    *,
+    operations: ManifestRefreshFileOperations,
+    parent_descriptor: int,
+    target_name: str,
+    expected_sha256: str,
+    staging_name: str | None,
+) -> ManifestRefreshFailure:
+    cleanup = (
+        RefreshCleanupOutcome.NOT_NEEDED
+        if staging_name is None
+        else _cleanup_staging(operations, parent_descriptor, staging_name)
+    )
+    return _refresh_failure(
+        code,
+        failure_point,
+        _observe_target_state(
+            operations,
+            parent_descriptor,
+            target_name,
+            expected_sha256,
+        ),
+        staging_state,
+        cleanup,
+    )
+
+
+def _staging_name_is_safe(staging_name: str, target_name: str) -> bool:
+    return (
+        staging_name != target_name
+        and Path(staging_name).name == staging_name
+        and staging_name.startswith(".handoff.")
+        and staging_name.endswith(".tmp")
+    )
+
+
+def apply_manifest_refresh(
+    preview: ManifestRefreshPreview,
+    *,
+    approved_preview_sha256: str,
+    approved: bool,
+    operations: ManifestRefreshFileOperations | None = None,
+) -> ManifestRefreshResult:
+    """Apply only one exact freshly approved refresh preview."""
+
+    filesystem = operations or ManifestRefreshFileOperations()
+    preview_identity = _preview_identity(preview)
+    if preview_identity is None or not isinstance(preview, ManifestRefreshPreview):
+        return _refresh_failure(
+            "refresh-preview-invalid",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
+    if (
+        approved is not True
+        or approved_preview_sha256 != preview.preview_sha256
+        or preview.preview_sha256 != preview_identity
+    ):
+        return _refresh_failure(
+            "refresh-approval-rejected",
+            RefreshFailurePoint.APPROVAL,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
+    try:
+        repository = Path(preview.repository_root).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return _refresh_failure(
+            "refresh-repository-unreadable",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
+    target_match = _TARGET.fullmatch(preview.target_path)
+    if (
+        str(repository) != preview.repository_root
+        or not repository.is_dir()
+        or target_match is None
+        or target_match.group(1) != preview.candidate_manifest.change_id
+    ):
+        return _refresh_failure(
+            "refresh-preview-target-mismatch",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
+    current = _current_preview(preview)
+    if isinstance(current, Failure) or current.value != preview:
+        return _refresh_failure(
+            "refresh-current-snapshot-changed",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
+
+    try:
+        repository_anchor = filesystem.open_parent_directory(repository, Path())
+    except OSError:
+        return _refresh_failure(
+            "refresh-repository-open-failed",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
+    target_anchor = None
+    try:
+        try:
+            target_anchor = filesystem.open_directory_at(
+                repository_anchor,
+                Path(preview.target_path).parent,
+                repository,
+            )
+        except OSError:
+            return _refresh_failure(
+                "refresh-target-parent-open-failed",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshTargetState.UNKNOWN,
+                RefreshStagingState.ABSENT,
+            )
+        target_name = Path(preview.target_path).name
+        try:
+            target_bytes = filesystem.read_bounded_bytes_at(
+                target_anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _refresh_failure(
+                "refresh-target-reread-failed",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshTargetState.UNKNOWN,
+                RefreshStagingState.ABSENT,
+            )
+        if _sha256(target_bytes) != preview.old_target_sha256:
+            return _refresh_failure(
+                "refresh-target-changed",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshTargetState.UNKNOWN,
+                RefreshStagingState.ABSENT,
+            )
+        if preview.no_op:
+            return Success(preview.candidate_manifest)
+
+        try:
+            staging_name = filesystem.create_staging_at(
+                target_anchor.descriptor,
+                target_anchor.path,
+            )
+        except _StagingCreationError as error:
+            cleanup = RefreshCleanupOutcome(error.cleanup_outcome.value)
+            return _refresh_failure(
+                "refresh-staging-create-failed",
+                RefreshFailurePoint.CREATE,
+                _observe_target_state(
+                    filesystem,
+                    target_anchor.descriptor,
+                    target_name,
+                    preview.old_target_sha256,
+                ),
+                (
+                    RefreshStagingState.ABSENT
+                    if error.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+                    else RefreshStagingState.UNKNOWN
+                ),
+                cleanup,
+            )
+        except OSError:
+            return _failure_after_staging(
+                "refresh-staging-create-failed",
+                RefreshFailurePoint.CREATE,
+                RefreshStagingState.UNKNOWN,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=None,
+            )
+        if not _staging_name_is_safe(staging_name, target_name):
+            return _failure_after_staging(
+                "refresh-staging-path-unsafe",
+                RefreshFailurePoint.CREATE,
+                RefreshStagingState.UNKNOWN,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        try:
+            filesystem.write_bytes_at(
+                target_anchor.descriptor,
+                staging_name,
+                preview.candidate_bytes,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _failure_after_staging(
+                "refresh-staging-write-failed",
+                RefreshFailurePoint.WRITE,
+                RefreshStagingState.UNKNOWN,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        try:
+            staged_bytes = filesystem.read_bounded_bytes_at(
+                target_anchor.descriptor,
+                staging_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _failure_after_staging(
+                "refresh-staging-reread-failed",
+                RefreshFailurePoint.REREAD,
+                RefreshStagingState.UNKNOWN,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        staged = parse_manifest_v2_bytes(staged_bytes)
+        if (
+            staged_bytes != preview.candidate_bytes
+            or isinstance(staged, Failure)
+            or staged.value != preview.candidate_manifest
+        ):
+            return _failure_after_staging(
+                "refresh-staging-validation-failed",
+                RefreshFailurePoint.VALIDATE,
+                RefreshStagingState.INVALID,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+
+        try:
+            filesystem.before_replace_at(
+                target_anchor.descriptor,
+                target_anchor.path,
+                staging_name,
+                target_name,
+            )
+        except OSError:
+            return _failure_after_staging(
+                "refresh-replace-guard-failed",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshStagingState.VALIDATED,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        current_at_replace = _current_preview(preview)
+        try:
+            target_at_replace = filesystem.read_bounded_bytes_at(
+                target_anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            target_at_replace = b""
+        if (
+            isinstance(current_at_replace, Failure)
+            or current_at_replace.value != preview
+            or not filesystem.parent_directory_is_current(
+                repository_anchor,
+                repository,
+            )
+            or not filesystem.parent_directory_is_current(target_anchor, repository)
+            or _sha256(target_at_replace) != preview.old_target_sha256
+        ):
+            return _failure_after_staging(
+                "refresh-state-changed-before-replace",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshStagingState.VALIDATED,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        try:
+            filesystem.replace_at(
+                target_anchor.descriptor,
+                staging_name,
+                target_name,
+            )
+        except OSError:
+            return _failure_after_staging(
+                "refresh-replace-failed",
+                RefreshFailurePoint.REPLACE,
+                RefreshStagingState.VALIDATED,
+                operations=filesystem,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        try:
+            installed_bytes = filesystem.read_bounded_bytes_at(
+                target_anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _refresh_failure(
+                "refresh-replaced-target-reread-failed",
+                RefreshFailurePoint.REREAD,
+                RefreshTargetState.UNKNOWN,
+                RefreshStagingState.ABSENT,
+            )
+        installed = parse_manifest_v2_bytes(installed_bytes)
+        if (
+            installed_bytes != preview.candidate_bytes
+            or isinstance(installed, Failure)
+            or installed.value != preview.candidate_manifest
+        ):
+            return _refresh_failure(
+                "refresh-replaced-target-validation-failed",
+                RefreshFailurePoint.VALIDATE,
+                RefreshTargetState.UNKNOWN,
+                RefreshStagingState.ABSENT,
+            )
+        return Success(preview.candidate_manifest)
+    finally:
+        if target_anchor is not None:
+            try:
+                filesystem.close_parent_directory(target_anchor)
+            except OSError:
+                pass
+        try:
+            filesystem.close_parent_directory(repository_anchor)
+        except OSError:
+            pass

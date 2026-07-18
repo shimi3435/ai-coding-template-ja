@@ -549,7 +549,7 @@ def test_apply_rejects_every_preview_bound_state_drift_before_staging(
             ),
         )
     else:
-        policy = repository / preview.policy_registry.references[0].source_path
+        policy = repository / POLICY_REGISTRY_PATH
         policy.write_bytes(policy.read_bytes() + b"\npolicy drift\n")
     before = target.read_bytes()
     operations = MutationRecordingRefreshOperations()
