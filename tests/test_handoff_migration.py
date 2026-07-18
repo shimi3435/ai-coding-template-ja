@@ -1072,8 +1072,11 @@ def test_apply_does_not_write_through_a_replaced_staging_name(
     assert isinstance(result, ManifestMigrationFailure)
     assert result.issue.failure_point is MigrationFailurePoint.WRITE
     assert result.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert result.issue.cleanup_outcome is MigrationCleanupOutcome.FAILED
     assert target.read_bytes() == EXPECTED_V1
-    assert not any(target.parent.glob(".handoff.*.tmp"))
+    retained = tuple(target.parent.glob(".handoff.*.tmp"))
+    assert len(retained) == 1
+    assert retained[0].read_bytes() == EXPECTED_V1
 
 
 def test_apply_does_not_cleanup_an_unowned_replacement_staging_file(
@@ -1496,7 +1499,7 @@ def test_apply_reports_pre_replace_faults_and_preserves_exact_v1(
 
 
 @pytest.mark.parametrize("fault", ["fstat", "close"])
-def test_apply_cleans_staging_when_creation_fails_after_open(
+def test_apply_reports_safe_cleanup_when_creation_fails_after_open(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     fault: str,
@@ -1540,11 +1543,18 @@ def test_apply_cleans_staging_when_creation_fails_after_open(
     assert isinstance(applied, ManifestMigrationFailure)
     assert applied.issue.failure_point is MigrationFailurePoint.CREATE
     assert applied.issue.target_state is MigrationTargetState.V1_PRESERVED
-    assert applied.issue.staging_state is MigrationStagingState.ABSENT
-    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
     assert target.read_bytes() == EXPECTED_V1
-    assert not any(target.parent.glob(".handoff.*.tmp"))
     assert operations.mutations == ["create", "unlink"]
+    retained = tuple(target.parent.glob(".handoff.*.tmp"))
+    if fault == "fstat":
+        assert applied.issue.staging_state is MigrationStagingState.UNKNOWN
+        assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.FAILED
+        assert len(retained) == 1
+        assert retained[0].read_bytes() == b""
+    else:
+        assert applied.issue.staging_state is MigrationStagingState.ABSENT
+        assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+        assert retained == ()
 
 
 def test_apply_does_not_claim_v1_preserved_when_write_fault_observes_target_drift(

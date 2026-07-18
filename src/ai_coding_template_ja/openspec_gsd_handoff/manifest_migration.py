@@ -293,7 +293,7 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
             descriptor_state = os.fstat(anchor.descriptor)
             path_state = os.stat(anchor.path, follow_symlinks=False)
             resolved_parent = anchor.path.resolve(strict=True)
-        except OSError:
+        except (OSError, RuntimeError):
             return False
         descriptor_identity = (descriptor_state.st_dev, descriptor_state.st_ino)
         path_identity = (path_state.st_dev, path_state.st_ino)
@@ -570,12 +570,37 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
         )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
+        identities = getattr(self, "_staging_identities", {})
+        expected = identities.get((parent_descriptor, name))
+        if expected is None:
+            raise OSError("migration staging cleanup identity unavailable")
+        descriptor = os.open(
+            name,
+            self._open_flags(os.O_RDONLY),
+            dir_fd=parent_descriptor,
+        )
         try:
-            os.unlink(name, dir_fd=parent_descriptor)
+            opened = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or (opened.st_dev, opened.st_ino) != expected
+                or not self._entry_is_current(
+                    parent_descriptor,
+                    name,
+                    descriptor,
+                )
+            ):
+                raise OSError("migration staging cleanup identity changed")
         finally:
-            getattr(self, "_staging_identities", {}).pop(
-                (parent_descriptor, name), None
-            )
+            try:
+                os.close(descriptor)
+            except OSError:
+                # Identity was already proved; an open inode remains safe
+                # to unlink.
+                pass
+        os.unlink(name, dir_fd=parent_descriptor)
+        identities.pop((parent_descriptor, name), None)
 
 
 def _failure(code: str, *, category: IssueCategory = IssueCategory.PERSISTENCE):
@@ -1004,7 +1029,7 @@ def _resolve_target(
 ) -> Result[tuple[Path, str, str]]:
     try:
         repository = repository_root.resolve(strict=True)
-    except OSError:
+    except (OSError, RuntimeError):
         return _failure("migration-repository-unreadable", category=IssueCategory.INPUT)
     if not repository.is_dir():
         return _failure("migration-repository-invalid", category=IssueCategory.INPUT)
@@ -1029,7 +1054,11 @@ def _resolve_target(
         return _failure("migration-target-invalid", category=IssueCategory.INPUT)
     logical_target = repository.joinpath(*parts)
     target_guard = ManifestRepository(logical_target, operations=operations)
-    if not target_guard._target_parent_is_safe(parts[2]):
+    try:
+        target_is_safe = target_guard._target_parent_is_safe(parts[2])
+    except RuntimeError:
+        target_is_safe = False
+    if not target_is_safe:
         return _failure("manifest-target-unsafe")
     return Success((repository, target_path.as_posix(), parts[2]))
 

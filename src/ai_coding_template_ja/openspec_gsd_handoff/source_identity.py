@@ -679,7 +679,7 @@ def read_source_inventory(
         return _failure("source-path-count-limit-exceeded")
     try:
         repository = repository_root.resolve(strict=True)
-    except OSError:
+    except (OSError, RuntimeError):
         return _failure("source-root-unreadable")
     try:
         repository_fd = os.open(repository, _DIRECTORY_OPEN_FLAGS)
