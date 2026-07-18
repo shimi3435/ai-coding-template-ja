@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import re
 import stat
 import unicodedata
 from collections.abc import Sequence
@@ -13,6 +15,9 @@ from pathlib import Path
 from .models import ClassifiedIssue, Failure, IssueCategory, KnownState, Result, Success
 
 _SECTION_FINGERPRINT_VERSION = "adaptive-policy-section-v1\0"
+_REGISTRY_VERSION = "adaptive-policy-references-v1"
+_REFERENCE_ID = re.compile(r"ACE-[A-Z0-9]+(?:-[A-Z0-9]+)*\Z")
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 
@@ -81,16 +86,6 @@ class _Fence:
 class _PolicyInputError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
-
-
-def _not_implemented() -> Failure:
-    return Failure(
-        ClassifiedIssue(
-            category=IssueCategory.ARTIFACT,
-            code="policy-observer-not-implemented",
-            known_state=KnownState.MANIFEST_ABSENT,
-        )
-    )
 
 
 def _failure(
@@ -419,6 +414,176 @@ def _observe_file(
     return tuple(observations)
 
 
+def _json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise _PolicyInputError("policy-registry-json-duplicate-key")
+        value[key] = item
+    return value
+
+
+def _reject_json_constant(value: str) -> object:
+    del value
+    raise _PolicyInputError("policy-registry-json-invalid")
+
+
+def _parse_registry_json(content_bytes: bytes) -> object:
+    try:
+        decoded = content_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise _PolicyInputError("policy-registry-utf8-invalid") from error
+    try:
+        return json.loads(
+            decoded,
+            object_pairs_hook=_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except _PolicyInputError:
+        raise
+    except (json.JSONDecodeError, RecursionError) as error:
+        raise _PolicyInputError("policy-registry-json-invalid") from error
+
+
+def _valid_reference_id(value: object) -> bool:
+    if not isinstance(value, str) or _REFERENCE_ID.fullmatch(value) is None:
+        return False
+    try:
+        return len(value.encode("ascii")) <= 128
+    except UnicodeEncodeError:
+        return False
+
+
+def _policy_reference_from_json(value: object) -> PolicyReference:
+    if not isinstance(value, dict):
+        raise _PolicyInputError("policy-reference-invalid")
+    expected_fields = {
+        "id",
+        "source_path",
+        "heading",
+        "body_length",
+        "sha256",
+        "historical_provenance",
+    }
+    if set(value) != expected_fields:
+        raise _PolicyInputError("policy-reference-fields-invalid")
+    reference_id = value["id"]
+    if not _valid_reference_id(reference_id):
+        raise _PolicyInputError("policy-reference-id-invalid")
+    source_path = value["source_path"]
+    if not isinstance(source_path, str):
+        raise _PolicyInputError("policy-path-invalid")
+    try:
+        _, canonical_path = _canonical_policy_path(source_path)
+    except _PolicyInputError as error:
+        raise _PolicyInputError("policy-path-invalid") from error
+    if canonical_path != source_path:
+        raise _PolicyInputError("policy-path-noncanonical")
+    heading = value["heading"]
+    if not isinstance(heading, str) or not heading:
+        raise _PolicyInputError("policy-heading-invalid")
+    if (
+        unicodedata.normalize("NFC", heading) != heading
+        or _normalize_heading_text(heading) != heading
+    ):
+        raise _PolicyInputError("policy-heading-invalid")
+    body_length = value["body_length"]
+    if type(body_length) is not int or not 1 <= body_length <= 8_388_608:
+        raise _PolicyInputError("policy-reference-length-invalid")
+    sha256 = value["sha256"]
+    if not isinstance(sha256, str) or _SHA256.fullmatch(sha256) is None:
+        raise _PolicyInputError("policy-reference-hash-invalid")
+    historical_provenance = value["historical_provenance"]
+    if historical_provenance is not None and not isinstance(historical_provenance, str):
+        raise _PolicyInputError("policy-reference-provenance-invalid")
+    return PolicyReference(
+        id=reference_id,
+        source_path=source_path,
+        heading=heading,
+        body_length=body_length,
+        sha256=sha256,
+        historical_provenance=historical_provenance,
+    )
+
+
+def _validate_registry(
+    registry: PolicyReferenceRegistry,
+    *,
+    max_records: int,
+) -> PolicyReferenceRegistry:
+    if registry.version != _REGISTRY_VERSION:
+        raise _PolicyInputError("policy-registry-version-invalid")
+    if type(registry.references) is not tuple or not registry.references:
+        raise _PolicyInputError("policy-registry-empty")
+    if len(registry.references) > max_records:
+        raise _PolicyInputError("policy-record-limit-exceeded")
+    ids: set[str] = set()
+    aliases: dict[str, str] = {}
+    validated: list[PolicyReference] = []
+    for reference in registry.references:
+        if not isinstance(reference, PolicyReference):
+            raise _PolicyInputError("policy-reference-invalid")
+        parsed = _policy_reference_from_json(
+            {
+                "id": reference.id,
+                "source_path": reference.source_path,
+                "heading": reference.heading,
+                "body_length": reference.body_length,
+                "sha256": reference.sha256,
+                "historical_provenance": reference.historical_provenance,
+            }
+        )
+        if parsed.id in ids:
+            raise _PolicyInputError("policy-reference-id-duplicate")
+        ids.add(parsed.id)
+        alias = _path_alias_key(parsed.source_path)
+        existing_path = aliases.get(alias)
+        if existing_path is not None and existing_path != parsed.source_path:
+            raise _PolicyInputError("policy-path-alias")
+        aliases[alias] = parsed.source_path
+        validated.append(parsed)
+    return PolicyReferenceRegistry(
+        version=_REGISTRY_VERSION,
+        references=tuple(sorted(validated, key=lambda item: item.id.encode("ascii"))),
+    )
+
+
+def _registry_from_json(value: object, *, max_records: int) -> PolicyReferenceRegistry:
+    if not isinstance(value, dict):
+        raise _PolicyInputError("policy-registry-invalid")
+    if set(value) != {"version", "references"}:
+        raise _PolicyInputError("policy-registry-fields-invalid")
+    version = value["version"]
+    if version != _REGISTRY_VERSION:
+        raise _PolicyInputError("policy-registry-version-invalid")
+    raw_references = value["references"]
+    if not isinstance(raw_references, list) or not raw_references:
+        raise _PolicyInputError("policy-registry-empty")
+    if len(raw_references) > max_records:
+        raise _PolicyInputError("policy-record-limit-exceeded")
+    raw_aliases: dict[str, str] = {}
+    for raw_reference in raw_references:
+        if not isinstance(raw_reference, dict):
+            continue
+        raw_path = raw_reference.get("source_path")
+        if not isinstance(raw_path, str):
+            continue
+        try:
+            _, canonical_path = _canonical_policy_path(raw_path)
+        except _PolicyInputError:
+            continue
+        alias = _path_alias_key(canonical_path)
+        existing_path = raw_aliases.get(alias)
+        if existing_path is not None and existing_path != raw_path:
+            raise _PolicyInputError("policy-path-alias")
+        raw_aliases[alias] = raw_path
+    registry = PolicyReferenceRegistry(
+        version=version,
+        references=tuple(_policy_reference_from_json(item) for item in raw_references),
+    )
+    return _validate_registry(registry, max_records=max_records)
+
+
 def read_policy_reference_registry(
     repository_root: Path,
     registry_path: str | Path,
@@ -427,8 +592,42 @@ def read_policy_reference_registry(
 ) -> Result[PolicyReferenceRegistry]:
     """Read one strict registry or return whole-operation non-success."""
 
-    del repository_root, registry_path, limits
-    return _not_implemented()
+    if not _valid_limits(limits):
+        return _failure("policy-limits-invalid", category=IssueCategory.INPUT)
+    try:
+        raw_segments, canonical_path = _canonical_policy_path(registry_path)
+    except _PolicyInputError as error:
+        return _failure(error.code, category=IssueCategory.INPUT)
+    if str(registry_path) != canonical_path:
+        return _failure("policy-path-noncanonical", category=IssueCategory.INPUT)
+    try:
+        repository = repository_root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return _failure("policy-root-unreadable")
+    try:
+        repository_fd = os.open(repository, _DIRECTORY_OPEN_FLAGS)
+    except OSError:
+        return _failure("policy-root-unreadable")
+    try:
+        content_bytes = _read_anchored_policy(
+            repository_fd,
+            raw_segments,
+            max_bytes=limits.registry_bytes,
+        )
+    except _PolicyInputError as error:
+        return _failure(error.code)
+    finally:
+        try:
+            os.close(repository_fd)
+        except OSError:
+            pass
+    if len(content_bytes) > limits.registry_bytes:
+        return _failure("policy-registry-limit-exceeded")
+    try:
+        parsed = _parse_registry_json(content_bytes)
+        return Success(_registry_from_json(parsed, max_records=limits.max_records))
+    except _PolicyInputError as error:
+        return _failure(error.code, category=IssueCategory.INPUT)
 
 
 def observe_policy_sections(
@@ -535,5 +734,57 @@ def validate_policy_references(
 ) -> Result[tuple[PolicyReference, ...]]:
     """Validate complete registry coverage for the requested stable IDs."""
 
-    del registry, observations, referenced_ids
-    return _not_implemented()
+    try:
+        validated_registry = _validate_registry(registry, max_records=4096)
+    except _PolicyInputError as error:
+        return _failure(error.code, category=IssueCategory.INPUT)
+    if type(observations) is not tuple or len(observations) > 4096:
+        return _failure("policy-observations-invalid", category=IssueCategory.INPUT)
+    observations_by_id: dict[str, PolicySectionObservation] = {}
+    for observation in observations:
+        if not isinstance(observation, PolicySectionObservation):
+            return _failure("policy-observations-invalid", category=IssueCategory.INPUT)
+        if observation.reference_id in observations_by_id:
+            return _failure("policy-observation-duplicate")
+        observations_by_id[observation.reference_id] = observation
+
+    references_by_id = {
+        reference.id: reference for reference in validated_registry.references
+    }
+    for reference in validated_registry.references:
+        observation = observations_by_id.get(reference.id)
+        if observation is None:
+            return _failure("policy-observation-missing")
+        if (
+            observation.raw_source_path != reference.source_path
+            or observation.source_path != reference.source_path
+            or observation.normalized_heading != reference.heading
+        ):
+            return _failure("policy-reference-anchor-mismatch")
+        if observation.body_length != reference.body_length:
+            return _failure("policy-reference-length-mismatch")
+        if observation.sha256 != reference.sha256:
+            return _failure("policy-reference-hash-mismatch")
+
+    if type(referenced_ids) is not tuple or len(referenced_ids) > 4096:
+        return _failure(
+            "policy-reference-request-invalid", category=IssueCategory.INPUT
+        )
+    requested: set[str] = set()
+    for reference_id in referenced_ids:
+        if not isinstance(reference_id, str):
+            return _failure(
+                "policy-reference-request-invalid",
+                category=IssueCategory.INPUT,
+            )
+        if reference_id in requested:
+            return _failure("policy-reference-request-duplicate")
+        if reference_id not in references_by_id:
+            return _failure("policy-reference-unknown")
+        requested.add(reference_id)
+    return Success(
+        tuple(
+            references_by_id[reference_id]
+            for reference_id in sorted(requested, key=str.encode)
+        )
+    )
