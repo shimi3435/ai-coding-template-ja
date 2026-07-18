@@ -98,7 +98,9 @@ class ManifestRefreshPreview:
     policy_registry: PolicyReferenceRegistry
     explicit_matches: tuple[ExplicitSourceMatch, ...]
     old_target_sha256: str
+    previous_artifacts_sha256: str
     current_artifacts_sha256: str
+    previous_progress_sha256: str
     current_progress_sha256: str
     previous_source_items_sha256: str
     candidate_source_items_sha256: str
@@ -251,6 +253,23 @@ def _inventory_object(inventory: PlanningInventory) -> dict[str, object]:
     }
 
 
+def _explicit_match_object(item: ExplicitSourceMatch) -> dict[str, object]:
+    parent = item.parent_locator
+    return {
+        "source_path": item.source_path,
+        "normalized_heading": item.normalized_heading,
+        "parent_locator": (
+            None
+            if parent is None
+            else {
+                "source_path": parent.source_path,
+                "normalized_heading": parent.normalized_heading,
+            }
+        ),
+        "source_id": item.source_id,
+    }
+
+
 def _policy_object(
     registry: PolicyReferenceRegistry, inventory: PlanningInventory
 ) -> dict[str, object]:
@@ -332,13 +351,22 @@ def _machine_view(preview: ManifestRefreshPreview) -> dict[str, object]:
         "observed_source_commit": preview.observed_source_commit,
         "current_source_commit": preview.current_source_commit,
         "old_target_sha256": preview.old_target_sha256,
+        "previous_artifacts": [
+            _artifact_object(item) for item in preview.previous_manifest.artifacts
+        ],
+        "previous_artifacts_sha256": preview.previous_artifacts_sha256,
         "current_artifacts": [
             _artifact_object(item) for item in preview.current_artifacts
         ],
         "current_artifacts_sha256": preview.current_artifacts_sha256,
+        "previous_progress": _progress_object(preview.previous_manifest.progress),
+        "previous_progress_sha256": preview.previous_progress_sha256,
         "current_progress": _progress_object(preview.current_progress),
         "current_progress_sha256": preview.current_progress_sha256,
         "source_paths": list(preview.source_paths),
+        "explicit_matches": [
+            _explicit_match_object(item) for item in preview.explicit_matches
+        ],
         "previous_source_items": _source_object(preview.previous_source_items),
         "previous_source_items_sha256": preview.previous_source_items_sha256,
         "candidate_source_items": _source_object(preview.candidate_source_items),
@@ -428,10 +456,26 @@ def preview_manifest_refresh(
     if previous.handoff_state is not HandoffState.STARTED:
         return _failure("refresh-target-not-started")
 
-    artifacts = tuple(current_artifacts)
-    paths = tuple(str(path) for path in source_paths)
-    matches = tuple(explicit_matches)
-    normalized_inventory = _normalized_inventory(planning_inventory)
+    try:
+        artifacts = tuple(current_artifacts)
+        paths = tuple(sorted((str(path) for path in source_paths), key=str.encode))
+        if isinstance(explicit_matches, (str, bytes)) or not all(
+            isinstance(item, ExplicitSourceMatch) for item in explicit_matches
+        ):
+            raise TypeError
+        matches = tuple(
+            sorted(
+                explicit_matches,
+                key=lambda item: (
+                    item.source_id,
+                    item.source_path.encode(),
+                    item.normalized_heading.encode(),
+                ),
+            )
+        )
+        normalized_inventory = _normalized_inventory(planning_inventory)
+    except (AttributeError, TypeError, UnicodeError):
+        return _failure("refresh-input-invalid", IssueCategory.INPUT)
     try:
         observed_artifacts: list[ManifestArtifact] = []
         artifact_bytes: dict[str, bytes] = {}
@@ -543,9 +587,13 @@ def preview_manifest_refresh(
         policy_registry=policy_registry,
         explicit_matches=matches,
         old_target_sha256=_sha256(target_bytes),
+        previous_artifacts_sha256=_sha256(
+            _compact([_artifact_object(item) for item in previous.artifacts])
+        ),
         current_artifacts_sha256=_sha256(
             _compact([_artifact_object(item) for item in artifacts])
         ),
+        previous_progress_sha256=_sha256(_compact(_progress_object(previous.progress))),
         current_progress_sha256=_sha256(_compact(_progress_object(current_progress))),
         previous_source_items_sha256=_sha256(source_before),
         candidate_source_items_sha256=_sha256(source_after),

@@ -235,10 +235,13 @@ def test_preview_machine_bytes_are_deterministic_complete_and_hash_bound(
     assert machine.value.endswith(b"\n")
     assert not machine.value.endswith(b"\n\n")
     assert _sha256(machine.value) == first.value.preview_sha256
-    assert (
-        json.loads(machine.value)["candidate_bytes_utf8"]
-        == first.value.candidate_bytes.decode()
-    )
+    machine_value = json.loads(machine.value)
+    assert machine_value["candidate_bytes_utf8"] == first.value.candidate_bytes.decode()
+    assert machine_value["previous_artifacts"]
+    assert machine_value["previous_artifacts_sha256"]
+    assert machine_value["previous_progress"]
+    assert machine_value["previous_progress_sha256"]
+    assert machine_value["explicit_matches"] == []
 
     changed = _preview(repository, current_source_commit="e" * 40)
     assert isinstance(changed, Success)
