@@ -12,7 +12,7 @@
 
 ## 2. Stable identity and mapping gates
 
-- [ ] 2.1 manifest migration と stable source identity の phase を完了し、対応する OpenSpec scenarios の検証を通す
+- [x] 2.1 manifest migration と stable source identity の phase を完了し、対応する OpenSpec scenarios の検証を通す
 - [ ] 2.2 source-to-phase / plan / evidence mapping の phase を完了し、対応する OpenSpec scenarios の検証を通す
 
 ## 3. Drift and ownership gates
