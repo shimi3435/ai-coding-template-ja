@@ -368,6 +368,57 @@ def test_plan_requires_only_complete_assignments_and_selected_phase(
     assert result.value.issues == ()
 
 
+def test_readiness_rejects_phase_directory_renamed_after_descriptor_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_items, registry, inventory = _baseline()
+    mappings = _mappings(source_items, registry, inventory)
+    selected = next(phase for phase in inventory.phases if phase.phase_id == "02")
+    selected_path = tmp_path / selected.phase_path
+    selected_path.mkdir(parents=True)
+    detached_path = tmp_path / "detached-phase"
+    original_open = execution_mapping.os.open
+    renamed = False
+
+    def rename_after_open(
+        path: str | bytes | Path,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal renamed
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        if (
+            not renamed
+            and path == selected_path.name
+            and dir_fd is not None
+            and flags & execution_mapping.os.O_DIRECTORY
+        ):
+            selected_path.rename(detached_path)
+            renamed = True
+        return descriptor
+
+    monkeypatch.setattr(execution_mapping.os, "open", rename_after_open)
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.PLAN,
+        target_phase_id="02",
+    )
+
+    assert renamed
+    assert isinstance(result, Success)
+    assert not result.value.ready
+    assert MappingIssue("mapping-path-identity-changed", selected.phase_path) in (
+        result.value.issues
+    )
+
+
 def test_execute_requires_declared_plan_but_not_evidence(tmp_path: Path) -> None:
     source_items, registry, baseline = _baseline()
     empty = _mappings(source_items, registry, baseline)
@@ -434,6 +485,53 @@ def test_verify_requires_every_selected_source_and_plan_evidence(
     assert not not_ready.value.ready
     assert MappingIssue("mapping-path-missing", inventory.evidence[0].path) in (
         not_ready.value.issues
+    )
+
+
+def test_readiness_rejects_evidence_removed_during_bounded_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=True)
+    declared_path = inventory.evidence[0].path
+    evidence_path = tmp_path / declared_path
+    original_read = execution_mapping.os.read
+    removed = False
+
+    def remove_evidence_after_read(descriptor: int, size: int) -> bytes:
+        nonlocal removed
+        data = original_read(descriptor, size)
+        if not removed:
+            try:
+                opened_path = Path(
+                    execution_mapping.os.readlink(f"/proc/self/fd/{descriptor}")
+                )
+            except OSError:
+                return data
+            if opened_path == evidence_path:
+                evidence_path.unlink()
+                removed = True
+        return data
+
+    monkeypatch.setattr(execution_mapping.os, "read", remove_evidence_after_read)
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+
+    assert removed
+    assert isinstance(result, Success)
+    assert not result.value.ready
+    assert MappingIssue("mapping-path-identity-changed", declared_path) in (
+        result.value.issues
     )
 
 
