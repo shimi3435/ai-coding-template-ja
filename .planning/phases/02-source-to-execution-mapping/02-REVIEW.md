@@ -1,6 +1,6 @@
 ---
 phase: 02-source-to-execution-mapping
-reviewed: 2026-07-21T20:11:18Z
+reviewed: 2026-07-21T20:37:39Z
 depth: standard
 files_reviewed: 12
 files_reviewed_list:
@@ -26,52 +26,45 @@ status: issues_found
 
 # Phase 02: Code Review Report
 
-**Reviewed:** 2026-07-21T20:11:18Z
+**Reviewed:** 2026-07-21T20:37:39Z
 **Depth:** standard
 **Files Reviewed:** 12
 **Status:** issues_found
 
 ## Summary
 
-対象12ファイルを standard depth でレビューした。execution mapping と policy reference の現行実装、ならびに corrective plan 02-05 の固定済み preview/evidence hash と tracked apply 非実行の証跡には、新たな blocker/warning は確認できなかった。一方、manifest refresh の mutation seam は `source_commit` を Git object として観測せず、任意の40桁 lowercase hex を承認済み commit として適用できるため、1件の BLOCKER が残る。
+original 12-file scope と fix commits `4357fbc` / `779d2ea` を fresh standard-depth で再レビューした。旧 CR-01 の中核は解消済みである。historical pin は HEAD と異なってもよいまま、preview と apply の staging 前・replace 直前で、実在する commit object、exact repository root、全 canonical artifact blob bytes を再観測する。`.git` 不在、unknown commit、blob mismatch は mutation 前に停止し、replace-boundary drift は validated staging を cleanup して target を維持する。
 
-旧レビューの CR-01（readiness 呼び出し全体を atomic snapshot/lease として扱う要求）は、現行 D-04 の「path-by-path の point-in-time observation」であり、最終観測後の不変性を保証しないという契約には適合しないため、今回は finding として再掲しない。consumer による action 直前の mapping readiness と Phase 3 drift/preflight の再実行、および mutation seam 固有の state guard が現行境界である。
+一方、source-pin 観測が再利用する subprocess runner の stdout 上限と refresh artifact 上限が一致せず、仕様上有効な 4–8 MiB artifact を誤拒否する新しい BLOCKER を1件確認した。fixed argv、`shell=False`、canonical path、no-follow filesystem read、symlink rejection、partial-failure classification に新たな injection/path/symlink 弱点は確認できなかった。
+
+D-04 は現在も path ごとの bounded point-in-time observation であり、atomic lease / repository snapshot ではない。final observation 後の外部 drift を保証しないことは明示契約どおりなので、旧 atomic-readiness 指摘は finding ではない。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01 [BLOCKER]: refresh の source commit guard が Git state を観測していない
+### CR-02 [BLOCKER]: 4 MiB 超の有効 artifact を source-pin guard が誤拒否する
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:513-529,650-657,775-829,903-955`
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:52,76-79,278-303,617-632`
 
-**Issue:** `preview_manifest_refresh()` は caller が渡した `current_source_commit` を40桁 lowercase hex かだけ検査して candidate に保存する。apply 時の `_current_preview()` も approved preview の同じ文字列をそのまま再投入するため、source commit の存在、commit object であること、canonical artifact がその commit の blob と一致することを一度も再観測しない。approval hash は虚偽の文字列を固定するだけで、その文字列を repository state の guard にはしない。
+**Issue:** refresh は `RefreshLimits.artifact_bytes` の既定値として manifest 契約と同じ 8 MiB を許可し、working-tree artifact をその上限で bounded read する。しかし `_source_pin_matches()` は各 Git blob を共通 `subprocess_runner()` で取得し、この runner は stdout を 4,194,304 bytes で打ち切る。したがって canonical blob が 4 MiB + 1 byte 以上 8 MiB 以下の場合、filesystem 側の artifact read/hash は成功するのに `git cat-file -p` だけが output-limit failure となり、正しい historical source pin を `refresh-source-pin-invalid` と誤判定する。
 
-一時 repository に `.git` が存在しない状態でも、`current_source_commit="e" * 40` の preview と apply がともに `Success` になり、candidate の `source_commit` にその値が保存されることを再現した。これは D-02/spec が求める apply-time の独立した source-commit state guard を満たさず、存在しない、または canonical source と対応しない commit を追跡 manifest に確定できる。後続の resume/drift 判定が誤った authority pin を信頼するため、正確性と安全な再開を破壊する。
+isolated Git repository で同一 commit/blob bytes を観測したところ、4,194,304 bytes は `True`、4,194,305 bytes は `False` になった。これは巨大出力を安全に fail-closed している点では security bypass ではないが、HARD-R1 の 8 MiB bounded-input contract 内の正当な refresh を実行不能にする incorrect behavior である。
 
-**Fix:** historical pin を許容するため HEAD との単純一致は要求せず、既存 preflight と同じ Git object 検証を refresh 用の観測関数として切り出す。preview 作成時と apply の staging 前（および replace 直前の mutation guard）に、少なくとも次を point-in-time で再観測し、不一致時は mutation 前に fail closed とする。
-
-```python
-observed = observe_source_pin(
-    repository_root=repository,
-    source_commit=preview.current_source_commit,
-    canonical_artifacts=preview.current_artifacts,
-)
-if isinstance(observed, Failure):
-    return refresh_state_guard_failure("refresh-source-commit-changed")
-```
-
-`observe_source_pin()` は `git cat-file -e <commit>^{commit}` で commit object の存在を確認し、各 canonical artifact を `git cat-file -p <commit>:<path>` で読み、approved preview が保持する artifact bytes/hash と一致させる。この観測結果を machine preview/hash に束縛し、apply 時に再観測する。回帰テストとして、(1) `.git` 不在、(2) 存在しない40桁hex、(3) commit は存在するが canonical artifact blob が異なる、の各ケースが staging/mutation 前に拒否されることを追加する。
+**Fix:** Git blob 観測を artifact 契約と同じ caller-supplied limit で streaming compare する専用 fixed-argv helper に分離する。stdout 全体を無制限に保持せず、expected bytes と逐次比較し、`artifact_bytes + 1` で停止する。あるいは bounded runner に per-call output limit を追加し、blob 呼び出しだけ `limits.artifact_bytes` を渡す。commit/root probe の小さい出力は現行上限のままにする。4 MiB、4 MiB + 1、8 MiB、8 MiB + 1 の回帰テストを public preview seam に追加し、前3件は正しい blobなら成功、最後だけ `refresh-artifact-limit-exceeded` で mutation 前に停止することを確認する。
 
 ## Validation
 
-- `uv run pytest tests/test_handoff_manifest_refresh.py tests/test_handoff_execution_mapping.py tests/test_handoff_policy_reference.py -q` — 98 passed
-- `task check` — ruff format/check、basedpyright、pytest 483件すべて成功
-- corrective 02-05 の candidate/preview/evidence/target/tasks/design/spec SHA-256 を記録値と照合済み
-- corrective evidence の `apply_invoked: false`、空の mutation operations、staging before/after 空、target/tasks hash 不変を確認済み
+- `uv run pytest tests/test_handoff_manifest_refresh.py tests/test_handoff_execution_mapping.py tests/test_handoff_policy_reference.py -q` — 103 passed
+- `task check` — Ruff format/check、BasedPyright 0 errors/warnings/notes、pytest 488 passed
+- isolated boundary reproduction — `{4194304: True, 4194305: False}`
+- tracked handoff SHA-256 — `554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914`（不変）
+- tracked preview SHA-256 — `661b63be39bacb882c53ade5e9919ae7fea661f852b7e47fb53188a29348138a`（不変）
+- preview evidence — `apply_invoked=false`、`mutation_operations=[]`、staging before/after empty、target/tasks hash unchanged
+- tracked apply は実行していない。`.handoff.*.tmp` も存在しない
 
 ---
 
-_Reviewed: 2026-07-21T20:11:18Z_
+_Reviewed: 2026-07-21T20:37:39Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
