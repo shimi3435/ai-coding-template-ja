@@ -21,8 +21,9 @@ rollback, repair, or downstream phase advance is allowed.
 Manual recovery from the stale started handoff is approved. Phase 1 was replanned and
 verified against its `2cbb127…` source pin. The approved Phase 2 mapping horizon,
 started-v2 refresh, and policy-fingerprint contracts are pinned at `fbe7f71…` without
-adding a phase or switching route. Phase 2 is ready but not started; Phases 3–6
-remain blocked by the strict dependency order, and no Phase 7 is added. The old handoff
+adding a phase or switching route. Phase 2 implementation has 4/4 plans complete, but
+independent review/verification and the OpenSpec 2.2 boundary update remain pending;
+Phases 3–6 remain blocked by the strict dependency order, and no Phase 7 is added. The old handoff
 manifest and brief remain unchanged audit evidence rather than the current planning
 authority.
 
@@ -32,7 +33,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ## Phases
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
-- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable.
+- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (4/4 plans complete; verification pending)
 - [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary.
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions.
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
@@ -68,7 +69,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 1
 **Requirements:** HND-02 (opaque canonical handle: HARD-R1)
-**Plans:** 0/4 plans complete
+**Plans:** 4/4 plans complete
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Every in-scope source item has a deterministic execution reference, and incomplete or cross-change references are reported as structured non-success.
@@ -77,10 +78,10 @@ Plans:
 
 Plans:
 
-- [ ] 02-01-PLAN.md — Validate the exact current-tree policy registry and section anchors.
-- [ ] 02-02-PLAN.md — Build the explicit 49-ID assignment baseline and operation readiness gates.
-- [ ] 02-03-PLAN.md — Reconcile canonical source and build the bounded read-only refresh preview.
-- [ ] 02-04-PLAN.md — Verify isolated approval-bound apply and generate the real read-only preview evidence.
+- [x] 02-01-PLAN.md — Validate the exact current-tree policy registry and section anchors.
+- [x] 02-02-PLAN.md — Build the explicit 49-ID assignment baseline and operation readiness gates.
+- [x] 02-03-PLAN.md — Reconcile canonical source and build the bounded read-only refresh preview.
+- [x] 02-04-PLAN.md — Verify isolated approval-bound apply and generate the real read-only preview evidence.
 
 ### Phase 3: Lifecycle Drift Gate
 
@@ -156,7 +157,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
-| 2. Source-to-Execution Mapping | 0/4 | Planned | - |
+| 2. Source-to-Execution Mapping | 4/4 | Verification pending | - |
 | 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 2 | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
