@@ -4,7 +4,7 @@
 
 This roadmap plans only OpenSpec change
 `harden-openspec-gsd-handoff-lifecycle`, pinned to source commit
-`fbe7f714f734d714480583ab90f41ec0d2077f50`. OpenSpec owns WHAT / WHY,
+`4d8b5b173927ed518d39dee18a29b0271628afbd`. OpenSpec owns WHAT / WHY,
 canonical requirements, scenarios, acceptance criteria, and final completion. GSD
 owns the sequential phase, plan, and phase-progress decomposition without copying
 or redefining canonical specification prose.
@@ -19,13 +19,16 @@ CI. Failure preserves inspectable state and stops; no automatic route switch,
 rollback, repair, or downstream phase advance is allowed.
 
 Manual recovery from the stale started handoff is approved. Phase 1 was replanned and
-verified against its `2cbb127…` source pin. The approved Phase 2 mapping horizon,
-started-v2 refresh, and policy-fingerprint contracts are pinned at `fbe7f71…` without
-adding a phase or switching route. Phase 2 implementation has 4/4 plans complete, but
-independent review/verification and the OpenSpec 2.2 boundary update remain pending;
-Phases 3–6 remain blocked by the strict dependency order, and no Phase 7 is added. The old handoff
-manifest and brief remain unchanged audit evidence rather than the current planning
-authority.
+verified against its `2cbb127…` source pin. The current Phase 2 authority is repinned to
+`4d8b5b1…`, including the approved point-in-time readiness decision D-04, without adding
+a phase or switching route. The final review blocker's specification question is resolved,
+but the 4/4 completed plans remain historical execution evidence: the old tracked refresh
+preview and expected-preview test fixture are stale, and their corrective plan has not been
+created or executed. `task check` currently fails exactly two manifest-refresh tests because
+fresh evidence derived from the current pin differs from those records. Phase 2 verification
+and OpenSpec task 2.2 remain incomplete; Phases 3–6 remain blocked, and no Phase 7 is added.
+The old handoff manifest and brief remain unchanged audit evidence rather than the current
+planning authority.
 
 The success criteria below are observable planning and verification outcomes. They
 do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
@@ -33,7 +36,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ## Phases
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
-- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (4/4 plans complete; verification pending)
+- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (4/4 historical plans complete; corrective planning and verification pending)
 - [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary.
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions.
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
@@ -69,12 +72,16 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 1
 **Requirements:** HND-02 (opaque canonical handle: HARD-R1)
-**Plans:** 4/4 plans complete
+**Plans:** 4/4 historical plans complete; no corrective plan created
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Every in-scope source item has a deterministic execution reference, and incomplete or cross-change references are reported as structured non-success.
 2. The mapping can be reviewed against the pinned canonical paths without copying canonical requirement, scenario, or acceptance text.
 3. Fixed positive and negative examples provide the primary evidence, with no broad property suite added where it would duplicate the same seam.
+
+**Current gate:** D-04 resolves the final review blocker's contract question at the
+current canonical pin. Corrective work for stale derived preview/fixture evidence is not
+planned or executed yet, so Phase 2 and OpenSpec task 2.2 remain incomplete.
 
 Plans:
 
@@ -157,7 +164,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
-| 2. Source-to-Execution Mapping | 4/4 | Verification pending | - |
+| 2. Source-to-Execution Mapping | 4/4 | Corrective planning and verification pending | - |
 | 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 2 | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |

@@ -1,6 +1,6 @@
 # Phase 2: Source-to-Execution Mapping - Context
 
-**Source authority:** `fbe7f714f734d714480583ab90f41ec0d2077f50`
+**Source authority:** `4d8b5b173927ed518d39dee18a29b0271628afbd`
 
 ## Decisions
 
@@ -24,6 +24,16 @@ Policy anchors use the exact `adaptive-policy-section-v1` normalizer and the cur
 reference registry fixed by the canonical design. Runtime and normal CI do not depend on
 historical Git blobs or optional OpenSpec/GSD tools.
 
+### D-04: Point-in-time readiness observation boundary
+
+Treat the canonical readiness outcome as an opaque point-in-time execution decision;
+GSD does not strengthen it into an atomic repository snapshot or lease. An observation
+failure detected at its owned seam is non-ready, while later external drift is handled at
+the next operation boundary. Consumers must discard earlier readiness, rerun mapping
+readiness and the Phase 3 drift/preflight immediately before the operation, and rely on
+separate mutation-seam state guards. Failure stops for inspection without automatic retry,
+repair, or route switching. Exact normative semantics remain at the source authority above.
+
 ## the agent's Discretion
 
 - Internal module/type naming and responsibility split, provided the public seams remain
@@ -33,7 +43,7 @@ historical Git blobs or optional OpenSpec/GSD tools.
 
 ## Deferred Ideas
 
-- Phase 3 drift enforcement and approval freshness across lifecycle operations.
+- Phase 3 implementation of drift/preflight and approval freshness across lifecycle operations.
 - Phase 4 ownership graphing, Phase 5 recovery/resume, and Phase 6 finalize/cleanup.
 - Automatic mapping inference, retry, rollback, repair, or route switching.
 - Mandatory real OpenSpec, GSD, or host smoke in normal CI.

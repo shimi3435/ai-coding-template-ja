@@ -1,8 +1,8 @@
 # Phase 2 Research: Source-to-Execution Mapping
 
 **Researched:** 2026-07-19
-**Planning authority:** `fbe7f714f734d714480583ab90f41ec0d2077f50`
-**Status:** Planning-ready
+**Planning authority:** `4d8b5b173927ed518d39dee18a29b0271628afbd`
+**Status:** Repinned; corrective planning required
 **Scope:** Phase 2 only; Phase 3 drift enforcement is out of scope
 
 ## Research boundary
@@ -16,7 +16,7 @@ shown and separately approved.
 
 Current immutable baseline:
 
-- planning authority: `fbe7f714f734d714480583ab90f41ec0d2077f50`
+- planning authority: `4d8b5b173927ed518d39dee18a29b0271628afbd`
 - target manifest:
   `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff.json`
 - current manifest SHA-256:
@@ -27,6 +27,12 @@ Current immutable baseline:
 The generic-agent workaround remains a degraded dispatch path, not evidence of
 typed-dispatch equivalence. Phase 2 does not change host discovery, dispatch, or the
 MVP `inspect` / `prepare` / `mark-started` surface.
+
+The completed 02-01 through 02-04 plans and summaries are historical execution evidence.
+They are not rewritten for this repin. The tracked refresh preview and expected-preview
+fixture still derive from the prior authority; no corrective plan has been created or
+executed. Consequently, `task check` currently has two manifest-refresh evidence mismatch
+failures while OpenSpec task 2.2 remains incomplete.
 
 ## Approved decisions
 
@@ -91,6 +97,22 @@ Planning consequences:
   malformed records, missing anchors, and limit+1 inputs are structured non-success.
 - Normal CI validates current-tree anchors. It does not require unreachable Git
   history or the pruned historical policy spec.
+
+### D-04 — Point-in-time readiness observation
+
+**RESOLVED.** Planning treats readiness as an opaque decision over bounded observations,
+not as an atomic snapshot or lease over all repository paths.
+
+Planning consequences:
+
+- Failures detected by an observation remain structured non-ready outcomes; GSD must not
+  infer a partial green result.
+- Consumers re-run mapping readiness and the Phase 3 drift/preflight immediately before
+  each operation instead of carrying an earlier result forward.
+- Any mutation seam keeps independent state guards. A failed or changed observation stops
+  for inspection and never triggers automatic retry, repair, or route switching.
+- The exact concurrency boundary and normative wording remain solely in the pinned
+  canonical artifacts.
 
 ## Source reconciliation expected by the refresh preview
 
@@ -301,7 +323,9 @@ Stop before mutation when any of the following occurs:
 
 ## Research resolution
 
-The former three planning blockers are resolved by D-01, D-02, and D-03. Phase 2 is
-ready for four sequential TDD plans. This resolution authorizes planning and test-first
-implementation only; it does not authorize started-v2 refresh apply. That mutation
-still requires the complete read-only preview followed by a separate explicit approval.
+The former contract questions are resolved by D-01 through D-04. Plans 02-01 through
+02-04 remain historical evidence and do not establish completion against the new pin.
+Corrective planning, refreshed derived evidence, green verification, and the OpenSpec 2.2
+boundary are still required. This resolution does not authorize started-v2 refresh apply;
+that mutation still requires a complete current-pin read-only preview followed by a
+separate explicit approval.

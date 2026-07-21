@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 2
 current_phase_name: Source-to-Execution Mapping
 status: executing
-stopped_at: Completed 02-04-PLAN.md; Phase 2 verification pending
-last_updated: "2026-07-21T17:33:59.352Z"
-last_activity: 2026-07-21
-last_activity_desc: Plan 02-04 completed; Phase 2 verification pending
+stopped_at: D-04 approved and authority repinned; corrective planning pending
+last_updated: "2026-07-22T04:22:22+09:00"
+last_activity: 2026-07-22
+last_activity_desc: Readiness observation contract approved at current canonical pin; stale derived evidence remains
 progress:
   total_phases: 6
   completed_phases: 1
@@ -21,20 +21,20 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-17)
+See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
 **Current focus:** Phase 2 — Source-to-Execution Mapping
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Source commit:** `fbe7f714f734d714480583ab90f41ec0d2077f50`
+**Source commit:** `4d8b5b173927ed518d39dee18a29b0271628afbd`
 **Project mode:** standard
 
 ## Current Position
 
-Phase: 2 (Source-to-Execution Mapping) — VERIFICATION PENDING
-Plan: 4 of 4 plans complete
-Status: Implementation complete; independent review/verification pending
-Last activity: 2026-07-21 — Plan 02-04 completed with tracked apply intentionally unexecuted
+Phase: 2 (Source-to-Execution Mapping) — CORRECTIVE PLANNING PENDING
+Plan: 4 of 4 historical plans complete; no corrective plan created
+Status: D-04 resolves the final review blocker's specification question; stale derived evidence still requires a corrective plan and verification
+Last activity: 2026-07-22 — planning authority repinned; tracked preview, expected fixture, source/tests, and OpenSpec task 2.2 left unchanged
 
 Progress: [██░░░░░░░░] 1 of 6 phases complete (17%)
 
@@ -80,19 +80,23 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 2]: Full active-source phase assignment is fixed before operation-specific plan/evidence readiness is required. — Future phases remain explicit without treating missing future evidence as ready.
 - [Phase 2]: Started schema-v2 publication uses a separate immutable refresh preview and exact fresh approval. — Keeps migration and refresh semantics separate and prevents stale publication.
 - [Phase 2]: Policy section anchors use the exact `adaptive-policy-section-v1` normalizer. — Gives current-tree CI a deterministic reference without requiring Git history.
+- [Phase 2]: Readiness is an opaque point-in-time observation decision, not an atomic snapshot or lease; consumers re-run mapping readiness and Phase 3 drift/preflight immediately before an operation, while mutation seams retain independent state guards. — Preserves the canonical boundary without promising stability after final observation or adding automatic retry, repair, or route switching.
 - [Phase 02]: Tracked refresh publication remains unexecuted and requires a separate fresh approval for the concrete preview hash. — Prevents preview evidence from becoming implicit mutation authority.
 - [Phase 02]: Refresh failure reports preserved-v2 only after bounded fresh proof; otherwise state is unknown without recovery action. — Avoids inferred preservation and automatic rollback after partial persistence.
 
 ### Pending Todos
 
-None yet.
+- Create and execute a corrective Phase 2 plan for the stale tracked refresh preview and expected-preview fixture; no such plan exists yet.
+- Re-run focused verification and `task check`, then complete the independent Phase 2 boundary review before considering OpenSpec task 2.2.
 
 ### Blockers/Concerns
 
 - Generic-agent workaround is recorded as a degraded dispatch path, not typed-dispatch equivalence.
 - Final acceptance remains owned by independent canonical OpenSpec boundary gates after all phases.
 - The old started handoff manifest and brief are historical / stale audit evidence and remain unchanged.
-- Phase 2 implementation is complete, but independent review/verification and the OpenSpec 2.2 boundary update are pending; Phases 3–6 remain blocked.
+- The final review blocker's specification question is resolved by D-04, but the review gate is not complete until corrective evidence and verification are green.
+- The tracked refresh preview and `expected-refresh-preview.json` still derive from the prior pin. `task check` fails exactly two `test_handoff_manifest_refresh.py` tests: repository-root evidence equality and the pinned candidate fingerprint expectation.
+- Phase 2 and OpenSpec task 2.2 remain incomplete; Phases 3–6 remain blocked.
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
 ## Deferred Items
@@ -104,6 +108,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-21T17:33:59.345Z
-Stopped at: Completed 02-04-PLAN.md; Phase 2 verification pending
+Last session: 2026-07-22T04:22:22+09:00
+Stopped at: D-04 approved and authority repinned; corrective planning pending
 Resume file: None

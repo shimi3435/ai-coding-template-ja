@@ -4,7 +4,7 @@
 **Core Value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
 **Authority:** This file is non-normative GSD traceability metadata. Requirement text,
 scenarios, acceptance criteria, and final completion remain in the canonical OpenSpec
-artifacts pinned at `fbe7f714f734d714480583ab90f41ec0d2077f50`.
+artifacts pinned at `4d8b5b173927ed518d39dee18a29b0271628afbd`.
 The old started handoff manifest and brief remain unchanged as historical / stale dispatch
 evidence; they are not the current canonical source pin.
 
@@ -60,4 +60,4 @@ Updated during roadmap creation. Each GSD handle maps to exactly one primary pha
 
 ---
 *Requirements registry defined: 2026-07-16*
-*Last updated: 2026-07-18 after independent Phase 1 verification*
+*Last updated: 2026-07-22 after readiness observation authority repin*

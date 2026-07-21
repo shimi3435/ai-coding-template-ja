@@ -16,8 +16,8 @@ OpenSpec に残す。
 ### Validated
 
 - ✓ MVP handoff bridge と schema v1 が `d96e451` で `origin/main` に統合済み
-- ✓ canonical hardening artifacts が Phase 2 contract source commit
-  `fbe7f714f734d714480583ab90f41ec0d2077f50` に再固定済み
+- ✓ canonical hardening artifacts と readiness observation boundary が current source commit
+  `4d8b5b173927ed518d39dee18a29b0271628afbd` に再固定済み
 - ✓ 旧 source commit の handoff は started 状態の監査証跡として保持し、manual recovery が明示承認済み
 
 ### Active
@@ -47,7 +47,7 @@ OpenSpec に残す。
 - Handoff brief:
   `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - OpenSpec source commit:
-  `fbe7f714f734d714480583ab90f41ec0d2077f50`
+  `4d8b5b173927ed518d39dee18a29b0271628afbd`
 - OpenSpec が WHAT / WHY と最終完了を所有し、GSD は詳細な実行分解だけを所有する。
 - 旧 started manifest / brief は旧 dispatch の historical / stale evidence であり、再prepare、
   `mark-started`、上書き、削除の対象にしない。
@@ -69,7 +69,8 @@ OpenSpec に残す。
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| OpenSpec artifactsをsource commitに固定して参照する | GSD側で仕様を複製せずdriftを検出するため | Phase 1は`2cbb127…`、承認済みPhase 2 contractは`fbe7f71…`へrepin |
+| OpenSpec artifactsをsource commitに固定して参照する | GSD側で仕様を複製せずdriftを検出するため | Phase 1は`2cbb127…`、current Phase 2 authorityは`4d8b5b1…`へrepin |
+| Mapping readinessをpoint-in-time execution decisionとして扱う | Atomic snapshot / leaseを主張せず、次のoperation boundaryでfreshnessを再確認するため | Phase 2 D-04を後続planning / verificationの前提にする |
 | 6つの依存phaseを逐次実行する | stable identityからfinalizeまでの前提関係を保つため | — Pending |
 | planning docsをGit追跡する | interruption後の再開とレビュー可能性を保つため | — Pending |
 | generic-agent workaroundを明示する | visible hostにtyped dispatchがなく、同等性を主張できないため | — Pending |
@@ -93,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-17 after approved manual recovery repin*
+*Last updated: 2026-07-22 after readiness observation authority repin*
