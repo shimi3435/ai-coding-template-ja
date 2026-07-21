@@ -1,6 +1,6 @@
 ---
 phase: 02-source-to-execution-mapping
-reviewed: 2026-07-21T17:53:47Z
+reviewed: 2026-07-21T18:20:27Z
 depth: standard
 files_reviewed: 12
 files_reviewed_list:
@@ -17,60 +17,68 @@ files_reviewed_list:
   - tests/fixtures/openspec_gsd_handoff/policy/unclosed-fence.md
   - tests/fixtures/openspec_gsd_handoff/policy/valid-policy.md
 findings:
-  critical: 2
-  warning: 2
+  critical: 1
+  warning: 0
   info: 0
-  total: 4
+  total: 1
 status: issues_found
 ---
 
 # Phase 2: Code Review Report
 
-**Reviewed:** 2026-07-21T17:53:47Z
+**Reviewed:** 2026-07-21T18:20:27Z
 **Depth:** standard
 **Files Reviewed:** 12
 **Status:** issues_found
 
 ## Summary
 
-Canonical source `fbe7f714f734d714480583ab90f41ec0d2077f50`、Phase 2 plans、49-ID fixture、policy registry、refresh preview/apply、および対象 tests/fixtures を照合した。49-ID mapping、tracked preview hashes、protected subtrees、no-op、approval-bound isolated apply、CLI非拡張は期待どおり確認できた。一方、canonical path / symlink の fail-closed 契約を破る読取経路が2件、structured Result seam と read-only mutation evidence の堅牢性問題が2件ある。
+修正 commits `ff842dd`、`fa9d21f`、`0399dcd`、`62369b4` を fresh に再査読し、前回の4 findings はすべて閉じたことを確認した。49-ID mapping、policy normalizer、refresh preview/apply/failure evidence、tracked read-only evidence、MVP API非拡張、preview-builderだけのproperty scopeも維持されている。
+
+ただし、mapping readiness の phase / plan / evidence path 観測には、読取中にentry identityが変化した場合の最終再検証がない。実際に evidence file を descriptor read 中にunlinkしても `ready=True` が返るため、operation-ready判定のfail-closed契約を満たさない。
 
 ## Narrative Findings (AI reviewer)
 
-### Critical Issues
+## Critical Issues
 
-#### CR-01: [BLOCKER] Planning inventory が symlink・`..`・絶対パスを canonical input として受理する
+### CR-01: [BLOCKER] Readiness が観測中に消失・差替えされた evidence path を ready と判定する
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py:439-445`
-**Issue:** `inventory_path` を lexical validationせず `(root / inventory_path).resolve(strict=True)` した後に `target.is_symlink()` を確認しているため、symlink情報は既に失われる。隔離再現では、内部 symlink、`nested/../inventory.json`、repository内の絶対パスがすべて `Success` になった。これは canonical repository-relative path、symlink/alias拒否、whole-operation fail-closed 契約に反する。また `read_bytes()` は descriptor-anchored/limit+1 read ではないため、検査と読取の間のpath置換も固定できない。
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py:674-727`
 
-**Fix:** `inventory_path` を resolve 前に POSIX relative/NFC/`.`/`..`/absolute/backslash/NUL 規則で検証し、repository descriptorから各componentを `O_NOFOLLOW` で開く。各descriptorとdirectory entryのidentityを読取後にも再検証し、`_MAX_BYTES + 1` のbounded readを行う。symlinkまたは非canonical pathは `mapping-inventory-path-invalid` の `Failure` にする。
+**Issue:** `_observe_declared_path()` はentryを`stat(..., follow_symlinks=False)`した後にdescriptorを開くが、entryとdescriptorのidentityを比較せず、読取後にもdirectory/file entryが同じidentityでpathへ接続されたままか再検証しない。最終directoryはdescriptorすら開かず、`stat`だけで成功する。隔離再現では、verify対象のevidence descriptorを開いた後、`os.read()`中にそのpathをunlinkしても `validate_mapping_readiness()` は `Success(MappingReadiness(ready=True, issues=()))` を返し、返却時点でevidence pathは存在しなかった。これは、対象horizonの全path実在と、検査不能・identity変化時にpartial greenを返さないcanonical contractに反する。
 
-#### CR-02: [BLOCKER] Refresh preview の canonical reads に symlink-swap TOCTOU が残る
+**Fix:** inventory readerと同様に、repository rootから全componentを`O_NOFOLLOW`で開き、各entryの`(st_dev, st_ino, file type)`をdescriptorと照合する。fileはbounded read後、directory/file双方は判定直前にもentry/descriptor identityを再検証し、unlink・rename・regular-file swapを `mapping-path-identity-changed` のnon-ready issueにする。phase directoryも最終componentをdescriptorで固定してから検証する。次の回帰testを追加する。
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:241-255`
-**Issue:** `_read_bounded()` は各componentの `is_symlink()`、`resolve()`、`is_file()`、`open()`を別々のpathname operationとして行う。最後のcheck後から`open()`までにfileまたはdirectory componentをsymlinkへ差し替えると、`open()`がrepository外をfollowできる。preview生成とapply時のfresh guardがこのhelperを使うため、canonical artifact/source/target観測をno-follow identityへ固定できず、specのpath/symlink escape fail-closed契約を満たさない。
+```python
+def test_readiness_rejects_evidence_removed_during_bounded_read(...):
+    # evidence descriptorのread中にdeclared pathをunlinkする
+    result = validate_mapping_readiness(..., operation=MappingOperation.VERIFY)
+    assert isinstance(result, Success)
+    assert result.value.ready is False
+    assert MappingIssue("mapping-path-identity-changed", evidence_path) in result.value.issues
+```
 
-**Fix:** pathnameの事前checkを廃し、Phase 1の `read_repository_bytes_at()` と同じ repository-root descriptor、componentごとの `O_NOFOLLOW`、entry/descriptor identity再検証、limit+1 readを使う。preview開始時と再観測時の双方で同じanchored readerを共有する。
+## Verification Evidence
 
-### Warnings
+- Phase 2 focused suite: `95 passed`。
+- Phase 1 / v1 regression suite: `186 passed`。
+- `task check`: Ruff format/check green、BasedPyright `0 errors`、pytest `480 passed`。
+- CLI help: `inspect`、`prepare`、`mark-started` の3操作のみ。
+- Property scope: Phase 2で追加されたHypothesis familyはrefresh preview builderの1件のみ。
+- Read-only repro: evidence read中のunlink後も `ready=True`、返却時点 `victim_exists=False` を確認。
+- Actual tracked apply: 未実行。実OpenSpec / GSD / host smokeもPhase 3/manual境界のため未検証。
 
-#### WR-01: [WARNING] Invalid registry が structured non-success ではなく `AttributeError` を送出する
+## Protected Surface Evidence
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/policy_reference.py:737-740`
-**Issue:** `validate_policy_references()` は `registry` の型確認前に `_validate_registry()` を呼び、`None` 等では `registry.version` の `AttributeError` が外へ漏れる。隔離再現で `validate_policy_references(None, (), ())` がraiseした。`build_manifest_mappings()` と refresh preview もこのseamを経由するため、malformed programmatic inputでResult契約を維持できない。
-
-**Fix:** public seam入口で `type(registry) is PolicyReferenceRegistry` を検査し、`policy-registry-invalid` の `Failure` を返す。`_validate_registry()` 自体も属性参照前に型を検証し、caller間で例外漏れを再発させない。
-
-#### WR-02: [WARNING] Tracked preview の mutation-count evidence は adapter が未接続で反証能力がない
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:512-516`
-**Issue:** `preview_manifest_refresh(..., operations=operations)` は直後に `del operations` する。`tests/test_handoff_manifest_refresh.py:276-281` は recording adapter の mutation list が空であることをtracked evidenceへ保存するが、production codeがadapterを一度も使わないため常に空になる。将来preview内へ直接filesystem mutationが混入しても、このassertionは検出しない。
-
-**Fix:** previewの全filesystem accessをread-only operations boundary経由にしてmutating methodsをrecord/forbidし、渡されたadapterを実際に使用する。代替として未接続parameterとmutation-count claimを削除し、hash/staging/diff invarianceだけを検証済み evidence として扱う。
+- tracked handoff: `554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914`
+- OpenSpec `tasks.md`: `cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220`
+- tracked refresh preview: `6775ff40a9e01aa634ff67098a0a1d020808ef11be80ece4e06f881dab5270cf`
+- ROADMAP: `10cb18a19943da7a5c9b41f5a65f21a5bfd6f462451c32e9a3f76adf21801f4d`
+- STATE: `81a99f6c42fa7a92c4d236f3a452b5526a7ef334dad1782fae9565d43fbbf89f`
+- protected handoff / tasks / preview はdiffなし。source/testsは変更していない。
 
 ---
 
-_Reviewed: 2026-07-21T17:53:47Z_
+_Reviewed: 2026-07-21T18:20:27Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
