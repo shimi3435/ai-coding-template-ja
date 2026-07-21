@@ -143,6 +143,21 @@ class MutationRecordingRefreshOperations(ManifestRefreshFileOperations):
 
     def __init__(self) -> None:
         self.mutations: list[str] = []
+        self.repository_reads: list[str] = []
+
+    def read_repository_bytes_at(
+        self,
+        repository_anchor,
+        relative_path: Path,
+        *,
+        limit: int,
+    ) -> bytes:
+        self.repository_reads.append(relative_path.as_posix())
+        return super().read_repository_bytes_at(
+            repository_anchor,
+            relative_path,
+            limit=limit,
+        )
 
     def create_staging_at(self, parent_descriptor: int, parent: Path) -> str:
         self.mutations.append("create")
@@ -440,6 +455,25 @@ def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
     assert json.loads(preview.candidate_bytes) == EXPECTED["candidate_manifest"]
     assert preview.candidate_bytes.decode() == EXPECTED["candidate_bytes_utf8"]
     assert target.read_bytes() == before
+
+
+def test_preview_uses_supplied_read_only_operations_boundary(tmp_path: Path) -> None:
+    repository, _ = _repository(tmp_path)
+    operations = MutationRecordingRefreshOperations()
+    _, artifacts, _, _, _ = _inputs()
+
+    result = _preview(repository, operations=operations)
+
+    assert isinstance(result, Success)
+    assert set(operations.repository_reads) == {
+        HANDOFF_PATH,
+        *(artifact.path for artifact in artifacts),
+    }
+    assert operations.repository_reads.count(HANDOFF_PATH) == 2
+    assert all(
+        operations.repository_reads.count(artifact.path) == 2 for artifact in artifacts
+    )
+    assert operations.mutations == []
 
 
 @pytest.mark.parametrize(

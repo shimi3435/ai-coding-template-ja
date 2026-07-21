@@ -242,11 +242,15 @@ def _canonical_relative_path(value: str) -> PurePosixPath | None:
     return path
 
 
-def _read_bounded(repository: Path, relative: str, limit: int) -> bytes:
+def _read_bounded(
+    repository: Path,
+    relative: str,
+    limit: int,
+    operations: ManifestRefreshFileOperations,
+) -> bytes:
     pure = _canonical_relative_path(relative)
     if pure is None:
         raise OSError("invalid relative path")
-    operations = ManifestRefreshFileOperations()
     anchor = operations.open_parent_directory(repository, Path())
     try:
         data = operations.read_repository_bytes_at(
@@ -514,11 +518,13 @@ def preview_manifest_refresh(
     policy_registry: PolicyReferenceRegistry,
     explicit_matches: Sequence[ExplicitSourceMatch] = (),
     limits: RefreshLimits = DEFAULT_REFRESH_LIMITS,
-    operations: object | None = None,
+    operations: ManifestRefreshFileOperations | None = None,
 ) -> Result[ManifestRefreshPreview]:
     """Build a complete started-v2 candidate without any filesystem mutation."""
 
-    del operations
+    filesystem = ManifestRefreshFileOperations() if operations is None else operations
+    if not isinstance(filesystem, ManifestRefreshFileOperations):
+        return _failure("refresh-input-invalid", IssueCategory.INPUT)
     if not _valid_limits(limits) or _HEX_40.fullmatch(current_source_commit) is None:
         return _failure("refresh-input-invalid", IssueCategory.INPUT)
     try:
@@ -529,7 +535,12 @@ def preview_manifest_refresh(
         match = _TARGET.fullmatch(canonical_target)
         if match is None:
             return _failure("refresh-target-path-invalid", IssueCategory.INPUT)
-        target_bytes = _read_bounded(repository, canonical_target, limits.target_bytes)
+        target_bytes = _read_bounded(
+            repository,
+            canonical_target,
+            limits.target_bytes,
+            filesystem,
+        )
     except OverflowError:
         return _failure("refresh-target-limit-exceeded")
     except (OSError, RuntimeError, ValueError):
@@ -565,7 +576,12 @@ def preview_manifest_refresh(
         observed_artifacts: list[ManifestArtifact] = []
         artifact_bytes: dict[str, bytes] = {}
         for artifact in artifacts:
-            data = _read_bounded(repository, artifact.path, limits.artifact_bytes)
+            data = _read_bounded(
+                repository,
+                artifact.path,
+                limits.artifact_bytes,
+                filesystem,
+            )
             artifact_bytes[artifact.path] = data
             observed_artifacts.append(replace(artifact, sha256=_sha256(data)))
     except OverflowError:
@@ -707,13 +723,23 @@ def preview_manifest_refresh(
     # Reobserve all approval inputs. Any mixed snapshot is non-success.
     try:
         if (
-            _read_bounded(repository, canonical_target, limits.target_bytes)
+            _read_bounded(
+                repository,
+                canonical_target,
+                limits.target_bytes,
+                filesystem,
+            )
             != target_bytes
         ):
             return _failure("refresh-target-changed")
         for artifact in artifacts:
             if (
-                _read_bounded(repository, artifact.path, limits.artifact_bytes)
+                _read_bounded(
+                    repository,
+                    artifact.path,
+                    limits.artifact_bytes,
+                    filesystem,
+                )
                 != artifact_bytes[artifact.path]
             ):
                 return _failure("refresh-artifact-changed", IssueCategory.ARTIFACT)
@@ -772,6 +798,8 @@ def _preview_identity(preview: object) -> str | None:
 
 def _current_preview(
     preview: ManifestRefreshPreview,
+    *,
+    operations: ManifestRefreshFileOperations,
 ) -> Result[ManifestRefreshPreview]:
     repository = Path(preview.repository_root)
     registry = read_policy_reference_registry(repository, _POLICY_REGISTRY_PATH)
@@ -797,6 +825,7 @@ def _current_preview(
         planning_inventory=inventory.value,
         policy_registry=registry.value,
         explicit_matches=preview.explicit_matches,
+        operations=operations,
     )
 
 
@@ -922,7 +951,7 @@ def apply_manifest_refresh(
             RefreshTargetState.UNKNOWN,
             RefreshStagingState.ABSENT,
         )
-    current = _current_preview(preview)
+    current = _current_preview(preview, operations=filesystem)
     if isinstance(current, Failure) or current.value != preview:
         return _refresh_failure(
             "refresh-current-snapshot-changed",
@@ -1091,7 +1120,7 @@ def apply_manifest_refresh(
                 expected_sha256=preview.old_target_sha256,
                 staging_name=staging_name,
             )
-        current_at_replace = _current_preview(preview)
+        current_at_replace = _current_preview(preview, operations=filesystem)
         try:
             target_at_replace = filesystem.read_bounded_bytes_at(
                 target_anchor.descriptor,
