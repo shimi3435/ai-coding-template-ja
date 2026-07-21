@@ -56,6 +56,7 @@ ASSIGNMENT_PATH = (
 )
 POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
 SOURCE_COMMIT = "4d8b5b173927ed518d39dee18a29b0271628afbd"
+ALTERNATE_SOURCE_COMMIT = "cca33916805a46a712f60da6a5f22a358889cffe"
 TRACKED_HANDOFF_SHA256 = (
     "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914"
 )
@@ -154,6 +155,7 @@ def _repository(
                 "--no-tags",
                 REPOSITORY_ROOT,
                 SOURCE_COMMIT,
+                ALTERNATE_SOURCE_COMMIT,
             ),
             check=True,
         )
@@ -279,6 +281,9 @@ class DriftAtReplaceRefreshOperations(MutationRecordingRefreshOperations):
         target_name: str,
     ) -> None:
         del parent_descriptor, parent, source_name, target_name
+        if self.path.is_dir():
+            shutil.rmtree(self.path)
+            return
         self.path.write_bytes(self.path.read_bytes() + b"\nreplace-boundary drift\n")
 
 
@@ -651,7 +656,7 @@ def test_preview_machine_bytes_are_deterministic_complete_and_hash_bound(
     assert machine_value["previous_progress_sha256"]
     assert machine_value["explicit_matches"] == []
 
-    changed = _preview(repository, current_source_commit="e" * 40)
+    changed = _preview(repository, current_source_commit=ALTERNATE_SOURCE_COMMIT)
     assert isinstance(changed, Success)
     assert changed.value.preview_sha256 != first.value.preview_sha256
 
@@ -799,7 +804,15 @@ def test_apply_requires_exact_fresh_approval_before_any_mutation(
 
 @pytest.mark.parametrize(
     "drift",
-    ["target", "source", "artifact", "progress", "assignment", "policy"],
+    [
+        "target",
+        "source",
+        "artifact",
+        "progress",
+        "assignment",
+        "policy",
+        "source-pin",
+    ],
 )
 def test_apply_rejects_every_preview_bound_state_drift_before_staging(
     tmp_path: Path, drift: str
@@ -831,9 +844,11 @@ def test_apply_rejects_every_preview_bound_state_drift_before_staging(
                 assignments=preview.planning_inventory.assignments[:-1],
             ),
         )
-    else:
+    elif drift == "policy":
         policy = repository / POLICY_REGISTRY_PATH
         policy.write_bytes(policy.read_bytes() + b"\npolicy drift\n")
+    else:
+        shutil.rmtree(repository / ".git")
     before = target.read_bytes()
     operations = MutationRecordingRefreshOperations()
 
@@ -1017,7 +1032,7 @@ def test_apply_replace_failure_uses_fresh_bounded_target_proof(
     assert operations.mutations == ["create", "write", "replace", "unlink"]
 
 
-@pytest.mark.parametrize("drift_path", [SOURCE_PATH, POLICY_REGISTRY_PATH])
+@pytest.mark.parametrize("drift_path", [SOURCE_PATH, POLICY_REGISTRY_PATH, ".git"])
 def test_apply_rechecks_source_and_policy_after_staging_before_replace(
     tmp_path: Path, drift_path: str
 ) -> None:

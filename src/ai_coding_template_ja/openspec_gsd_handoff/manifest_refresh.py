@@ -49,6 +49,7 @@ from .policy_reference import (
     observe_policy_sections,
     read_policy_reference_registry,
 )
+from .preflight import COMMAND_TIMEOUT_SECONDS, CommandResult, subprocess_runner
 from .progress import parse_task_progress
 from .source_identity import (
     ExplicitSourceMatch,
@@ -265,6 +266,43 @@ def _read_bounded(
         raise OverflowError from error
     finally:
         operations.close_parent_directory(anchor)
+
+
+def _source_pin_matches(
+    repository: Path,
+    source_commit: str,
+    artifact_bytes: dict[str, bytes],
+) -> bool:
+    """Observe one historical commit and its exact canonical artifact blobs."""
+
+    def git(*arguments: str) -> CommandResult:
+        return subprocess_runner(
+            ("git", *arguments),
+            cwd=repository,
+            timeout=COMMAND_TIMEOUT_SECONDS,
+        )
+
+    if _HEX_40.fullmatch(source_commit) is None:
+        return False
+    commit = git("cat-file", "-e", f"{source_commit}^{{commit}}")
+    if commit.return_code != 0:
+        return False
+    root = git("rev-parse", "--show-toplevel")
+    if root.return_code != 0:
+        return False
+    try:
+        observed_root = Path(root.stdout.decode("utf-8").strip()).resolve(strict=True)
+    except (OSError, UnicodeDecodeError):
+        return False
+    if observed_root != repository:
+        return False
+    for path, expected in artifact_bytes.items():
+        if _canonical_relative_path(path) is None:
+            return False
+        blob = git("cat-file", "-p", f"{source_commit}:{path}")
+        if blob.return_code != 0 or blob.stdout != expected:
+            return False
+    return True
 
 
 def _artifact_object(item: ManifestArtifact) -> dict[str, object]:
@@ -590,6 +628,8 @@ def preview_manifest_refresh(
         return _failure("refresh-artifact-unreadable", IssueCategory.ARTIFACT)
     if tuple(observed_artifacts) != artifacts:
         return _failure("refresh-artifact-hash-mismatch", IssueCategory.ARTIFACT)
+    if not _source_pin_matches(repository, current_source_commit, artifact_bytes):
+        return _failure("refresh-source-pin-invalid", IssueCategory.ARTIFACT)
     if tuple((item.kind, item.path) for item in artifacts) != tuple(
         (item.kind, item.path) for item in previous.artifacts
     ):
@@ -751,6 +791,8 @@ def preview_manifest_refresh(
         or second_inventory.value != inventory.value
     ):
         return _failure("refresh-source-changed", IssueCategory.ARTIFACT)
+    if not _source_pin_matches(repository, current_source_commit, artifact_bytes):
+        return _failure("refresh-source-pin-invalid", IssueCategory.ARTIFACT)
     return Success(replace(preview, preview_sha256=_sha256(machine.value)))
 
 
