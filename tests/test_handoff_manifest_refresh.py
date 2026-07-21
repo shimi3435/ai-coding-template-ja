@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -106,7 +107,10 @@ def _inputs():
 
 
 def _repository(
-    tmp_path: Path, manifest_bytes: bytes | None = None
+    tmp_path: Path,
+    manifest_bytes: bytes | None = None,
+    *,
+    seed_source_commit: bool = True,
 ) -> tuple[Path, Path]:
     repository = tmp_path / "repository"
     manifest, _, _, _, _ = _inputs()
@@ -135,6 +139,24 @@ def _repository(
     (repository / ".planning/phases/02-source-to-execution-mapping").mkdir(
         parents=True, exist_ok=True
     )
+    if seed_source_commit:
+        subprocess.run(  # noqa: S603 - fixed Git argv against isolated test paths
+            ("git", "init", "--quiet", repository),
+            check=True,
+        )
+        subprocess.run(  # noqa: S603 - fixed Git argv against isolated test paths
+            (
+                "git",
+                "-C",
+                repository,
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                REPOSITORY_ROOT,
+                SOURCE_COMMIT,
+            ),
+            check=True,
+        )
     return repository, target
 
 
@@ -474,6 +496,39 @@ def test_preview_uses_supplied_read_only_operations_boundary(tmp_path: Path) -> 
         operations.repository_reads.count(artifact.path) == 2 for artifact in artifacts
     )
     assert operations.mutations == []
+
+
+@pytest.mark.parametrize("git_state", ["missing", "unknown-commit", "blob-mismatch"])
+def test_preview_rejects_unverified_source_pin_without_mutation(
+    tmp_path: Path, git_state: str
+) -> None:
+    repository, target = _repository(
+        tmp_path,
+        seed_source_commit=git_state != "missing",
+    )
+    _, artifacts, _, _, _ = _inputs()
+    overrides = {}
+    if git_state == "unknown-commit":
+        overrides["current_source_commit"] = "e" * 40
+    elif git_state == "blob-mismatch":
+        artifact = artifacts[0]
+        artifact_path = repository / artifact.path
+        artifact_path.write_bytes(
+            artifact_path.read_bytes() + b"\nworking-tree drift\n"
+        )
+        overrides["current_artifacts"] = (
+            replace(artifact, sha256=_sha256(artifact_path.read_bytes())),
+            *artifacts[1:],
+        )
+    before = target.read_bytes()
+    operations = MutationRecordingRefreshOperations()
+
+    result = _preview(repository, operations=operations, **overrides)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "refresh-source-pin-invalid"
+    assert operations.mutations == []
+    assert target.read_bytes() == before
 
 
 @pytest.mark.parametrize(
