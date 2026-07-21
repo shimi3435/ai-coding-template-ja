@@ -273,10 +273,12 @@ def _repository_root_evidence() -> bytes:
     staging_before = tuple(
         sorted(path.name for path in target.parent.glob(".handoff.*.tmp"))
     )
+    operations = MutationRecordingRefreshOperations()
 
-    result = _preview(REPOSITORY_ROOT)
+    result = _preview(REPOSITORY_ROOT, operations=operations)
 
     assert isinstance(result, Success)
+    assert operations.mutations == []
     preview = result.value
     machine = serialize_manifest_refresh_preview(preview)
     assert isinstance(machine, Success)
@@ -291,6 +293,7 @@ def _repository_root_evidence() -> bytes:
         "evidence_schema": "openspec-gsd-refresh-preview-evidence-v1",
         "generation_mode": "read-only-preview-only",
         "apply_invoked": False,
+        "mutation_operations": operations.mutations,
         "preview_sha256": preview.preview_sha256,
         "target_observation": {
             "path": HANDOFF_PATH,
@@ -341,6 +344,7 @@ def test_repository_root_preview_matches_complete_read_only_evidence() -> None:
         "evidence_schema",
         "generation_mode",
         "apply_invoked",
+        "mutation_operations",
         "preview_sha256",
         "target_observation",
         "tasks_observation",
@@ -351,6 +355,7 @@ def test_repository_root_preview_matches_complete_read_only_evidence() -> None:
     }
     assert evidence["generation_mode"] == "read-only-preview-only"
     assert evidence["apply_invoked"] is False
+    assert evidence["mutation_operations"] == []
     assert evidence["target_observation"] == {
         "path": HANDOFF_PATH,
         "before_sha256": TRACKED_HANDOFF_SHA256,
