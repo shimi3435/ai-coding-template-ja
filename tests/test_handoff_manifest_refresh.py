@@ -486,6 +486,59 @@ def test_refresh_rejects_incomplete_or_stale_inputs_without_mutation(
     assert target.read_bytes() == before
 
 
+@pytest.mark.parametrize(
+    ("surface", "expected_code"),
+    [
+        ("target", "refresh-target-unreadable"),
+        ("artifact", "refresh-artifact-unreadable"),
+    ],
+)
+def test_preview_rejects_symlink_swap_at_canonical_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+    expected_code: str,
+) -> None:
+    repository, target = _repository(tmp_path)
+    _, artifacts, _, _, _ = _inputs()
+    victim = target if surface == "target" else repository / artifacts[0].path
+    relative_victim = victim.relative_to(repository)
+    outside = tmp_path / f"outside-{surface}"
+    outside.write_bytes(victim.read_bytes())
+    original_read = ManifestRefreshFileOperations.read_repository_bytes_at
+    swapped = False
+
+    def swap_before_descriptor_read(
+        self: ManifestRefreshFileOperations,
+        repository_anchor,
+        relative_path: Path,
+        *,
+        limit: int,
+    ) -> bytes:
+        nonlocal swapped
+        if not swapped and relative_path == relative_victim:
+            swapped = True
+            victim.unlink()
+            victim.symlink_to(outside)
+        return original_read(
+            self,
+            repository_anchor,
+            relative_path,
+            limit=limit,
+        )
+
+    monkeypatch.setattr(
+        ManifestRefreshFileOperations,
+        "read_repository_bytes_at",
+        swap_before_descriptor_read,
+    )
+
+    result = _preview(repository)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == expected_code
+
+
 def test_preview_machine_bytes_are_deterministic_complete_and_hash_bound(
     tmp_path: Path,
 ) -> None:

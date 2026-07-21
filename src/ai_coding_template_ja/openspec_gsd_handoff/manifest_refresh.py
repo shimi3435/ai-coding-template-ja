@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -233,7 +234,10 @@ def _canonical_relative_path(value: str) -> PurePosixPath | None:
     if not value or value.startswith("/") or "\\" in value or "\0" in value:
         return None
     path = PurePosixPath(value)
-    if path.as_posix() != value or any(part in {"", ".", ".."} for part in path.parts):
+    if path.as_posix() != value or any(
+        part in {"", ".", ".."} or unicodedata.normalize("NFC", part) != part
+        for part in path.parts
+    ):
         return None
     return path
 
@@ -242,20 +246,21 @@ def _read_bounded(repository: Path, relative: str, limit: int) -> bytes:
     pure = _canonical_relative_path(relative)
     if pure is None:
         raise OSError("invalid relative path")
-    current = repository
-    for part in pure.parts:
-        current = current / part
-        if current.is_symlink():
-            raise OSError("symlink rejected")
-    resolved = current.resolve(strict=True)
-    resolved.relative_to(repository)
-    if not resolved.is_file():
-        raise OSError("not a regular file")
-    with resolved.open("rb") as stream:
-        data = stream.read(limit + 1)
-    if len(data) > limit:
-        raise OverflowError
-    return data
+    operations = ManifestRefreshFileOperations()
+    anchor = operations.open_parent_directory(repository, Path())
+    try:
+        data = operations.read_repository_bytes_at(
+            anchor,
+            Path(*pure.parts),
+            limit=limit,
+        )
+        if not operations.parent_directory_is_current(anchor, repository):
+            raise OSError("repository identity changed")
+        return data
+    except ManifestSizeLimitExceeded as error:
+        raise OverflowError from error
+    finally:
+        operations.close_parent_directory(anchor)
 
 
 def _artifact_object(item: ManifestArtifact) -> dict[str, object]:
