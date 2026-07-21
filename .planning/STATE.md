@@ -4,15 +4,15 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 2
 current_phase_name: Source-to-Execution Mapping
-status: executing
-stopped_at: D-04 approved and authority repinned; corrective planning pending
-last_updated: "2026-07-22T04:22:22+09:00"
+status: ready
+stopped_at: Corrective Plan 02-05 verified and ready to execute
+last_updated: "2026-07-22T04:35:00+09:00"
 last_activity: 2026-07-22
-last_activity_desc: Readiness observation contract approved at current canonical pin; stale derived evidence remains
+last_activity_desc: Corrective Plan 02-05 passed plan-checker with 0 issues
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 9
+  total_plans: 10
   completed_plans: 9
   percent: 17
 ---
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 2 (Source-to-Execution Mapping) — CORRECTIVE PLANNING PENDING
-Plan: 4 of 4 historical plans complete; no corrective plan created
-Status: D-04 resolves the final review blocker's specification question; stale derived evidence still requires a corrective plan and verification
-Last activity: 2026-07-22 — planning authority repinned; tracked preview, expected fixture, source/tests, and OpenSpec task 2.2 left unchanged
+Phase: 2 (Source-to-Execution Mapping) — CORRECTIVE PLAN READY
+Plan: 4 of 5 plans complete; Plan 02-05 ready to execute
+Status: D-04 resolves the final review blocker's specification question; corrective evidence remains to be regenerated and verified
+Last activity: 2026-07-22 — Plan 02-05 passed plan-checker; tracked preview, expected fixture, source/tests, and OpenSpec task 2.2 remain unchanged
 
 Progress: [██░░░░░░░░] 1 of 6 phases complete (17%)
 
@@ -86,7 +86,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Create and execute a corrective Phase 2 plan for the stale tracked refresh preview and expected-preview fixture; no such plan exists yet.
+- Execute corrective Plan 02-05 for the stale tracked refresh preview and expected-preview fixture.
 - Re-run focused verification and `task check`, then complete the independent Phase 2 boundary review before considering OpenSpec task 2.2.
 
 ### Blockers/Concerns
@@ -109,5 +109,5 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-07-22T04:22:22+09:00
-Stopped at: D-04 approved and authority repinned; corrective planning pending
+Stopped at: Corrective Plan 02-05 verified and ready to execute
 Resume file: None
