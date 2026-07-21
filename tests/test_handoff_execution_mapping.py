@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_coding_template_ja.openspec_gsd_handoff import execution_mapping
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     EvidenceDeclaration,
     MappingIssue,
@@ -108,6 +109,62 @@ def test_planning_inventory_values_are_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         inventory.change_id = "other-change"  # type: ignore[misc]
+
+
+def test_planning_inventory_rejects_noncanonical_and_symlink_paths(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    target = repository / "inventory.json"
+    target.parent.mkdir()
+    target.write_bytes((REPOSITORY_ROOT / ASSIGNMENT_FIXTURE).read_bytes())
+    symlink = repository / "inventory-link.json"
+    symlink.symlink_to(target)
+
+    unsafe_paths = (
+        str(target),
+        "nested/../inventory.json",
+        "./inventory.json",
+        "inventory\\.json",
+        "inventory\0.json",
+        "Cafe\u0301.json",
+        "inventory-link.json",
+    )
+
+    for unsafe_path in unsafe_paths:
+        result = read_planning_inventory(repository, unsafe_path)
+        assert isinstance(result, Failure), unsafe_path
+        assert result.issue.code == "mapping-inventory-path-invalid"
+
+
+def test_planning_inventory_rejects_identity_change_during_bounded_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    target = repository / "inventory.json"
+    target.parent.mkdir()
+    target.write_bytes((REPOSITORY_ROOT / ASSIGNMENT_FIXTURE).read_bytes())
+    replacement = tmp_path / "replacement.json"
+    replacement.write_bytes(target.read_bytes())
+    original_read = execution_mapping.os.read
+    swapped = False
+
+    def swap_after_read(descriptor: int, size: int) -> bytes:
+        nonlocal swapped
+        data = original_read(descriptor, size)
+        if not swapped:
+            swapped = True
+            target.unlink()
+            target.symlink_to(replacement)
+        return data
+
+    monkeypatch.setattr(execution_mapping.os, "read", swap_after_read)
+
+    result = read_planning_inventory(repository, "inventory.json")
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "mapping-inventory-path-invalid"
 
 
 @pytest.mark.parametrize(

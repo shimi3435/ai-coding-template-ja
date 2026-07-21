@@ -35,6 +35,8 @@ _CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _SOURCE_ID = re.compile(r"(?:REQ|SCN)-[0-9]{6}\Z")
 _PHASE_ID = re.compile(r"[0-9]{2}\Z")
 _POLICY_ID = re.compile(r"ACE-[A-Z0-9]+(?:-[A-Z0-9]+)*\Z")
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+_FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 
 
 class MappingOperation(StrEnum):
@@ -181,6 +183,102 @@ def _canonical_path(value: str) -> str:
     ):
         raise _InventoryError("mapping-path-invalid")
     return value
+
+
+def _canonical_inventory_path(value: object) -> tuple[str, ...]:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value.startswith("/")
+        or "\\" in value
+        or "\0" in value
+    ):
+        raise _InventoryError("mapping-inventory-path-invalid")
+    parts = tuple(value.split("/"))
+    if any(
+        part in {"", ".", ".."} or unicodedata.normalize("NFC", part) != part
+        for part in parts
+    ):
+        raise _InventoryError("mapping-inventory-path-invalid")
+    return parts
+
+
+def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino, stat.S_IFMT(left.st_mode)) == (
+        right.st_dev,
+        right.st_ino,
+        stat.S_IFMT(right.st_mode),
+    )
+
+
+def _verify_inventory_entry(parent_fd: int, name: str, descriptor: int) -> None:
+    try:
+        linked = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        opened = os.fstat(descriptor)
+    except OSError as error:
+        raise _InventoryError("mapping-inventory-path-invalid") from error
+    if stat.S_ISLNK(linked.st_mode) or not _same_identity(linked, opened):
+        raise _InventoryError("mapping-inventory-path-invalid")
+
+
+def _read_anchored_inventory(
+    repository: Path,
+    parts: tuple[str, ...],
+) -> bytes:
+    descriptors: list[int] = []
+    entries: list[tuple[int, str, int]] = []
+    try:
+        repository_fd = os.open(repository, _DIRECTORY_OPEN_FLAGS)
+        descriptors.append(repository_fd)
+        repository_identity = os.fstat(repository_fd)
+        if not stat.S_ISDIR(repository_identity.st_mode):
+            raise _InventoryError("mapping-inventory-path-invalid")
+        parent_fd = repository_fd
+        for part in parts[:-1]:
+            descriptor = os.open(part, _DIRECTORY_OPEN_FLAGS, dir_fd=parent_fd)
+            descriptors.append(descriptor)
+            entries.append((parent_fd, part, descriptor))
+            _verify_inventory_entry(parent_fd, part, descriptor)
+            if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                raise _InventoryError("mapping-inventory-path-invalid")
+            parent_fd = descriptor
+
+        filename = parts[-1]
+        file_fd = os.open(filename, _FILE_OPEN_FLAGS, dir_fd=parent_fd)
+        descriptors.append(file_fd)
+        entries.append((parent_fd, filename, file_fd))
+        _verify_inventory_entry(parent_fd, filename, file_fd)
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            raise _InventoryError("mapping-inventory-path-invalid")
+
+        chunks: list[bytes] = []
+        remaining = _MAX_BYTES + 1
+        while remaining:
+            chunk = os.read(file_fd, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content = b"".join(chunks)
+
+        for parent, name, descriptor in entries:
+            _verify_inventory_entry(parent, name, descriptor)
+        linked_repository = os.stat(repository, follow_symlinks=False)
+        if not _same_identity(linked_repository, repository_identity):
+            raise _InventoryError("mapping-inventory-path-invalid")
+        if len(content) > _MAX_BYTES:
+            raise _InventoryError("mapping-inventory-byte-limit-exceeded")
+        return content
+    except _InventoryError:
+        raise
+    except (OSError, ValueError) as error:
+        raise _InventoryError("mapping-inventory-path-invalid") from error
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def _alias_key(value: str) -> str:
@@ -437,14 +535,9 @@ def read_planning_inventory(
     """Read one complete bounded assignment fixture without inferring declarations."""
 
     try:
+        parts = _canonical_inventory_path(inventory_path)
         root = repository_root.resolve(strict=True)
-        target = (root / inventory_path).resolve(strict=True)
-        target.relative_to(root)
-        if target.is_symlink() or not target.is_file():
-            raise _InventoryError("mapping-inventory-path-invalid")
-        content = target.read_bytes()
-        if len(content) > _MAX_BYTES:
-            raise _InventoryError("mapping-inventory-byte-limit-exceeded")
+        content = _read_anchored_inventory(root, parts)
         if type(policy_observations) is not tuple:
             raise _InventoryError("mapping-policy-observations-invalid")
         inventory = _parse_inventory(content, policy_observations)
