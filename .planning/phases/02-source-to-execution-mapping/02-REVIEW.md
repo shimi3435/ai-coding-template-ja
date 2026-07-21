@@ -1,21 +1,21 @@
 ---
 phase: 02-source-to-execution-mapping
-reviewed: 2026-07-21T19:07:07Z
+reviewed: 2026-07-21T20:11:18Z
 depth: standard
 files_reviewed: 12
 files_reviewed_list:
   - docs/agents/adaptive-change-execution.references.json
-  - src/ai_coding_template_ja/openspec_gsd_handoff/policy_reference.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py
-  - tests/test_handoff_policy_reference.py
-  - tests/test_handoff_execution_mapping.py
-  - tests/test_handoff_manifest_refresh.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/policy_reference.py
   - tests/fixtures/openspec_gsd_handoff/manifest/expected-refresh-preview.json
   - tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json
   - tests/fixtures/openspec_gsd_handoff/policy/duplicate-heading.md
   - tests/fixtures/openspec_gsd_handoff/policy/unclosed-fence.md
   - tests/fixtures/openspec_gsd_handoff/policy/valid-policy.md
+  - tests/test_handoff_execution_mapping.py
+  - tests/test_handoff_manifest_refresh.py
+  - tests/test_handoff_policy_reference.py
 findings:
   critical: 1
   warning: 0
@@ -24,49 +24,54 @@ findings:
 status: issues_found
 ---
 
-# Phase 2: Code Review Report
+# Phase 02: Code Review Report
 
-**Reviewed:** 2026-07-21T19:07:07Z
+**Reviewed:** 2026-07-21T20:11:18Z
 **Depth:** standard
 **Files Reviewed:** 12
 **Status:** issues_found
 
 ## Summary
 
-Phase 2 の3 source modules、3 test modules、fixture/registryを、canonical OpenSpec、Phase 2 context、全plans/summaries、`02-REVIEW-FIX.md`、最新 commits `fa6f238` / `5487156` と照合した。通常・既存例外経路、public CLI/API非変更、descriptor close、focused/full regressionはgreenである。
+対象12ファイルを standard depth でレビューした。execution mapping と policy reference の現行実装、ならびに corrective plan 02-05 の固定済み preview/evidence hash と tracked apply 非実行の証跡には、新たな blocker/warning は確認できなかった。一方、manifest refresh の mutation seam は `source_commit` を Git object として観測せず、任意の40桁 lowercase hex を承認済み commit として適用できるため、1件の BLOCKER が残る。
 
-ただし、`fa6f238` が追加したoperation末尾の全path再検証は逐次実行であり、再検証済みの先行pathを後続pathの最終再検証中にunlinkすると、その先行pathを再度照合しない。返却時にrequired evidenceが存在しないまま`ready=True`となるため、前回CR-01のwhole-operation identity保証は未解決である。
+旧レビューの CR-01（readiness 呼び出し全体を atomic snapshot/lease として扱う要求）は、現行 D-04 の「path-by-path の point-in-time observation」であり、最終観測後の不変性を保証しないという契約には適合しないため、今回は finding として再掲しない。consumer による action 直前の mapping readiness と Phase 3 drift/preflight の再実行、および mutation seam 固有の state guard が現行境界である。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: [BLOCKER] 最終再検証中の先行path消失を見逃してreadinessがfalse greenになる
+### CR-01 [BLOCKER]: refresh の source commit guard が Git state を観測していない
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py:919-932`
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:513-529,650-657,775-829,903-955`
 
-**Issue:** `_readiness_issues()` は保持済みobservationsを順番に再検証する。先行evidenceの最終再検証が成功した後、後続evidenceの `_revalidate_declared_path_observation()` 内で先行evidenceをunlinkしても、先行evidenceは再検証されない。隔離再現では `.planning/evidence/REQ-000001.json` の最終照合後、`.planning/evidence/plan-02.json` の最終照合時に前者をunlinkした結果、`victim_exists=False`、`issues=[]`、`ready=True`となった。descriptorは正常に閉じられ、`fd_delta=0`だったため、例外やleakではなく最終snapshot判定そのものの欠陥である。これはcanonical design/specの「必要path不在が一件でもあればpartial greenを返さない」契約に反する。
+**Issue:** `preview_manifest_refresh()` は caller が渡した `current_source_commit` を40桁 lowercase hex かだけ検査して candidate に保存する。apply 時の `_current_preview()` も approved preview の同じ文字列をそのまま再投入するため、source commit の存在、commit object であること、canonical artifact がその commit の blob と一致することを一度も再観測しない。approval hash は虚偽の文字列を固定するだけで、その文字列を repository state の guard にはしない。
 
-**Fix:** 複数pathのreadinessをどの時点・どのmechanismで一つのatomic snapshotとして成立させるかをcanonical contractで先に定義し、その境界を機械的に保証できるまでwhole-operation `ready=True`を許可しないこと。単なる再検証ループ追加では同じ競合窓が移動するだけなので、実装方式はこのreviewでは推測しない。回帰は「先行pathの最終照合後、後続pathの最終照合中に先行pathをunlink」をpublic seamから再現し、false greenを拒否する必要がある。
+一時 repository に `.git` が存在しない状態でも、`current_source_commit="e" * 40` の preview と apply がともに `Success` になり、candidate の `source_commit` にその値が保存されることを再現した。これは D-02/spec が求める apply-time の独立した source-commit state guard を満たさず、存在しない、または canonical source と対応しない commit を追跡 manifest に確定できる。後続の resume/drift 判定が誤った authority pin を信頼するため、正確性と安全な再開を破壊する。
 
-## Verification Evidence
+**Fix:** historical pin を許容するため HEAD との単純一致は要求せず、既存 preflight と同じ Git object 検証を refresh 用の観測関数として切り出す。preview 作成時と apply の staging 前（および replace 直前の mutation guard）に、少なくとも次を point-in-time で再観測し、不一致時は mutation 前に fail closed とする。
 
-- Phase 2 focused suite: `98 passed`。
-- `task check`: Ruff format/check green、BasedPyright `0 errors, 0 warnings, 0 notes`、pytest `483 passed`。
-- Read-only isolated repro: `removed=True`、`later_stats=3`、`victim_exists=False`、`ready=True`、`issues=[]`、`fd_delta=0`。
-- Phase 2 base以降でroot exports / `__main__.py` / CLI surfaceにdiffなし。actual tracked refresh apply、実OpenSpec / GSD / host smokeは未実行。
+```python
+observed = observe_source_pin(
+    repository_root=repository,
+    source_commit=preview.current_source_commit,
+    canonical_artifacts=preview.current_artifacts,
+)
+if isinstance(observed, Failure):
+    return refresh_state_guard_failure("refresh-source-commit-changed")
+```
 
-## Protected Surface Evidence
+`observe_source_pin()` は `git cat-file -e <commit>^{commit}` で commit object の存在を確認し、各 canonical artifact を `git cat-file -p <commit>:<path>` で読み、approved preview が保持する artifact bytes/hash と一致させる。この観測結果を machine preview/hash に束縛し、apply 時に再観測する。回帰テストとして、(1) `.git` 不在、(2) 存在しない40桁hex、(3) commit は存在するが canonical artifact blob が異なる、の各ケースが staging/mutation 前に拒否されることを追加する。
 
-- tracked handoff: `554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914`
-- OpenSpec `tasks.md`: `cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220`
-- tracked refresh preview: `6775ff40a9e01aa634ff67098a0a1d020808ef11be80ece4e06f881dab5270cf`
-- ROADMAP: `10cb18a19943da7a5c9b41f5a65f21a5bfd6f462451c32e9a3f76adf21801f4d`
-- STATE: `81a99f6c42fa7a92c4d236f3a452b5526a7ef334dad1782fae9565d43fbbf89f`
-- report更新前のworktreeはclean。source/tests/protected artifactsは変更していない。
+## Validation
+
+- `uv run pytest tests/test_handoff_manifest_refresh.py tests/test_handoff_execution_mapping.py tests/test_handoff_policy_reference.py -q` — 98 passed
+- `task check` — ruff format/check、basedpyright、pytest 483件すべて成功
+- corrective 02-05 の candidate/preview/evidence/target/tasks/design/spec SHA-256 を記録値と照合済み
+- corrective evidence の `apply_invoked: false`、空の mutation operations、staging before/after 空、target/tasks hash 不変を確認済み
 
 ---
 
-_Reviewed: 2026-07-21T19:07:07Z_
+_Reviewed: 2026-07-21T20:11:18Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
