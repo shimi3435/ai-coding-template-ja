@@ -21,12 +21,12 @@ rollback, repair, or downstream phase advance is allowed.
 Manual recovery from the stale started handoff is approved. Phase 1 was replanned and
 verified against its `2cbb127…` source pin. The current Phase 2 authority is repinned to
 `4d8b5b1…`, including the approved point-in-time readiness decision D-04, without adding
-a phase or switching route. The final review blocker's specification question is resolved,
-but the 4/4 completed plans remain historical execution evidence: the old tracked refresh
-preview and expected-preview test fixture are stale, and corrective Plan 02-05 is planned but
-not executed. `task check` currently fails exactly two manifest-refresh tests because
-fresh evidence derived from the current pin differs from those records. Phase 2 verification
-and OpenSpec task 2.2 remain incomplete; Phases 3–6 remain blocked, and no Phase 7 is added.
+a phase or switching route. The final review blocker's specification question is resolved.
+The 4/4 earlier plans remain historical execution evidence, while corrective Plan 02-05
+repins the derived preview and expected-preview fixture to the current authority without
+applying the tracked refresh. Focused regression, strict OpenSpec validation, and `task check`
+are green. Fresh Phase 2 review and independent verification remain pending; Phase 2 and
+OpenSpec task 2.2 therefore remain incomplete, Phases 3–6 remain blocked, and no Phase 7 is added.
 The old handoff manifest and brief remain unchanged audit evidence rather than the current
 planning authority.
 
@@ -36,7 +36,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ## Phases
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
-- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (4/5 plans complete; corrective execution and verification pending)
+- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; fresh review and independent verification pending)
 - [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary.
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions.
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
@@ -72,7 +72,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 1
 **Requirements:** HND-02 (opaque canonical handle: HARD-R1)
-**Plans:** 4/5 plans complete
+**Plans:** 5/5 plans complete
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Every in-scope source item has a deterministic execution reference, and incomplete or cross-change references are reported as structured non-success.
@@ -80,8 +80,9 @@ Plans:
 3. Fixed positive and negative examples provide the primary evidence, with no broad property suite added where it would duplicate the same seam.
 
 **Current gate:** D-04 resolves the final review blocker's contract question at the
-current canonical pin. Corrective Plan 02-05 for stale derived preview/fixture evidence is
-planned but not executed, so Phase 2 and OpenSpec task 2.2 remain incomplete.
+current canonical pin. Corrective Plan 02-05 regenerated the stale derived preview/fixture
+evidence read-only and all execution checks are green. Fresh review and independent
+verification are still required, so Phase 2 and OpenSpec task 2.2 remain incomplete.
 
 Plans:
 **Wave 1**
@@ -102,7 +103,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-05-PLAN.md — Repin derived evidence and regenerate the tracked read-only preview without apply.
+- [x] 02-05-PLAN.md — Repin derived evidence and regenerate the tracked read-only preview without apply.
 
 ### Phase 3: Lifecycle Drift Gate
 
@@ -178,7 +179,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
-| 2. Source-to-Execution Mapping | 4/4 | Corrective planning and verification pending | - |
+| 2. Source-to-Execution Mapping | 5/5 | Review and verification pending | - |
 | 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 2 | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |

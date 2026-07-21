@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 02
 current_phase_name: Source-to-Execution Mapping
-status: executing
-stopped_at: Corrective Plan 02-05 verified and ready to execute
-last_updated: "2026-07-21T19:48:28.857Z"
-last_activity: 2026-07-21
-last_activity_desc: Phase 02 execution started
+status: verifying
+stopped_at: Corrective Plan 02-05 complete; fresh Phase 2 review pending
+last_updated: "2026-07-22T05:00:33+09:00"
+last_activity: 2026-07-22
+last_activity_desc: Corrective Plan 02-05 completed with all execution checks green
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 17
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 02 (Source-to-Execution Mapping) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 02
-Last activity: 2026-07-21 — Phase 02 execution started
+Phase: 02 (Source-to-Execution Mapping) — VERIFYING
+Plan: 5 of 5
+Status: Fresh Phase 02 review and independent verification pending
+Last activity: 2026-07-22 — Corrective Plan 02-05 completed with all execution checks green
 
 Progress: [██░░░░░░░░] 1 of 6 phases complete (17%)
 
@@ -42,27 +42,27 @@ Progress: [██░░░░░░░░] 1 of 6 phases complete (17%)
 
 **Velocity:**
 
-- Total plans completed: 9
-- Average duration: 12 min
-- Total execution time: 104 min
+- Total plans completed: 10
+- Average duration: 11 min
+- Total execution time: 112 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | Phase 1 | 5 | 48 min | 10 min |
-| Phase 2 | 4 | 56 min | 14 min |
+| Phase 2 | 5 | 64 min | 13 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 9 min, 12 min, 18 min, 16 min, 10 min
+- Last 5 plans: 12 min, 18 min, 16 min, 10 min, 8 min
 - Trend: Stable
 
 **Latest Plan:**
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
-| Phase 02 P04 | 10 min | 2 | 3 |
+| Phase 02 P05 | 8 min | 2 | 4 |
 
 ## Accumulated Context
 
@@ -86,16 +86,16 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Execute corrective Plan 02-05 for the stale tracked refresh preview and expected-preview fixture.
-- Re-run focused verification and `task check`, then complete the independent Phase 2 boundary review before considering OpenSpec task 2.2.
+- Complete the fresh Phase 2 boundary review and independent verification against canonical source `4d8b5b1…`.
+- Display the new exact refresh preview and obtain a distinct approval before any tracked apply or OpenSpec task 2.2 update.
 
 ### Blockers/Concerns
 
 - Generic-agent workaround is recorded as a degraded dispatch path, not typed-dispatch equivalence.
 - Final acceptance remains owned by independent canonical OpenSpec boundary gates after all phases.
 - The old started handoff manifest and brief are historical / stale audit evidence and remain unchanged.
-- The final review blocker's specification question is resolved by D-04, but the review gate is not complete until corrective evidence and verification are green.
-- The tracked refresh preview and `expected-refresh-preview.json` still derive from the prior pin. `task check` fails exactly two `test_handoff_manifest_refresh.py` tests: repository-root evidence equality and the pinned candidate fingerprint expectation.
+- The final review blocker's specification question is resolved by D-04, and corrective execution evidence is green; the fresh review and independent verifier remain pending.
+- The tracked refresh preview is read-only evidence only. Actual publication requires display plus a distinct approval for exact preview hash `90b52efd98d6718796548151ea9c808dfd1e14484bcacd2f847b09ea71054bea`.
 - Phase 2 and OpenSpec task 2.2 remain incomplete; Phases 3–6 remain blocked.
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -108,6 +108,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-22T04:22:22+09:00
-Stopped at: Corrective Plan 02-05 verified and ready to execute
+Last session: 2026-07-22T05:00:33+09:00
+Stopped at: Corrective Plan 02-05 complete; fresh Phase 2 review pending
 Resume file: None
