@@ -64,7 +64,12 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
 - **WHEN** plan、execute、verify、またはfinalizeのoperation-ready判定を要求する
 - **THEN** bridgeはplanでは全active sourceから対象phaseへの割当と対象`phase_path`の実在、executeでは対象phaseの
   全`plan_paths`、verifyでは対象phaseの必要`evidence_paths`、finalizeでは全active source / 全phase / 全plan / 全required
-  evidenceの実在と同じchangeへの所属を要求し、horizon外の将来pathが空であることをgreen判定へ流用しない
+  evidenceの実在と同じchangeへの所属を要求し、horizon外の将来pathが空であることをgreen判定へ流用しない。readinessは
+  各pathをno-follow、bounded、identity-checkedで検査したpoint-in-time observation resultであってatomic filesystem
+  snapshotまたはleaseではなく、各pathは自身の観測時点で契約を満たさなければならない。観測中に検出したmissing、alias、
+  symlink、identity changeは部分的なgreenにせず、非協調な外部processによる各pathのfinal observation後の変更までは
+  保証しない。consumerは結果を将来の操作へ流用せず、実operation直前に同じreadinessとPhase 3のdrift / preflightを
+  再実行し、actual mutation seamは自身のstate guardsを持つ。bridgeは失敗時に自動retry、repair、route switchを行わない
 
 #### Scenario: MVP schema v1 の migration をpreviewする
 - **WHEN** exact MVP schema v1 manifestからhardening schema v2へのmigrationを要求する

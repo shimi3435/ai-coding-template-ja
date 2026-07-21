@@ -164,6 +164,13 @@ readiness horizonは次に固定する。各rowの範囲内でunknown、cross-ch
 | `verify` | 対象phaseの全active source ID、全plans、必要evidence | 対象phaseの実在path、全plan paths、各source / planに要求される全`evidence_paths` |
 | `finalize` | 全active source ID、全phases、全plans、全required evidence | repository-wideに実在し同じchangeへ属する完全なmapping graph |
 
+mapping readinessは各pathをno-follow、bounded、identity-checkedで検査したpoint-in-time observation resultであり、
+atomic filesystem snapshotまたはleaseではない。各pathは自身の観測時点で上表の契約を満たす必要があり、観測中に
+検出したmissing、alias、symlink、identity changeは部分的なgreenにしない。一方、非協調な外部processが各pathの
+final observation後に変更することまでは保証しない。consumerは結果を将来の操作へ流用せず、実operation直前に同じ
+mapping readinessとPhase 3のdrift / preflightを再実行する。actual mutation seamも自身のstate guardsを持ち、失敗時に
+自動retry、repair、route switchを行わない。
+
 started v2へsource identity、phase assignment、canonical artifact hash、source commit、checkbox progressを反映する操作は、
 v1 migrationとは別のPhase 2 application seamとする。read-only refresh previewは現在のv2 bytes hash、更新前後のsource /
 artifact / progress / mapping、生成予定v2 hash、除外理由、immutable preview hashを完全に返す。差分0件も完全なno-op preview
@@ -466,8 +473,8 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 | `P-PREVIEW` | Hypothesis property | preview builderの決定性、冪等性、hash binding |
 | `E-MIGRATION` | fixture / example | v1読取、read-only preview、staging failure時v1保持、unknown / downgrade拒否 |
 | `E-REFRESH` | fixture / filesystem integration | started v2のempty / stale / partial / oversized refresh、新previewと別承認によるmanual retry、state / capabilities / ownership / lifecycle保持、atomic replace |
-| `E-MAPPING` | fixture / example | category / ID prefix / parent整合、全active sourceのphase baseline、operation別horizon、空・重複・cross-change・tombstone・path不在・policy ref不整合 |
-| `E-DRIFT` | fixture / example | source / phase / capability drift、checkbox-only除外、unknown停止 |
+| `E-MAPPING` | fixture / example | category / ID prefix / parent整合、全active sourceのphase baseline、operation別horizon、空・重複・cross-change・tombstone・path不在・policy ref不整合、観測中のpath / identity変化 |
+| `E-DRIFT` | fixture / example | source / phase / capability drift、checkbox-only除外、unknown停止、final observation後のdriftと実operation直前の再検査 |
 | `I-OWNERSHIP` | filesystem / Git integration | 全manifest scan、shared reference、symlink / traversal / Unicode / case alias |
 | `I-RECOVERY` | filesystem integration | 0/1/N effects、中断、corrupt journal、resume再検査、巨大evidence |
 | `I-FINALIZE` | filesystem / Git integration | no-op、stale approval、dependency順、partial failure receipt、再実行 |
@@ -481,10 +488,12 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 明示的に非該当 / スコープ外とした項目で、test未作成の理由も同じcellに残す。
 `H01`〜`H12`は順に、空・ゼロ長・None、境界値、重複・衝突、順序、型・形式不正、エラー経路、
 冪等性・再実行、時刻・タイムゾーン、文字列、数値、巨大入力・リソース枯渇、状態遷移の未定義パスを表す。
+mapping readinessのconcurrency / TOCTOU境界は新しいholeを追加せず、観測中のmissing / alias / symlink / identity changeを
+`H06`、final observation後のdriftと実operation直前の再検査を`H12`として、既存の`E-MAPPING` / `E-DRIFT`で検証する。
 
 | requirement | H01 | H02 | H03 | H04 | H05 | H06 | H07 | H08 | H09 | H10 | H11 | H12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `HARD-R1` stable identity / mapping | `E-MAPPING`,`E-REFRESH` | `P-ALLOC`,`E-BOUNDS`,`E-MAPPING` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC`,`P-NORMALIZER`,`E-MAPPING` | `P-MANIFEST-RT`,`E-MAPPING`,`P-NORMALIZER`,`E-POLICY` | `E-MIGRATION`,`E-REFRESH` | `P-ALLOC`,`P-MANIFEST-RT`,`P-NORMALIZER`,`E-REFRESH` | N/A: identityへ時刻不使用 | `P-NORMALIZER`,`E-MAPPING`,`E-POLICY` | `P-ALLOC`,`E-BOUNDS` | `E-BOUNDS`,`P-NORMALIZER`,`E-REFRESH` | `P-ALLOC`,`E-MIGRATION`,`E-MAPPING`,`E-REFRESH` |
+| `HARD-R1` stable identity / mapping | `E-MAPPING`,`E-REFRESH` | `P-ALLOC`,`E-BOUNDS`,`E-MAPPING` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC`,`P-NORMALIZER`,`E-MAPPING` | `P-MANIFEST-RT`,`E-MAPPING`,`P-NORMALIZER`,`E-POLICY` | `E-MIGRATION`,`E-REFRESH`,`E-MAPPING` | `P-ALLOC`,`P-MANIFEST-RT`,`P-NORMALIZER`,`E-REFRESH` | N/A: identityへ時刻不使用 | `P-NORMALIZER`,`E-MAPPING`,`E-POLICY` | `P-ALLOC`,`E-BOUNDS` | `E-BOUNDS`,`P-NORMALIZER`,`E-REFRESH` | `P-ALLOC`,`E-MIGRATION`,`E-MAPPING`,`E-REFRESH` |
 | `HARD-R2` drift | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `P-NORMALIZER`,`E-DRIFT` | N/A: mtime判定なし | `P-NORMALIZER`,`E-DRIFT` | N/A: fuzzy判定なし | `E-BOUNDS`,`E-DRIFT` | `E-DRIFT` |
 | `HARD-R3` ownership | `P-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP` | `I-OWNERSHIP` | `I-OWNERSHIP` | `P-OWNERSHIP` | N/A: 時刻優先なし | `I-OWNERSHIP` | N/A: score推定なし | `E-BOUNDS`,`I-OWNERSHIP` | `I-OWNERSHIP`,`I-FINALIZE` |
 | `HARD-R4` recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |
