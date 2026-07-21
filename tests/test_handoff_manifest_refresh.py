@@ -55,6 +55,15 @@ ASSIGNMENT_PATH = (
 )
 POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
 SOURCE_COMMIT = "fbe7f714f734d714480583ab90f41ec0d2077f50"
+TRACKED_HANDOFF_SHA256 = (
+    "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914"
+)
+TRACKED_TASKS_SHA256 = (
+    "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
+)
+REFRESH_EVIDENCE_PATH = (
+    ".planning/phases/02-source-to-execution-mapping/02-REFRESH-PREVIEW.json"
+)
 EXPECTED = json.loads(
     (
         REPOSITORY_ROOT
@@ -248,6 +257,133 @@ def _preview(repository: Path, **overrides):
     }
     arguments.update(overrides)
     return preview_manifest_refresh(repository, Path(HANDOFF_PATH), **arguments)
+
+
+def _compact_json(value: object) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+    ).encode()
+
+
+def _repository_root_evidence() -> bytes:
+    target = REPOSITORY_ROOT / HANDOFF_PATH
+    tasks = REPOSITORY_ROOT / f"openspec/changes/{CHANGE_ID}/tasks.md"
+    target_before = target.read_bytes()
+    tasks_before = tasks.read_bytes()
+    staging_before = tuple(
+        sorted(path.name for path in target.parent.glob(".handoff.*.tmp"))
+    )
+
+    result = _preview(REPOSITORY_ROOT)
+
+    assert isinstance(result, Success)
+    preview = result.value
+    machine = serialize_manifest_refresh_preview(preview)
+    assert isinstance(machine, Success)
+    target_after = target.read_bytes()
+    tasks_after = tasks.read_bytes()
+    staging_after = tuple(
+        sorted(path.name for path in target.parent.glob(".handoff.*.tmp"))
+    )
+    created = [item for item in preview.changes if item.kind == "created"]
+    updated = [item for item in preview.changes if item.kind == "updated"]
+    evidence = {
+        "evidence_schema": "openspec-gsd-refresh-preview-evidence-v1",
+        "generation_mode": "read-only-preview-only",
+        "apply_invoked": False,
+        "preview_sha256": preview.preview_sha256,
+        "target_observation": {
+            "path": HANDOFF_PATH,
+            "before_sha256": _sha256(target_before),
+            "after_sha256": _sha256(target_after),
+            "unchanged": target_before == target_after,
+        },
+        "tasks_observation": {
+            "path": f"openspec/changes/{CHANGE_ID}/tasks.md",
+            "before_sha256": _sha256(tasks_before),
+            "after_sha256": _sha256(tasks_after),
+            "unchanged": tasks_before == tasks_after,
+        },
+        "staging_observation": {
+            "before": list(staging_before),
+            "after": list(staging_after),
+        },
+        "reconciliation": {
+            "previous_active": len(preview.previous_source_items.active),
+            "candidate_active": len(preview.candidate_source_items.active),
+            "created": len(created),
+            "updated": len(updated),
+            "tombstoned": len(preview.candidate_source_items.tombstones),
+            "next_requirement_id": preview.candidate_source_items.next_requirement_id,
+            "next_scenario_id": preview.candidate_source_items.next_scenario_id,
+        },
+        "mapping_coverage": {
+            "active": len(preview.candidate_source_items.active),
+            "mapped": len(preview.candidate_mappings),
+        },
+        "preview": json.loads(machine.value),
+    }
+    return _compact_json(evidence)
+
+
+def test_repository_root_preview_matches_complete_read_only_evidence() -> None:
+    target = REPOSITORY_ROOT / HANDOFF_PATH
+    tasks = REPOSITORY_ROOT / f"openspec/changes/{CHANGE_ID}/tasks.md"
+    target_before = target.read_bytes()
+    tasks_before = tasks.read_bytes()
+
+    evidence_bytes = _repository_root_evidence()
+    tracked_evidence = (REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes()
+
+    assert tracked_evidence == evidence_bytes
+    evidence = json.loads(tracked_evidence)
+    assert set(evidence) == {
+        "evidence_schema",
+        "generation_mode",
+        "apply_invoked",
+        "preview_sha256",
+        "target_observation",
+        "tasks_observation",
+        "staging_observation",
+        "reconciliation",
+        "mapping_coverage",
+        "preview",
+    }
+    assert evidence["generation_mode"] == "read-only-preview-only"
+    assert evidence["apply_invoked"] is False
+    assert evidence["target_observation"] == {
+        "path": HANDOFF_PATH,
+        "before_sha256": TRACKED_HANDOFF_SHA256,
+        "after_sha256": TRACKED_HANDOFF_SHA256,
+        "unchanged": True,
+    }
+    assert evidence["tasks_observation"] == {
+        "path": f"openspec/changes/{CHANGE_ID}/tasks.md",
+        "before_sha256": TRACKED_TASKS_SHA256,
+        "after_sha256": TRACKED_TASKS_SHA256,
+        "unchanged": True,
+    }
+    assert evidence["staging_observation"] == {"before": [], "after": []}
+    assert evidence["reconciliation"] == {
+        "previous_active": 42,
+        "candidate_active": 49,
+        "created": 7,
+        "updated": 2,
+        "tombstoned": 0,
+        "next_requirement_id": 7,
+        "next_scenario_id": 44,
+    }
+    assert evidence["mapping_coverage"] == {"active": 49, "mapped": 49}
+    machine_bytes = _compact_json(evidence["preview"])
+    assert _sha256(machine_bytes) == evidence["preview_sha256"]
+    candidate = parse_manifest_v2_bytes(
+        evidence["preview"]["candidate_bytes_utf8"].encode()
+    )
+    assert isinstance(candidate, Success)
+    assert candidate.value.source_commit == SOURCE_COMMIT
+    assert target.read_bytes() == target_before
+    assert tasks.read_bytes() == tasks_before
+    assert not tuple(target.parent.glob(".handoff.*.tmp"))
 
 
 def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
