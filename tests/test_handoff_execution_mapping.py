@@ -535,6 +535,54 @@ def test_readiness_rejects_evidence_removed_during_bounded_read(
     )
 
 
+def test_readiness_rejects_earlier_evidence_removed_while_later_path_is_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=True)
+    victim_path = inventory.evidence[0].path
+    victim = tmp_path / victim_path
+    later_evidence = tmp_path / ".planning/evidence/plan-02.json"
+    original_read = execution_mapping.os.read
+    removed = False
+
+    def remove_earlier_evidence(descriptor: int, size: int) -> bytes:
+        nonlocal removed
+        data = original_read(descriptor, size)
+        if not removed:
+            try:
+                opened_path = Path(
+                    execution_mapping.os.readlink(f"/proc/self/fd/{descriptor}")
+                )
+            except OSError:
+                return data
+            if opened_path == later_evidence:
+                victim.unlink()
+                removed = True
+        return data
+
+    monkeypatch.setattr(execution_mapping.os, "read", remove_earlier_evidence)
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+
+    assert removed
+    assert isinstance(result, Success)
+    assert not result.value.ready
+    assert MappingIssue("mapping-path-identity-changed", victim_path) in (
+        result.value.issues
+    )
+
+
 def test_finalize_requires_nonempty_declarations_for_every_phase(
     tmp_path: Path,
 ) -> None:

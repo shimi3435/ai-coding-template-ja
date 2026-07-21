@@ -671,43 +671,95 @@ def _expected_mappings(
     )
 
 
+@dataclass(frozen=True)
+class _DeclaredPathObservation:
+    declared_path: str
+    expect_directory: bool
+    descriptors: tuple[int, ...]
+    anchored_entries: tuple[tuple[int, str, int], ...]
+    final_descriptor: int
+    byte_count: int
+
+
+def _close_declared_path_observation(
+    observation: _DeclaredPathObservation,
+) -> None:
+    for descriptor in reversed(observation.descriptors):
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+
+
+def _revalidate_declared_path_observation(
+    observation: _DeclaredPathObservation,
+) -> MappingIssue | None:
+    for parent_descriptor, name, opened_descriptor in observation.anchored_entries:
+        try:
+            linked = os.stat(
+                name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            opened = os.fstat(opened_descriptor)
+        except OSError:
+            return MappingIssue(
+                "mapping-path-identity-changed", observation.declared_path
+            )
+        if stat.S_ISLNK(linked.st_mode) or not _same_identity(linked, opened):
+            return MappingIssue(
+                "mapping-path-identity-changed", observation.declared_path
+            )
+
+    try:
+        final_identity = os.fstat(observation.final_descriptor)
+    except OSError:
+        return MappingIssue("mapping-path-identity-changed", observation.declared_path)
+    if observation.expect_directory:
+        if not stat.S_ISDIR(final_identity.st_mode):
+            return MappingIssue("mapping-path-non-directory", observation.declared_path)
+    elif not stat.S_ISREG(final_identity.st_mode):
+        return MappingIssue("mapping-path-non-regular", observation.declared_path)
+    return None
+
+
 def _observe_declared_path(
-    root: Path,
+    root_descriptor: int,
     declared_path: str,
     *,
     expect_directory: bool,
-) -> tuple[MappingIssue | None, int]:
+) -> tuple[MappingIssue | None, _DeclaredPathObservation | None]:
     """Observe one exact path from an anchored descriptor without following links."""
 
     parts = PurePosixPath(declared_path).parts
     descriptors: list[int] = []
     anchored_entries: list[tuple[int, str, int]] = []
+    retain_descriptors = False
     try:
-        root_descriptor = os.open(root, _DIRECTORY_OPEN_FLAGS)
-        descriptors.append(root_descriptor)
-        root_identity = os.fstat(root_descriptor)
         descriptor = root_descriptor
         for index, part in enumerate(parts):
             names = os.listdir(descriptor)
             aliases = [name for name in names if _alias_key(name) == _alias_key(part)]
             if part not in names:
                 code = "mapping-path-alias" if aliases else "mapping-path-missing"
-                return MappingIssue(code, declared_path), 0
+                return MappingIssue(code, declared_path), None
             if any(name != part for name in aliases):
-                return MappingIssue("mapping-path-alias", declared_path), 0
+                return MappingIssue("mapping-path-alias", declared_path), None
 
             try:
                 entry = os.stat(part, dir_fd=descriptor, follow_symlinks=False)
             except OSError:
-                return MappingIssue("mapping-path-identity-changed", declared_path), 0
+                return MappingIssue(
+                    "mapping-path-identity-changed", declared_path
+                ), None
             if stat.S_ISLNK(entry.st_mode):
-                return MappingIssue("mapping-path-symlink", declared_path), 0
+                return MappingIssue("mapping-path-symlink", declared_path), None
             final = index == len(parts) - 1
             directory = not final or expect_directory
             if directory and not stat.S_ISDIR(entry.st_mode):
-                return MappingIssue("mapping-path-non-directory", declared_path), 0
+                return MappingIssue("mapping-path-non-directory", declared_path), None
             if not directory and not stat.S_ISREG(entry.st_mode):
-                return MappingIssue("mapping-path-non-regular", declared_path), 0
+                return MappingIssue("mapping-path-non-regular", declared_path), None
 
             parent_descriptor = descriptor
             flags = _DIRECTORY_OPEN_FLAGS if directory else _FILE_OPEN_FLAGS
@@ -727,20 +779,24 @@ def _observe_declared_path(
                 except OSError:
                     return MappingIssue(
                         "mapping-path-identity-changed", declared_path
-                    ), 0
+                    ), None
                 if stat.S_ISLNK(current.st_mode) or not _same_identity(entry, current):
                     return MappingIssue(
                         "mapping-path-identity-changed", declared_path
-                    ), 0
+                    ), None
                 raise
             descriptors.append(opened_descriptor)
             anchored_entries.append((parent_descriptor, part, opened_descriptor))
             try:
                 opened = os.fstat(opened_descriptor)
             except OSError:
-                return MappingIssue("mapping-path-identity-changed", declared_path), 0
+                return MappingIssue(
+                    "mapping-path-identity-changed", declared_path
+                ), None
             if not _same_identity(entry, opened):
-                return MappingIssue("mapping-path-identity-changed", declared_path), 0
+                return MappingIssue(
+                    "mapping-path-identity-changed", declared_path
+                ), None
             descriptor = opened_descriptor
 
         observed_chunks: list[bytes] = []
@@ -753,44 +809,31 @@ def _observe_declared_path(
                 observed_chunks.append(chunk)
                 remaining -= len(chunk)
 
-        for parent_descriptor, name, opened_descriptor in anchored_entries:
-            try:
-                linked = os.stat(
-                    name,
-                    dir_fd=parent_descriptor,
-                    follow_symlinks=False,
-                )
-                opened = os.fstat(opened_descriptor)
-            except OSError:
-                return MappingIssue("mapping-path-identity-changed", declared_path), 0
-            if stat.S_ISLNK(linked.st_mode) or not _same_identity(linked, opened):
-                return MappingIssue("mapping-path-identity-changed", declared_path), 0
-        try:
-            linked_root = os.stat(root, follow_symlinks=False)
-        except OSError:
-            return MappingIssue("mapping-path-identity-changed", declared_path), 0
-        if not _same_identity(linked_root, root_identity):
-            return MappingIssue("mapping-path-identity-changed", declared_path), 0
-
-        final_identity = os.fstat(descriptor)
-        if expect_directory:
-            if not stat.S_ISDIR(final_identity.st_mode):
-                return MappingIssue("mapping-path-non-directory", declared_path), 0
-            return None, 0
-        if not stat.S_ISREG(final_identity.st_mode):
-            return MappingIssue("mapping-path-non-regular", declared_path), 0
         observed = b"".join(observed_chunks)
         if len(observed) > _MAX_BYTES:
-            return MappingIssue("mapping-path-byte-limit-exceeded", declared_path), 0
-        return None, len(observed)
+            return MappingIssue("mapping-path-byte-limit-exceeded", declared_path), None
+        observation = _DeclaredPathObservation(
+            declared_path=declared_path,
+            expect_directory=expect_directory,
+            descriptors=tuple(descriptors),
+            anchored_entries=tuple(anchored_entries),
+            final_descriptor=descriptor,
+            byte_count=len(observed),
+        )
+        issue = _revalidate_declared_path_observation(observation)
+        if issue is not None:
+            return issue, None
+        retain_descriptors = True
+        return None, observation
     except (OSError, UnicodeError, ValueError):
-        return MappingIssue("mapping-path-unreadable", declared_path), 0
+        return MappingIssue("mapping-path-unreadable", declared_path), None
     finally:
-        for descriptor in reversed(descriptors):
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
+        if not retain_descriptors:
+            for descriptor in reversed(descriptors):
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
 
 
 def _readiness_issues(
@@ -850,20 +893,59 @@ def _readiness_issues(
             if plan.path not in evidenced_plans:
                 issues.append(MappingIssue("mapping-plan-evidence-missing", plan.path))
 
-    observed_bytes = 0
-    for path, expect_directory in sorted(
-        paths.items(), key=lambda item: item[0].encode()
-    ):
-        issue, byte_count = _observe_declared_path(
-            root, path, expect_directory=expect_directory
+    sorted_paths = tuple(sorted(paths.items(), key=lambda item: item[0].encode()))
+    observations: list[_DeclaredPathObservation] = []
+    root_descriptor: int | None = None
+    try:
+        root_descriptor = os.open(root, _DIRECTORY_OPEN_FLAGS)
+        root_identity = os.fstat(root_descriptor)
+        observed_bytes = 0
+        for path, expect_directory in sorted_paths:
+            issue, observation = _observe_declared_path(
+                root_descriptor,
+                path,
+                expect_directory=expect_directory,
+            )
+            if issue is not None:
+                issues.append(issue)
+                continue
+            assert observation is not None
+            observations.append(observation)
+            observed_bytes += observation.byte_count
+            if observed_bytes > _MAX_BYTES:
+                issues.append(MappingIssue("mapping-observation-limit-exceeded", path))
+                break
+
+        for observation in observations:
+            issue = _revalidate_declared_path_observation(observation)
+            if issue is not None:
+                issues.append(issue)
+        try:
+            linked_root = os.stat(root, follow_symlinks=False)
+            opened_root = os.fstat(root_descriptor)
+        except OSError:
+            root_changed = True
+        else:
+            root_changed = not _same_identity(root_identity, opened_root) or not (
+                _same_identity(linked_root, opened_root)
+            )
+        if root_changed:
+            issues.extend(
+                MappingIssue("mapping-path-identity-changed", path)
+                for path, _ in sorted_paths
+            )
+    except (OSError, UnicodeError, ValueError):
+        issues.extend(
+            MappingIssue("mapping-path-unreadable", path) for path, _ in sorted_paths
         )
-        if issue is not None:
-            issues.append(issue)
-            continue
-        observed_bytes += byte_count
-        if observed_bytes > _MAX_BYTES:
-            issues.append(MappingIssue("mapping-observation-limit-exceeded", path))
-            break
+    finally:
+        for observation in reversed(observations):
+            _close_declared_path_observation(observation)
+        if root_descriptor is not None:
+            try:
+                os.close(root_descriptor)
+            except OSError:
+                pass
     return tuple(
         sorted(set(issues), key=lambda item: ((item.path or "").encode(), item.code))
     )
