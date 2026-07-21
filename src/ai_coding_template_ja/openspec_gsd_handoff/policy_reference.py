@@ -507,10 +507,12 @@ def _policy_reference_from_json(value: object) -> PolicyReference:
 
 
 def _validate_registry(
-    registry: PolicyReferenceRegistry,
+    registry: object,
     *,
     max_records: int,
 ) -> PolicyReferenceRegistry:
+    if type(registry) is not PolicyReferenceRegistry:
+        raise _PolicyInputError("policy-registry-invalid")
     if registry.version != _REGISTRY_VERSION:
         raise _PolicyInputError("policy-registry-version-invalid")
     if type(registry.references) is not tuple or not registry.references:
@@ -734,6 +736,8 @@ def validate_policy_references(
 ) -> Result[tuple[PolicyReference, ...]]:
     """Validate complete registry coverage for the requested stable IDs."""
 
+    if type(registry) is not PolicyReferenceRegistry:
+        return _failure("policy-registry-invalid", category=IssueCategory.INPUT)
     try:
         validated_registry = _validate_registry(registry, max_records=4096)
     except _PolicyInputError as error:

@@ -668,3 +668,17 @@ def test_validation_rejects_unknown_missing_and_mismatched_references(
     assert length_mismatch.issue.code == "policy-reference-length-mismatch"
     assert isinstance(hash_mismatch, Failure)
     assert hash_mismatch.issue.code == "policy-reference-hash-mismatch"
+
+
+@pytest.mark.parametrize("registry", [None, object()])
+def test_validation_returns_structured_failure_for_invalid_registry(
+    registry: object,
+) -> None:
+    result = validate_policy_references(
+        registry,  # type: ignore[arg-type]
+        (),
+        (),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "policy-registry-invalid"
