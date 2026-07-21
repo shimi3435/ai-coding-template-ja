@@ -55,8 +55,8 @@ status: all_fixed
 
 - Finding ごとの RED/GREEN regression test と対象モジュールの Ruff、BasedPyright を実行した。
 - Phase 1 / v1 regression: `186 passed`。
-- Phase 2 focused suite（temporary worktree）: `94 passed, 1 failed`。失敗は tracked preview が記録する絶対 repository root と temporary worktree path の既知の位置差だけで、同じテストを canonical repository root から修正済み source に対して再実行し `1 passed` を確認した。
-- `task check`（temporary worktree）: Ruff format/check と BasedPyright は成功。pytest は上記と同じ repository-location-sensitive test だけが失敗したため、canonical repository root での最終再実行を cleanup 後に行う。
+- Phase 2 focused suite: canonical repository root で `95 passed`。temporary worktree では tracked preview の絶対 repository root との差だけで1件不一致になり、canonical root で解消することも個別に確認した。
+- `task check`: Ruff format/check、BasedPyright（0 errors）、pytest（`480 passed`）がすべて成功した。
 - protected handoff、OpenSpec `tasks.md`、tracked refresh preview の SHA-256 と差分は変更なし。
 
 ---
