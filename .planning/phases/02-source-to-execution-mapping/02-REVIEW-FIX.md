@@ -1,8 +1,8 @@
 ---
 phase: 2
-fixed_at: 2026-07-21T18:32:09Z
+fixed_at: 2026-07-21T18:57:56Z
 review_path: .planning/phases/02-source-to-execution-mapping/02-REVIEW.md
-iteration: 2
+iteration: 3
 findings_in_scope: 1
 fixed: 1
 skipped: 0
@@ -11,9 +11,9 @@ status: all_fixed
 
 # Phase 2: Code Review Fix Report
 
-**Fixed at:** 2026-07-21T18:32:09Z
+**Fixed at:** 2026-07-21T18:57:56Z
 **Source review:** `.planning/phases/02-source-to-execution-mapping/02-REVIEW.md`
-**Iteration:** 2
+**Iteration:** 3
 
 **Summary:**
 
@@ -21,7 +21,7 @@ status: all_fixed
 - Fixed: 1
 - Skipped: 0
 
-## Previous Fixed Issues (Iteration 1)
+## Previous Fixed Issues (Iterations 1–2)
 
 ### CR-01: Planning inventory が symlink・`..`・絶対パスを canonical input として受理する
 
@@ -51,8 +51,6 @@ status: all_fixed
 **Applied fix:** 注入された read-only operations boundary を refresh target と canonical artifact の初回・再観測読取りへ接続し、recording adapter が実際の filesystem access を観測できるようにした。
 **Regression test:** `test_preview_uses_supplied_read_only_operations_boundary`
 
-## Follow-up Fixed Issue (Iteration 2)
-
 ### CR-01: Readiness が観測中に消失・差替えされた path を ready と判定する
 
 **Status:** fixed: requires human verification
@@ -61,13 +59,23 @@ status: all_fixed
 **Applied fix:** repository root と phase / plan / evidence の全componentをno-follow descriptorで固定し、entryとdescriptorの`st_dev` / `st_ino` / file typeをopen直後と成功判定直前に照合した。fileはlimit+1のbounded read後にも全componentを再検証し、最終phase directoryもdescriptorで固定する。unlink・rename・swapによるidentity変化は`mapping-path-identity-changed`のnon-ready issueになる。
 **Regression tests:** `test_readiness_rejects_evidence_removed_during_bounded_read`, `test_readiness_rejects_phase_directory_renamed_after_descriptor_open`
 
+## Whole-operation Fixed Issue (Iteration 3)
+
+### CR-01: 後続 path の観測中に消失した先行 evidence を readiness が見逃す
+
+**Status:** fixed: requires human verification
+**Files modified:** `src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py`, `tests/test_handoff_execution_mapping.py`
+**Commit:** `fa6f238`
+**Applied fix:** readiness operation ごとに repository root descriptor を一度だけ開き、正常観測した全 phase / plan / evidence path の component descriptor と identity を全 bounded read 完了まで保持する。返却直前に全保持 entry と repository root をまとめて再検証し、先行 path の unlink・rename・swap を `mapping-path-identity-changed` の non-ready issue にする。失敗途中と operation 終了時の descriptor close は `finally` で維持する。
+**Regression test:** `test_readiness_rejects_earlier_evidence_removed_while_later_path_is_read`
+
 ## Verification
 
-- Reviewer指定のevidence unlink回帰は修正前に`ready=True`でRED、修正後にGREENを確認した。
-- 対象module: `25 passed`、Ruff green、BasedPyright `0 errors, 0 warnings, 0 notes`。
+- Reviewer指定の「後続 plan evidence の bounded read 中に先行 source evidence を unlink」する回帰は、修正前に`ready=True`でRED、修正後に`mapping-path-identity-changed`を含む`ready=False`でGREENを確認した。
+- 対象module: `26 passed`、Ruff green、BasedPyright `0 errors, 0 warnings, 0 notes`。
 - Phase 1 / v1 regression: `186 passed`。
-- Phase 2 focused suite: canonical repository rootで`97 passed`。
-- `task check`: Ruff format/check、BasedPyright（0 errors）、pytest（`482 passed`）がすべて成功した。
+- Phase 2 focused suite: canonical repository rootで`98 passed`。
+- `task check`: Ruff format/check、BasedPyright（0 errors）、pytest（`483 passed`）がすべて成功した。
 - protected handoff、OpenSpec `tasks.md`、tracked refresh preview、ROADMAP、STATEのSHA-256と差分は変更なし。
 
 ## Protected Surface Evidence
@@ -84,6 +92,6 @@ status: all_fixed
 
 ---
 
-_Fixed: 2026-07-21T18:32:09Z_
+_Fixed: 2026-07-21T18:57:56Z_
 _Fixer: the agent (gsd-code-fixer)_
-_Iteration: 2_
+_Iteration: 3_
