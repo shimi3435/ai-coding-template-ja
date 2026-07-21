@@ -54,7 +54,7 @@ ASSIGNMENT_PATH = (
     "tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json"
 )
 POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
-SOURCE_COMMIT = "fbe7f714f734d714480583ab90f41ec0d2077f50"
+SOURCE_COMMIT = "4d8b5b173927ed518d39dee18a29b0271628afbd"
 TRACKED_HANDOFF_SHA256 = (
     "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914"
 )
