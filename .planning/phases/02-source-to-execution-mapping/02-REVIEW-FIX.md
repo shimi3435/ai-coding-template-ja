@@ -1,27 +1,27 @@
 ---
 phase: 2
-fixed_at: 2026-07-21T18:09:21Z
+fixed_at: 2026-07-21T18:32:09Z
 review_path: .planning/phases/02-source-to-execution-mapping/02-REVIEW.md
-iteration: 1
-findings_in_scope: 4
-fixed: 4
+iteration: 2
+findings_in_scope: 1
+fixed: 1
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 2: Code Review Fix Report
 
-**Fixed at:** 2026-07-21T18:09:21Z
+**Fixed at:** 2026-07-21T18:32:09Z
 **Source review:** `.planning/phases/02-source-to-execution-mapping/02-REVIEW.md`
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
 
-- Findings in scope: 4
-- Fixed: 4
+- Findings in scope: 1
+- Fixed: 1
 - Skipped: 0
 
-## Fixed Issues
+## Previous Fixed Issues (Iteration 1)
 
 ### CR-01: Planning inventory が symlink・`..`・絶対パスを canonical input として受理する
 
@@ -51,16 +51,39 @@ status: all_fixed
 **Applied fix:** 注入された read-only operations boundary を refresh target と canonical artifact の初回・再観測読取りへ接続し、recording adapter が実際の filesystem access を観測できるようにした。
 **Regression test:** `test_preview_uses_supplied_read_only_operations_boundary`
 
+## Follow-up Fixed Issue (Iteration 2)
+
+### CR-01: Readiness が観測中に消失・差替えされた path を ready と判定する
+
+**Status:** fixed: requires human verification
+**Files modified:** `src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py`, `tests/test_handoff_execution_mapping.py`
+**Commit:** `108f275`
+**Applied fix:** repository root と phase / plan / evidence の全componentをno-follow descriptorで固定し、entryとdescriptorの`st_dev` / `st_ino` / file typeをopen直後と成功判定直前に照合した。fileはlimit+1のbounded read後にも全componentを再検証し、最終phase directoryもdescriptorで固定する。unlink・rename・swapによるidentity変化は`mapping-path-identity-changed`のnon-ready issueになる。
+**Regression tests:** `test_readiness_rejects_evidence_removed_during_bounded_read`, `test_readiness_rejects_phase_directory_renamed_after_descriptor_open`
+
 ## Verification
 
-- Finding ごとの RED/GREEN regression test と対象モジュールの Ruff、BasedPyright を実行した。
+- Reviewer指定のevidence unlink回帰は修正前に`ready=True`でRED、修正後にGREENを確認した。
+- 対象module: `25 passed`、Ruff green、BasedPyright `0 errors, 0 warnings, 0 notes`。
 - Phase 1 / v1 regression: `186 passed`。
-- Phase 2 focused suite: canonical repository root で `95 passed`。temporary worktree では tracked preview の絶対 repository root との差だけで1件不一致になり、canonical root で解消することも個別に確認した。
-- `task check`: Ruff format/check、BasedPyright（0 errors）、pytest（`480 passed`）がすべて成功した。
-- protected handoff、OpenSpec `tasks.md`、tracked refresh preview の SHA-256 と差分は変更なし。
+- Phase 2 focused suite: canonical repository rootで`97 passed`。
+- `task check`: Ruff format/check、BasedPyright（0 errors）、pytest（`482 passed`）がすべて成功した。
+- protected handoff、OpenSpec `tasks.md`、tracked refresh preview、ROADMAP、STATEのSHA-256と差分は変更なし。
+
+## Protected Surface Evidence
+
+- tracked handoff: `554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914`
+- OpenSpec `tasks.md`: `cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220`
+- tracked refresh preview: `6775ff40a9e01aa634ff67098a0a1d020808ef11be80ece4e06f881dab5270cf`
+- ROADMAP: `10cb18a19943da7a5c9b41f5a65f21a5bfd6f462451c32e9a3f76adf21801f4d`
+- STATE: `81a99f6c42fa7a92c4d236f3a452b5526a7ef334dad1782fae9565d43fbbf89f`
+
+## Unverified / Out of Scope
+
+- Actual tracked apply、Phase 3の実host orchestration、OpenSpec task 2.2、push / PRは未実行。
 
 ---
 
-_Fixed: 2026-07-21T18:09:21Z_
+_Fixed: 2026-07-21T18:32:09Z_
 _Fixer: the agent (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
