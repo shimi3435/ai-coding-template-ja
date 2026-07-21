@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 2
+current_phase: 02
 current_phase_name: Source-to-Execution Mapping
-status: ready
+status: executing
 stopped_at: Corrective Plan 02-05 verified and ready to execute
-last_updated: "2026-07-22T04:35:00+09:00"
-last_activity: 2026-07-22
-last_activity_desc: Corrective Plan 02-05 passed plan-checker with 0 issues
+last_updated: "2026-07-21T19:48:28.857Z"
+last_activity: 2026-07-21
+last_activity_desc: Phase 02 execution started
 progress:
   total_phases: 6
   completed_phases: 1
@@ -24,17 +24,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
-**Current focus:** Phase 2 — Source-to-Execution Mapping
+**Current focus:** Phase 02 — Source-to-Execution Mapping
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
 **Source commit:** `4d8b5b173927ed518d39dee18a29b0271628afbd`
 **Project mode:** standard
 
 ## Current Position
 
-Phase: 2 (Source-to-Execution Mapping) — CORRECTIVE PLAN READY
-Plan: 4 of 5 plans complete; Plan 02-05 ready to execute
-Status: D-04 resolves the final review blocker's specification question; corrective evidence remains to be regenerated and verified
-Last activity: 2026-07-22 — Plan 02-05 passed plan-checker; tracked preview, expected fixture, source/tests, and OpenSpec task 2.2 remain unchanged
+Phase: 02 (Source-to-Execution Mapping) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 02
+Last activity: 2026-07-21 — Phase 02 execution started
 
 Progress: [██░░░░░░░░] 1 of 6 phases complete (17%)
 
