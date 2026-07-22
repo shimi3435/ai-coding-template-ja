@@ -6,7 +6,7 @@
     {
       "kind": "design",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md",
-      "sha256": "129b48e8b27e3c59cc7e730529682533c29d49d7270a7248aba53d3c64beb4af"
+      "sha256": "3561792edfe750f5815fad72ff2e133888848b2733e770e2b6f66f87c413e783"
     },
     {
       "kind": "proposal",
@@ -16,15 +16,15 @@
     {
       "kind": "spec",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
-      "sha256": "523c70ee6134bd10bdc36bd560aa2aa175ad36502388916fbbed1439d8373300"
+      "sha256": "7d076d2a946a8e8f3346f48ae80d4fbeb8ae0fb9ea6d20ccf19e01847edfd784"
     },
     {
       "kind": "tasks",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md",
-      "sha256": "f9d3c8f6716003ae8375610edc659a3635ed7af29784064b155d59463bd9b459"
+      "sha256": "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
     }
   ],
-  "source_commit": "2cbb127917feaa637ef5eac439478227ac5f717b",
+  "source_commit": "4d8b5b173927ed518d39dee18a29b0271628afbd",
   "progress": {
     "total": 12,
     "complete": 4,
@@ -37,7 +37,7 @@
       },
       {
         "id": "2",
-        "description": "1.2 本 change の各 enforcement と参照する `adaptive-change-execution` requirement / scenario の対応、manifest migration / rollback contract、実装時の spec-holes Phase 2 計画を確定し、strict validate 後に source-pinned handoff previewを提示できる状態にする",
+        "description": "1.2 source-to-execution mappingのoperation別readiness、started v2 refresh、policy section fingerprint契約を再確定し、spec-holes Phase 1とstrict validateを再実行してcanonical artifactsをsource-pinned commitへ固定する",
         "done": true
       },
       {
@@ -113,7 +113,7 @@
   },
   "source_items": {
     "next_requirement_id": 7,
-    "next_scenario_id": 37,
+    "next_scenario_id": 44,
     "active": [
       {
         "id": "REQ-000001",
@@ -121,7 +121,7 @@
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
         "raw_heading": "### Requirement: HARD-R1 stable source identity と requirement mapping を維持する",
         "parent_id": null,
-        "fingerprint": "ed1fdf2fb03ad6ba086ccabe6b2977545fb42fa3c5f7c8f1c680fceff0a8fdca"
+        "fingerprint": "01f6b1f8dd9985a6f6fac5648358e3e7d01bd26da56a592d610cbb9ca51505bc"
       },
       {
         "id": "REQ-000002",
@@ -260,6 +260,14 @@
         "fingerprint": "72a02614dc88bb0dbb9e05402b117d89783d848ef4ff2b5b526676d4fc655d0c"
       },
       {
+        "id": "SCN-000037",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: operation ごとの mapping readiness を検査する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "991e346b82283f78043cc2d819546ebc457ce45c0789a9479265765c5c7a59d8"
+      },
+      {
         "id": "SCN-000013",
         "category": "scenario",
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
@@ -284,6 +292,14 @@
         "fingerprint": "8578b3f01603ba14629c5df779cfbe433094da67e3e9ea845660bc506b9ac79a"
       },
       {
+        "id": "SCN-000038",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: phase assignment baseline を作る",
+        "parent_id": "REQ-000001",
+        "fingerprint": "77f6f25273d01b9a076d1d6e08a50eb987dae18563ddd57ac381d2b3b64dad6a"
+      },
+      {
         "id": "SCN-000016",
         "category": "scenario",
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
@@ -305,7 +321,7 @@
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
         "raw_heading": "#### Scenario: policy reference のtraceabilityを検査する",
         "parent_id": "REQ-000001",
-        "fingerprint": "c1eecd96205fc756ae48fe83f23865ac1f0933282eeb20335a76b8788eb3feee"
+        "fingerprint": "46843242f7ab1f230919ca8ff5915859cd6aee9e243714ec63d3aa9ae4a2c025"
       },
       {
         "id": "SCN-000019",
@@ -370,6 +386,46 @@
         "raw_heading": "#### Scenario: source の順序または表示上の空白だけが変わる",
         "parent_id": "REQ-000001",
         "fingerprint": "2113db41624c029e2a512951b1b7db7106ecda3f5df33ea5f79b1690eb54e4e8"
+      },
+      {
+        "id": "SCN-000039",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: started schema v2 の refresh をpreviewする",
+        "parent_id": "REQ-000001",
+        "fingerprint": "29a69973c02ddc4531086d8cc99b130f6ab27d624edb8a9908944082c721389b"
+      },
+      {
+        "id": "SCN-000040",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: started schema v2 のrefresh persistenceが失敗する",
+        "parent_id": "REQ-000001",
+        "fingerprint": "04165f99efa4c7a1508000bc05c73137247994bcdf2123be6e6a750887d53546"
+      },
+      {
+        "id": "SCN-000041",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: started schema v2 のrefresh previewをboundedに生成できない",
+        "parent_id": "REQ-000001",
+        "fingerprint": "7ba80b119c183f45335da816030b22bc1a87d6493102892c712e872eaf3da39b"
+      },
+      {
+        "id": "SCN-000042",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: started schema v2 のrefresh候補が空である",
+        "parent_id": "REQ-000001",
+        "fingerprint": "85bb17bc1a4d82311f3c0449c6b9f4a9294c64358c14de043c8303daedaf4eb1"
+      },
+      {
+        "id": "SCN-000043",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: started schema v2 のrefresh承認がstaleである",
+        "parent_id": "REQ-000001",
+        "fingerprint": "22e25348d815d3432dbf06f6bec864039cadd2e609c5c1176203bda7dd5fb879"
       },
       {
         "id": "SCN-000027",
@@ -454,7 +510,515 @@
     ],
     "tombstones": []
   },
-  "mappings": [],
+  "mappings": [
+    {
+      "source_id": "REQ-000001",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S4-CONTEXT-PARITY"
+      ]
+    },
+    {
+      "source_id": "REQ-000002",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-SPEC-CHANGE-REPLAN",
+        "ACE-S5-REVALIDATE-ON-DRIFT"
+      ]
+    },
+    {
+      "source_id": "REQ-000003",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "REQ-000004",
+      "phase_id": "05",
+      "phase_path": ".planning/phases/05-recovery-and-resume",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S4-RESUME"
+      ]
+    },
+    {
+      "source_id": "REQ-000005",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S5-OPEN-SPEC-FINAL",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "REQ-000006",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000001",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000002",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000003",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000004",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-SPEC-CHANGE-REPLAN",
+        "ACE-S5-REVALIDATE-ON-DRIFT"
+      ]
+    },
+    {
+      "source_id": "SCN-000005",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000006",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S5-OPEN-SPEC-FINAL",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000007",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S4-RESUME",
+        "ACE-S5-REVALIDATE-ON-DRIFT"
+      ]
+    },
+    {
+      "source_id": "SCN-000008",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S2-SPEC-CHANGE-REPLAN"
+      ]
+    },
+    {
+      "source_id": "SCN-000009",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-ONE-PHASE-ONE-CHANGE",
+        "ACE-S2-OPEN-SPEC-AUTHORITY"
+      ]
+    },
+    {
+      "source_id": "SCN-000010",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000011",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000012",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S2-SPEC-CHANGE-REPLAN"
+      ]
+    },
+    {
+      "source_id": "SCN-000013",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000014",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000015",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-SOURCE-PINNED",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000016",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S4-SOURCE-PINNED"
+      ]
+    },
+    {
+      "source_id": "SCN-000017",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-ONE-PHASE-ONE-CHANGE",
+        "ACE-S4-CONTEXT-PARITY"
+      ]
+    },
+    {
+      "source_id": "SCN-000018",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000019",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S5-OPEN-SPEC-FINAL",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000020",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-RESUME",
+        "ACE-S5-REVALIDATE-ON-DRIFT"
+      ]
+    },
+    {
+      "source_id": "SCN-000021",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000022",
+      "phase_id": "05",
+      "phase_path": ".planning/phases/05-recovery-and-resume",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-SPEC-CHANGE-REPLAN",
+        "ACE-S4-NO-AUTO-FALLBACK"
+      ]
+    },
+    {
+      "source_id": "SCN-000023",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000024",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000025",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000026",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S2-SPEC-CHANGE-REPLAN"
+      ]
+    },
+    {
+      "source_id": "SCN-000027",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-SPEC-CHANGE-REPLAN",
+        "ACE-S5-REVALIDATE-ON-DRIFT"
+      ]
+    },
+    {
+      "source_id": "SCN-000028",
+      "phase_id": "04",
+      "phase_path": ".planning/phases/04-repository-wide-ownership",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S5-OPEN-SPEC-FINAL",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
+    },
+    {
+      "source_id": "SCN-000029",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000030",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S2-SPEC-CHANGE-REPLAN"
+      ]
+    },
+    {
+      "source_id": "SCN-000031",
+      "phase_id": "06",
+      "phase_path": ".planning/phases/06-finalize-preview-and-receipt",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S5-OPEN-SPEC-FINAL"
+      ]
+    },
+    {
+      "source_id": "SCN-000032",
+      "phase_id": "05",
+      "phase_path": ".planning/phases/05-recovery-and-resume",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-RESUME",
+        "ACE-S4-SOURCE-PINNED"
+      ]
+    },
+    {
+      "source_id": "SCN-000033",
+      "phase_id": "05",
+      "phase_path": ".planning/phases/05-recovery-and-resume",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-RESUME",
+        "ACE-S4-SOURCE-PINNED"
+      ]
+    },
+    {
+      "source_id": "SCN-000034",
+      "phase_id": "01",
+      "phase_path": ".planning/phases/01-stable-identity-and-migration",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-OPEN-SPEC-AUTHORITY",
+        "ACE-S2-SPEC-CHANGE-REPLAN"
+      ]
+    },
+    {
+      "source_id": "SCN-000035",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S1-START-GATES",
+        "ACE-S4-NO-AUTO-FALLBACK"
+      ]
+    },
+    {
+      "source_id": "SCN-000036",
+      "phase_id": "05",
+      "phase_path": ".planning/phases/05-recovery-and-resume",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S4-RESUME"
+      ]
+    },
+    {
+      "source_id": "SCN-000037",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-ONE-PHASE-ONE-CHANGE",
+        "ACE-S4-CONTEXT-PARITY"
+      ]
+    },
+    {
+      "source_id": "SCN-000038",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-ONE-PHASE-ONE-CHANGE",
+        "ACE-S4-CONTEXT-PARITY"
+      ]
+    },
+    {
+      "source_id": "SCN-000039",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000040",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000041",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000042",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    },
+    {
+      "source_id": "SCN-000043",
+      "phase_id": "02",
+      "phase_path": ".planning/phases/02-source-to-execution-mapping",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": []
+    }
+  ],
   "ownership": {
     "owned": [],
     "referenced": []
