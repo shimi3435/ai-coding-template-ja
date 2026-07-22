@@ -106,10 +106,26 @@ def _failure(code: str) -> Failure:
 
 
 def subprocess_runner(
-    argv: tuple[str, ...], *, cwd: Path, timeout: float
+    argv: tuple[str, ...],
+    *,
+    cwd: Path,
+    timeout: float,
+    output_limit: int | None = None,
 ) -> CommandResult:
     """Run one bounded fixed argv without shell interpolation."""
 
+    effective_output_limit = (
+        COMMAND_OUTPUT_LIMIT if output_limit is None else output_limit
+    )
+    if type(effective_output_limit) is not int or effective_output_limit <= 0:
+        return CommandResult(
+            argv,
+            cwd,
+            timeout,
+            126,
+            b"",
+            "command-output-limit-invalid",
+        )
     try:
         process = subprocess.Popen(  # noqa: S603 - argv is fixed by bridge callers
             list(argv),
@@ -145,7 +161,10 @@ def subprocess_runner(
             for key, _mask in events:
                 stream = cast(BinaryIO, key.fileobj)
                 buffer = streams[stream]
-                read_size = min(65_536, COMMAND_OUTPUT_LIMIT + 1 - len(buffer))
+                read_size = min(
+                    65_536,
+                    effective_output_limit + 1 - len(buffer),
+                )
                 try:
                     chunk = os.read(stream.fileno(), max(1, read_size))
                 except OSError as exc:
@@ -155,7 +174,7 @@ def subprocess_runner(
                     selector.unregister(stream)
                     continue
                 buffer.extend(chunk)
-                if len(buffer) > COMMAND_OUTPUT_LIMIT:
+                if len(buffer) > effective_output_limit:
                     failure = "command-output-limit-exceeded"
                     break
             if failure is not None:

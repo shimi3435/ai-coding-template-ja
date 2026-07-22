@@ -272,14 +272,20 @@ def _source_pin_matches(
     repository: Path,
     source_commit: str,
     artifact_bytes: dict[str, bytes],
+    *,
+    artifact_limit: int,
 ) -> bool:
     """Observe one historical commit and its exact canonical artifact blobs."""
 
-    def git(*arguments: str) -> CommandResult:
+    def git(
+        *arguments: str,
+        output_limit: int | None = None,
+    ) -> CommandResult:
         return subprocess_runner(
             ("git", *arguments),
             cwd=repository,
             timeout=COMMAND_TIMEOUT_SECONDS,
+            output_limit=output_limit,
         )
 
     if _HEX_40.fullmatch(source_commit) is None:
@@ -299,7 +305,12 @@ def _source_pin_matches(
     for path, expected in artifact_bytes.items():
         if _canonical_relative_path(path) is None:
             return False
-        blob = git("cat-file", "-p", f"{source_commit}:{path}")
+        blob = git(
+            "cat-file",
+            "-p",
+            f"{source_commit}:{path}",
+            output_limit=artifact_limit,
+        )
         if blob.return_code != 0 or blob.stdout != expected:
             return False
     return True
@@ -628,7 +639,12 @@ def preview_manifest_refresh(
         return _failure("refresh-artifact-unreadable", IssueCategory.ARTIFACT)
     if tuple(observed_artifacts) != artifacts:
         return _failure("refresh-artifact-hash-mismatch", IssueCategory.ARTIFACT)
-    if not _source_pin_matches(repository, current_source_commit, artifact_bytes):
+    if not _source_pin_matches(
+        repository,
+        current_source_commit,
+        artifact_bytes,
+        artifact_limit=limits.artifact_bytes,
+    ):
         return _failure("refresh-source-pin-invalid", IssueCategory.ARTIFACT)
     if tuple((item.kind, item.path) for item in artifacts) != tuple(
         (item.kind, item.path) for item in previous.artifacts
@@ -791,7 +807,12 @@ def preview_manifest_refresh(
         or second_inventory.value != inventory.value
     ):
         return _failure("refresh-source-changed", IssueCategory.ARTIFACT)
-    if not _source_pin_matches(repository, current_source_commit, artifact_bytes):
+    if not _source_pin_matches(
+        repository,
+        current_source_commit,
+        artifact_bytes,
+        artifact_limit=limits.artifact_bytes,
+    ):
         return _failure("refresh-source-pin-invalid", IssueCategory.ARTIFACT)
     return Success(replace(preview, preview_sha256=_sha256(machine.value)))
 
