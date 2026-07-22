@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 from hypothesis import HealthCheck, given, settings
@@ -264,6 +265,13 @@ class FaultInjectingRefreshOperations(MutationRecordingRefreshOperations):
             self.mutations.append("unlink")
             raise OSError("injected refresh cleanup failure")
         super().unlink_at(parent_descriptor, name)
+
+
+class FalseyFaultInjectingRefreshOperations(FaultInjectingRefreshOperations):
+    """A valid refresh adapter whose truth value must not control injection."""
+
+    def __bool__(self) -> bool:
+        return False
 
 
 class DriftAtReplaceRefreshOperations(MutationRecordingRefreshOperations):
@@ -882,6 +890,53 @@ def test_apply_requires_exact_fresh_approval_before_any_mutation(
         assert applied.issue.staging_state is RefreshStagingState.ABSENT
         assert operations.mutations == []
         assert target.read_bytes() == before
+
+
+def test_apply_uses_falsey_supplied_operations_without_default_fallback(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    before = target.read_bytes()
+    operations = FalseyFaultInjectingRefreshOperations("create", target)
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.failure_point is RefreshFailurePoint.CREATE
+    assert applied.issue.staging_state is RefreshStagingState.UNKNOWN
+    assert operations.mutations == ["create"]
+    assert target.read_bytes() == before
+
+
+def test_apply_rejects_non_operations_adapter_before_mutation(tmp_path: Path) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    before = target.read_bytes()
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=cast(ManifestRefreshFileOperations, object()),
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.code == "refresh-operations-invalid"
+    assert applied.issue.failure_point is RefreshFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is RefreshTargetState.UNKNOWN
+    assert applied.issue.staging_state is RefreshStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is RefreshCleanupOutcome.NOT_NEEDED
+    assert target.read_bytes() == before
 
 
 @pytest.mark.parametrize(
