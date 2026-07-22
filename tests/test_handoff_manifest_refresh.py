@@ -537,6 +537,88 @@ def test_preview_rejects_unverified_source_pin_without_mutation(
 
 
 @pytest.mark.parametrize(
+    ("artifact_size", "expected_code"),
+    [
+        (4 * 1024 * 1024, None),
+        (4 * 1024 * 1024 + 1, None),
+        (8 * 1024 * 1024, None),
+        (8 * 1024 * 1024 + 1, "refresh-artifact-limit-exceeded"),
+    ],
+    ids=("4-mib", "4-mib-plus-one", "8-mib", "8-mib-plus-one"),
+)
+def test_preview_source_pin_uses_the_refresh_artifact_boundary_without_mutation(
+    tmp_path: Path,
+    artifact_size: int,
+    expected_code: str | None,
+) -> None:
+    repository, target = _repository(tmp_path)
+    manifest, _, _, _, _ = _inputs()
+    proposal = next(item for item in manifest.artifacts if item.kind == "proposal")
+    (repository / proposal.path).write_bytes(b"x" * artifact_size)
+    subprocess.run(  # noqa: S603 - fixed Git argv against isolated test paths
+        (
+            "git",
+            "-C",
+            repository,
+            "-c",
+            "user.name=Refresh Boundary Test",
+            "-c",
+            "user.email=refresh-boundary@example.invalid",
+            "add",
+            "--",
+            *(item.path for item in manifest.artifacts),
+        ),
+        check=True,
+    )
+    subprocess.run(  # noqa: S603 - fixed Git argv against isolated test paths
+        (
+            "git",
+            "-C",
+            repository,
+            "-c",
+            "user.name=Refresh Boundary Test",
+            "-c",
+            "user.email=refresh-boundary@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "seed refresh boundary",
+        ),
+        check=True,
+    )
+    source_commit = subprocess.run(  # noqa: S603 - fixed isolated Git argv
+        ("git", "-C", repository, "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    artifacts = tuple(
+        replace(
+            item,
+            sha256=_sha256((repository / item.path).read_bytes()),
+        )
+        for item in manifest.artifacts
+    )
+    before = target.read_bytes()
+    operations = MutationRecordingRefreshOperations()
+
+    result = _preview(
+        repository,
+        current_source_commit=source_commit,
+        current_artifacts=artifacts,
+        operations=operations,
+    )
+
+    if expected_code is None:
+        assert isinstance(result, Success)
+    else:
+        assert isinstance(result, Failure)
+        assert result.issue.code == expected_code
+    assert operations.mutations == []
+    assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
     ("case", "expected_code"),
     [
         ("prepared", "refresh-target-not-started"),
