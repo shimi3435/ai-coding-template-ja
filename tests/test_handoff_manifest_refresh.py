@@ -58,8 +58,11 @@ ASSIGNMENT_PATH = (
 POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
 SOURCE_COMMIT = "4d8b5b173927ed518d39dee18a29b0271628afbd"
 ALTERNATE_SOURCE_COMMIT = "cca33916805a46a712f60da6a5f22a358889cffe"
-TRACKED_HANDOFF_SHA256 = (
+HISTORICAL_HANDOFF_SHA256 = (
     "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914"
+)
+PUBLISHED_HANDOFF_SHA256 = (
+    "6cc9bcf4caa3f9f839742f6d86660a8039c2370cf5cf7d054ba04199e3775fc5"
 )
 TRACKED_TASKS_SHA256 = (
     "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
@@ -77,6 +80,32 @@ EXPECTED = json.loads(
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _compact_json(value: object) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+    ).encode()
+
+
+def _historical_manifest_bytes() -> bytes:
+    evidence = json.loads((REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes())
+    preview = evidence["preview"]
+    assert preview["observed_source_commit"] == (
+        "2cbb127917feaa637ef5eac439478227ac5f717b"
+    )
+    raw = json.loads(preview["candidate_bytes_utf8"])
+    raw["artifacts"] = preview["previous_artifacts"]
+    raw["source_commit"] = preview["observed_source_commit"]
+    raw["progress"] = preview["previous_progress"]
+    raw["source_items"] = preview["previous_source_items"]
+    raw["mappings"] = preview["previous_mappings"]
+    parsed = parse_manifest_v2_bytes(_compact_json(raw))
+    assert isinstance(parsed, Success)
+    serialized = serialize_manifest_v2(parsed.value)
+    assert isinstance(serialized, Success)
+    assert _sha256(serialized.value) == HISTORICAL_HANDOFF_SHA256
+    return serialized.value
 
 
 def _inputs():
@@ -134,9 +163,7 @@ def _repository(
     target = repository / HANDOFF_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(
-        manifest_bytes
-        if manifest_bytes is not None
-        else (REPOSITORY_ROOT / HANDOFF_PATH).read_bytes()
+        manifest_bytes if manifest_bytes is not None else _historical_manifest_bytes()
     )
     (repository / ".planning/phases/02-source-to-execution-mapping").mkdir(
         parents=True, exist_ok=True
@@ -309,87 +336,12 @@ def _preview(repository: Path, **overrides):
     return preview_manifest_refresh(repository, Path(HANDOFF_PATH), **arguments)
 
 
-def _compact_json(value: object) -> bytes:
-    return (
-        json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
-    ).encode()
-
-
-def _repository_root_evidence() -> bytes:
+def test_published_target_preserves_historical_evidence_and_is_current_no_op() -> None:
     target = REPOSITORY_ROOT / HANDOFF_PATH
     tasks = REPOSITORY_ROOT / f"openspec/changes/{CHANGE_ID}/tasks.md"
     target_before = target.read_bytes()
     tasks_before = tasks.read_bytes()
-    staging_before = tuple(
-        sorted(path.name for path in target.parent.glob(".handoff.*.tmp"))
-    )
-    operations = MutationRecordingRefreshOperations()
-
-    result = _preview(REPOSITORY_ROOT, operations=operations)
-
-    assert isinstance(result, Success)
-    assert operations.mutations == []
-    preview = result.value
-    machine = serialize_manifest_refresh_preview(preview)
-    assert isinstance(machine, Success)
-    target_after = target.read_bytes()
-    tasks_after = tasks.read_bytes()
-    staging_after = tuple(
-        sorted(path.name for path in target.parent.glob(".handoff.*.tmp"))
-    )
-    created = [item for item in preview.changes if item.kind == "created"]
-    updated = [item for item in preview.changes if item.kind == "updated"]
-    evidence = {
-        "evidence_schema": "openspec-gsd-refresh-preview-evidence-v1",
-        "generation_mode": "read-only-preview-only",
-        "apply_invoked": False,
-        "mutation_operations": operations.mutations,
-        "preview_sha256": preview.preview_sha256,
-        "target_observation": {
-            "path": HANDOFF_PATH,
-            "before_sha256": _sha256(target_before),
-            "after_sha256": _sha256(target_after),
-            "unchanged": target_before == target_after,
-        },
-        "tasks_observation": {
-            "path": f"openspec/changes/{CHANGE_ID}/tasks.md",
-            "before_sha256": _sha256(tasks_before),
-            "after_sha256": _sha256(tasks_after),
-            "unchanged": tasks_before == tasks_after,
-        },
-        "staging_observation": {
-            "before": list(staging_before),
-            "after": list(staging_after),
-        },
-        "reconciliation": {
-            "previous_active": len(preview.previous_source_items.active),
-            "candidate_active": len(preview.candidate_source_items.active),
-            "created": len(created),
-            "updated": len(updated),
-            "tombstoned": len(preview.candidate_source_items.tombstones),
-            "next_requirement_id": preview.candidate_source_items.next_requirement_id,
-            "next_scenario_id": preview.candidate_source_items.next_scenario_id,
-        },
-        "mapping_coverage": {
-            "active": len(preview.candidate_source_items.active),
-            "mapped": len(preview.candidate_mappings),
-        },
-        "preview": json.loads(machine.value),
-    }
-    return _compact_json(evidence)
-
-
-def test_repository_root_preview_matches_complete_read_only_evidence() -> None:
-    target = REPOSITORY_ROOT / HANDOFF_PATH
-    tasks = REPOSITORY_ROOT / f"openspec/changes/{CHANGE_ID}/tasks.md"
-    target_before = target.read_bytes()
-    tasks_before = tasks.read_bytes()
-
-    evidence_bytes = _repository_root_evidence()
-    tracked_evidence = (REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes()
-
-    assert tracked_evidence == evidence_bytes
-    evidence = json.loads(tracked_evidence)
+    evidence = json.loads((REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes())
     assert set(evidence) == {
         "evidence_schema",
         "generation_mode",
@@ -408,8 +360,8 @@ def test_repository_root_preview_matches_complete_read_only_evidence() -> None:
     assert evidence["mutation_operations"] == []
     assert evidence["target_observation"] == {
         "path": HANDOFF_PATH,
-        "before_sha256": TRACKED_HANDOFF_SHA256,
-        "after_sha256": TRACKED_HANDOFF_SHA256,
+        "before_sha256": HISTORICAL_HANDOFF_SHA256,
+        "after_sha256": HISTORICAL_HANDOFF_SHA256,
         "unchanged": True,
     }
     assert evidence["tasks_observation"] == {
@@ -436,6 +388,19 @@ def test_repository_root_preview_matches_complete_read_only_evidence() -> None:
     )
     assert isinstance(candidate, Success)
     assert candidate.value.source_commit == SOURCE_COMMIT
+    assert candidate.value.handoff_state is HandoffState.STARTED
+    assert len(candidate.value.source_items.active) == 49
+    assert len(candidate.value.mappings) == 49
+    assert target_before == evidence["preview"]["candidate_bytes_utf8"].encode()
+    assert _sha256(target_before) == PUBLISHED_HANDOFF_SHA256
+
+    operations = MutationRecordingRefreshOperations()
+    current = _preview(REPOSITORY_ROOT, operations=operations)
+
+    assert isinstance(current, Success)
+    assert current.value.no_op is True
+    assert current.value.changes == ()
+    assert operations.mutations == []
     assert target.read_bytes() == target_before
     assert tasks.read_bytes() == tasks_before
     assert not tuple(target.parent.glob(".handoff.*.tmp"))
