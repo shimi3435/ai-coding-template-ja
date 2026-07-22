@@ -972,7 +972,14 @@ def apply_manifest_refresh(
 ) -> ManifestRefreshResult:
     """Apply only one exact freshly approved refresh preview."""
 
-    filesystem = operations or ManifestRefreshFileOperations()
+    filesystem = ManifestRefreshFileOperations() if operations is None else operations
+    if not isinstance(filesystem, ManifestRefreshFileOperations):
+        return _refresh_failure(
+            "refresh-operations-invalid",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshTargetState.UNKNOWN,
+            RefreshStagingState.ABSENT,
+        )
     preview_identity = _preview_identity(preview)
     if preview_identity is None or not isinstance(preview, ManifestRefreshPreview):
         return _refresh_failure(
