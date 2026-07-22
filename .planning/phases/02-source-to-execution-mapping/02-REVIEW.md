@@ -1,91 +1,75 @@
 ---
 phase: 02-source-to-execution-mapping
-reviewed: 2026-07-22T04:08:05Z
+reviewed: 2026-07-22T04:26:18Z
 depth: standard
 files_reviewed: 13
 files_reviewed_list:
   - docs/agents/adaptive-change-execution.references.json
-  - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
-  - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py
-  - src/ai_coding_template_ja/openspec_gsd_handoff/policy_reference.py
-  - src/ai_coding_template_ja/openspec_gsd_handoff/preflight.py
-  - tests/fixtures/openspec_gsd_handoff/manifest/expected-refresh-preview.json
-  - tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json
-  - tests/fixtures/openspec_gsd_handoff/policy/duplicate-heading.md
-  - tests/fixtures/openspec_gsd_handoff/policy/unclosed-fence.md
-  - tests/fixtures/openspec_gsd_handoff/policy/valid-policy.md
+  - src/ai_coding_template/handoff/execution_mapping.py
+  - src/ai_coding_template/handoff/manifest_refresh.py
+  - src/ai_coding_template/handoff/policy_reference.py
+  - src/ai_coding_template/handoff/preflight.py
+  - tests/fixtures/handoff/manifest/expected-refresh-preview.json
+  - tests/fixtures/handoff/mapping/hardening-phase-assignments.json
+  - tests/fixtures/handoff/policy/invalid-command.md
+  - tests/fixtures/handoff/policy/invalid-label.md
+  - tests/fixtures/handoff/policy/valid.md
   - tests/test_handoff_execution_mapping.py
   - tests/test_handoff_manifest_refresh.py
   - tests/test_handoff_policy_reference.py
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 02: Code Review Report
 
-**Reviewed:** 2026-07-22T04:08:05Z
+**Reviewed:** 2026-07-22T04:26:18Z
 **Depth:** standard
 **Files Reviewed:** 13
-**Status:** issues_found
+**Status:** clean
 
 ## Summary
 
-original 12-file scope に `preflight.py` を加え、fix commits `4357fbc` / `779d2ea` / `7d7a169` / `5982d29` を fresh standard-depth で再レビューした。
+Iteration 3 の修正後に、指定された13ファイルを改めて standard depth でレビューした。source pin、出力境界、ファイル操作アダプター、パス・symlink・注入、巨大入力、部分失敗の各経路を実装・テスト・canonical OpenSpec 契約と照合し、新たな Critical、Warning、Info は確認されなかった。
 
-旧 CR-01 は解消済みである。historical source pin は HEAD と異なってもよいまま、実在する commit object、exact repository root、全 canonical artifact の Git blob bytes を preview と apply の staging 前・replace 前に再観測する。missing Git、unknown commit、blob mismatch は mutation 前に fail-closed し、replace-boundary drift は validated staging を cleanup して target を維持する。
-
-旧 CR-02 も解消済みである。bounded subprocess runner の既定 4 MiB は維持され、Git blob probe だけが refresh の artifact limit を渡す。4 MiB、4 MiB + 1、8 MiB は成功し、8 MiB + 1 は artifact read で拒否される。runner は limit+1、timeout、terminate/kill/reap を維持し、unbounded capture は行わない。
-
-D-04 は各 path の bounded point-in-time observation であり、atomic filesystem snapshot / lease を要求しない。final observation 後の非協調外部 drift を保証しないことは canonical contract どおりなので、旧 atomic-readiness 指摘は finding ではない。
-
-一方、approved apply の injectable filesystem boundary を truthiness で選択しているため、正規 subclass adapter が falsey の場合に無視され、既定 adapter が実 target を置換する BLOCKER を1件確認した。
+All reviewed files meet quality standards. No issues found.
 
 ## Narrative Findings (AI reviewer)
 
-## Critical Issues
+新規の指摘はない。
 
-### CR-03 [BLOCKER]: falsey な supplied filesystem adapter を無視して既定 adapter で target を置換する
+### 解消済みの従来指摘
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:975`
+- **CR-01（source pin guard）:** source commit の40桁16進検証、Git commit 存在確認、repository root の一致、canonical artifact と pinned Git blob のバイト一致が preview の初回観測と最終再観測で検証される。apply も staging 前と replace 前に同じ preview guard を通り、Git metadata 欠落、未知 commit、blob 不一致、replace 前 drift を fail closed にする。
+- **CR-02（bounded subprocess output）:** 通常の subprocess stdout/stderr は各4 MiB、Git artifact blob は8 MiBを上限とし、上限超過時は子プロセスを停止・回収して構造化エラーを返す。境界値と超過値のテストが追加されている。
+- **CR-03（operations adapter）:** preview/apply とも `None` のときだけ既定アダプターへ置換する。falsey な正規アダプターは保持され、無効なオブジェクトは mutation 前に `refresh-operations-invalid` として拒否される。
 
-**Issue:** `apply_manifest_refresh()` は `filesystem = operations or ManifestRefreshFileOperations()` で persistence adapter を選ぶ。このため、`ManifestRefreshFileOperations` の正規 subclass が `__bool__()` で `False` を返すと、caller が明示した adapter は捨てられ、既定の実 filesystem adapter が使用される。これは型契約内の値であり、fault injection、mutation recording、host-owned persistence guard を迂回して未監視の実書込を起こす。
+### 非指摘・スコープ境界
 
-isolated repository で falsey subclass を渡し、その `create_staging_at()` が呼ばれたら例外にする再現を行った。結果は `Success [] True True` となり、supplied adapter の呼出は0件のまま、target bytes が candidate bytes へ置換された。したがって単なる invalid-input crash ではなく、approved apply の mutation boundary が実際に bypass されるデータ変更リスクである。
-
-**Fix:** truthiness を使わず `None` だけを既定値として扱い、preview seam と同じく型を fail-closed に検査する。
-
-```python
-filesystem = (
-    ManifestRefreshFileOperations() if operations is None else operations
-)
-if not isinstance(filesystem, ManifestRefreshFileOperations):
-    return _refresh_failure(
-        "refresh-operations-invalid",
-        RefreshFailurePoint.STATE_GUARD,
-        RefreshTargetState.UNKNOWN,
-        RefreshStagingState.ABSENT,
-    )
-```
-
-falsey subclass の recording/fault adapter を public apply seam に渡し、その adapter が実際に呼ばれること、既定 adapter へ fallback しないこと、guard failure 時に target が不変であることを回帰テストに追加する。
+- **D-04:** readiness は operation 内の全 path descriptor と root identity を保持し、最終再観測までの drift を検出する。canonical contract は point-in-time observation を要求しており、外部変更を排除する atomic snapshot / lease は要求していないため、指摘対象ではない。
+- tracked handoff manifest への apply は意図的に実行していない。refresh preview evidence は `apply_invoked: false`、`mutation_operations: []` で、staging artifact も残っていない。
+- 実 OpenSpec/GSD/host orchestration smoke は Phase 3 の opt-in/manual evidence が所有する未検証項目であり、Phase 2 実装の欠陥としては扱わない。
 
 ## Validation
 
-- `uv run pytest tests/test_handoff_manifest_refresh.py tests/test_handoff_preflight.py tests/test_handoff_execution_mapping.py tests/test_handoff_policy_reference.py -q` — 138 passed
-- falsey adapter isolated reproduction — `Success [] True True`（supplied adapter calls 0、target changed、candidate installed）
-- tracked handoff SHA-256 — `554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914`（不変）
-- tracked preview SHA-256 — `661b63be39bacb882c53ade5e9919ae7fea661f852b7e47fb53188a29348138a`（不変）
-- OpenSpec tasks SHA-256 — `cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220`（不変）
-- `.handoff.*.tmp` — なし
-- tracked apply は実行していない。再現は temporary isolated repository のみで実行した
-- `task check` — 今回の fresh review では未実行。fix report の全体 green evidence は確認したが、本レビューでは focused 138 tests を再実行した
+- `uv run pytest tests/test_handoff_manifest_refresh.py tests/test_handoff_preflight.py tests/test_handoff_execution_mapping.py tests/test_handoff_policy_reference.py -q`: **140 passed in 28.75s**
+- protected artifact SHA-256:
+  - tracked handoff: `554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914`
+  - tracked refresh preview: `661b63be39bacb882c53ade5e9919ae7fea661f852b7e47fb53188a29348138a`
+  - OpenSpec tasks: `cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220`
+  - OpenSpec design: `3561792edfe750f5815fad72ff2e133888848b2733e770e2b6f66f87c413e783`
+  - OpenSpec spec: `7d076d2a946a8e8f3346f48ae80d4fbeb8ae0fb9ea6d20ccf19e01847edfd784`
+  - golden expected fixture: `30052bc2cbc030131fcfc06a27f502de80743be0391b9669cc8f438e92b5222d`
+- `.handoff.*.tmp` staging artifact: なし
+- `git diff --check`: 成功
+- `task check`: この最終レビューでは再実行していない。
 
 ---
 
-_Reviewed: 2026-07-22T04:08:05Z_
+_Reviewed: 2026-07-22T04:26:18Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
