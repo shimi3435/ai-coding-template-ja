@@ -25,8 +25,9 @@ a phase or switching route. The final review blocker's specification question is
 The 4/4 earlier plans remain historical execution evidence, while corrective Plan 02-05
 repins the derived preview and expected-preview fixture to the current authority without
 applying the tracked refresh. Focused regression, strict OpenSpec validation, and `task check`
-are green. Fresh Phase 2 review and independent verification remain pending; Phase 2 and
-OpenSpec task 2.2 therefore remain incomplete, Phases 3–6 remain blocked, and no Phase 7 is added.
+are green; the final review is clean and independent verification passed 7/7. The tracked
+refresh publication still requires a fresh exact-hash approval, so Phase 2 and OpenSpec task
+2.2 remain incomplete, Phases 3–6 remain blocked, and no Phase 7 is added.
 The old handoff manifest and brief remain unchanged audit evidence rather than the current
 planning authority.
 
@@ -36,7 +37,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 ## Phases
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
-- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; fresh review and independent verification pending)
+- [ ] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean and verification passed; publication approval pending)
 - [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary.
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions.
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
@@ -81,8 +82,9 @@ Plans:
 
 **Current gate:** D-04 resolves the final review blocker's contract question at the
 current canonical pin. Corrective Plan 02-05 regenerated the stale derived preview/fixture
-evidence read-only and all execution checks are green. Fresh review and independent
-verification are still required, so Phase 2 and OpenSpec task 2.2 remain incomplete.
+evidence read-only, the final review is clean, and independent verification passed 7/7.
+Exact-hash approval and tracked publication are still required, so Phase 2 and OpenSpec task
+2.2 remain incomplete.
 
 Plans:
 **Wave 1**
@@ -179,7 +181,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
-| 2. Source-to-Execution Mapping | 5/5 | Review and verification pending | - |
+| 2. Source-to-Execution Mapping | 5/5 | Verified; publication approval pending | - |
 | 3. Lifecycle Drift Gate | 0/TBD | Blocked on Phase 2 | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
