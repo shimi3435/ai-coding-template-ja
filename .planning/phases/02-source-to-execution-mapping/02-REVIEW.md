@@ -5,15 +5,15 @@ depth: standard
 files_reviewed: 13
 files_reviewed_list:
   - docs/agents/adaptive-change-execution.references.json
-  - src/ai_coding_template/handoff/execution_mapping.py
-  - src/ai_coding_template/handoff/manifest_refresh.py
-  - src/ai_coding_template/handoff/policy_reference.py
-  - src/ai_coding_template/handoff/preflight.py
-  - tests/fixtures/handoff/manifest/expected-refresh-preview.json
-  - tests/fixtures/handoff/mapping/hardening-phase-assignments.json
-  - tests/fixtures/handoff/policy/invalid-command.md
-  - tests/fixtures/handoff/policy/invalid-label.md
-  - tests/fixtures/handoff/policy/valid.md
+  - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/policy_reference.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/preflight.py
+  - tests/fixtures/openspec_gsd_handoff/manifest/expected-refresh-preview.json
+  - tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json
+  - tests/fixtures/openspec_gsd_handoff/policy/duplicate-heading.md
+  - tests/fixtures/openspec_gsd_handoff/policy/unclosed-fence.md
+  - tests/fixtures/openspec_gsd_handoff/policy/valid-policy.md
   - tests/test_handoff_execution_mapping.py
   - tests/test_handoff_manifest_refresh.py
   - tests/test_handoff_policy_reference.py
