@@ -17,7 +17,6 @@ from hypothesis import strategies as st
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     read_planning_inventory,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.manifest import ManifestArtifact
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
     ManifestRefreshFailure,
     ManifestRefreshFileOperations,
@@ -48,6 +47,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progr
 REPOSITORY_ROOT = Path(__file__).parents[1]
 CHANGE_ID = "harden-openspec-gsd-handoff-lifecycle"
 HANDOFF_PATH = f".planning/openspec/{CHANGE_ID}/handoff.json"
+TASKS_PATH = f"openspec/changes/{CHANGE_ID}/tasks.md"
 SOURCE_PATH = (
     f"openspec/changes/{CHANGE_ID}/specs/"
     "openspec-gsd-handoff-lifecycle-hardening/spec.md"
@@ -66,6 +66,16 @@ PUBLISHED_HANDOFF_SHA256 = (
 )
 TRACKED_TASKS_SHA256 = (
     "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
+)
+POST_SOURCE_COMMIT_TASK_IDS = (
+    "2.2",
+    "3.1",
+    "3.2",
+    "4.1",
+    "4.2",
+    "5.1",
+    "5.2",
+    "6.1",
 )
 REFRESH_EVIDENCE_PATH = (
     ".planning/phases/02-source-to-execution-mapping/02-REFRESH-PREVIEW.json"
@@ -88,9 +98,42 @@ def _compact_json(value: object) -> bytes:
     ).encode()
 
 
-def _historical_manifest_bytes() -> bytes:
-    evidence = json.loads((REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes())
+def _refresh_evidence() -> dict[str, object]:
+    value = json.loads((REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes())
+    assert isinstance(value, dict)
+    return value
+
+
+def _source_pinned_tasks_bytes(tasks_bytes: bytes | None = None) -> bytes:
+    current = (
+        (REPOSITORY_ROOT / TASKS_PATH).read_bytes()
+        if tasks_bytes is None
+        else tasks_bytes
+    )
+    for task_id in POST_SOURCE_COMMIT_TASK_IDS:
+        checked_marker = f"- [x] {task_id} ".encode()
+        unchecked_marker = f"- [ ] {task_id} ".encode()
+        assert current.count(checked_marker) + current.count(unchecked_marker) == 1
+        current = current.replace(checked_marker, unchecked_marker, 1)
+    assert _sha256(current) == TRACKED_TASKS_SHA256
+    return current
+
+
+def _published_manifest():
+    evidence = _refresh_evidence()
     preview = evidence["preview"]
+    assert isinstance(preview, dict)
+    candidate_bytes = preview["candidate_bytes_utf8"].encode()
+    assert _sha256(candidate_bytes) == PUBLISHED_HANDOFF_SHA256
+    parsed = parse_manifest_v2_bytes(candidate_bytes)
+    assert isinstance(parsed, Success)
+    return parsed.value
+
+
+def _historical_manifest_bytes() -> bytes:
+    evidence = _refresh_evidence()
+    preview = evidence["preview"]
+    assert isinstance(preview, dict)
     assert preview["observed_source_commit"] == (
         "2cbb127917feaa637ef5eac439478227ac5f717b"
     )
@@ -109,21 +152,18 @@ def _historical_manifest_bytes() -> bytes:
 
 
 def _inputs():
-    parsed = parse_manifest_v2_bytes((REPOSITORY_ROOT / HANDOFF_PATH).read_bytes())
-    assert isinstance(parsed, Success)
-    manifest = parsed.value
-    artifacts = tuple(
-        ManifestArtifact(
-            item.kind, item.path, _sha256((REPOSITORY_ROOT / item.path).read_bytes())
+    manifest = _published_manifest()
+    artifacts = manifest.artifacts
+    for artifact in artifacts:
+        artifact_bytes = (
+            _source_pinned_tasks_bytes()
+            if artifact.path == TASKS_PATH
+            else (REPOSITORY_ROOT / artifact.path).read_bytes()
         )
-        for item in manifest.artifacts
-    )
-    progress = parse_task_progress(
-        (REPOSITORY_ROOT / f"openspec/changes/{CHANGE_ID}/tasks.md").read_text(
-            encoding="utf-8"
-        )
-    )
+        assert _sha256(artifact_bytes) == artifact.sha256
+    progress = parse_task_progress(_source_pinned_tasks_bytes().decode("utf-8"))
     assert isinstance(progress, Success)
+    assert progress.value == manifest.progress
     registry = read_policy_reference_registry(REPOSITORY_ROOT, POLICY_REGISTRY_PATH)
     assert isinstance(registry, Success)
     observations = observe_policy_sections(REPOSITORY_ROOT, registry.value)
@@ -148,7 +188,13 @@ def _repository(
     for artifact in manifest.artifacts:
         target = repository / artifact.path
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(REPOSITORY_ROOT / artifact.path, target)
+        artifact_bytes = (
+            _source_pinned_tasks_bytes()
+            if artifact.path == TASKS_PATH
+            else (REPOSITORY_ROOT / artifact.path).read_bytes()
+        )
+        assert _sha256(artifact_bytes) == artifact.sha256
+        target.write_bytes(artifact_bytes)
     registry = read_policy_reference_registry(REPOSITORY_ROOT, POLICY_REGISTRY_PATH)
     assert isinstance(registry, Success)
     for relative_path in {
@@ -336,12 +382,10 @@ def _preview(repository: Path, **overrides):
     return preview_manifest_refresh(repository, Path(HANDOFF_PATH), **arguments)
 
 
-def test_published_target_preserves_historical_evidence_and_is_current_no_op() -> None:
+def test_published_target_matches_immutable_historical_evidence() -> None:
     target = REPOSITORY_ROOT / HANDOFF_PATH
-    tasks = REPOSITORY_ROOT / f"openspec/changes/{CHANGE_ID}/tasks.md"
     target_before = target.read_bytes()
-    tasks_before = tasks.read_bytes()
-    evidence = json.loads((REPOSITORY_ROOT / REFRESH_EVIDENCE_PATH).read_bytes())
+    evidence = _refresh_evidence()
     assert set(evidence) == {
         "evidence_schema",
         "generation_mode",
@@ -381,29 +425,37 @@ def test_published_target_preserves_historical_evidence_and_is_current_no_op() -
         "next_scenario_id": 44,
     }
     assert evidence["mapping_coverage"] == {"active": 49, "mapped": 49}
-    machine_bytes = _compact_json(evidence["preview"])
+    preview = evidence["preview"]
+    assert isinstance(preview, dict)
+    candidate_text = preview["candidate_bytes_utf8"]
+    assert isinstance(candidate_text, str)
+    machine_bytes = _compact_json(preview)
     assert _sha256(machine_bytes) == evidence["preview_sha256"]
-    candidate = parse_manifest_v2_bytes(
-        evidence["preview"]["candidate_bytes_utf8"].encode()
-    )
+    candidate = parse_manifest_v2_bytes(candidate_text.encode())
     assert isinstance(candidate, Success)
     assert candidate.value.source_commit == SOURCE_COMMIT
     assert candidate.value.handoff_state is HandoffState.STARTED
     assert len(candidate.value.source_items.active) == 49
     assert len(candidate.value.mappings) == 49
-    assert target_before == evidence["preview"]["candidate_bytes_utf8"].encode()
+    assert target_before == candidate_text.encode()
     assert _sha256(target_before) == PUBLISHED_HANDOFF_SHA256
-
-    operations = MutationRecordingRefreshOperations()
-    current = _preview(REPOSITORY_ROOT, operations=operations)
-
-    assert isinstance(current, Success)
-    assert current.value.no_op is True
-    assert current.value.changes == ()
-    assert operations.mutations == []
     assert target.read_bytes() == target_before
-    assert tasks.read_bytes() == tasks_before
     assert not tuple(target.parent.glob(".handoff.*.tmp"))
+
+
+def test_source_pinned_tasks_ignore_only_post_pin_completion_checkboxes() -> None:
+    pinned = _source_pinned_tasks_bytes()
+    checked = pinned
+    for task_id in POST_SOURCE_COMMIT_TASK_IDS:
+        checked = checked.replace(
+            f"- [ ] {task_id} ".encode(),
+            f"- [x] {task_id} ".encode(),
+            1,
+        )
+
+    assert checked != pinned
+    assert _source_pinned_tasks_bytes(pinned) == pinned
+    assert _source_pinned_tasks_bytes(checked) == pinned
 
 
 def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
