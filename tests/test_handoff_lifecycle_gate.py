@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import pytest
@@ -16,13 +18,18 @@ from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     PhaseDeclaration,
     PlanDeclaration,
     PlanningInventory,
+    read_planning_inventory,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_drift import (
     CanonicalSourceObservation,
+    DriftState,
+    classify_canonical_source_drift,
+    normalize_tasks_specification,
     observe_canonical_source,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_gate import (
     CapabilityObservation,
+    LifecycleGateDecision,
     LifecycleGateLimits,
     LifecycleGateState,
     LifecycleObservationBoundary,
@@ -58,7 +65,20 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     HostSpawnSchema,
     IssueCategory,
     KnownState,
+    Progress,
     Success,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
+    observe_policy_sections,
+    read_policy_reference_registry,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.preflight import (
+    COMMAND_TIMEOUT_SECONDS,
+    subprocess_runner,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
+from ai_coding_template_ja.openspec_gsd_handoff.reader import (
+    DEFAULT_ARTIFACT_LIMITS,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
@@ -72,6 +92,18 @@ DESIGN_PATH = f"openspec/changes/{CHANGE_ID}/design.md"
 TASKS_PATH = f"openspec/changes/{CHANGE_ID}/tasks.md"
 SPEC_PATH = f"openspec/changes/{CHANGE_ID}/specs/lifecycle/spec.md"
 MANIFEST_PATH = f".planning/openspec/{CHANGE_ID}/handoff.json"
+
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+REAL_CHANGE_ID = "harden-openspec-gsd-handoff-lifecycle"
+REAL_HANDOFF_PATH = f".planning/openspec/{REAL_CHANGE_ID}/handoff.json"
+REAL_ASSIGNMENT_PATH = (
+    "tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json"
+)
+REAL_POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
+EXPECTED_EVIDENCE_PATH = (
+    "tests/fixtures/openspec_gsd_handoff/lifecycle/expected-lifecycle-evidence.json"
+)
+SOURCE_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 
 CANONICAL_CONTENT = {
     PROPOSAL_PATH: "# Proposal\n\nUse one lifecycle gate.\n",
@@ -487,15 +519,18 @@ def _pin_fixed_scenario_drift(
     _rewrite_manifest(repository, transform)
 
 
+OPERATION_CASES = (
+    (LifecycleOperation.PLAN, "03", MappingOperation.PLAN),
+    (LifecycleOperation.EXECUTE, "03", MappingOperation.EXECUTE),
+    (LifecycleOperation.RESUME, "03", MappingOperation.EXECUTE),
+    (LifecycleOperation.VERIFY, "03", MappingOperation.VERIFY),
+    (LifecycleOperation.FINALIZE, None, MappingOperation.FINALIZE),
+)
+
+
 @pytest.mark.parametrize(
     ("operation", "target_phase", "mapping_operation"),
-    [
-        (LifecycleOperation.PLAN, "03", MappingOperation.PLAN),
-        (LifecycleOperation.EXECUTE, "03", MappingOperation.EXECUTE),
-        (LifecycleOperation.RESUME, "03", MappingOperation.EXECUTE),
-        (LifecycleOperation.VERIFY, "03", MappingOperation.VERIFY),
-        (LifecycleOperation.FINALIZE, None, MappingOperation.FINALIZE),
-    ],
+    OPERATION_CASES,
 )
 def test_operation_matrix_uses_one_complete_gate(
     tmp_path: Path,
@@ -520,6 +555,478 @@ def test_operation_matrix_uses_one_complete_gate(
     assert boundary.source_calls == 1
     assert boundary.phase_calls == 1
     assert boundary.capability_calls == 1
+
+
+def _decision_view(decision: LifecycleGateDecision) -> dict[str, object]:
+    return {
+        "operation": decision.operation.value
+        if decision.operation is not None
+        else None,
+        "target_phase": decision.target_phase,
+        "mapping_operation": (
+            decision.mapping_operation.value
+            if decision.mapping_operation is not None
+            else None
+        ),
+        "state": decision.state.value,
+        "admitted": decision.admitted,
+        "issue_codes": list(decision.issue_codes),
+        "changed_source_item_ids": list(decision.changed_source_item_ids),
+        "revalidation_targets": list(decision.revalidation_targets),
+        "replanning_targets": list(decision.replanning_targets),
+        "next_action_codes": list(decision.next_action_codes),
+        "decision_identity": decision.decision_identity,
+        "manifest_sha256": decision.manifest_sha256,
+    }
+
+
+def _progress_view(progress: Progress) -> dict[str, object]:
+    return {
+        "total": progress.total,
+        "complete": progress.complete,
+        "remaining": progress.remaining,
+        "tasks": [
+            {
+                "id": task.id,
+                "done": task.done,
+            }
+            for task in progress.tasks
+        ],
+    }
+
+
+def _compact_json(value: object) -> bytes:
+    return (
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        + b"\n"
+    )
+
+
+def _read_bounded_bytes(path: Path, limit: int) -> bytes:
+    with path.open("rb") as stream:
+        content = stream.read(limit + 1)
+    assert len(content) <= limit
+    return content
+
+
+def _assert_canonical_manifest_path(path: str, change_id: str) -> PurePosixPath:
+    pure = PurePosixPath(path)
+    assert path == pure.as_posix()
+    assert not pure.is_absolute()
+    assert "." not in pure.parts and ".." not in pure.parts
+    assert pure.parts[:3] == ("openspec", "changes", change_id)
+    return pure
+
+
+def _read_source_commit_blobs(
+    repository_root: Path,
+    manifest: HandoffManifestV2,
+) -> tuple[tuple[ArtifactClaim, ...], dict[str, bytes]]:
+    source_commit = manifest.source_commit
+    assert SOURCE_COMMIT_PATTERN.fullmatch(source_commit) is not None
+
+    def git(*arguments: str, output_limit: int) -> bytes:
+        result = subprocess_runner(
+            ("git", *arguments),
+            cwd=repository_root,
+            timeout=COMMAND_TIMEOUT_SECONDS,
+            output_limit=output_limit,
+        )
+        assert result.return_code == 0, (result.argv, result.stderr)
+        return result.stdout
+
+    git("cat-file", "-e", f"{source_commit}^{{commit}}", output_limit=4096)
+    root_bytes = git("rev-parse", "--show-toplevel", output_limit=4096)
+    observed_root = Path(root_bytes.decode("utf-8").strip()).resolve(strict=True)
+    assert observed_root == repository_root.resolve(strict=True)
+
+    claims: list[ArtifactClaim] = []
+    blobs: dict[str, bytes] = {}
+    for artifact in manifest.artifacts:
+        relative_path = _assert_canonical_manifest_path(
+            artifact.path,
+            manifest.change_id,
+        )
+        blob = git(
+            "cat-file",
+            "-p",
+            f"{source_commit}:{artifact.path}",
+            output_limit=DEFAULT_ARTIFACT_LIMITS.bytes_per_file,
+        )
+        blob.decode("utf-8")
+        assert hashlib.sha256(blob).hexdigest() == artifact.sha256
+        claims.append(ArtifactClaim(ArtifactKind(artifact.kind), Path(relative_path)))
+        blobs[artifact.path] = blob
+    return (
+        tuple(sorted(claims, key=lambda item: (item.kind.value, item.path.as_posix()))),
+        blobs,
+    )
+
+
+def _real_planning_inventory(repository_root: Path) -> PlanningInventory:
+    registry = read_policy_reference_registry(
+        repository_root,
+        REAL_POLICY_REGISTRY_PATH,
+    )
+    assert isinstance(registry, Success)
+    observations = observe_policy_sections(repository_root, registry.value)
+    assert isinstance(observations, Success)
+    inventory = read_planning_inventory(
+        repository_root,
+        REAL_ASSIGNMENT_PATH,
+        policy_observations=observations.value,
+    )
+    assert isinstance(inventory, Success)
+    return inventory.value
+
+
+def _real_phase_nodes(
+    inventory: PlanningInventory,
+) -> tuple[PhaseNodeObservation, ...]:
+    ordered = sorted(inventory.phases, key=lambda item: item.phase_id.encode())
+    return tuple(
+        PhaseNodeObservation(
+            phase.phase_id,
+            phase.phase_path,
+            (() if index == 0 else (ordered[index - 1].phase_id,)),
+        )
+        for index, phase in enumerate(ordered)
+    )
+
+
+def _checkbox_only_progress_evidence(
+    repository_root: Path,
+    tmp_path: Path,
+) -> dict[str, object]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    handoff_bytes = _read_bounded_bytes(
+        repository_root / REAL_HANDOFF_PATH,
+        MAX_MANIFEST_BYTES,
+    )
+    parsed = parse_manifest_v2_bytes(handoff_bytes)
+    assert isinstance(parsed, Success)
+    manifest = parsed.value
+    assert manifest.schema_version == 2
+    assert manifest.change_id == REAL_CHANGE_ID
+
+    claims, pinned_blobs = _read_source_commit_blobs(repository_root, manifest)
+    pinned_root = tmp_path / "source-pinned"
+    pinned_root.mkdir()
+    for relative_path, blob in pinned_blobs.items():
+        target = pinned_root.joinpath(
+            *_assert_canonical_manifest_path(relative_path, REAL_CHANGE_ID).parts
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
+
+    source_pinned = observe_canonical_source(
+        pinned_root,
+        REAL_CHANGE_ID,
+        claims,
+        expected_source_items=manifest.source_items,
+        limits=DEFAULT_ARTIFACT_LIMITS,
+    )
+    working_tree = observe_canonical_source(
+        repository_root,
+        REAL_CHANGE_ID,
+        claims,
+        expected_source_items=manifest.source_items,
+        limits=DEFAULT_ARTIFACT_LIMITS,
+    )
+    assert isinstance(source_pinned, Success)
+    assert isinstance(working_tree, Success)
+    classification = classify_canonical_source_drift(source_pinned, working_tree)
+
+    tasks_artifact = next(
+        artifact
+        for artifact in manifest.artifacts
+        if artifact.kind == ArtifactKind.TASKS.value
+    )
+    pinned_tasks = pinned_blobs[tasks_artifact.path]
+    current_tasks = _read_bounded_bytes(
+        repository_root / tasks_artifact.path,
+        DEFAULT_ARTIFACT_LIMITS.bytes_per_file,
+    )
+    pinned_text = pinned_tasks.decode("utf-8")
+    current_text = current_tasks.decode("utf-8")
+    pinned_normalized = normalize_tasks_specification(pinned_text)
+    current_normalized = normalize_tasks_specification(current_text)
+    pinned_progress = parse_task_progress(pinned_text)
+    current_progress = parse_task_progress(current_text)
+    assert isinstance(pinned_normalized, Success)
+    assert isinstance(current_normalized, Success)
+    assert isinstance(pinned_progress, Success)
+    assert isinstance(current_progress, Success)
+
+    pinned_raw_sha256 = hashlib.sha256(pinned_tasks).hexdigest()
+    current_raw_sha256 = hashlib.sha256(current_tasks).hexdigest()
+    pinned_specification_sha256 = hashlib.sha256(pinned_normalized.value).hexdigest()
+    current_specification_sha256 = hashlib.sha256(current_normalized.value).hexdigest()
+    assert tasks_artifact.sha256 == pinned_raw_sha256
+    assert pinned_raw_sha256 != current_raw_sha256
+    assert pinned_normalized.value == current_normalized.value
+    assert pinned_specification_sha256 == current_specification_sha256
+    assert pinned_progress.value != current_progress.value
+    assert classification.state is DriftState.CLEAN
+    assert classification.drifted_artifact_paths == ()
+    assert classification.changed_source_item_ids == ()
+    assert classification.progress_update_candidate == current_progress.value
+
+    inventory = _real_planning_inventory(repository_root)
+    phase_nodes = _real_phase_nodes(inventory)
+    boundary = FakeBoundary(
+        repository=repository_root,
+        canonical_source=source_pinned.value,
+        inventory=inventory,
+        expected_nodes=phase_nodes,
+        observed_nodes=phase_nodes,
+        capabilities=manifest.capabilities,
+    )
+    decision = gate_lifecycle_operation(
+        repository_root,
+        REAL_CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    assert decision.state is LifecycleGateState.CLEAN
+    assert decision.admitted
+
+    return {
+        **_decision_view(decision),
+        "source_commit": manifest.source_commit,
+        "canonical_tasks_path": tasks_artifact.path,
+        "handoff_claimed_raw_sha256": tasks_artifact.sha256,
+        "source_pinned_raw_sha256": pinned_raw_sha256,
+        "working_tree_raw_sha256": current_raw_sha256,
+        "source_pinned_specification_sha256": pinned_specification_sha256,
+        "working_tree_specification_sha256": current_specification_sha256,
+        "source_pinned_progress": _progress_view(pinned_progress.value),
+        "working_tree_progress": _progress_view(current_progress.value),
+        "classification_state": classification.state.value,
+        "drifted_artifact_paths": list(classification.drifted_artifact_paths),
+        "changed_source_item_ids": list(classification.changed_source_item_ids),
+    }
+
+
+def _operation_coverage(
+    tmp_path: Path,
+) -> tuple[list[dict[str, object]], dict[LifecycleOperation, LifecycleGateDecision]]:
+    rows: list[dict[str, object]] = []
+    decisions: dict[LifecycleOperation, LifecycleGateDecision] = {}
+    for operation, target_phase, mapping_operation in OPERATION_CASES:
+        operation_root = tmp_path / operation.value
+        operation_root.mkdir(parents=True)
+        repository, boundary = _fixture(operation_root)
+        decision = gate_lifecycle_operation(
+            repository,
+            CHANGE_ID,
+            operation,
+            target_phase,
+            boundary=boundary,
+        )
+        assert decision.state is LifecycleGateState.CLEAN
+        assert decision.admitted
+        assert decision.mapping_operation is mapping_operation
+        rows.append(_decision_view(decision))
+        decisions[operation] = decision
+    return rows, decisions
+
+
+def _canonical_drift_evidence(tmp_path: Path) -> dict[str, object]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    repository, boundary = _fixture(tmp_path)
+    spec_path = repository / SPEC_PATH
+    spec_path.write_text(
+        CANONICAL_CONTENT[SPEC_PATH].replace(
+            "the operation is admitted", "the operation is stopped"
+        ),
+        encoding="utf-8",
+    )
+    _pin_fixed_scenario_drift(repository, boundary)
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    assert decision.state is LifecycleGateState.DRIFTED
+    return _decision_view(decision)
+
+
+def _unknown_evidence(tmp_path: Path) -> dict[str, object]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    repository, boundary = _fixture(tmp_path)
+    boundary.source_result = _failure("canonical-source-unknown")
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert decision.decision_identity is None
+    return _decision_view(decision)
+
+
+def _phase_capability_stale_evidence(tmp_path: Path) -> dict[str, object]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    repository, clean_boundary = _fixture(tmp_path)
+    previous = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=clean_boundary,
+    )
+    assert previous.state is LifecycleGateState.CLEAN
+    assert previous.decision_identity is not None
+
+    changed_nodes = tuple(
+        replace(node, depends_on=()) if node.phase_id == "04" else node
+        for node in _phase_nodes()
+    )
+    changed_boundary = FakeBoundary(
+        repository=repository,
+        canonical_source=clean_boundary.canonical_source,
+        inventory=clean_boundary.inventory,
+        observed_nodes=changed_nodes,
+        capabilities=_capabilities(gsd_probe="changed-probe"),
+    )
+    stale = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=changed_boundary,
+        prior_decision_identity=previous.decision_identity,
+    )
+    assert stale.state is LifecycleGateState.DRIFTED
+    assert not stale.admitted
+    assert "lifecycle-decision-stale" in stale.issue_codes
+    return {
+        **_decision_view(stale),
+        "prior_decision_identity": previous.decision_identity,
+    }
+
+
+def _protected_input_hashes(repository_root: Path) -> list[dict[str, str]]:
+    handoff_path = repository_root / REAL_HANDOFF_PATH
+    handoff_bytes = _read_bounded_bytes(handoff_path, MAX_MANIFEST_BYTES)
+    parsed = parse_manifest_v2_bytes(handoff_bytes)
+    assert isinstance(parsed, Success)
+    rows = [
+        {
+            "kind": artifact.kind,
+            "path": artifact.path,
+            "sha256": hashlib.sha256(
+                _read_bounded_bytes(
+                    repository_root / artifact.path,
+                    DEFAULT_ARTIFACT_LIMITS.bytes_per_file,
+                )
+            ).hexdigest(),
+        }
+        for artifact in parsed.value.artifacts
+    ]
+    rows.append(
+        {
+            "kind": "handoff",
+            "path": REAL_HANDOFF_PATH,
+            "sha256": hashlib.sha256(handoff_bytes).hexdigest(),
+        }
+    )
+    return rows
+
+
+def _staging_paths(repository_root: Path) -> list[str]:
+    handoff_directory = repository_root / ".planning" / "openspec" / REAL_CHANGE_ID
+    return sorted(
+        path.relative_to(repository_root).as_posix()
+        for path in handoff_directory.glob(".handoff.*.tmp")
+    )
+
+
+def _repository_root_lifecycle_evidence(
+    repository_root: Path,
+    tmp_path: Path,
+) -> bytes:
+    before = _protected_input_hashes(repository_root)
+    staging_before = _staging_paths(repository_root)
+    assert staging_before == []
+
+    operation_rows, operation_decisions = _operation_coverage(
+        tmp_path / "operation-coverage"
+    )
+    outcomes = {
+        "clean": _decision_view(operation_decisions[LifecycleOperation.PLAN]),
+        "canonical_drift": _canonical_drift_evidence(tmp_path / "canonical-drift"),
+        "unknown": _unknown_evidence(tmp_path / "unknown"),
+        "checkbox_only_progress": _checkbox_only_progress_evidence(
+            repository_root,
+            tmp_path / "checkbox-only",
+        ),
+        "phase_capability_stale": _phase_capability_stale_evidence(
+            tmp_path / "phase-capability-stale"
+        ),
+    }
+
+    after = _protected_input_hashes(repository_root)
+    staging_after = _staging_paths(repository_root)
+    assert after == before
+    assert staging_after == []
+    protected_inputs = [
+        {
+            "kind": before_row["kind"],
+            "path": before_row["path"],
+            "before_sha256": before_row["sha256"],
+            "after_sha256": after_row["sha256"],
+            "unchanged": before_row["sha256"] == after_row["sha256"],
+        }
+        for before_row, after_row in zip(before, after, strict=True)
+    ]
+    tracked_handoff = next(
+        item for item in protected_inputs if item["kind"] == "handoff"
+    )
+    manifest = parse_manifest_v2_bytes(
+        _read_bounded_bytes(
+            repository_root / REAL_HANDOFF_PATH,
+            MAX_MANIFEST_BYTES,
+        )
+    )
+    assert isinstance(manifest, Success)
+    return _compact_json(
+        {
+            "schema_version": "lifecycle-evidence-v1",
+            "producer_version": "repository-root-lifecycle-evidence-v1",
+            "source_authority": {
+                "change_id": REAL_CHANGE_ID,
+                "source_commit": manifest.value.source_commit,
+                "tracked_handoff_sha256": tracked_handoff["before_sha256"],
+            },
+            "operation_coverage": operation_rows,
+            "outcomes": outcomes,
+            "protected_inputs": protected_inputs,
+            "staging_paths_before": staging_before,
+            "staging_paths_after": staging_after,
+            "mutation_operations": [],
+        }
+    )
+
+
+def test_fixed_canonical_evidence_matches_independent_golden(
+    tmp_path: Path,
+) -> None:
+    produced = _repository_root_lifecycle_evidence(REPOSITORY_ROOT, tmp_path)
+    expected = (REPOSITORY_ROOT / EXPECTED_EVIDENCE_PATH).read_bytes()
+
+    assert json.loads(produced) == json.loads(expected)
 
 
 @pytest.mark.parametrize(
