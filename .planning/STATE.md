@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 03
-current_phase_name: Lifecycle Drift Gate
-status: ready
-stopped_at: Phase 03 typed researcher/planner exceeded configured 5-minute cap; no artifacts created
-last_updated: "2026-07-22T09:01:32.476Z"
-last_activity: 2026-07-22
-last_activity_desc: Exact approved Phase 2 refresh published; task 2.2 complete
+current_phase_name: lifecycle-drift-gate
+status: executing
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-07-23T00:46:36.241Z"
+last_activity: 2026-07-23
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 13
+  completed_plans: 11
   percent: 33
 ---
 
@@ -24,17 +24,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
-**Current focus:** Phase 03 — Lifecycle Drift Gate
+**Current focus:** Phase 03 — lifecycle-drift-gate
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
 **Source commit:** `4d8b5b173927ed518d39dee18a29b0271628afbd`
 **Project mode:** standard
 
 ## Current Position
 
-Phase: 03 (Lifecycle Drift Gate) — READY
-Plan: 0 of TBD
-Status: Phase 2 dependency complete; ready for discussion and planning
-Last activity: 2026-07-22 — Exact approved Phase 2 refresh published; task 2.2 complete
+Phase: 03 (lifecycle-drift-gate) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-07-23 — Phase 03 execution started
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -63,6 +63,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 02 P05 | 8 min | 2 | 4 |
+| Phase 03 P01 | 10 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 2]: Readiness is an opaque point-in-time observation decision, not an atomic snapshot or lease; consumers re-run mapping readiness and Phase 3 drift/preflight immediately before an operation, while mutation seams retain independent state guards. — Preserves the canonical boundary without promising stability after final observation or adding automatic retry, repair, or route switching.
 - [Phase 02]: Preview `90b52e…` received a separate exact approval and published candidate `6cc9bc…` in commit `2cc802c`; the historical preview remains immutable evidence. — Preserves the approval boundary and an auditable preimage/candidate record.
 - [Phase 02]: Refresh failure reports preserved-v2 only after bounded fresh proof; otherwise state is unknown without recovery action. — Avoids inferred preservation and automatic rollback after partial persistence.
+- [Phase 03]: Unknown canonical-source decisions expose only a stable issue code and never partial artifact, source-ID, or progress evidence. — Prevents incomplete observations from being consumed as clean.
+- [Phase 03]: Checkbox normalization recognizes only CRLF, CR, and LF Markdown line starts. — Preserves all other decoded content as specification evidence.
 
 ### Pending Todos
 
@@ -107,6 +110,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-22T09:01:32.467Z
-Stopped at: Phase 03 typed researcher/planner exceeded configured 5-minute cap; no artifacts created
+Last session: 2026-07-23T00:46:36.235Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
