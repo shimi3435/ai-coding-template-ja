@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
-status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-07-23T01:11:55.568Z"
+status: verifying
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-07-23T01:27:54.982Z"
 last_activity: 2026-07-23
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
-  completed_plans: 12
-  percent: 33
+  completed_plans: 13
+  percent: 50
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-23 — Phase 03 execution started
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
@@ -65,6 +65,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 02 P05 | 8 min | 2 | 4 |
 | Phase 03 P01 | 10 min | 2 tasks | 2 files |
 | Phase 03 P02 | 20min | 2 tasks | 2 files |
+| Phase 03 P03 | 11min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Resume reuses the execute mapping horizon while retaining a distinct lifecycle operation identity. — Phase 2 intentionally exposes no separate resume readiness horizon.
 - [Phase 03]: Complete lifecycle decisions use lifecycle-gate-decision-v1 typed length-prefixed SHA-256; unknown decisions expose no reusable identity. — This binds complete current evidence and prevents stale or partial evidence from admitting an operation.
 - [Phase 03]: Set-like phase graph ordering is normalized before validation and identity generation; duplicates remain invalid. — Semantic ordering does not affect identity while ambiguous graph declarations still fail closed.
+- [Phase 03]: Lifecycle reviewer evidence remains test-side and consumes only public observation, classification, and gate seams. — Prevents a second production admission or serialization authority.
+- [Phase 03]: Checkbox-only progress evidence requires every bounded source-commit blob to match the tracked handoff claim before current-tree comparison. — Makes the old side provenance-backed rather than synthetic.
+- [Phase 03]: Real OpenSpec/GSD/host smoke remains opt-in and separate from deterministic lifecycle evidence. — Avoids treating an unrequested or unavailable runtime probe as normal-CI proof.
 
 ### Pending Todos
 
@@ -114,6 +118,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-23T01:11:55.562Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-07-23T01:27:54.905Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

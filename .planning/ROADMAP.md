@@ -40,7 +40,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary.
+- [x] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (completed 2026-07-23)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions.
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
@@ -184,7 +184,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 2/3 | In Progress|  |
+| 3. Lifecycle Drift Gate | 3/3 | Complete   | 2026-07-23 |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |
