@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
@@ -89,13 +90,12 @@ def normalize_tasks_specification(markdown: str) -> Result[bytes]:
     if isinstance(progress, Failure):
         return progress
 
-    normalized_lines: list[str] = []
-    for line in markdown.splitlines(keepends=True):
-        if line.startswith(("- [ ] ", "- [x] ")):
-            line = "- [ ] " + line[6:]
-        normalized_lines.append(line)
+    normalized_parts = re.split(r"(\r\n|\r|\n)", markdown)
+    for index in range(0, len(normalized_parts), 2):
+        if normalized_parts[index].startswith(("- [ ] ", "- [x] ")):
+            normalized_parts[index] = "- [ ] " + normalized_parts[index][6:]
     try:
-        return Success("".join(normalized_lines).encode("utf-8"))
+        return Success("".join(normalized_parts).encode("utf-8"))
     except UnicodeEncodeError:
         return _failure("tasks-utf8-invalid", category=IssueCategory.PROGRESS)
 
