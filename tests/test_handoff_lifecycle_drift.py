@@ -3,14 +3,15 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
+
 from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_drift import (
     DriftState,
     classify_canonical_source_drift,
     observe_canonical_source,
 )
-
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
     ArtifactClaim,
     ArtifactKind,
@@ -95,7 +96,7 @@ def _observe_initial(repository: Path, claims: tuple[ArtifactClaim, ...]):
 def _classify_after_change(
     repository: Path,
     claims: tuple[ArtifactClaim, ...],
-    change: Callable[[], None],
+    change: Callable[[], object],
 ):
     expected = _observe_initial(repository, claims)
     change()
@@ -286,7 +287,7 @@ def test_bounded_unreadable_artifact_is_unknown(
     expected = _observe_initial(repository, claims)
     original_open = Path.open
 
-    def unreadable_proposal(path: Path, *args: object, **kwargs: object):
+    def unreadable_proposal(path: Path, *args: Any, **kwargs: Any):
         if path == (repository / PROPOSAL_PATH).resolve():
             raise PermissionError
         return original_open(path, *args, **kwargs)
