@@ -797,3 +797,265 @@ def test_manifest_digest_is_bound_to_exact_bounded_bytes(tmp_path: Path) -> None
     )
 
     assert decision.manifest_sha256 == hashlib.sha256(raw).hexdigest()
+
+
+def test_identity_fixed_complete_example_is_deterministic(tmp_path: Path) -> None:
+    repository, boundary = _fixture(tmp_path)
+
+    first = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    second = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+
+    assert first.decision_identity == (
+        "4fd3f17dd2032f1c71fa8010efa81366aa675a8a6e6ecf56090e98c81f2b3a75"
+    )
+    assert second.decision_identity == first.decision_identity
+    assert boundary.source_calls == 2
+    assert boundary.phase_calls == 2
+    assert boundary.capability_calls == 2
+
+
+def test_identity_ignores_semantically_irrelevant_phase_tuple_order(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    first = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    reordered = FakeBoundary(
+        repository=repository,
+        canonical_source=boundary.canonical_source,
+        inventory=boundary.inventory,
+        expected_nodes=tuple(reversed(boundary.expected_nodes)),
+        observed_nodes=tuple(reversed(boundary.observed_nodes)),
+    )
+
+    second = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=reordered,
+    )
+
+    assert second.state is LifecycleGateState.CLEAN
+    assert second.decision_identity == first.decision_identity
+
+
+@pytest.mark.parametrize(
+    "domain",
+    [
+        "operation",
+        "target-phase",
+        "canonical-progress",
+        "manifest-bytes",
+        "manifest-state",
+        "source-commit",
+        "mapping-result",
+        "phase-graph",
+        "capability",
+    ],
+)
+def test_identity_changes_when_one_bound_domain_changes(
+    tmp_path: Path,
+    domain: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    baseline = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    operation = LifecycleOperation.PLAN
+    target_phase = "03"
+    changed_boundary = boundary
+
+    if domain == "operation":
+        operation = LifecycleOperation.EXECUTE
+    elif domain == "target-phase":
+        target_phase = "04"
+    elif domain == "canonical-progress":
+        tasks = repository / TASKS_PATH
+        tasks.write_text(
+            CANONICAL_CONTENT[TASKS_PATH].replace("- [x]", "- [ ]"),
+            encoding="utf-8",
+        )
+    elif domain == "manifest-bytes":
+        manifest_path = repository / MANIFEST_PATH
+        manifest_path.write_bytes(manifest_path.read_bytes() + b" \n")
+    elif domain == "manifest-state":
+        _rewrite_manifest(
+            repository,
+            lambda manifest: replace(manifest, handoff_state=HandoffState.PREPARED),
+        )
+    elif domain == "source-commit":
+        changed_boundary = FakeBoundary(
+            repository=repository,
+            canonical_source=boundary.canonical_source,
+            inventory=boundary.inventory,
+            source_result=Success(
+                SourceCommitObservation(
+                    repository_root=str(repository.resolve()),
+                    change_id=CHANGE_ID,
+                    source_commit="2" * 40,
+                    canonical_source=boundary.canonical_source,
+                )
+            ),
+        )
+    elif domain == "mapping-result":
+        (repository / boundary.inventory.plans[0].path).unlink()
+        operation = LifecycleOperation.EXECUTE
+    elif domain == "phase-graph":
+        changed_nodes = tuple(
+            replace(node, depends_on=()) if node.phase_id == "04" else node
+            for node in boundary.observed_nodes
+        )
+        changed_boundary = FakeBoundary(
+            repository=repository,
+            canonical_source=boundary.canonical_source,
+            inventory=boundary.inventory,
+            observed_nodes=changed_nodes,
+        )
+    elif domain == "capability":
+        changed_boundary = FakeBoundary(
+            repository=repository,
+            canonical_source=boundary.canonical_source,
+            inventory=boundary.inventory,
+            capabilities=_capabilities(gsd_probe="changed-probe"),
+        )
+    else:  # pragma: no cover - table is exhaustive
+        raise AssertionError(domain)
+
+    changed = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        operation,
+        target_phase,
+        boundary=changed_boundary,
+    )
+
+    assert baseline.decision_identity is not None
+    assert changed.decision_identity is not None
+    assert changed.decision_identity != baseline.decision_identity
+
+
+def test_identity_current_reuse_is_accepted_after_fresh_observation(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    current = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+
+    repeated = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+        prior_decision_identity=current.decision_identity,
+    )
+
+    assert repeated.state is LifecycleGateState.CLEAN
+    assert repeated.admitted
+    assert repeated.decision_identity == current.decision_identity
+    assert boundary.source_calls == 2
+
+
+def test_identity_stale_reuse_is_rejected_after_bound_input_changes(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    previous = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    manifest_path = repository / MANIFEST_PATH
+    manifest_path.write_bytes(manifest_path.read_bytes() + b" \n")
+
+    stale = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+        prior_decision_identity=previous.decision_identity,
+    )
+
+    assert stale.state is LifecycleGateState.DRIFTED
+    assert not stale.admitted
+    assert "lifecycle-decision-stale" in stale.issue_codes
+    assert stale.decision_identity != previous.decision_identity
+
+
+@pytest.mark.parametrize("malformed", ["", "A" * 64, "0" * 63, "g" * 64])
+def test_identity_malformed_text_is_unknown(
+    tmp_path: Path,
+    malformed: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+        prior_decision_identity=malformed,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-decision-identity-invalid",)
+    assert decision.decision_identity is None
+
+
+def test_identity_incomplete_observation_has_no_reusable_digest(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    clean = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    boundary.source_result = _failure("source-commit-timeout")
+
+    incomplete = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+        prior_decision_identity=clean.decision_identity,
+    )
+
+    assert incomplete.state is LifecycleGateState.UNKNOWN
+    assert not incomplete.admitted
+    assert incomplete.decision_identity is None
