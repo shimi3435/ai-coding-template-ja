@@ -103,6 +103,9 @@ REAL_POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.js
 EXPECTED_EVIDENCE_PATH = (
     "tests/fixtures/openspec_gsd_handoff/lifecycle/expected-lifecycle-evidence.json"
 )
+TRACKED_EVIDENCE_PATH = (
+    ".planning/phases/03-lifecycle-drift-gate/03-LIFECYCLE-EVIDENCE.json"
+)
 SOURCE_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 
 CANONICAL_CONTENT = {
@@ -1027,6 +1030,29 @@ def test_fixed_canonical_evidence_matches_independent_golden(
     expected = (REPOSITORY_ROOT / EXPECTED_EVIDENCE_PATH).read_bytes()
 
     assert json.loads(produced) == json.loads(expected)
+
+
+def test_repository_root_lifecycle_evidence_matches_tracked_record(
+    tmp_path: Path,
+) -> None:
+    first = _repository_root_lifecycle_evidence(
+        REPOSITORY_ROOT,
+        tmp_path / "first",
+    )
+    second = _repository_root_lifecycle_evidence(
+        REPOSITORY_ROOT,
+        tmp_path / "second",
+    )
+    tracked = (REPOSITORY_ROOT / TRACKED_EVIDENCE_PATH).read_bytes()
+    independent_golden = (REPOSITORY_ROOT / EXPECTED_EVIDENCE_PATH).read_bytes()
+
+    assert first == second == tracked
+    assert json.loads(first) == json.loads(independent_golden)
+    evidence = json.loads(first)
+    assert evidence["mutation_operations"] == []
+    assert evidence["staging_paths_before"] == []
+    assert evidence["staging_paths_after"] == []
+    assert all(item["unchanged"] for item in evidence["protected_inputs"])
 
 
 @pytest.mark.parametrize(
