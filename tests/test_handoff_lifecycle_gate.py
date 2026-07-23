@@ -8,17 +8,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_gate import (
-    CapabilityObservation,
-    LifecycleGateLimits,
-    LifecycleGateState,
-    LifecycleObservationBoundary,
-    LifecycleOperation,
-    PhaseGraphObservation,
-    PhaseNodeObservation,
-    SourceCommitObservation,
-    gate_lifecycle_operation,
-)
 
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     EvidenceDeclaration,
@@ -32,6 +21,17 @@ from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_drift import (
     CanonicalSourceObservation,
     observe_canonical_source,
 )
+from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_gate import (
+    CapabilityObservation,
+    LifecycleGateLimits,
+    LifecycleGateState,
+    LifecycleObservationBoundary,
+    LifecycleOperation,
+    PhaseGraphObservation,
+    PhaseNodeObservation,
+    SourceCommitObservation,
+    gate_lifecycle_operation,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
     MAX_MANIFEST_BYTES,
     GsdCapability,
@@ -44,6 +44,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     ManifestLifecycle,
     ManifestMapping,
     ManifestOwnership,
+    parse_manifest_v2_bytes,
     serialize_manifest_v2,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
@@ -109,7 +110,7 @@ def _capabilities(*, gsd_probe: str = "init-progress-raw") -> ManifestCapabiliti
             version="1.5.0",
             probe=gsd_probe,
             project_initialized=True,
-            entrypoint="gsd-tools.cjs",
+            entrypoint="gsd-phase",
         ),
         host=HostCapabilityInput(
             inspected=True,
@@ -188,7 +189,11 @@ def _inventory() -> PlanningInventory:
         PhaseDeclaration(
             change_id=CHANGE_ID,
             phase_id=phase_id,
-            phase_path=f".planning/phases/{phase_id}-lifecycle-{phase_id}",
+            phase_path=(
+                ".planning/phases/03-lifecycle-drift-gate"
+                if phase_id == "03"
+                else f".planning/phases/{phase_id}-lifecycle-{phase_id}"
+            ),
         )
         for phase_id in ("03", "04", "05", "06")
     )
@@ -233,28 +238,34 @@ def _inventory() -> PlanningInventory:
 
 def _mappings(inventory: PlanningInventory) -> tuple[ManifestMapping, ...]:
     phase = next(item for item in inventory.phases if item.phase_id == "03")
-    phase_plan = next(item for item in inventory.plans if item.phase_id == "03")
-    plan_evidence = next(
-        item for item in inventory.evidence if item.plan_path == phase_plan.path
+    phase_plan = next((item for item in inventory.plans if item.phase_id == "03"), None)
+    plan_evidence = (
+        next(item for item in inventory.evidence if item.plan_path == phase_plan.path)
+        if phase_plan is not None
+        else None
     )
     return tuple(
         ManifestMapping(
             source_id=assignment.source_id,
             phase_id="03",
             phase_path=phase.phase_path,
-            plan_paths=(phase_plan.path,),
-            evidence_paths=tuple(
-                sorted(
-                    (
-                        next(
-                            item.path
-                            for item in inventory.evidence
-                            if item.source_id == assignment.source_id
+            plan_paths=((phase_plan.path,) if phase_plan is not None else ()),
+            evidence_paths=(
+                tuple(
+                    sorted(
+                        (
+                            next(
+                                item.path
+                                for item in inventory.evidence
+                                if item.source_id == assignment.source_id
+                            ),
+                            plan_evidence.path,
                         ),
-                        plan_evidence.path,
-                    ),
-                    key=str.encode,
+                        key=str.encode,
+                    )
                 )
+                if plan_evidence is not None
+                else ()
             ),
             policy_references=(),
         )
@@ -273,7 +284,7 @@ def _write_mapping_paths(repository: Path, inventory: PlanningInventory) -> None
 
 def _phase_nodes() -> tuple[PhaseNodeObservation, ...]:
     return (
-        PhaseNodeObservation("03", ".planning/phases/03-lifecycle-03", ()),
+        PhaseNodeObservation("03", ".planning/phases/03-lifecycle-drift-gate", ()),
         PhaseNodeObservation("04", ".planning/phases/04-lifecycle-04", ("03",)),
         PhaseNodeObservation("05", ".planning/phases/05-lifecycle-05", ("04",)),
         PhaseNodeObservation("06", ".planning/phases/06-lifecycle-06", ("05",)),
@@ -421,6 +432,61 @@ def _fixture(tmp_path: Path) -> tuple[Path, FakeBoundary]:
     )
 
 
+def _rewrite_manifest(
+    repository: Path,
+    transform,
+) -> HandoffManifestV2:
+    path = repository / MANIFEST_PATH
+    parsed = parse_manifest_v2_bytes(path.read_bytes())
+    assert isinstance(parsed, Success)
+    manifest = transform(parsed.value)
+    serialized = serialize_manifest_v2(manifest)
+    assert isinstance(serialized, Success)
+    path.write_bytes(serialized.value)
+    return manifest
+
+
+def _pin_fixed_scenario_drift(
+    repository: Path,
+    boundary: FakeBoundary,
+) -> None:
+    observed = observe_canonical_source(
+        repository,
+        CHANGE_ID,
+        _claims(),
+        expected_source_items=boundary.canonical_source.source_items,
+    )
+    assert isinstance(observed, Success)
+    current_requirement = next(
+        item for item in observed.value.source_items.active if item.id == "REQ-000001"
+    )
+    pinned_items = tuple(
+        replace(item, fingerprint=current_requirement.fingerprint)
+        if item.id == "REQ-000001"
+        else item
+        for item in boundary.canonical_source.source_items.active
+    )
+    pinned_state = replace(
+        boundary.canonical_source.source_items,
+        active=pinned_items,
+    )
+    boundary.canonical_source = replace(
+        boundary.canonical_source,
+        source_items=pinned_state,
+    )
+    plan_only_inventory = replace(boundary.inventory, plans=(), evidence=())
+    boundary.inventory = plan_only_inventory
+
+    def transform(manifest: HandoffManifestV2) -> HandoffManifestV2:
+        return replace(
+            manifest,
+            source_items=pinned_state,
+            mappings=_mappings(plan_only_inventory),
+        )
+
+    _rewrite_manifest(repository, transform)
+
+
 @pytest.mark.parametrize(
     ("operation", "target_phase", "mapping_operation"),
     [
@@ -504,11 +570,12 @@ def test_drift_dimension_canonical_source_has_exact_remediation(
         ),
         encoding="utf-8",
     )
+    _pin_fixed_scenario_drift(repository, boundary)
 
     decision = gate_lifecycle_operation(
         repository,
         CHANGE_ID,
-        LifecycleOperation.EXECUTE,
+        LifecycleOperation.PLAN,
         "03",
         boundary=boundary,
     )
@@ -517,7 +584,7 @@ def test_drift_dimension_canonical_source_has_exact_remediation(
     assert not decision.admitted
     assert decision.changed_source_item_ids == ("SCN-000004",)
     assert decision.revalidation_targets == (
-        "phase-path:.planning/phases/03-lifecycle-03",
+        "phase-path:.planning/phases/03-lifecycle-drift-gate",
     )
     assert decision.replanning_targets == ("03", "04", "05", "06")
     assert decision.next_action_codes == (
