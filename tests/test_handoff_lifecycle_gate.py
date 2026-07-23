@@ -646,6 +646,7 @@ def test_drift_dimension_phase_and_capability_has_exact_remediation(
         "mapping-failure",
         "phase-over-limit",
         "capability-incomplete",
+        "capability-over-limit",
     ],
 )
 def test_incomplete_dimension_is_wholly_unknown(tmp_path: Path, case: str) -> None:
@@ -684,10 +685,17 @@ def test_incomplete_dimension_is_wholly_unknown(tmp_path: Path, case: str) -> No
                 capabilities=cast(Any, None),
             )
         )
+    elif case == "capability-over-limit":
+        boundary.capabilities = _capabilities(gsd_probe="x" * 1025)
     else:  # pragma: no cover - table is exhaustive
         raise AssertionError(case)
 
-    limits = LifecycleGateLimits(max_phase_nodes=4)
+    limits = LifecycleGateLimits(
+        max_phase_nodes=4,
+        max_aggregate_bytes=(
+            1024 if case == "capability-over-limit" else MAX_MANIFEST_BYTES
+        ),
+    )
     decision = gate_lifecycle_operation(
         repository,
         CHANGE_ID,
@@ -818,7 +826,7 @@ def test_identity_fixed_complete_example_is_deterministic(tmp_path: Path) -> Non
     )
 
     assert first.decision_identity == (
-        "4fd3f17dd2032f1c71fa8010efa81366aa675a8a6e6ecf56090e98c81f2b3a75"
+        "4e7605ce41fdc12e5a7b9d7278408b55e84e2ee84352eb5832209a18ec5309c9"
     )
     assert second.decision_identity == first.decision_identity
     assert boundary.source_calls == 2
@@ -876,15 +884,19 @@ def test_identity_changes_when_one_bound_domain_changes(
     domain: str,
 ) -> None:
     repository, boundary = _fixture(tmp_path)
+    operation = (
+        LifecycleOperation.EXECUTE
+        if domain == "mapping-result"
+        else LifecycleOperation.PLAN
+    )
+    target_phase = "03"
     baseline = gate_lifecycle_operation(
         repository,
         CHANGE_ID,
-        LifecycleOperation.PLAN,
-        "03",
+        operation,
+        target_phase,
         boundary=boundary,
     )
-    operation = LifecycleOperation.PLAN
-    target_phase = "03"
     changed_boundary = boundary
 
     if domain == "operation":
@@ -921,7 +933,6 @@ def test_identity_changes_when_one_bound_domain_changes(
         )
     elif domain == "mapping-result":
         (repository / boundary.inventory.plans[0].path).unlink()
-        operation = LifecycleOperation.EXECUTE
     elif domain == "phase-graph":
         changed_nodes = tuple(
             replace(node, depends_on=()) if node.phase_id == "04" else node

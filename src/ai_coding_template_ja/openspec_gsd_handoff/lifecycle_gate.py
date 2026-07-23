@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import re
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -24,13 +25,21 @@ from .lifecycle_drift import (
     classify_canonical_source_drift,
     observe_canonical_source,
 )
-from .manifest import MAX_MANIFEST_BYTES, ManifestCapabilities
+from .manifest import (
+    MAX_MANIFEST_BYTES,
+    GsdCapability,
+    ManifestCapabilities,
+    OpenSpecCapability,
+)
 from .manifest_v2 import HandoffManifestV2, parse_manifest_v2_bytes
 from .models import (
     ArtifactClaim,
     ArtifactKind,
     ClassifiedIssue,
     Failure,
+    HostCapabilityInput,
+    HostDispatch,
+    HostSpawnSchema,
     IssueCategory,
     KnownState,
     Result,
@@ -324,10 +333,6 @@ def _validate_phase_nodes(
     if any(not isinstance(node, PhaseNodeObservation) for node in nodes):
         return False
     typed_nodes = nodes
-    if typed_nodes != tuple(
-        sorted(typed_nodes, key=lambda node: node.phase_id.encode())
-    ):
-        return False
     phase_ids = {node.phase_id for node in typed_nodes}
     if len(phase_ids) != len(typed_nodes):
         return False
@@ -340,7 +345,7 @@ def _validate_phase_nodes(
             _PHASE_ID.fullmatch(node.phase_id) is None
             or not _canonical_phase_path(node.phase_path, node.phase_id)
             or type(node.depends_on) is not tuple
-            or node.depends_on != _utf8_sorted(node.depends_on)
+            or len(node.depends_on) != len(set(node.depends_on))
             or node.phase_id in node.depends_on
             or any(dependency not in phase_ids for dependency in node.depends_on)
         ):
@@ -351,6 +356,17 @@ def _validate_phase_nodes(
     except UnicodeEncodeError:
         return False
     return aggregate_bytes <= limits.max_aggregate_bytes
+
+
+def _normalize_phase_nodes(
+    nodes: tuple[PhaseNodeObservation, ...],
+) -> tuple[PhaseNodeObservation, ...]:
+    return tuple(
+        sorted(
+            (replace(node, depends_on=_utf8_sorted(node.depends_on)) for node in nodes),
+            key=lambda node: node.phase_id.encode(),
+        )
+    )
 
 
 def _validate_source_commit(
@@ -391,13 +407,52 @@ def _validate_phase_graph(
     )
 
 
-def _validate_capabilities(value: object, *, change_id: str) -> bool:
-    return (
-        isinstance(value, CapabilityObservation)
-        and value.change_id == change_id
-        and _COMMIT.fullmatch(value.source_commit) is not None
-        and isinstance(value.capabilities, ManifestCapabilities)
+def _validate_capabilities(
+    value: object,
+    *,
+    change_id: str,
+    limits: LifecycleGateLimits,
+) -> bool:
+    if (
+        not isinstance(value, CapabilityObservation)
+        or value.change_id != change_id
+        or _COMMIT.fullmatch(value.source_commit) is None
+        or not isinstance(value.capabilities, ManifestCapabilities)
+    ):
+        return False
+    capabilities = value.capabilities
+    if (
+        not isinstance(capabilities.openspec, OpenSpecCapability)
+        or not isinstance(capabilities.gsd, GsdCapability)
+        or not isinstance(capabilities.host, HostCapabilityInput)
+        or type(capabilities.gsd.project_initialized) is not bool
+        or type(capabilities.host.inspected) is not bool
+        or not isinstance(capabilities.host.spawn_agent_schema, HostSpawnSchema)
+        or not isinstance(capabilities.host.dispatch, HostDispatch)
+        or (
+            capabilities.host.agent_role_source is not None
+            and type(capabilities.host.agent_role_source) is not str
+        )
+    ):
+        return False
+    strings = (
+        capabilities.openspec.version,
+        capabilities.openspec.probe,
+        capabilities.openspec.schema_name,
+        capabilities.openspec.input_route,
+        capabilities.gsd.version,
+        capabilities.gsd.probe,
+        capabilities.gsd.entrypoint,
+        capabilities.host.agent_role_source or "",
     )
+    if any(type(item) is not str for item in strings):
+        return False
+    try:
+        return sum(len(item.encode("utf-8")) for item in strings) <= (
+            limits.max_aggregate_bytes
+        )
+    except UnicodeEncodeError:
+        return False
 
 
 def _boundary_result[ObservationT](
@@ -501,13 +556,23 @@ def observe_lifecycle_operation(
         change_id=change_id,
     ):
         return _failure("lifecycle-source-commit-observation-incomplete")
+    if isinstance(phase_graph, PhaseGraphObservation):
+        phase_graph = replace(
+            phase_graph,
+            expected_nodes=_normalize_phase_nodes(phase_graph.expected_nodes),
+            observed_nodes=_normalize_phase_nodes(phase_graph.observed_nodes),
+        )
     if not _validate_phase_graph(
         phase_graph,
         change_id=change_id,
         limits=limits,
     ):
         return _failure("lifecycle-phase-observation-incomplete")
-    if not _validate_capabilities(capabilities, change_id=change_id):
+    if not _validate_capabilities(
+        capabilities,
+        change_id=change_id,
+        limits=limits,
+    ):
         return _failure("lifecycle-capability-observation-incomplete")
 
     current_source = observe_canonical_source(
@@ -674,6 +739,258 @@ def _manifest_consistency_issues(
     return issues
 
 
+class _IdentityEncoder:
+    """Versioned explicit-tag encoder with eight-byte component lengths."""
+
+    def __init__(self) -> None:
+        self._buffer = bytearray()
+        self.add("encoding-version", "lifecycle-gate-decision-v1")
+
+    def add(self, tag: str, value: str | bytes | bool | int | None) -> None:
+        encoded_tag = tag.encode("utf-8")
+        if value is None:
+            encoded_value = b"N"
+        elif isinstance(value, bytes):
+            encoded_value = b"B" + value
+        elif type(value) is bool:
+            encoded_value = b"T" if value else b"F"
+        elif type(value) is int:
+            encoded_value = b"I" + str(value).encode("ascii")
+        else:
+            assert isinstance(value, str)
+            encoded_value = b"S" + value.encode("utf-8")
+        for component in (encoded_tag, encoded_value):
+            self._buffer.extend(len(component).to_bytes(8, "big"))
+            self._buffer.extend(component)
+
+    def digest(self) -> str:
+        return hashlib.sha256(self._buffer).hexdigest()
+
+
+def _encode_progress(encoder: _IdentityEncoder, prefix: str, progress) -> None:
+    encoder.add(f"{prefix}.total", progress.total)
+    encoder.add(f"{prefix}.complete", progress.complete)
+    encoder.add(f"{prefix}.remaining", progress.remaining)
+    for index, task in enumerate(progress.tasks):
+        item = f"{prefix}.tasks[{index}]"
+        encoder.add(f"{item}.id", task.id)
+        encoder.add(f"{item}.description", task.description)
+        encoder.add(f"{item}.done", task.done)
+
+
+def _encode_capabilities(
+    encoder: _IdentityEncoder,
+    prefix: str,
+    capabilities: ManifestCapabilities,
+) -> None:
+    encoder.add(f"{prefix}.openspec.version", capabilities.openspec.version)
+    encoder.add(f"{prefix}.openspec.probe", capabilities.openspec.probe)
+    encoder.add(f"{prefix}.openspec.schema_name", capabilities.openspec.schema_name)
+    encoder.add(f"{prefix}.openspec.input_route", capabilities.openspec.input_route)
+    encoder.add(f"{prefix}.gsd.version", capabilities.gsd.version)
+    encoder.add(f"{prefix}.gsd.probe", capabilities.gsd.probe)
+    encoder.add(
+        f"{prefix}.gsd.project_initialized",
+        capabilities.gsd.project_initialized,
+    )
+    encoder.add(f"{prefix}.gsd.entrypoint", capabilities.gsd.entrypoint)
+    encoder.add(f"{prefix}.host.inspected", capabilities.host.inspected)
+    encoder.add(
+        f"{prefix}.host.spawn_agent_schema",
+        capabilities.host.spawn_agent_schema.value,
+    )
+    encoder.add(f"{prefix}.host.dispatch", capabilities.host.dispatch.value)
+    encoder.add(f"{prefix}.host.agent_role_source", capabilities.host.agent_role_source)
+
+
+def _encode_source_state(encoder: _IdentityEncoder, prefix: str, state) -> None:
+    encoder.add(f"{prefix}.next_requirement_id", state.next_requirement_id)
+    encoder.add(f"{prefix}.next_scenario_id", state.next_scenario_id)
+    for index, item in enumerate(state.active):
+        item_prefix = f"{prefix}.active[{index}]"
+        encoder.add(f"{item_prefix}.id", item.id)
+        encoder.add(f"{item_prefix}.category", item.category.value)
+        encoder.add(f"{item_prefix}.source_path", item.source_path)
+        encoder.add(f"{item_prefix}.raw_heading", item.raw_heading)
+        encoder.add(f"{item_prefix}.parent_id", item.parent_id)
+        encoder.add(f"{item_prefix}.fingerprint", item.fingerprint)
+    for index, item in enumerate(state.tombstones):
+        item_prefix = f"{prefix}.tombstones[{index}]"
+        encoder.add(f"{item_prefix}.id", item.id)
+        encoder.add(f"{item_prefix}.category", item.category.value)
+        encoder.add(f"{item_prefix}.source_path", item.last_source_path)
+        encoder.add(f"{item_prefix}.raw_heading", item.last_raw_heading)
+        encoder.add(f"{item_prefix}.parent_id", item.last_parent_id)
+        encoder.add(f"{item_prefix}.fingerprint", item.fingerprint)
+
+
+def _encode_source_observation(
+    encoder: _IdentityEncoder,
+    prefix: str,
+    observation: CanonicalSourceObservation,
+) -> None:
+    for index, artifact in enumerate(observation.artifacts):
+        item = f"{prefix}.artifacts[{index}]"
+        encoder.add(f"{item}.kind", artifact.kind.value)
+        encoder.add(f"{item}.path", artifact.path)
+        encoder.add(f"{item}.raw_sha256", artifact.raw_sha256)
+        encoder.add(f"{item}.specification_sha256", artifact.specification_sha256)
+    _encode_progress(encoder, f"{prefix}.progress", observation.progress)
+    _encode_source_state(encoder, f"{prefix}.source_items", observation.source_items)
+    for source_id in _utf8_sorted(observation.changed_source_item_ids):
+        encoder.add(f"{prefix}.changed_source_item_id", source_id)
+
+
+def _encode_inventory(
+    encoder: _IdentityEncoder,
+    prefix: str,
+    inventory: PlanningInventory,
+) -> None:
+    encoder.add(f"{prefix}.version", inventory.version)
+    encoder.add(f"{prefix}.change_id", inventory.change_id)
+    for phase in sorted(inventory.phases, key=lambda item: item.phase_id.encode()):
+        encoder.add(f"{prefix}.phase.change_id", phase.change_id)
+        encoder.add(f"{prefix}.phase.phase_id", phase.phase_id)
+        encoder.add(f"{prefix}.phase.phase_path", phase.phase_path)
+    for assignment in sorted(
+        inventory.assignments, key=lambda item: item.source_id.encode()
+    ):
+        encoder.add(f"{prefix}.assignment.change_id", assignment.change_id)
+        encoder.add(f"{prefix}.assignment.source_id", assignment.source_id)
+        encoder.add(f"{prefix}.assignment.phase_id", assignment.phase_id)
+        for reference in _utf8_sorted(assignment.policy_references):
+            encoder.add(f"{prefix}.assignment.policy_reference", reference)
+    for plan in sorted(inventory.plans, key=lambda item: item.path.encode()):
+        encoder.add(f"{prefix}.plan.change_id", plan.change_id)
+        encoder.add(f"{prefix}.plan.phase_id", plan.phase_id)
+        encoder.add(f"{prefix}.plan.path", plan.path)
+    for evidence in sorted(inventory.evidence, key=lambda item: item.path.encode()):
+        encoder.add(f"{prefix}.evidence.change_id", evidence.change_id)
+        encoder.add(f"{prefix}.evidence.phase_id", evidence.phase_id)
+        encoder.add(f"{prefix}.evidence.path", evidence.path)
+        encoder.add(f"{prefix}.evidence.source_id", evidence.source_id)
+        encoder.add(f"{prefix}.evidence.plan_path", evidence.plan_path)
+    for policy in sorted(
+        inventory.policy_observations,
+        key=lambda item: item.reference_id.encode(),
+    ):
+        item = f"{prefix}.policy"
+        encoder.add(f"{item}.reference_id", policy.reference_id)
+        encoder.add(f"{item}.raw_source_path", policy.raw_source_path)
+        encoder.add(f"{item}.source_path", policy.source_path)
+        encoder.add(f"{item}.raw_heading", policy.raw_heading)
+        encoder.add(f"{item}.normalized_heading", policy.normalized_heading)
+        encoder.add(f"{item}.normalized_body", policy.normalized_body)
+        encoder.add(f"{item}.body_length", policy.body_length)
+        encoder.add(f"{item}.sha256", policy.sha256)
+
+
+def _encode_phase_nodes(
+    encoder: _IdentityEncoder,
+    prefix: str,
+    nodes: tuple[PhaseNodeObservation, ...],
+) -> None:
+    for node in sorted(nodes, key=lambda item: item.phase_id.encode()):
+        encoder.add(f"{prefix}.phase_id", node.phase_id)
+        encoder.add(f"{prefix}.phase_path", node.phase_path)
+        for dependency in _utf8_sorted(node.depends_on):
+            encoder.add(f"{prefix}.depends_on", dependency)
+
+
+def _decision_identity(
+    observation: LifecycleGateObservation,
+    decision: LifecycleGateDecision,
+) -> str:
+    encoder = _IdentityEncoder()
+    encoder.add("operation", observation.operation.value)
+    encoder.add("target_phase", observation.target_phase)
+    encoder.add("mapping_operation", observation.mapping_operation.value)
+    encoder.add("manifest.raw_sha256", observation.manifest_sha256)
+    manifest = observation.manifest
+    encoder.add("manifest.schema_version", manifest.schema_version)
+    encoder.add("manifest.change_id", manifest.change_id)
+    encoder.add("manifest.handoff_state", manifest.handoff_state.value)
+    encoder.add("manifest.source_commit", manifest.source_commit)
+    for artifact in manifest.artifacts:
+        encoder.add("manifest.artifact.kind", artifact.kind)
+        encoder.add("manifest.artifact.path", artifact.path)
+        encoder.add("manifest.artifact.sha256", artifact.sha256)
+    _encode_progress(encoder, "manifest.progress", manifest.progress)
+    _encode_capabilities(encoder, "manifest.capabilities", manifest.capabilities)
+    _encode_source_state(encoder, "manifest.source_items", manifest.source_items)
+    for mapping in manifest.mappings:
+        encoder.add("manifest.mapping.source_id", mapping.source_id)
+        encoder.add("manifest.mapping.phase_id", mapping.phase_id)
+        encoder.add("manifest.mapping.phase_path", mapping.phase_path)
+        for path in _utf8_sorted(mapping.plan_paths):
+            encoder.add("manifest.mapping.plan_path", path)
+        for path in _utf8_sorted(mapping.evidence_paths):
+            encoder.add("manifest.mapping.evidence_path", path)
+        for reference in _utf8_sorted(mapping.policy_references):
+            encoder.add("manifest.mapping.policy_reference", reference)
+
+    commit = observation.source_commit
+    encoder.add("source_commit.change_id", commit.change_id)
+    encoder.add("source_commit.commit", commit.source_commit)
+    _encode_source_observation(
+        encoder,
+        "source_commit.canonical_source",
+        commit.canonical_source,
+    )
+    source = observation.source_decision
+    encoder.add("source_decision.state", source.state.value)
+    encoder.add("source_decision.issue_code", source.issue_code)
+    for path in _utf8_sorted(source.drifted_artifact_paths):
+        encoder.add("source_decision.drifted_artifact_path", path)
+    for source_id in _utf8_sorted(source.changed_source_item_ids):
+        encoder.add("source_decision.changed_source_item_id", source_id)
+    if source.progress_update_candidate is None:
+        encoder.add("source_decision.progress_update", None)
+    else:
+        _encode_progress(
+            encoder,
+            "source_decision.progress_update",
+            source.progress_update_candidate,
+        )
+
+    readiness = observation.mapping_readiness
+    encoder.add("mapping.operation", readiness.operation.value)
+    encoder.add("mapping.target_phase", readiness.target_phase_id)
+    encoder.add("mapping.ready", readiness.ready)
+    for issue in sorted(
+        set(readiness.issues),
+        key=lambda item: ((item.path or "").encode(), item.code.encode()),
+    ):
+        encoder.add("mapping.issue.code", issue.code)
+        encoder.add("mapping.issue.path", issue.path)
+
+    graph = observation.phase_graph
+    encoder.add("phase_graph.change_id", graph.change_id)
+    encoder.add("phase_graph.source_commit", graph.source_commit)
+    _encode_phase_nodes(encoder, "phase_graph.expected", graph.expected_nodes)
+    _encode_phase_nodes(encoder, "phase_graph.observed", graph.observed_nodes)
+    _encode_inventory(encoder, "phase_graph.inventory", graph.planning_inventory)
+
+    capability = observation.capabilities
+    encoder.add("capability.change_id", capability.change_id)
+    encoder.add("capability.source_commit", capability.source_commit)
+    _encode_capabilities(encoder, "capability.observed", capability.capabilities)
+
+    encoder.add("decision.state", decision.state.value)
+    encoder.add("decision.admitted", decision.admitted)
+    for code in decision.issue_codes:
+        encoder.add("decision.issue_code", code)
+    for source_id in decision.changed_source_item_ids:
+        encoder.add("decision.changed_source_item_id", source_id)
+    for target in decision.revalidation_targets:
+        encoder.add("decision.revalidation_target", target)
+    for phase_id in decision.replanning_targets:
+        encoder.add("decision.replanning_target", phase_id)
+    for code in decision.next_action_codes:
+        encoder.add("decision.next_action_code", code)
+    return encoder.digest()
+
+
 def _decision_from_observation(
     observation: LifecycleGateObservation,
 ) -> LifecycleGateDecision:
@@ -734,7 +1051,7 @@ def _decision_from_observation(
         replanning_seeds,
     )
     state = LifecycleGateState.DRIFTED if issues else LifecycleGateState.CLEAN
-    return LifecycleGateDecision(
+    decision = LifecycleGateDecision(
         operation=observation.operation,
         target_phase=observation.target_phase,
         mapping_operation=observation.mapping_operation,
@@ -749,6 +1066,10 @@ def _decision_from_observation(
         next_action_codes=_utf8_sorted(actions),
         decision_identity=None,
         manifest_sha256=observation.manifest_sha256,
+    )
+    return replace(
+        decision,
+        decision_identity=_decision_identity(observation, decision),
     )
 
 
@@ -789,7 +1110,6 @@ def gate_lifecycle_operation(
 ) -> LifecycleGateDecision:
     """Re-observe every input and return the sole lifecycle admission decision."""
 
-    del prior_decision_identity  # Identity and replay handling are added by Task 2.
     observation = observe_lifecycle_operation(
         repository_root,
         change_id,
@@ -804,4 +1124,24 @@ def gate_lifecycle_operation(
             target_phase,
             observation.issue.code,
         )
-    return _decision_from_observation(observation.value)
+    decision = _decision_from_observation(observation.value)
+    if prior_decision_identity is None:
+        return decision
+    if (
+        type(prior_decision_identity) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", prior_decision_identity) is None
+    ):
+        return _unknown_decision(
+            operation,
+            target_phase,
+            "lifecycle-decision-identity-invalid",
+        )
+    assert decision.decision_identity is not None
+    if hmac.compare_digest(prior_decision_identity, decision.decision_identity):
+        return decision
+    return replace(
+        decision,
+        state=LifecycleGateState.DRIFTED,
+        admitted=False,
+        issue_codes=_utf8_sorted((*decision.issue_codes, "lifecycle-decision-stale")),
+    )
