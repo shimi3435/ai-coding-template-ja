@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-07-23T00:46:36.241Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-07-23T01:11:55.568Z"
 last_activity: 2026-07-23
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 33
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-23 — Phase 03 execution started
 
@@ -64,6 +64,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 |------|----------|-------|-------|
 | Phase 02 P05 | 8 min | 2 | 4 |
 | Phase 03 P01 | 10 min | 2 tasks | 2 files |
+| Phase 03 P02 | 20min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 02]: Refresh failure reports preserved-v2 only after bounded fresh proof; otherwise state is unknown without recovery action. — Avoids inferred preservation and automatic rollback after partial persistence.
 - [Phase 03]: Unknown canonical-source decisions expose only a stable issue code and never partial artifact, source-ID, or progress evidence. — Prevents incomplete observations from being consumed as clean.
 - [Phase 03]: Checkbox normalization recognizes only CRLF, CR, and LF Markdown line starts. — Preserves all other decoded content as specification evidence.
+- [Phase 03]: Resume reuses the execute mapping horizon while retaining a distinct lifecycle operation identity. — Phase 2 intentionally exposes no separate resume readiness horizon.
+- [Phase 03]: Complete lifecycle decisions use lifecycle-gate-decision-v1 typed length-prefixed SHA-256; unknown decisions expose no reusable identity. — This binds complete current evidence and prevents stale or partial evidence from admitting an operation.
+- [Phase 03]: Set-like phase graph ordering is normalized before validation and identity generation; duplicates remain invalid. — Semantic ordering does not affect identity while ambiguous graph declarations still fail closed.
 
 ### Pending Todos
 
@@ -110,6 +114,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-23T00:46:36.235Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-07-23T01:11:55.562Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
