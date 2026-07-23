@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff.lifecycle_drift import (
     DriftState,
     classify_canonical_source_drift,
+    normalize_tasks_specification,
     observe_canonical_source,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
@@ -21,6 +25,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     KnownState,
     Success,
 )
+from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
 from ai_coding_template_ja.openspec_gsd_handoff.reader import ArtifactLimits
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceIdentityState,
@@ -433,3 +438,75 @@ def test_fixed_artifacts_do_not_depend_on_mtime(tmp_path: Path) -> None:
     decision = classify_canonical_source_drift(expected, observed)
 
     assert decision.state is DriftState.CLEAN
+
+
+@given(
+    descriptions=st.lists(
+        st.tuples(
+            st.text(
+                alphabet=st.characters(
+                    exclude_characters="\r\n",
+                    exclude_categories=("Cs",),
+                ),
+                min_size=1,
+                max_size=20,
+            ).filter(lambda value: bool(value.strip())),
+            st.sampled_from(("", "\u2028- [x] nested marker")),
+        ),
+        min_size=1,
+        max_size=8,
+    ),
+    states=st.data(),
+)
+def test_checkbox_normalization_preserves_specification_and_progress_property(
+    descriptions: list[tuple[str, str]],
+    states: st.DataObject,
+) -> None:
+    done_values = states.draw(
+        st.lists(
+            st.booleans(),
+            min_size=len(descriptions),
+            max_size=len(descriptions),
+        )
+    )
+    inverted_values = [not done for done in done_values]
+
+    def render(values: list[bool], *, normalized: bool = False) -> str:
+        lines = []
+        for index, ((description, suffix), done) in enumerate(
+            zip(descriptions, values, strict=True),
+            start=1,
+        ):
+            marker = " " if normalized or not done else "x"
+            lines.append(f"- [{marker}] task-{index}:{description}{suffix}")
+        return "\n".join(lines)
+
+    markdown = render(done_values)
+    same_specification = render(inverted_values)
+    expected_bytes = render(done_values, normalized=True).encode("utf-8")
+    normalized = normalize_tasks_specification(markdown)
+    inverted = normalize_tasks_specification(same_specification)
+    progress = parse_task_progress(markdown)
+
+    assert isinstance(normalized, Success)
+    assert isinstance(inverted, Success)
+    assert isinstance(progress, Success)
+    assert normalized.value == expected_bytes
+    assert normalized.value == inverted.value
+    assert sha256(normalized.value).digest() == sha256(inverted.value).digest()
+    assert tuple(
+        task.done
+        for task in progress.value.tasks
+        if task.description.startswith("task-")
+    ) == tuple(done_values)
+    repeated = normalize_tasks_specification(normalized.value.decode("utf-8"))
+    assert repeated == normalized
+
+
+def test_fixed_description_byte_changes_normalized_specification() -> None:
+    first = normalize_tasks_specification("- [x] 1. first description\n")
+    second = normalize_tasks_specification("- [ ] 1. second description\n")
+
+    assert isinstance(first, Success)
+    assert isinstance(second, Success)
+    assert first.value != second.value
