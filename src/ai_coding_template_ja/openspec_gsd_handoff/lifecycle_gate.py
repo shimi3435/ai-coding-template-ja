@@ -204,18 +204,22 @@ def _utf8_sorted(values: set[str] | list[str] | tuple[str, ...]) -> tuple[str, .
 
 
 def _valid_limits(limits: LifecycleGateLimits) -> bool:
-    return (
-        isinstance(limits, LifecycleGateLimits)
-        and all(
-            type(value) is int and value > 0
-            for value in (
-                limits.max_manifest_bytes,
-                limits.max_phase_nodes,
-                limits.max_phase_edges,
-                limits.max_aggregate_bytes,
-            )
+    if not isinstance(limits, LifecycleGateLimits) or not isinstance(
+        limits.artifact_limits, ArtifactLimits
+    ):
+        return False
+    return all(
+        type(value) is int and value > 0
+        for value in (
+            limits.max_manifest_bytes,
+            limits.max_phase_nodes,
+            limits.max_phase_edges,
+            limits.max_aggregate_bytes,
+            limits.artifact_limits.max_files,
+            limits.artifact_limits.bytes_per_file,
+            limits.artifact_limits.bytes_total,
+            limits.artifact_limits.change_id_bytes,
         )
-        and isinstance(limits.artifact_limits, ArtifactLimits)
     )
 
 
@@ -426,7 +430,7 @@ def _validate_capabilities(
         or not isinstance(capabilities.gsd, GsdCapability)
         or not isinstance(capabilities.host, HostCapabilityInput)
         or type(capabilities.gsd.project_initialized) is not bool
-        or type(capabilities.host.inspected) is not bool
+        or capabilities.host.inspected is not True
         or not isinstance(capabilities.host.spawn_agent_schema, HostSpawnSchema)
         or not isinstance(capabilities.host.dispatch, HostDispatch)
         or (
@@ -679,6 +683,7 @@ def _capability_changes(
             expected.host.spawn_agent_schema,
             observed.host.spawn_agent_schema,
         ),
+        ("host.inspected", expected.host.inspected, observed.host.inspected),
         ("host.dispatch", expected.host.dispatch, observed.host.dispatch),
         (
             "host.agent_role_source",
