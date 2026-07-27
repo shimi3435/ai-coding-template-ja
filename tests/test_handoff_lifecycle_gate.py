@@ -327,6 +327,38 @@ def _phase_nodes() -> tuple[PhaseNodeObservation, ...]:
     )
 
 
+def _malformed_phase_nodes(case: str) -> object:
+    nodes = list(_phase_nodes())
+    if case == "non-tuple-container":
+        return nodes
+    if case == "invalid-node":
+        nodes[0] = cast(Any, None)
+    elif case == "invalid-phase-id":
+        nodes[0] = replace(nodes[0], phase_id=cast(Any, 3))
+    elif case == "invalid-phase-path":
+        nodes[0] = replace(nodes[0], phase_path=cast(Any, b"phase"))
+    elif case == "non-tuple-dependencies":
+        nodes[1] = replace(nodes[1], depends_on=cast(Any, ["03"]))
+    elif case == "invalid-dependency":
+        nodes[1] = replace(nodes[1], depends_on=("03", cast(Any, 3)))
+    elif case == "duplicate-node-id":
+        nodes[1] = replace(nodes[1], phase_id="03")
+    else:  # pragma: no cover - table is exhaustive
+        raise AssertionError(case)
+    return tuple(nodes)
+
+
+def _cyclic_phase_nodes(case: str) -> tuple[PhaseNodeObservation, ...]:
+    nodes = list(_phase_nodes())
+    if case == "two-node":
+        nodes[0] = replace(nodes[0], depends_on=("04",))
+    elif case == "longer":
+        nodes[0] = replace(nodes[0], depends_on=("05",))
+    else:  # pragma: no cover - table is exhaustive
+        raise AssertionError(case)
+    return tuple(nodes)
+
+
 class FakeBoundary(LifecycleObservationBoundary):
     def __init__(
         self,
@@ -1264,6 +1296,108 @@ def test_host_inspected_drift_is_explicit_capability_drift(
     assert decision.issue_codes == ("capability-changed:host.inspected",)
     assert decision.revalidation_targets == ("capability:host.inspected",)
     assert decision.next_action_codes == ("reprobe-capabilities",)
+
+
+@pytest.mark.parametrize("side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "non-tuple-container",
+        "invalid-node",
+        "invalid-phase-id",
+        "invalid-phase-path",
+        "non-tuple-dependencies",
+        "invalid-dependency",
+        "duplicate-node-id",
+    ],
+)
+def test_malformed_phase_graph_is_unknown_without_raising(
+    tmp_path: Path,
+    side: str,
+    case: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    malformed = _malformed_phase_nodes(case)
+    if side == "expected":
+        boundary.expected_nodes = cast(Any, malformed)
+    else:
+        boundary.observed_nodes = cast(Any, malformed)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-phase-observation-incomplete",)
+    assert decision.changed_source_item_ids == ()
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
+
+
+@pytest.mark.parametrize("side", ["expected", "observed"])
+def test_duplicate_phase_edge_is_rejected_before_normalization(
+    tmp_path: Path,
+    side: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    nodes = list(_phase_nodes())
+    nodes[1] = replace(nodes[1], depends_on=("03", "03"))
+    if side == "expected":
+        boundary.expected_nodes = tuple(nodes)
+    else:
+        boundary.observed_nodes = tuple(nodes)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-phase-observation-incomplete",)
+    assert decision.decision_identity is None
+
+
+@pytest.mark.parametrize("side", ["expected", "observed"])
+@pytest.mark.parametrize("case", ["two-node", "longer"])
+def test_cyclic_phase_graph_is_unknown_and_never_admitted(
+    tmp_path: Path,
+    side: str,
+    case: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    nodes = _cyclic_phase_nodes(case)
+    if side == "expected":
+        boundary.expected_nodes = nodes
+    else:
+        boundary.observed_nodes = nodes
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-phase-observation-incomplete",)
+    assert decision.changed_source_item_ids == ()
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
 
 
 @pytest.mark.parametrize(
