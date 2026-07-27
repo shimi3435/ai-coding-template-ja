@@ -975,6 +975,7 @@ def _decision_identity(
             encoder.add("manifest.mapping.policy_reference", reference)
 
     commit = observation.source_commit
+    encoder.add("source_commit.repository_root", commit.repository_root)
     encoder.add("source_commit.change_id", commit.change_id)
     encoder.add("source_commit.commit", commit.source_commit)
     _encode_source_observation(
