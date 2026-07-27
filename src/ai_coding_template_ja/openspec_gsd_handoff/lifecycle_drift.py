@@ -205,7 +205,9 @@ def observe_canonical_source(
     )
 
 
-def _is_complete_observation(observation: CanonicalSourceObservation) -> bool:
+def _is_complete_observation(observation: object) -> bool:
+    if not isinstance(observation, CanonicalSourceObservation):
+        return False
     if (
         type(observation.artifacts) is not tuple
         or type(observation.changed_source_item_ids) is not tuple
