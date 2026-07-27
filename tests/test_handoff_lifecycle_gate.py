@@ -11,6 +11,7 @@ from typing import Any, cast
 
 import pytest
 
+from ai_coding_template_ja.openspec_gsd_handoff import lifecycle_gate
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     EvidenceDeclaration,
     MappingOperation,
@@ -1164,6 +1165,105 @@ def test_drift_dimension_phase_and_capability_has_exact_remediation(
         "reprobe-capabilities",
         "revalidate-mapping",
     )
+
+
+def test_uninspected_host_is_incomplete_capability_evidence(tmp_path: Path) -> None:
+    repository, boundary = _fixture(tmp_path)
+    boundary.capabilities = replace(
+        boundary.capabilities,
+        host=replace(boundary.capabilities.host, inspected=False),
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-capability-observation-incomplete",)
+    assert decision.changed_source_item_ids == ()
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        (field_name, invalid_value)
+        for field_name in (
+            "max_files",
+            "bytes_per_file",
+            "bytes_total",
+            "change_id_bytes",
+        )
+        for invalid_value in ("invalid", True, 0, -1)
+    ],
+)
+def test_malformed_nested_limits_fail_before_boundary_observation(
+    tmp_path: Path,
+    field_name: str,
+    invalid_value: object,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    artifact_limits = replace(
+        DEFAULT_ARTIFACT_LIMITS,
+        **{field_name: cast(Any, invalid_value)},
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+        limits=LifecycleGateLimits(artifact_limits=artifact_limits),
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-input-invalid",)
+    assert boundary.source_calls == 0
+    assert boundary.phase_calls == 0
+    assert boundary.capability_calls == 0
+
+
+def test_host_inspected_drift_is_explicit_capability_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    parsed = parse_manifest_v2_bytes((repository / MANIFEST_PATH).read_bytes())
+    assert isinstance(parsed, Success)
+    expected_capabilities = replace(
+        parsed.value.capabilities,
+        host=replace(parsed.value.capabilities.host, inspected=False),
+    )
+    manifest = replace(parsed.value, capabilities=expected_capabilities)
+    monkeypatch.setattr(
+        lifecycle_gate,
+        "parse_manifest_v2_bytes",
+        lambda _data: Success(manifest),
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.DRIFTED
+    assert not decision.admitted
+    assert decision.issue_codes == ("capability-changed:host.inspected",)
+    assert decision.revalidation_targets == ("capability:host.inspected",)
+    assert decision.next_action_codes == ("reprobe-capabilities",)
 
 
 @pytest.mark.parametrize(
