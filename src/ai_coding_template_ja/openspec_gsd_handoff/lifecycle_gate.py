@@ -42,6 +42,7 @@ from .models import (
     HostSpawnSchema,
     IssueCategory,
     KnownState,
+    Progress,
     Result,
     Success,
 )
@@ -149,7 +150,9 @@ class LifecycleGateDecision:
     state: LifecycleGateState
     admitted: bool
     issue_codes: tuple[str, ...]
+    drifted_artifact_paths: tuple[str, ...]
     changed_source_item_ids: tuple[str, ...]
+    progress_update_candidate: Progress | None
     revalidation_targets: tuple[str, ...]
     replanning_targets: tuple[str, ...]
     next_action_codes: tuple[str, ...]
@@ -1022,8 +1025,18 @@ def _decision_identity(
     encoder.add("decision.admitted", decision.admitted)
     for code in decision.issue_codes:
         encoder.add("decision.issue_code", code)
+    for path in decision.drifted_artifact_paths:
+        encoder.add("decision.drifted_artifact_path", path)
     for source_id in decision.changed_source_item_ids:
         encoder.add("decision.changed_source_item_id", source_id)
+    if decision.progress_update_candidate is None:
+        encoder.add("decision.progress_update", None)
+    else:
+        _encode_progress(
+            encoder,
+            "decision.progress_update",
+            decision.progress_update_candidate,
+        )
     for target in decision.revalidation_targets:
         encoder.add("decision.revalidation_target", target)
     for phase_id in decision.replanning_targets:
@@ -1100,9 +1113,11 @@ def _decision_from_observation(
         state=state,
         admitted=state is LifecycleGateState.CLEAN,
         issue_codes=_utf8_sorted(issues),
+        drifted_artifact_paths=_utf8_sorted(source.drifted_artifact_paths),
         changed_source_item_ids=_utf8_sorted(
             observation.source_decision.changed_source_item_ids
         ),
+        progress_update_candidate=source.progress_update_candidate,
         revalidation_targets=_utf8_sorted(revalidation_targets),
         replanning_targets=_utf8_sorted(replanning_targets),
         next_action_codes=_utf8_sorted(actions),
@@ -1131,7 +1146,9 @@ def _unknown_decision(
         state=LifecycleGateState.UNKNOWN,
         admitted=False,
         issue_codes=(code,),
+        drifted_artifact_paths=(),
         changed_source_item_ids=(),
+        progress_update_candidate=None,
         revalidation_targets=(),
         replanning_targets=(),
         next_action_codes=(),
