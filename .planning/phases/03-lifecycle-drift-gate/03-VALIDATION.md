@@ -19,8 +19,8 @@ created: 2026-07-27
 |----------|-------|
 | **Framework** | pytest 9.1.1; Hypothesis 6.155.7 only for the existing checkbox-normalization property family |
 | **Config file** | `pyproject.toml` (`[tool.pytest.ini_options]`) |
-| **Quick run command** | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py -q` |
-| **Full suite command** | `task check` |
+| **Quick run command** | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q` |
+| **Full suite command** | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q && task check` |
 | **Estimated runtime** | ~45 seconds |
 
 ---
@@ -28,8 +28,9 @@ created: 2026-07-27
 ## Sampling Rate
 
 - **After every task commit:** Run the task-specific focused command from the map below.
-- **After every plan wave:** Run `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py -q`.
-- **After Plan 03-06 completion:** Run `task check` as the plan-level project gate after both tasks are complete.
+- **After Waves 4-5:** Run `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py -q`.
+- **After Wave 6 / Plan 03-07:** Run `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q`; the execution-mapping suite is included as the downstream compatibility backstop.
+- **After Wave 7 / Plan 03-08:** Run `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q`, then run `task check` as the final project gate after both 03-08 tasks are complete.
 - **Before `$gsd-verify-work`:** `task check`, `git diff --check`, and protected-surface review must be green.
 - **Max task-level feedback latency:** 30 seconds; plan-level and final `task check` sampling may use the recorded ~45-second full-suite budget.
 
@@ -45,6 +46,10 @@ created: 2026-07-27
 | 03-05-02 | 05 | 4 | HND-03 / G2, G7 | T-03-05-02 | Raw malformed, duplicate, or cyclic phase graphs cannot normalize into clean | bounded graph examples | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "malformed_phase_graph or duplicate_phase_edge or cyclic_phase_graph or irrelevant_phase_tuple_order"` | ✅ | ⬜ pending |
 | 03-06-01 | 06 | 5 | HND-03 / G5 | T-03-06-01 | Public decisions carry exact remediation and progress evidence; unknown carries none | fixed public-gate examples | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "canonical_source_has_exact_remediation or checkbox_progress_public_decision or incomplete_dimension"` | ✅ | ⬜ pending |
 | 03-06-02 | 06 | 5 | HND-03 / G6 | T-03-06-02 | Runtime identity is repository-bound while portable evidence proves relations without raw path/digest leakage | isolated filesystem + literal golden | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "repository_root_identity or repository_root_lifecycle_evidence"` | ✅ | ⬜ pending |
+| 03-07-01 | 07 | 6 | HND-03 / GAP-1.1, GAP-1.3 | T-03-07-01, T-03-07-03 | Malformed Progress and changed-ID values are rejected on both classifier sides before comparison or sorting | fixed public-classifier examples | `uv run pytest tests/test_handoff_lifecycle_drift.py::test_malformed_progress_observation_is_unknown_before_comparison tests/test_handoff_lifecycle_drift.py::test_malformed_changed_source_ids_observation_is_unknown_before_sorting -q` | ✅ | ⬜ pending |
+| 03-07-02 | 07 | 6 | HND-03 / GAP-1.2, GAP-1.4 | T-03-07-02, T-03-07-04 | One SourceIdentityState authority rejects every nested family, and the boundary-injected public gate rejects Progress, changed IDs, and source state with empty evidence and no identity | fixed classifier + `FakeBoundary` public-gate matrix | `uv run pytest tests/test_handoff_lifecycle_drift.py::test_malformed_source_state_observation_is_unknown_before_dereference tests/test_handoff_lifecycle_gate.py::test_malformed_canonical_nested_state_public_gate_is_wholly_unknown -q` | ✅ | ⬜ pending |
+| 03-08-01 | 08 | 7 | HND-03 / GAP-2.2, GAP-2.3 | T-03-08-01, T-03-08-02 | One safe PlanningInventory validator rejects malformed outer/container/member/field families before all consumers traverse them | fixed public-validator and readiness examples | `uv run pytest tests/test_handoff_execution_mapping.py -q -k "planning_inventory_runtime_validation or readiness_rejects_malformed_inventory"` | ✅ | ⬜ pending |
+| 03-08-02 | 08 | 7 | HND-03 / GAP-2.1, GAP-2.4 | T-03-08-03, T-03-08-04 | Malformed boundary commits and inventories return dimension-specific unknown, non-admitted, empty decisions with no identity | fixed `FakeBoundary` public-gate examples | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "malformed_boundary_commit or malformed_boundary_inventory"` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -56,6 +61,7 @@ created: 2026-07-27
 |----------|---------|---------------------|----------------|
 | Complete drift suite | Preserve clean, artifact drift, stable source IDs, checkbox-only behavior, and the sole property family | `uv run pytest tests/test_handoff_lifecycle_drift.py -q` | Existing valid behavior changes or a second property family appears |
 | Complete lifecycle suite | Preserve the five-operation matrix, mapping horizons, remediation, freshness, and stale handling | `uv run pytest tests/test_handoff_lifecycle_gate.py -q` | Wrong horizon, issue-bearing admission, or stale identity acceptance |
+| Complete execution-mapping suite | Preserve inventory parsing, 49-item mapping baseline, operation readiness, and bounded path behavior while validation is centralized | `uv run pytest tests/test_handoff_execution_mapping.py -q` | Mapping baseline changes, malformed inventory escapes, or a readiness horizon regresses |
 | Valid graph order invariance | Ensure hardening does not make semantic tuple order identity-relevant | `uv run pytest tests/test_handoff_lifecycle_gate.py::test_identity_ignores_semantically_irrelevant_phase_tuple_order -q` | Valid reorderings produce different identity or non-clean state |
 | Independent portable golden | Detect omitted public fields and portable evidence schema drift | Two producer runs are byte-identical and equal the literal golden | Raw path/digest leak, missing field, false relation, or nondeterministic bytes |
 | Protected input invariance | Ensure evidence generation remains read-only | Existing before/after hashes and `mutation_operations=[]` | Protected hash changes or staging residue appears |
@@ -70,6 +76,10 @@ created: 2026-07-27
 - [ ] Add G1/G2/G3/G7 fixed cases to `tests/test_handoff_lifecycle_gate.py`.
 - [ ] Add G5/G6 projection and repository-relation cases; update the portable producer and literal golden.
 - [ ] Repin `03-LIFECYCLE-EVIDENCE.json` only after all behavioral cases are green.
+- [ ] Add the named 03-07 classifier regressions for malformed Progress, changed IDs, and SourceIdentityState on both expected/observed sides.
+- [ ] Add the named 03-07 `FakeBoundary` gate matrix for malformed Progress, changed IDs, and SourceIdentityState with the full unknown/empty/no-identity decision shape.
+- [ ] Add 03-08 fixed PlanningInventory validator/readiness regressions to `tests/test_handoff_execution_mapping.py`.
+- [ ] Add 03-08 boundary commit/inventory public-gate regressions to `tests/test_handoff_lifecycle_gate.py`.
 - Existing pytest/Hypothesis infrastructure is sufficient; no dependency, fixture framework, or config installation is required.
 
 ---
@@ -89,4 +99,4 @@ All phase gap-closure behaviors have automated verification. Real OpenSpec/GSD/h
 - [x] Expected task-level focused feedback latency is below 30 seconds; plan-level and final `task check` use the separate full-suite budget.
 - [x] `nyquist_compliant: true` is set in frontmatter.
 
-**Approval:** planning strategy approved 2026-07-27; execution evidence pending.
+**Approval:** validation strategy revised and re-signed 2026-07-28 for Plans 03-07/03-08 and Waves 6/7; execution evidence pending.
