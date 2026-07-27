@@ -617,7 +617,7 @@ def _decision_view(decision: LifecycleGateDecision) -> dict[str, object]:
         "revalidation_targets": list(decision.revalidation_targets),
         "replanning_targets": list(decision.replanning_targets),
         "next_action_codes": list(decision.next_action_codes),
-        "decision_identity": decision.decision_identity,
+        "decision_identity_present": decision.decision_identity is not None,
         "manifest_sha256": decision.manifest_sha256,
     }
 
@@ -953,9 +953,62 @@ def _phase_capability_stale_evidence(tmp_path: Path) -> dict[str, object]:
     assert stale.state is LifecycleGateState.DRIFTED
     assert not stale.admitted
     assert "lifecycle-decision-stale" in stale.issue_codes
+    return _decision_view(stale)
+
+
+def _repository_identity_relations(tmp_path: Path) -> dict[str, bool]:
+    first_root = tmp_path / "first-root"
+    second_root = tmp_path / "second-root"
+    first_root.mkdir(parents=True)
+    second_root.mkdir(parents=True)
+    first_repository, first_boundary = _fixture(first_root)
+    second_repository, second_boundary = _fixture(second_root)
+
+    first = gate_lifecycle_operation(
+        first_repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=first_boundary,
+    )
+    repeated = gate_lifecycle_operation(
+        first_repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=first_boundary,
+        prior_decision_identity=first.decision_identity,
+    )
+    second = gate_lifecycle_operation(
+        second_repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=second_boundary,
+    )
+    foreign = gate_lifecycle_operation(
+        second_repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=second_boundary,
+        prior_decision_identity=first.decision_identity,
+    )
+    assert first.decision_identity is not None
+    assert repeated.decision_identity is not None
+    assert second.decision_identity is not None
     return {
-        **_decision_view(stale),
-        "prior_decision_identity": previous.decision_identity,
+        "same_root_identity_stable": (
+            repeated.admitted and repeated.decision_identity == first.decision_identity
+        ),
+        "cross_root_identities_distinct": (
+            second.decision_identity != first.decision_identity
+        ),
+        "foreign_root_prior_identity_rejected": (
+            foreign.state is LifecycleGateState.DRIFTED
+            and not foreign.admitted
+            and "lifecycle-decision-stale" in foreign.issue_codes
+        ),
     }
 
 
@@ -1018,6 +1071,9 @@ def _repository_root_lifecycle_evidence(
             tmp_path / "phase-capability-stale"
         ),
     }
+    repository_identity_relations = _repository_identity_relations(
+        tmp_path / "repository-identity-relations"
+    )
 
     after = _protected_input_hashes(repository_root)
     staging_after = _staging_paths(repository_root)
@@ -1045,8 +1101,8 @@ def _repository_root_lifecycle_evidence(
     assert isinstance(manifest, Success)
     return _compact_json(
         {
-            "schema_version": "lifecycle-evidence-v1",
-            "producer_version": "repository-root-lifecycle-evidence-v1",
+            "schema_version": "lifecycle-evidence-v2",
+            "producer_version": "repository-portable-lifecycle-evidence-v2",
             "source_authority": {
                 "change_id": REAL_CHANGE_ID,
                 "source_commit": manifest.value.source_commit,
@@ -1054,6 +1110,7 @@ def _repository_root_lifecycle_evidence(
             },
             "operation_coverage": operation_rows,
             "outcomes": outcomes,
+            "repository_identity_relations": repository_identity_relations,
             "protected_inputs": protected_inputs,
             "staging_paths_before": staging_before,
             "staging_paths_after": staging_after,
@@ -1088,6 +1145,22 @@ def test_repository_root_lifecycle_evidence_matches_tracked_record(
     assert first == second == tracked
     assert json.loads(first) == json.loads(independent_golden)
     evidence = json.loads(first)
+    assert evidence["schema_version"] == "lifecycle-evidence-v2"
+    assert evidence["producer_version"] == "repository-portable-lifecycle-evidence-v2"
+    assert evidence["repository_identity_relations"] == {
+        "same_root_identity_stable": True,
+        "cross_root_identities_distinct": True,
+        "foreign_root_prior_identity_rejected": True,
+    }
+    decision_rows = [
+        *evidence["operation_coverage"],
+        *evidence["outcomes"].values(),
+    ]
+    assert all("drifted_artifact_paths" in row for row in decision_rows)
+    assert all("progress_update_candidate" in row for row in decision_rows)
+    assert all("decision_identity" not in row for row in decision_rows)
+    assert all("prior_decision_identity" not in row for row in decision_rows)
+    assert str(tmp_path).encode() not in first
     assert evidence["mutation_operations"] == []
     assert evidence["staging_paths_before"] == []
     assert evidence["staging_paths_after"] == []
@@ -1609,31 +1682,58 @@ def test_manifest_digest_is_bound_to_exact_bounded_bytes(tmp_path: Path) -> None
     assert decision.manifest_sha256 == hashlib.sha256(raw).hexdigest()
 
 
-def test_identity_fixed_complete_example_is_deterministic(tmp_path: Path) -> None:
-    repository, boundary = _fixture(tmp_path)
+def test_repository_root_identity_is_stable_separate_and_not_replayable(
+    tmp_path: Path,
+) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    first_repository, first_boundary = _fixture(first_root)
+    second_repository, second_boundary = _fixture(second_root)
 
     first = gate_lifecycle_operation(
-        repository,
+        first_repository,
         CHANGE_ID,
         LifecycleOperation.PLAN,
         "03",
-        boundary=boundary,
+        boundary=first_boundary,
+    )
+    repeated = gate_lifecycle_operation(
+        first_repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=first_boundary,
+        prior_decision_identity=first.decision_identity,
     )
     second = gate_lifecycle_operation(
-        repository,
+        second_repository,
         CHANGE_ID,
         LifecycleOperation.PLAN,
         "03",
-        boundary=boundary,
+        boundary=second_boundary,
+    )
+    foreign = gate_lifecycle_operation(
+        second_repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=second_boundary,
+        prior_decision_identity=first.decision_identity,
     )
 
-    assert first.decision_identity == (
-        "4e7605ce41fdc12e5a7b9d7278408b55e84e2ee84352eb5832209a18ec5309c9"
-    )
-    assert second.decision_identity == first.decision_identity
-    assert boundary.source_calls == 2
-    assert boundary.phase_calls == 2
-    assert boundary.capability_calls == 2
+    assert first.decision_identity is not None
+    assert re.fullmatch(r"[0-9a-f]{64}", first.decision_identity) is not None
+    assert repeated.state is LifecycleGateState.CLEAN
+    assert repeated.admitted
+    assert repeated.decision_identity == first.decision_identity
+    assert second.decision_identity is not None
+    assert re.fullmatch(r"[0-9a-f]{64}", second.decision_identity) is not None
+    assert second.decision_identity != first.decision_identity
+    assert foreign.state is LifecycleGateState.DRIFTED
+    assert not foreign.admitted
+    assert "lifecycle-decision-stale" in foreign.issue_codes
 
 
 def test_identity_ignores_semantically_irrelevant_phase_tuple_order(
