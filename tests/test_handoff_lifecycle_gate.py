@@ -607,7 +607,13 @@ def _decision_view(decision: LifecycleGateDecision) -> dict[str, object]:
         "state": decision.state.value,
         "admitted": decision.admitted,
         "issue_codes": list(decision.issue_codes),
+        "drifted_artifact_paths": list(decision.drifted_artifact_paths),
         "changed_source_item_ids": list(decision.changed_source_item_ids),
+        "progress_update_candidate": (
+            _progress_view(decision.progress_update_candidate)
+            if decision.progress_update_candidate is not None
+            else None
+        ),
         "revalidation_targets": list(decision.revalidation_targets),
         "replanning_targets": list(decision.replanning_targets),
         "next_action_codes": list(decision.next_action_codes),
@@ -1118,7 +1124,9 @@ def test_incomplete_dimension_rejects_invalid_operation_target_pairs(
     assert decision.state is LifecycleGateState.UNKNOWN
     assert not decision.admitted
     assert decision.issue_codes == (expected_code,)
+    assert decision.drifted_artifact_paths == ()
     assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
     assert decision.revalidation_targets == ()
     assert decision.replanning_targets == ()
     assert decision.next_action_codes == ()
@@ -1148,6 +1156,7 @@ def test_drift_dimension_canonical_source_has_exact_remediation(
 
     assert decision.state is LifecycleGateState.DRIFTED
     assert not decision.admitted
+    assert decision.drifted_artifact_paths == (SPEC_PATH,)
     assert decision.changed_source_item_ids == ("SCN-000004",)
     assert decision.revalidation_targets == (
         "phase-path:.planning/phases/03-lifecycle-drift-gate",
@@ -1158,6 +1167,30 @@ def test_drift_dimension_canonical_source_has_exact_remediation(
         "revalidate-mapping",
         "revalidate-source",
     )
+
+
+def test_checkbox_progress_public_decision_preserves_current_progress(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    current_tasks = CANONICAL_CONTENT[TASKS_PATH].replace("- [x]", "- [ ]")
+    (repository / TASKS_PATH).write_text(current_tasks, encoding="utf-8")
+    expected_progress = parse_task_progress(current_tasks)
+    assert isinstance(expected_progress, Success)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.CLEAN
+    assert decision.admitted
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate == expected_progress.value
 
 
 def test_drift_dimension_phase_and_capability_has_exact_remediation(
@@ -1474,7 +1507,9 @@ def test_incomplete_dimension_is_wholly_unknown(tmp_path: Path, case: str) -> No
 
     assert decision.state is LifecycleGateState.UNKNOWN
     assert not decision.admitted
+    assert decision.drifted_artifact_paths == ()
     assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
     assert decision.revalidation_targets == ()
     assert decision.replanning_targets == ()
     assert decision.next_action_codes == ()
