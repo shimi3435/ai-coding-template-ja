@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-07-27T13:36:38.368Z"
+stopped_at: Completed 03-06-PLAN.md
+last_updated: "2026-07-27T13:55:16.697Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 16
-  completed_plans: 15
-  percent: 33
+  completed_plans: 16
+  percent: 50
 ---
 
 # Project State
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-07-27 — Phase 03 execution started
 
@@ -68,6 +68,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P03 | 11min | 2 tasks | 4 files |
 | Phase 03 P04 | 5min | 2 tasks | 2 files |
 | Phase 03 P05 | 6min | 2 tasks | 2 files |
+| Phase 03 P06 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Canonical observation and artifact values are runtime-validated before canonical checks. — Prevents malformed structured Success payloads from raising or contributing partial evidence.
 - [Phase 03]: Current host capability evidence is complete only when host.inspected is exactly true. — Prevents an unperformed host probe from contributing green admission evidence while retaining explicit drift comparison defense.
 - [Phase 03]: Raw expected and observed phase graphs are validated for exact shape, uniqueness, bounds, and acyclicity before canonical ordering. — Prevents malformed, duplicate, or cyclic declarations from crashing or normalizing into clean evidence.
+- [Phase 03]: The public lifecycle decision copies exact artifact paths and immutable progress from the canonical source decision and binds both fields into the existing typed identity. — Ensures HARD-R2 callers receive exact remediation/progress evidence without a second classification authority.
+- [Phase 03]: Runtime identity binds the validated repository real path, while tracked and golden evidence publish only identity presence and deterministic same-root/cross-root/replay relations. — Prevents cross-repository replay while keeping reviewer artifacts deterministic and path-independent.
 
 ### Pending Todos
 
@@ -123,6 +126,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-27T13:36:38.361Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-07-27T13:54:39.110Z
+Stopped at: Completed 03-06-PLAN.md
 Resume file: None
