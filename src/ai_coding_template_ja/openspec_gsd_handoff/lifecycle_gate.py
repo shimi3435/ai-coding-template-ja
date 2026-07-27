@@ -327,6 +327,31 @@ def _canonical_phase_path(value: str, phase_id: str) -> bool:
     )
 
 
+def _is_acyclic_phase_graph(
+    nodes: tuple[PhaseNodeObservation, ...],
+) -> bool:
+    remaining_dependencies = {node.phase_id: len(node.depends_on) for node in nodes}
+    dependents = {phase_id: [] for phase_id in remaining_dependencies}
+    for node in nodes:
+        for dependency in node.depends_on:
+            dependents[dependency].append(node.phase_id)
+
+    ready = [
+        phase_id
+        for phase_id, dependency_count in remaining_dependencies.items()
+        if dependency_count == 0
+    ]
+    visited = 0
+    while ready:
+        phase_id = ready.pop()
+        visited += 1
+        for dependent in dependents[phase_id]:
+            remaining_dependencies[dependent] -= 1
+            if remaining_dependencies[dependent] == 0:
+                ready.append(dependent)
+    return visited == len(nodes)
+
+
 def _validate_phase_nodes(
     nodes: object,
     *,
@@ -337,6 +362,14 @@ def _validate_phase_nodes(
     if any(not isinstance(node, PhaseNodeObservation) for node in nodes):
         return False
     typed_nodes = nodes
+    if any(
+        type(node.phase_id) is not str
+        or type(node.phase_path) is not str
+        or type(node.depends_on) is not tuple
+        or any(type(dependency) is not str for dependency in node.depends_on)
+        for node in typed_nodes
+    ):
+        return False
     phase_ids = {node.phase_id for node in typed_nodes}
     if len(phase_ids) != len(typed_nodes):
         return False
@@ -359,7 +392,9 @@ def _validate_phase_nodes(
         aggregate_bytes = sum(len(value.encode("utf-8")) for value in aggregate_values)
     except UnicodeEncodeError:
         return False
-    return aggregate_bytes <= limits.max_aggregate_bytes
+    return aggregate_bytes <= limits.max_aggregate_bytes and _is_acyclic_phase_graph(
+        typed_nodes
+    )
 
 
 def _normalize_phase_nodes(
@@ -396,7 +431,9 @@ def _validate_phase_graph(
 ) -> bool:
     if (
         not isinstance(value, PhaseGraphObservation)
+        or type(value.change_id) is not str
         or value.change_id != change_id
+        or type(value.source_commit) is not str
         or _COMMIT.fullmatch(value.source_commit) is None
         or not isinstance(value.planning_inventory, PlanningInventory)
         or value.planning_inventory.change_id != change_id
@@ -560,18 +597,18 @@ def observe_lifecycle_operation(
         change_id=change_id,
     ):
         return _failure("lifecycle-source-commit-observation-incomplete")
-    if isinstance(phase_graph, PhaseGraphObservation):
-        phase_graph = replace(
-            phase_graph,
-            expected_nodes=_normalize_phase_nodes(phase_graph.expected_nodes),
-            observed_nodes=_normalize_phase_nodes(phase_graph.observed_nodes),
-        )
     if not _validate_phase_graph(
         phase_graph,
         change_id=change_id,
         limits=limits,
     ):
         return _failure("lifecycle-phase-observation-incomplete")
+    assert isinstance(phase_graph, PhaseGraphObservation)
+    phase_graph = replace(
+        phase_graph,
+        expected_nodes=_normalize_phase_nodes(phase_graph.expected_nodes),
+        observed_nodes=_normalize_phase_nodes(phase_graph.observed_nodes),
+    )
     if not _validate_capabilities(
         capabilities,
         change_id=change_id,
