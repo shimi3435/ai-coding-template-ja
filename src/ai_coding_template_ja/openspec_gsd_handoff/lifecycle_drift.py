@@ -215,6 +215,19 @@ def _is_complete_observation(observation: object) -> bool:
         or not isinstance(observation.source_items, SourceIdentityState)
     ):
         return False
+    if any(
+        not isinstance(artifact, CanonicalArtifactObservation)
+        for artifact in observation.artifacts
+    ):
+        return False
+    if any(
+        type(artifact.kind) is not ArtifactKind
+        or type(artifact.path) is not str
+        or type(artifact.raw_sha256) is not str
+        or type(artifact.specification_sha256) is not str
+        for artifact in observation.artifacts
+    ):
+        return False
     if not _has_required_artifact_cardinality(
         tuple(artifact.kind for artifact in observation.artifacts)
     ):
