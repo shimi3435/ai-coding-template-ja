@@ -241,6 +241,29 @@ def _assert_unknown(expected, observed, code: str) -> None:
     assert decision.progress_update_candidate is None
 
 
+@pytest.mark.parametrize(
+    ("malformed_side", "payload"),
+    [
+        ("expected", None),
+        ("observed", None),
+        ("expected", object()),
+        ("observed", object()),
+    ],
+)
+def test_malformed_structured_payload_is_unknown(
+    tmp_path: Path,
+    malformed_side: str,
+    payload: object | None,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    malformed: Any = Success(payload)
+    expected = malformed if malformed_side == "expected" else complete
+    observed = malformed if malformed_side == "observed" else complete
+
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
 def test_bounded_empty_claims_are_unknown(tmp_path: Path) -> None:
     repository, claims = _write_complete_change(tmp_path)
     expected = _observe_initial(repository, claims)
