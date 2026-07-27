@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-07-27T13:24:59.058Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-07-27T13:36:38.368Z"
 last_activity: 2026-07-27
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 33
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-07-27 — Phase 03 execution started
 
@@ -67,6 +67,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P02 | 20min | 2 tasks | 2 files |
 | Phase 03 P03 | 11min | 2 tasks | 4 files |
 | Phase 03 P04 | 5min | 2 tasks | 2 files |
+| Phase 03 P05 | 6min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Checkbox-only progress evidence requires every bounded source-commit blob to match the tracked handoff claim before current-tree comparison. — Makes the old side provenance-backed rather than synthetic.
 - [Phase 03]: Real OpenSpec/GSD/host smoke remains opt-in and separate from deterministic lifecycle evidence. — Avoids treating an unrequested or unavailable runtime probe as normal-CI proof.
 - [Phase 03]: Canonical observation and artifact values are runtime-validated before canonical checks. — Prevents malformed structured Success payloads from raising or contributing partial evidence.
+- [Phase 03]: Current host capability evidence is complete only when host.inspected is exactly true. — Prevents an unperformed host probe from contributing green admission evidence while retaining explicit drift comparison defense.
+- [Phase 03]: Raw expected and observed phase graphs are validated for exact shape, uniqueness, bounds, and acyclicity before canonical ordering. — Prevents malformed, duplicate, or cyclic declarations from crashing or normalizing into clean evidence.
 
 ### Pending Todos
 
@@ -120,6 +123,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-27T13:24:59.051Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-07-27T13:36:38.361Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
