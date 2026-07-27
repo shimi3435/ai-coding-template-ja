@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -262,6 +263,49 @@ def test_malformed_structured_payload_is_unknown(
     observed = malformed if malformed_side == "observed" else complete
 
     _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
+@pytest.mark.parametrize("invalid_member", [None, object()])
+def test_malformed_nested_artifact_member_is_unknown(
+    tmp_path: Path,
+    invalid_member: object | None,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    malformed_observation = replace(
+        complete.value,
+        artifacts=(invalid_member,),
+    )
+    malformed: Any = Success(malformed_observation)
+
+    _assert_unknown(complete, malformed, "canonical-observation-incomplete")
+
+
+@pytest.mark.parametrize(
+    "invalid_field",
+    ["kind", "path", "raw_sha256", "specification_sha256"],
+)
+def test_malformed_nested_artifact_field_is_unknown(
+    tmp_path: Path,
+    invalid_field: str,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    artifact = complete.value.artifacts[0]
+    invalid_value: object | None = (
+        artifact.kind.value if invalid_field == "kind" else None
+    )
+    malformed_artifact: Any = replace(
+        artifact,
+        **{invalid_field: invalid_value},
+    )
+    malformed_observation = replace(
+        complete.value,
+        artifacts=(malformed_artifact, *complete.value.artifacts[1:]),
+    )
+    malformed: Any = Success(malformed_observation)
+
+    _assert_unknown(complete, malformed, "canonical-observation-incomplete")
 
 
 def test_bounded_empty_claims_are_unknown(tmp_path: Path) -> None:
