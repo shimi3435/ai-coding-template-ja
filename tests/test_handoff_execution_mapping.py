@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from typing import Any, cast
@@ -22,6 +24,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     validate_mapping_readiness,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
+    ManifestMapping,
     parse_manifest_v2_bytes,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
@@ -760,6 +763,248 @@ def _mappings(source_items, registry, inventory):
     result = build_manifest_mappings(source_items, inventory, registry)
     assert isinstance(result, Success)
     return result.value
+
+
+def _replace_mapping(
+    mappings: tuple[ManifestMapping, ...],
+    mapping: object,
+) -> tuple[ManifestMapping, ...]:
+    return cast(tuple[ManifestMapping, ...], (mapping, *mappings[1:]))
+
+
+def test_readiness_rejects_manifest_mapping_outer_container_and_member_families(
+    tmp_path: Path,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    first = mappings[0]
+    cases: tuple[tuple[str, object], ...] = (
+        (
+            "source-id-list",
+            _replace_mapping(mappings, _unsafe_replace(first, source_id=[])),
+        ),
+        ("outer-list", list(mappings)),
+        ("outer-limit", (first,) * 4097),
+        ("member-class", _replace_mapping(mappings, None)),
+        (
+            "source-id-type",
+            _replace_mapping(mappings, _unsafe_replace(first, source_id=1)),
+        ),
+        (
+            "phase-id-type",
+            _replace_mapping(mappings, _unsafe_replace(first, phase_id=2)),
+        ),
+        (
+            "phase-path-type",
+            _replace_mapping(mappings, _unsafe_replace(first, phase_path=None)),
+        ),
+    )
+
+    for case, malformed in cases:
+        result = validate_mapping_readiness(
+            tmp_path,
+            source_items,
+            cast(Any, malformed),
+            inventory,
+            operation=MappingOperation.PLAN,
+            target_phase_id="02",
+        )
+
+        assert isinstance(result, Failure), case
+        assert result.issue.code == "mapping-set-invalid", case
+        assert not hasattr(result, "value"), case
+
+
+def _malformed_mapping_nested_cases(
+    mappings: tuple[ManifestMapping, ...],
+) -> tuple[tuple[str, tuple[ManifestMapping, ...]], ...]:
+    first = mappings[0]
+    phase_plan_path = f"{first.phase_path}/02-01-PLAN.md"
+    invalid_scalar = "\ud800"
+    cases: list[tuple[str, tuple[ManifestMapping, ...]]] = []
+    for field, valid_path in (
+        ("plan_paths", phase_plan_path),
+        ("evidence_paths", ".planning/evidence/REQ-000001.json"),
+        ("policy_references", "ACE-S2-OPEN-SPEC-AUTHORITY"),
+    ):
+        families: tuple[tuple[str, object], ...] = (
+            ("container", [valid_path]),
+            ("limit", (valid_path,) * 4097),
+            ("member", (1,)),
+            ("unicode", (invalid_scalar,)),
+            ("unsorted", (valid_path + "-b", valid_path + "-a")),
+            ("duplicate", (valid_path, valid_path)),
+        )
+        if field != "policy_references":
+            families += (
+                ("alias", (valid_path, valid_path.swapcase())),
+                ("noncanonical", ("../outside",)),
+            )
+        else:
+            families += (("syntax", ("not-a-policy-reference",)),)
+        for family, value in families:
+            cases.append(
+                (
+                    f"{field}-{family}",
+                    _replace_mapping(
+                        mappings,
+                        _unsafe_replace(first, **{field: value}),
+                    ),
+                )
+            )
+
+    outer_cases = (
+        ("source-order", (mappings[1], mappings[0], *mappings[2:])),
+        (
+            "source-duplicate",
+            (
+                mappings[0],
+                replace(mappings[1], source_id=mappings[0].source_id),
+                *mappings[2:],
+            ),
+        ),
+        (
+            "source-syntax",
+            _replace_mapping(mappings, replace(first, source_id="REQ-1")),
+        ),
+        (
+            "phase-syntax",
+            _replace_mapping(mappings, replace(first, phase_id="2")),
+        ),
+        (
+            "phase-path-shape",
+            _replace_mapping(mappings, replace(first, phase_path="phases/02-wrong")),
+        ),
+        (
+            "phase-path-consistency",
+            _replace_mapping(
+                mappings,
+                replace(first, phase_path=".planning/phases/03-wrong"),
+            ),
+        ),
+        (
+            "plan-phase-consistency",
+            _replace_mapping(
+                mappings,
+                replace(
+                    first,
+                    plan_paths=(".planning/phases/03-wrong/03-01-PLAN.md",),
+                ),
+            ),
+        ),
+        (
+            "aggregate-byte-limit",
+            _replace_mapping(
+                mappings,
+                replace(
+                    first,
+                    phase_path=".planning/phases/02-" + "x" * 8_388_609,
+                ),
+            ),
+        ),
+    )
+    cases.extend(outer_cases)
+    return tuple(cases)
+
+
+def test_readiness_rejects_manifest_mapping_field_tuple_order_uniqueness_and_path_families(  # noqa: E501
+    tmp_path: Path,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+
+    for case, malformed in _malformed_mapping_nested_cases(mappings):
+        result = validate_mapping_readiness(
+            tmp_path,
+            source_items,
+            malformed,
+            inventory,
+            operation=MappingOperation.PLAN,
+            target_phase_id="02",
+        )
+
+        assert isinstance(result, Failure), case
+        assert result.issue.code == "mapping-set-invalid", case
+        assert not hasattr(result, "value"), case
+
+
+def test_builder_and_readiness_share_canonical_mapping_projection() -> None:
+    source_items, registry, baseline = _baseline()
+    compact_state = _source_state_with_tombstone(source_items)
+    compact_ids = {item.id for item in compact_state.active}
+    inventory = replace(
+        baseline,
+        assignments=tuple(
+            assignment
+            for assignment in baseline.assignments
+            if assignment.source_id in compact_ids
+        ),
+    )
+    expected = (
+        ManifestMapping(
+            source_id="REQ-000001",
+            phase_id="02",
+            phase_path=".planning/phases/02-source-to-execution-mapping",
+            plan_paths=(),
+            evidence_paths=(),
+            policy_references=(
+                "ACE-S2-OPEN-SPEC-AUTHORITY",
+                "ACE-S4-CONTEXT-PARITY",
+            ),
+        ),
+        ManifestMapping(
+            source_id="SCN-000001",
+            phase_id="01",
+            phase_path=".planning/phases/01-stable-identity-and-migration",
+            plan_paths=(),
+            evidence_paths=(),
+            policy_references=(),
+        ),
+    )
+
+    built = build_manifest_mappings(compact_state, inventory, registry)
+    assert isinstance(built, Success)
+    assert built.value == expected
+
+    ready = validate_mapping_readiness(
+        REPOSITORY_ROOT,
+        compact_state,
+        expected,
+        inventory,
+        operation=MappingOperation.PLAN,
+        target_phase_id="02",
+    )
+    assert isinstance(ready, Success)
+    assert ready.value.ready
+
+    module = ast.parse(inspect.getsource(execution_mapping))
+    functions = {
+        node.name: node
+        for node in module.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for public_name in ("build_manifest_mappings", "validate_mapping_readiness"):
+        helper_calls = [
+            node
+            for node in ast.walk(functions[public_name])
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_project_canonical_manifest_mappings"
+        ]
+        assert len(helper_calls) == 1, public_name
+    constructors = {
+        name
+        for name, function in functions.items()
+        if any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "ManifestMapping"
+            for node in ast.walk(function)
+        )
+    }
+    assert constructors == {"_project_canonical_manifest_mappings"}
 
 
 def test_plan_requires_only_complete_assignments_and_selected_phase(
