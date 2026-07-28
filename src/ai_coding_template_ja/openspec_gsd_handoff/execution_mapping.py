@@ -26,7 +26,7 @@ from .policy_reference import (
     PolicySectionObservation,
     validate_policy_references,
 )
-from .source_identity import SourceIdentityState
+from .source_identity import SourceIdentityState, validate_source_identity_state
 
 _INVENTORY_VERSION = "openspec-gsd-planning-inventory-v1"
 _MAX_ENTRIES = 4096
@@ -654,8 +654,10 @@ def build_manifest_mappings(
 ) -> Result[tuple[ManifestMapping, ...]]:
     """Build a deterministic complete baseline from caller-declared assignments."""
 
-    if not isinstance(source_items, SourceIdentityState):
+    source_result = validate_source_identity_state(source_items)
+    if isinstance(source_result, Failure):
         return _failure("mapping-input-invalid")
+    source_items = source_result.value
     inventory_result = validate_planning_inventory(planning_inventory)
     if isinstance(inventory_result, Failure):
         return inventory_result
@@ -1060,8 +1062,10 @@ def validate_mapping_readiness(
 
     if not isinstance(operation, MappingOperation):
         return _failure("mapping-operation-invalid")
-    if not isinstance(source_items, SourceIdentityState):
+    source_result = validate_source_identity_state(source_items)
+    if isinstance(source_result, Failure):
         return _failure("mapping-input-invalid")
+    source_items = source_result.value
     if type(mappings) is not tuple or len(mappings) > _MAX_ENTRIES:
         return _failure("mapping-set-invalid")
     inventory_result = validate_planning_inventory(planning_inventory)
