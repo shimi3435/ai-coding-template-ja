@@ -2207,6 +2207,128 @@ def test_cyclic_phase_graph_is_unknown_and_never_admitted(
 
 
 @pytest.mark.parametrize(
+    "component",
+    [
+        ".planning",
+        ".planning/openspec",
+        f".planning/openspec/{CHANGE_ID}",
+    ],
+)
+def test_manifest_intermediate_symlink_is_unknown_and_never_admitted(
+    tmp_path: Path,
+    component: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    linked_component = repository / component
+    external_component = tmp_path / f"external-{component.replace('/', '-')}"
+    linked_component.rename(external_component)
+    linked_component.symlink_to(external_component, target_is_directory=True)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-manifest-unreadable",)
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
+    assert decision.manifest_sha256 is None
+    assert boundary.source_calls == 0
+    assert boundary.phase_calls == 0
+    assert boundary.capability_calls == 0
+
+
+@pytest.mark.parametrize(
+    "component",
+    [
+        ".",
+        ".planning",
+        ".planning/openspec",
+        f".planning/openspec/{CHANGE_ID}",
+        MANIFEST_PATH,
+    ],
+)
+def test_manifest_parent_identity_change_is_unknown_and_never_admitted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    component: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    manifest_path = repository / MANIFEST_PATH
+    selected_component = repository if component == "." else repository / component
+    detached_component = tmp_path / f"detached-{component.replace('/', '-')}"
+    original_open = lifecycle_gate.os.open
+    original_close = lifecycle_gate.os.close
+    opened_descriptors: set[int] = set()
+    closed_descriptors: set[int] = set()
+    replaced = False
+
+    def replace_parent_after_manifest_open(
+        path: str | bytes | Path,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal replaced
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        opened_descriptors.add(descriptor)
+        manifest_opened = (dir_fd is None and Path(path) == manifest_path) or (
+            dir_fd is not None and path == "handoff.json"
+        )
+        if not replaced and manifest_opened:
+            selected_component.rename(detached_component)
+            selected_component.symlink_to(
+                detached_component,
+                target_is_directory=component != MANIFEST_PATH,
+            )
+            replaced = True
+        return descriptor
+
+    def record_close(descriptor: int) -> None:
+        closed_descriptors.add(descriptor)
+        original_close(descriptor)
+
+    monkeypatch.setattr(lifecycle_gate.os, "open", replace_parent_after_manifest_open)
+    monkeypatch.setattr(lifecycle_gate.os, "close", record_close)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert replaced
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-manifest-identity-changed",)
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
+    assert decision.manifest_sha256 is None
+    assert boundary.source_calls == 0
+    assert boundary.phase_calls == 0
+    assert boundary.capability_calls == 0
+    assert opened_descriptors <= closed_descriptors
+
+
+@pytest.mark.parametrize(
     "case",
     [
         "source-failure",
