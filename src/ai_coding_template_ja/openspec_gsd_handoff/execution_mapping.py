@@ -35,6 +35,7 @@ _CHANGE_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _SOURCE_ID = re.compile(r"(?:REQ|SCN)-[0-9]{6}\Z")
 _PHASE_ID = re.compile(r"[0-9]{2}\Z")
 _POLICY_ID = re.compile(r"ACE-[A-Z0-9]+(?:-[A-Z0-9]+)*\Z")
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 
@@ -310,29 +311,123 @@ def _inventory_bytes(inventory: PlanningInventory) -> int:
                 evidence.plan_path or "",
             )
         )
+    for observation in inventory.policy_observations:
+        values.extend(
+            (
+                observation.reference_id,
+                observation.raw_source_path,
+                observation.source_path,
+                observation.raw_heading,
+                observation.normalized_heading,
+                observation.normalized_body,
+                observation.sha256,
+            )
+        )
     try:
         return sum(len(value.encode("utf-8")) for value in values)
     except UnicodeEncodeError as error:
         raise _InventoryError("mapping-inventory-value-invalid") from error
 
 
-def _validate_declarations(inventory: PlanningInventory) -> None:
+def _validate_inventory_shape(value: object) -> PlanningInventory:
+    if type(value) is not PlanningInventory:
+        raise _InventoryError("mapping-input-invalid")
+    inventory = value
+    if type(inventory.version) is not str or type(inventory.change_id) is not str:
+        raise _InventoryError("mapping-inventory-value-invalid")
+    collections: tuple[tuple[object, type[object]], ...] = (
+        (inventory.phases, PhaseDeclaration),
+        (inventory.assignments, PhaseAssignment),
+        (inventory.plans, PlanDeclaration),
+        (inventory.evidence, EvidenceDeclaration),
+        (inventory.policy_observations, PolicySectionObservation),
+    )
+    for items, member_type in collections:
+        if type(items) is not tuple:
+            raise _InventoryError("mapping-inventory-value-invalid")
+        if len(items) > _MAX_ENTRIES:
+            raise _InventoryError("mapping-inventory-limit-exceeded")
+        if any(type(item) is not member_type for item in items):
+            raise _InventoryError("mapping-inventory-value-invalid")
+
+    for phase in inventory.phases:
+        if any(
+            type(item) is not str
+            for item in (phase.change_id, phase.phase_id, phase.phase_path)
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+    for assignment in inventory.assignments:
+        if any(
+            type(item) is not str
+            for item in (
+                assignment.change_id,
+                assignment.source_id,
+                assignment.phase_id,
+            )
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+        if (
+            type(assignment.policy_references) is not tuple
+            or len(assignment.policy_references) > _MAX_ENTRIES
+            or any(
+                type(reference_id) is not str
+                for reference_id in assignment.policy_references
+            )
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+    for plan in inventory.plans:
+        if any(
+            type(item) is not str for item in (plan.change_id, plan.phase_id, plan.path)
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+    for evidence in inventory.evidence:
+        if any(
+            type(item) is not str
+            for item in (evidence.change_id, evidence.phase_id, evidence.path)
+        ) or any(
+            item is not None and type(item) is not str
+            for item in (evidence.source_id, evidence.plan_path)
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+    for observation in inventory.policy_observations:
+        strings = (
+            observation.reference_id,
+            observation.raw_source_path,
+            observation.source_path,
+            observation.raw_heading,
+            observation.normalized_heading,
+            observation.normalized_body,
+            observation.sha256,
+        )
+        if (
+            any(type(item) is not str for item in strings)
+            or type(observation.body_length) is not int
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+        try:
+            normalized_body_length = len(observation.normalized_body.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise _InventoryError("mapping-inventory-value-invalid") from error
+        if (
+            _POLICY_ID.fullmatch(observation.reference_id) is None
+            or not observation.raw_heading
+            or not observation.normalized_heading
+            or _SHA256.fullmatch(observation.sha256) is None
+            or observation.body_length != normalized_body_length
+            or observation.body_length > _MAX_BYTES
+        ):
+            raise _InventoryError("mapping-inventory-value-invalid")
+        _canonical_path(observation.raw_source_path)
+        _canonical_path(observation.source_path)
+    return inventory
+
+
+def _validate_inventory_invariants(inventory: PlanningInventory) -> None:
     if (
         inventory.version != _INVENTORY_VERSION
         or _CHANGE_ID.fullmatch(inventory.change_id) is None
     ):
         raise _InventoryError("mapping-inventory-value-invalid")
-    collections = (
-        inventory.phases,
-        inventory.assignments,
-        inventory.plans,
-        inventory.evidence,
-        inventory.policy_observations,
-    )
-    if any(type(items) is not tuple for items in collections):
-        raise _InventoryError("mapping-inventory-value-invalid")
-    if any(len(items) > _MAX_ENTRIES for items in collections):
-        raise _InventoryError("mapping-inventory-limit-exceeded")
     if _inventory_bytes(inventory) > _MAX_BYTES:
         raise _InventoryError("mapping-inventory-byte-limit-exceeded")
     if any(
@@ -351,8 +446,6 @@ def _validate_declarations(inventory: PlanningInventory) -> None:
     phase_ids_by_path: dict[str, str] = {}
     aliases: dict[str, str] = {}
     for phase in inventory.phases:
-        if not isinstance(phase, PhaseDeclaration):
-            raise _InventoryError("mapping-inventory-value-invalid")
         if _PHASE_ID.fullmatch(phase.phase_id) is None:
             raise _InventoryError("mapping-phase-invalid")
         if phase.phase_id in phases_by_id:
@@ -376,8 +469,6 @@ def _validate_declarations(inventory: PlanningInventory) -> None:
 
     assignment_ids: set[str] = set()
     for assignment in inventory.assignments:
-        if not isinstance(assignment, PhaseAssignment):
-            raise _InventoryError("mapping-inventory-value-invalid")
         if _SOURCE_ID.fullmatch(assignment.source_id) is None:
             raise _InventoryError("mapping-source-invalid")
         if assignment.source_id in assignment_ids:
@@ -399,7 +490,7 @@ def _validate_declarations(inventory: PlanningInventory) -> None:
     plan_paths: set[str] = set()
     plans_by_phase: dict[str, set[str]] = {}
     for plan in inventory.plans:
-        if not isinstance(plan, PlanDeclaration) or plan.phase_id not in phases_by_id:
+        if plan.phase_id not in phases_by_id:
             raise _InventoryError("mapping-plan-invalid")
         plan_path = _canonical_path(plan.path)
         phase = phases_by_id[plan.phase_id]
@@ -420,10 +511,7 @@ def _validate_declarations(inventory: PlanningInventory) -> None:
 
     evidence_paths: set[str] = set()
     for evidence in inventory.evidence:
-        if (
-            not isinstance(evidence, EvidenceDeclaration)
-            or evidence.phase_id not in phases_by_id
-        ):
+        if evidence.phase_id not in phases_by_id:
             raise _InventoryError("mapping-evidence-invalid")
         evidence_path = _canonical_path(evidence.path)
         if evidence.source_id is None and evidence.plan_path is None:
@@ -442,6 +530,17 @@ def _validate_declarations(inventory: PlanningInventory) -> None:
             raise _InventoryError("mapping-path-alias")
         aliases[alias] = evidence_path
         evidence_paths.add(evidence_path)
+
+
+def validate_planning_inventory(value: object) -> Result[PlanningInventory]:
+    """Validate one complete in-memory planning inventory before traversal."""
+
+    try:
+        inventory = _validate_inventory_shape(value)
+        _validate_inventory_invariants(inventory)
+        return Success(inventory)
+    except _InventoryError as error:
+        return _failure(error.code)
 
 
 def _parse_inventory(
@@ -541,8 +640,7 @@ def read_planning_inventory(
         if type(policy_observations) is not tuple:
             raise _InventoryError("mapping-policy-observations-invalid")
         inventory = _parse_inventory(content, policy_observations)
-        _validate_declarations(inventory)
-        return Success(inventory)
+        return validate_planning_inventory(inventory)
     except _InventoryError as error:
         return _failure(error.code)
     except (OSError, RuntimeError, ValueError):
@@ -556,14 +654,12 @@ def build_manifest_mappings(
 ) -> Result[tuple[ManifestMapping, ...]]:
     """Build a deterministic complete baseline from caller-declared assignments."""
 
-    if not isinstance(source_items, SourceIdentityState) or not isinstance(
-        planning_inventory, PlanningInventory
-    ):
+    if not isinstance(source_items, SourceIdentityState):
         return _failure("mapping-input-invalid")
-    try:
-        _validate_declarations(planning_inventory)
-    except _InventoryError as error:
-        return _failure(error.code)
+    inventory_result = validate_planning_inventory(planning_inventory)
+    if isinstance(inventory_result, Failure):
+        return inventory_result
+    planning_inventory = inventory_result.value
     active_ids = {item.id for item in source_items.active}
     tombstone_ids = {item.id for item in source_items.tombstones}
     assignments = planning_inventory.assignments
@@ -964,19 +1060,18 @@ def validate_mapping_readiness(
 
     if not isinstance(operation, MappingOperation):
         return _failure("mapping-operation-invalid")
-    if not isinstance(source_items, SourceIdentityState) or not isinstance(
-        planning_inventory, PlanningInventory
-    ):
+    if not isinstance(source_items, SourceIdentityState):
         return _failure("mapping-input-invalid")
     if type(mappings) is not tuple or len(mappings) > _MAX_ENTRIES:
         return _failure("mapping-set-invalid")
+    inventory_result = validate_planning_inventory(planning_inventory)
+    if isinstance(inventory_result, Failure):
+        return inventory_result
+    planning_inventory = inventory_result.value
     try:
-        _validate_declarations(planning_inventory)
         root = repository_root.resolve(strict=True)
         if not root.is_dir():
             raise OSError
-    except _InventoryError as error:
-        return _failure(error.code)
     except (OSError, RuntimeError, ValueError):
         return _failure("mapping-repository-root-invalid")
 

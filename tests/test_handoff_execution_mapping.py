@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -107,7 +107,7 @@ def _baseline():
     return source_items, registry, inventory.value
 
 
-def _unsafe_replace[T](value: T, /, **changes: object) -> T:
+def _unsafe_replace(value: Any, /, **changes: object) -> Any:
     copy = replace(value)
     for field, item in changes.items():
         object.__setattr__(copy, field, item)
@@ -287,6 +287,9 @@ def test_planning_inventory_runtime_validation_rejects_every_malformed_family() 
     inventory = _inventory_with_execution_declarations(baseline)
     validator = getattr(execution_mapping, "validate_planning_inventory", None)
     assert validator is not None
+    valid = validator(inventory)
+    assert isinstance(valid, Success)
+    assert valid.value is inventory
 
     for case, malformed, expected_code in _malformed_inventory_cases(inventory):
         validated = validator(malformed)
