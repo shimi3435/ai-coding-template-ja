@@ -963,28 +963,46 @@ def _observation_key(
     )
 
 
-def _validate_inventory(inventory: SourceInventory) -> None:
+def _validate_inventory(inventory: object) -> SourceInventory:
+    if type(inventory) is not SourceInventory:
+        raise _SourceInputError("source-inventory-invalid")
     if type(inventory.items) is not tuple:
         raise _SourceInputError("source-inventory-invalid")
     if len(inventory.items) > _MAX_SOURCE_ITEMS:
         raise _SourceInputError("source-item-limit-exceeded")
+    if any(type(item) is not SourceObservation for item in inventory.items):
+        raise _SourceInputError("source-inventory-invalid")
+    for observation in inventory.items:
+        if (
+            type(observation.category) is not SourceCategory
+            or type(observation.source_path) is not str
+            or type(observation.raw_heading) is not str
+            or type(observation.normalized_heading) is not str
+            or type(observation.normalized_block) is not str
+        ):
+            raise _SourceInputError("source-inventory-invalid")
+        parent = observation.parent_locator
+        if parent is not None and (
+            type(parent) is not SourceParentLocator
+            or type(parent.source_path) is not str
+            or type(parent.normalized_heading) is not str
+        ):
+            raise _SourceInputError("source-inventory-invalid")
+
     identities: set[tuple[SourceCategory, str, str, SourceParentLocator | None]] = set()
     aggregate_bytes = 0
     for observation in inventory.items:
-        if not isinstance(observation, SourceObservation):
-            raise _SourceInputError("source-inventory-invalid")
-        if type(observation.category) is not SourceCategory:
-            raise _SourceInputError("source-inventory-invalid")
-        _validate_persisted_path(observation.source_path)
-        normalized_heading = _normalized_persisted_heading(
-            observation.raw_heading,
-            observation.category,
-        )
+        try:
+            _validate_persisted_path(observation.source_path)
+            normalized_heading = _normalized_persisted_heading(
+                observation.raw_heading,
+                observation.category,
+            )
+        except _SourceInputError as error:
+            raise _SourceInputError("source-inventory-invalid") from error
         if normalized_heading != observation.normalized_heading:
             raise _SourceInputError("source-inventory-invalid")
-        if not isinstance(
-            observation.normalized_block, str
-        ) or not observation.normalized_block.endswith("\n"):
+        if not observation.normalized_block.endswith("\n"):
             raise _SourceInputError("source-inventory-invalid")
         if observation.category is SourceCategory.REQUIREMENT:
             if observation.parent_locator is not None:
@@ -993,10 +1011,12 @@ def _validate_inventory(inventory: SourceInventory) -> None:
             parent = observation.parent_locator
             if parent is None:
                 raise _SourceInputError("source-parent-unresolved")
-            _validate_persisted_path(parent.source_path)
+            try:
+                _validate_persisted_path(parent.source_path)
+            except _SourceInputError as error:
+                raise _SourceInputError("source-parent-unresolved") from error
             if (
-                not isinstance(parent.normalized_heading, str)
-                or not parent.normalized_heading.startswith("Requirement:")
+                not parent.normalized_heading.startswith("Requirement:")
                 or _normalize_heading_text(parent.normalized_heading)
                 != parent.normalized_heading
             ):
@@ -1016,6 +1036,7 @@ def _validate_inventory(inventory: SourceInventory) -> None:
         )
         if aggregate_bytes > _MAX_SOURCE_STATE_BYTES:
             raise _SourceInputError("source-item-limit-exceeded")
+    return inventory
 
 
 def _active_identity(
@@ -1074,18 +1095,36 @@ def _explicit_match_category(match: ExplicitSourceMatch) -> SourceCategory:
 
 
 def _validate_explicit_matches(
-    explicit_matches: Sequence[ExplicitSourceMatch],
+    explicit_matches: object,
     inventory: SourceInventory,
     previous_state: SourceIdentityState,
 ) -> dict[
     tuple[SourceCategory, str, str, SourceParentLocator | None],
     ActiveSourceItem,
 ]:
-    if (
-        isinstance(explicit_matches, (str, bytes))
-        or len(explicit_matches) > _MAX_SOURCE_ITEMS
+    if isinstance(explicit_matches, (str, bytes)) or not isinstance(
+        explicit_matches, Sequence
     ):
         raise _SourceInputError("source-explicit-match-invalid")
+    if len(explicit_matches) > _MAX_SOURCE_ITEMS:
+        raise _SourceInputError("source-explicit-match-invalid")
+    if any(type(match) is not ExplicitSourceMatch for match in explicit_matches):
+        raise _SourceInputError("source-explicit-match-invalid")
+    for match in explicit_matches:
+        if (
+            type(match.source_path) is not str
+            or type(match.normalized_heading) is not str
+            or type(match.source_id) is not str
+        ):
+            raise _SourceInputError("source-explicit-match-invalid")
+        parent = match.parent_locator
+        if parent is not None and (
+            type(parent) is not SourceParentLocator
+            or type(parent.source_path) is not str
+            or type(parent.normalized_heading) is not str
+        ):
+            raise _SourceInputError("source-explicit-match-invalid")
+
     inventory_keys = {_observation_key(item) for item in inventory.items}
     active_by_id = {item.id: item for item in previous_state.active}
     matches: dict[
@@ -1095,18 +1134,21 @@ def _validate_explicit_matches(
     matched_ids: set[str] = set()
 
     for match in explicit_matches:
-        if not isinstance(match, ExplicitSourceMatch):
-            raise _SourceInputError("source-explicit-match-invalid")
-        _validate_persisted_path(match.source_path)
+        try:
+            _validate_persisted_path(match.source_path)
+        except _SourceInputError as error:
+            raise _SourceInputError("source-explicit-match-invalid") from error
         if (
-            not isinstance(match.normalized_heading, str)
-            or _normalize_heading_text(match.normalized_heading)
+            _normalize_heading_text(match.normalized_heading)
             != match.normalized_heading
         ):
             raise _SourceInputError("source-explicit-match-invalid")
         category = _explicit_match_category(match)
         if match.parent_locator is not None:
-            _validate_persisted_path(match.parent_locator.source_path)
+            try:
+                _validate_persisted_path(match.parent_locator.source_path)
+            except _SourceInputError as error:
+                raise _SourceInputError("source-explicit-match-invalid") from error
             if (
                 not match.parent_locator.normalized_heading.startswith("Requirement:")
                 or _normalize_heading_text(match.parent_locator.normalized_heading)
@@ -1165,7 +1207,7 @@ def reconcile_source_items(
         return validated_previous_state
     previous_state = validated_previous_state.value
     try:
-        _validate_inventory(inventory)
+        inventory = _validate_inventory(inventory)
         explicit_by_observation = _validate_explicit_matches(
             explicit_matches,
             inventory,
