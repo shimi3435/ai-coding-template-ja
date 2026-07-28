@@ -548,11 +548,12 @@ def _validate_phase_graph(
     ):
         return False
     planning_inventory = inventory_result.value
+    inventory_paths = {
+        phase.phase_id: phase.phase_path for phase in planning_inventory.phases
+    }
+    expected_paths = {node.phase_id: node.phase_path for node in value.expected_nodes}
     observed_paths = {node.phase_id: node.phase_path for node in value.observed_nodes}
-    return all(
-        observed_paths.get(phase.phase_id) == phase.phase_path
-        for phase in planning_inventory.phases
-    )
+    return expected_paths == inventory_paths and observed_paths == inventory_paths
 
 
 def _validate_capabilities(
