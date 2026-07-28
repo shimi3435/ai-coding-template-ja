@@ -308,6 +308,120 @@ def test_malformed_nested_artifact_field_is_unknown(
     _assert_unknown(complete, malformed, "canonical-observation-incomplete")
 
 
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "total-non-integer",
+        "total-boolean",
+        "total-negative",
+        "complete-non-integer",
+        "complete-boolean",
+        "complete-negative",
+        "remaining-non-integer",
+        "remaining-boolean",
+        "remaining-negative",
+        "total-task-count-mismatch",
+        "complete-done-count-mismatch",
+        "remaining-open-count-mismatch",
+        "tasks-not-tuple",
+        "task-wrong-type",
+        "task-id-wrong-type",
+        "task-description-wrong-type",
+        "task-done-wrong-type",
+    ],
+)
+def test_malformed_progress_observation_is_unknown_before_comparison(
+    tmp_path: Path,
+    malformed_side: str,
+    mutation: str,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    progress = complete.value.progress
+    first_task = progress.tasks[0]
+    malformed_progress: Any
+    if mutation == "total-non-integer":
+        malformed_progress = replace(progress, total="2")
+    elif mutation == "total-boolean":
+        malformed_progress = replace(progress, total=True)
+    elif mutation == "total-negative":
+        malformed_progress = replace(progress, total=-1)
+    elif mutation == "complete-non-integer":
+        malformed_progress = replace(progress, complete="1")
+    elif mutation == "complete-boolean":
+        malformed_progress = replace(progress, complete=True)
+    elif mutation == "complete-negative":
+        malformed_progress = replace(progress, complete=-1)
+    elif mutation == "remaining-non-integer":
+        malformed_progress = replace(progress, remaining="1")
+    elif mutation == "remaining-boolean":
+        malformed_progress = replace(progress, remaining=False)
+    elif mutation == "remaining-negative":
+        malformed_progress = replace(progress, remaining=-1)
+    elif mutation == "total-task-count-mismatch":
+        malformed_progress = replace(progress, total=progress.total + 1)
+    elif mutation == "complete-done-count-mismatch":
+        malformed_progress = replace(progress, complete=progress.complete + 1)
+    elif mutation == "remaining-open-count-mismatch":
+        malformed_progress = replace(progress, remaining=progress.remaining + 1)
+    elif mutation == "tasks-not-tuple":
+        malformed_progress = replace(progress, tasks=list(progress.tasks))
+    elif mutation == "task-wrong-type":
+        malformed_progress = replace(progress, tasks=(None, *progress.tasks[1:]))
+    elif mutation == "task-id-wrong-type":
+        malformed_progress = replace(
+            progress,
+            tasks=(replace(first_task, id=1), *progress.tasks[1:]),
+        )
+    elif mutation == "task-description-wrong-type":
+        malformed_progress = replace(
+            progress,
+            tasks=(replace(first_task, description=None), *progress.tasks[1:]),
+        )
+    else:
+        malformed_progress = replace(
+            progress,
+            tasks=(replace(first_task, done=1), *progress.tasks[1:]),
+        )
+
+    malformed_observation = replace(
+        complete.value,
+        progress=malformed_progress,
+    )
+    malformed: Any = Success(malformed_observation)
+    expected = malformed if malformed_side == "expected" else complete
+    observed = malformed if malformed_side == "observed" else complete
+
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    "changed_source_item_ids",
+    [
+        ["REQ-000001"],
+        ("REQ-000001", 1),
+    ],
+)
+def test_malformed_changed_source_ids_observation_is_unknown_before_sorting(
+    tmp_path: Path,
+    malformed_side: str,
+    changed_source_item_ids: object,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    malformed_observation = replace(
+        complete.value,
+        changed_source_item_ids=changed_source_item_ids,
+    )
+    malformed: Any = Success(malformed_observation)
+    expected = malformed if malformed_side == "expected" else complete
+    observed = malformed if malformed_side == "observed" else complete
+
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
 def test_bounded_empty_claims_are_unknown(tmp_path: Path) -> None:
     repository, claims = _write_complete_change(tmp_path)
     expected = _observe_initial(repository, claims)
