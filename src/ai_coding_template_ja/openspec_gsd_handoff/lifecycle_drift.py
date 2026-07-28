@@ -16,6 +16,7 @@ from .models import (
     Failure,
     IssueCategory,
     KnownState,
+    NormalizedTask,
     Progress,
     Result,
     Success,
@@ -211,7 +212,7 @@ def _is_complete_observation(observation: object) -> bool:
     if (
         type(observation.artifacts) is not tuple
         or type(observation.changed_source_item_ids) is not tuple
-        or not isinstance(observation.progress, Progress)
+        or not _is_complete_progress(observation.progress)
         or not isinstance(observation.source_items, SourceIdentityState)
     ):
         return False
@@ -247,8 +248,44 @@ def _is_complete_observation(observation: object) -> bool:
         for digest in (artifact.raw_sha256, artifact.specification_sha256)
     ):
         return False
+    if any(
+        type(source_item_id) is not str
+        for source_item_id in observation.changed_source_item_ids
+    ):
+        return False
     return observation.changed_source_item_ids == tuple(
         sorted(set(observation.changed_source_item_ids))
+    )
+
+
+def _is_complete_progress(progress: object) -> bool:
+    if not isinstance(progress, Progress):
+        return False
+    if (
+        type(progress.total) is not int
+        or type(progress.complete) is not int
+        or type(progress.remaining) is not int
+        or progress.total < 0
+        or progress.complete < 0
+        or progress.remaining < 0
+        or type(progress.tasks) is not tuple
+    ):
+        return False
+    if any(not isinstance(task, NormalizedTask) for task in progress.tasks):
+        return False
+    if any(
+        type(task.id) is not str
+        or type(task.description) is not str
+        or type(task.done) is not bool
+        for task in progress.tasks
+    ):
+        return False
+    complete = sum(task.done for task in progress.tasks)
+    return (
+        progress.total == len(progress.tasks)
+        and progress.complete == complete
+        and progress.remaining == len(progress.tasks) - complete
+        and progress.total == progress.complete + progress.remaining
     )
 
 
