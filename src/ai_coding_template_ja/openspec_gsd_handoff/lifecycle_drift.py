@@ -369,6 +369,8 @@ def classify_canonical_source_drift(
         observed.value
     ):
         return _unknown("canonical-observation-incomplete")
+    if expected.value.changed_source_item_ids:
+        return _unknown("source-reconciliation-incomplete")
 
     expected_by_key = {
         (artifact.kind, artifact.path): artifact

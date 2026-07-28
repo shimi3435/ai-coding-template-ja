@@ -113,7 +113,14 @@ def _classify_after_change(
     claims: tuple[ArtifactClaim, ...],
     change: Callable[[], object],
 ):
-    expected = _observe_initial(repository, claims)
+    allocated = _observe_initial(repository, claims)
+    expected = observe_canonical_source(
+        repository,
+        CHANGE_ID,
+        claims,
+        expected_source_items=allocated.value.source_items,
+    )
+    assert isinstance(expected, Success)
     change()
     observed = observe_canonical_source(
         repository,
@@ -126,7 +133,14 @@ def _classify_after_change(
 
 def test_fixed_complete_equal_observations_are_clean(tmp_path: Path) -> None:
     repository, claims = _write_complete_change(tmp_path)
-    expected = _observe_initial(repository, claims)
+    allocated = _observe_initial(repository, claims)
+    expected = observe_canonical_source(
+        repository,
+        CHANGE_ID,
+        claims,
+        expected_source_items=allocated.value.source_items,
+    )
+    assert isinstance(expected, Success)
 
     observed = observe_canonical_source(
         repository,
@@ -655,7 +669,10 @@ def test_canonical_observation_rejects_count_and_aggregate_limit_plus_one(
     bounded = Success(mutate(baseline, at_limit))
     excessive = Success(mutate(baseline, over_limit))
 
-    bounded_decision = classify_canonical_source_drift(bounded, bounded)
+    bounded_decision = classify_canonical_source_drift(
+        Success(baseline) if bound == "changed-source-ids" else bounded,
+        bounded,
+    )
     expected = excessive if malformed_side == "expected" else bounded
     observed = excessive if malformed_side == "observed" else bounded
 
@@ -1028,7 +1045,14 @@ def test_bounded_invalid_source_state_is_unknown(tmp_path: Path) -> None:
 
 def test_fixed_artifacts_do_not_depend_on_mtime(tmp_path: Path) -> None:
     repository, claims = _write_complete_change(tmp_path)
-    expected = _observe_initial(repository, claims)
+    allocated = _observe_initial(repository, claims)
+    expected = observe_canonical_source(
+        repository,
+        CHANGE_ID,
+        claims,
+        expected_source_items=allocated.value.source_items,
+    )
+    assert isinstance(expected, Success)
     for claim in claims:
         target = repository / claim.path
         current = target.stat()
