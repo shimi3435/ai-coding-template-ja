@@ -31,6 +31,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
     read_policy_reference_registry,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
+    SourceCategory,
     SourceIdentityState,
     SourceTombstone,
     read_source_inventory,
@@ -112,6 +113,189 @@ def _unsafe_replace(value: Any, /, **changes: object) -> Any:
     for field, item in changes.items():
         object.__setattr__(copy, field, item)
     return copy
+
+
+def _source_state_with_tombstone(
+    state: SourceIdentityState,
+) -> SourceIdentityState:
+    scenario = next(
+        item for item in state.active if item.category is SourceCategory.SCENARIO
+    )
+    requirement = next(item for item in state.active if item.id == scenario.parent_id)
+    requirement_suffix = int(requirement.id.removeprefix("REQ-"))
+    scenario_suffix = int(scenario.id.removeprefix("SCN-"))
+    return SourceIdentityState(
+        next_requirement_id=requirement_suffix + 2,
+        next_scenario_id=scenario_suffix + 1,
+        active=(requirement, scenario),
+        tombstones=(
+            SourceTombstone(
+                id=f"REQ-{requirement_suffix + 1:06d}",
+                category=SourceCategory.REQUIREMENT,
+                last_source_path=requirement.source_path,
+                last_raw_heading="### Requirement: Retired mapping admission",
+                last_parent_id=None,
+                fingerprint=requirement.fingerprint,
+            ),
+        ),
+    )
+
+
+def _malformed_mapping_source_states(
+    state: SourceIdentityState,
+) -> tuple[tuple[str, object], ...]:
+    state = _source_state_with_tombstone(state)
+    requirement, scenario = state.active
+    tombstone = state.tombstones[0]
+    requirement_suffix = int(requirement.id.removeprefix("REQ-"))
+    aliased_path_parts = requirement.source_path.split("/")
+    aliased_path_parts[-2] = aliased_path_parts[-2].upper()
+    duplicate = replace(
+        requirement,
+        id=f"REQ-{state.next_requirement_id:06d}",
+    )
+    oversized = replace(
+        requirement,
+        raw_heading="### Requirement: " + "x" * 8_388_609,
+    )
+    return (
+        ("active-member-none", replace(state, active=(None, scenario))),
+        ("outer", object()),
+        ("next-requirement-type", replace(state, next_requirement_id="3")),
+        ("next-scenario-boolean", replace(state, next_scenario_id=True)),
+        ("counter-bound", replace(state, next_requirement_id=1_000_001)),
+        ("active-container", replace(state, active=list(state.active))),
+        ("tombstone-container", replace(state, tombstones=list(state.tombstones))),
+        ("active-member-class", replace(state, active=(tombstone, scenario))),
+        ("tombstone-member", replace(state, tombstones=(None,))),
+        ("tombstone-member-class", replace(state, tombstones=(requirement,))),
+        (
+            "active-id-field",
+            replace(state, active=(replace(requirement, id=1), scenario)),
+        ),
+        (
+            "active-category-field",
+            replace(
+                state,
+                active=(replace(requirement, category="requirement"), scenario),
+            ),
+        ),
+        (
+            "active-path-field",
+            replace(state, active=(replace(requirement, source_path=None), scenario)),
+        ),
+        (
+            "active-heading-field",
+            replace(state, active=(replace(requirement, raw_heading=None), scenario)),
+        ),
+        (
+            "active-parent-field",
+            replace(
+                state, active=(requirement, replace(scenario, parent_id="REQ-999999"))
+            ),
+        ),
+        (
+            "active-fingerprint-field",
+            replace(state, active=(replace(requirement, fingerprint=None), scenario)),
+        ),
+        (
+            "tombstone-id-field",
+            replace(state, tombstones=(replace(tombstone, id=2),)),
+        ),
+        (
+            "tombstone-category-field",
+            replace(
+                state,
+                tombstones=(replace(tombstone, category="requirement"),),
+            ),
+        ),
+        (
+            "tombstone-path-field",
+            replace(
+                state,
+                tombstones=(replace(tombstone, last_source_path=None),),
+            ),
+        ),
+        (
+            "tombstone-heading-field",
+            replace(
+                state,
+                tombstones=(replace(tombstone, last_raw_heading=None),),
+            ),
+        ),
+        (
+            "tombstone-parent-field",
+            replace(
+                state,
+                tombstones=(replace(tombstone, last_parent_id=requirement.id),),
+            ),
+        ),
+        (
+            "tombstone-fingerprint-field",
+            replace(state, tombstones=(replace(tombstone, fingerprint=None),)),
+        ),
+        (
+            "duplicate-id",
+            replace(state, tombstones=(replace(tombstone, id=requirement.id),)),
+        ),
+        (
+            "duplicate-identity",
+            replace(
+                state,
+                next_requirement_id=state.next_requirement_id + 1,
+                active=(*state.active, duplicate),
+            ),
+        ),
+        (
+            "path-alias",
+            replace(
+                state,
+                next_requirement_id=state.next_requirement_id + 1,
+                active=(
+                    *state.active,
+                    replace(
+                        duplicate,
+                        source_path="/".join(aliased_path_parts),
+                        raw_heading="### Requirement: Aliased mapping admission",
+                    ),
+                ),
+            ),
+        ),
+        ("item-limit", replace(state, active=state.active * 2049)),
+        ("byte-limit", replace(state, active=(oversized, scenario))),
+        (
+            "requirement-counter-order",
+            replace(state, next_requirement_id=requirement_suffix),
+        ),
+        (
+            "scenario-counter-order",
+            replace(
+                state,
+                next_scenario_id=int(scenario.id.removeprefix("SCN-")),
+            ),
+        ),
+    )
+
+
+def test_builder_and_readiness_reject_malformed_source_identity_state() -> None:
+    source_items, registry, inventory = _baseline()
+    mappings = _mappings(source_items, registry, inventory)
+
+    for case, malformed in _malformed_mapping_source_states(source_items):
+        builder = build_manifest_mappings(cast(Any, malformed), inventory, registry)
+        readiness = validate_mapping_readiness(
+            REPOSITORY_ROOT,
+            cast(Any, malformed),
+            mappings,
+            inventory,
+            operation=MappingOperation.PLAN,
+            target_phase_id="02",
+        )
+
+        for result in (builder, readiness):
+            assert isinstance(result, Failure), case
+            assert result.issue.code == "mapping-input-invalid", case
+            assert not hasattr(result, "value"), case
 
 
 def _replace_inventory_member(
