@@ -1025,6 +1025,81 @@ def test_malformed_canonical_nested_state_public_gate_is_wholly_unknown(
     assert decision.decision_identity is None
 
 
+def _with_malformed_canonical_string(
+    observation: CanonicalSourceObservation,
+    field: str,
+) -> CanonicalSourceObservation:
+    if field == "artifact-path":
+        artifact = observation.artifacts[0]
+        return replace(
+            observation,
+            artifacts=(
+                replace(artifact, path=artifact.path + "\ud800"),
+                *observation.artifacts[1:],
+            ),
+        )
+    if field in {"task-id", "task-description"}:
+        task = observation.progress.tasks[0]
+        attribute = field.removeprefix("task-")
+        malformed_task = replace(
+            task,
+            **{attribute: getattr(task, attribute) + "\ud800"},
+        )
+        return replace(
+            observation,
+            progress=replace(
+                observation.progress,
+                tasks=(malformed_task, *observation.progress.tasks[1:]),
+            ),
+        )
+    if field == "changed-source-id":
+        return replace(
+            observation,
+            changed_source_item_ids=("REQ-000001\ud800",),
+        )
+    raise AssertionError(field)
+
+
+@pytest.mark.parametrize("canonical_side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    "field",
+    ["artifact-path", "task-id", "task-description", "changed-source-id"],
+)
+def test_malformed_unicode_and_over_limit_canonical_observation_is_wholly_unknown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    canonical_side: str,
+    field: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    malformed = _with_malformed_canonical_string(boundary.canonical_source, field)
+    if canonical_side == "expected":
+        boundary.source_result = Success(
+            SourceCommitObservation(
+                repository_root=str(repository.resolve()),
+                change_id=CHANGE_ID,
+                source_commit=SOURCE_COMMIT,
+                canonical_source=malformed,
+            )
+        )
+    else:
+        monkeypatch.setattr(
+            lifecycle_gate,
+            "observe_canonical_source",
+            lambda *args, **kwargs: Success(malformed),
+        )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    _assert_wholly_unknown(decision, "canonical-observation-incomplete")
+
+
 def _rewrite_manifest(
     repository: Path,
     transform,

@@ -424,6 +424,60 @@ def test_malformed_changed_source_ids_observation_is_unknown_before_sorting(
     _assert_unknown(expected, observed, "canonical-observation-incomplete")
 
 
+def _with_malformed_canonical_string(
+    observation: Any,
+    field: str,
+) -> Any:
+    if field == "artifact-path":
+        artifact = observation.artifacts[0]
+        return replace(
+            observation,
+            artifacts=(
+                replace(artifact, path=artifact.path + "\ud800"),
+                *observation.artifacts[1:],
+            ),
+        )
+    if field in {"task-id", "task-description"}:
+        task = observation.progress.tasks[0]
+        attribute = field.removeprefix("task-")
+        malformed_task = replace(
+            task,
+            **{attribute: getattr(task, attribute) + "\ud800"},
+        )
+        return replace(
+            observation,
+            progress=replace(
+                observation.progress,
+                tasks=(malformed_task, *observation.progress.tasks[1:]),
+            ),
+        )
+    if field == "changed-source-id":
+        return replace(
+            observation,
+            changed_source_item_ids=("REQ-000001\ud800",),
+        )
+    raise AssertionError(field)
+
+
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    "field",
+    ["artifact-path", "task-id", "task-description", "changed-source-id"],
+)
+def test_canonical_observation_rejects_non_utf8_scalar_before_comparison(
+    tmp_path: Path,
+    malformed_side: str,
+    field: str,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    malformed = Success(_with_malformed_canonical_string(complete.value, field))
+    expected = malformed if malformed_side == "expected" else complete
+    observed = malformed if malformed_side == "observed" else complete
+
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
 SOURCE_STATE_MALFORMED_CASES = (
     "outer-wrong-type",
     "next-requirement-non-integer",
