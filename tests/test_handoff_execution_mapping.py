@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -15,6 +16,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     PhaseAssignment,
     PhaseDeclaration,
     PlanDeclaration,
+    PlanningInventory,
     build_manifest_mappings,
     read_planning_inventory,
     validate_mapping_readiness,
@@ -24,6 +26,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
 from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
+    PolicySectionObservation,
     observe_policy_sections,
     read_policy_reference_registry,
 )
@@ -102,6 +105,232 @@ def _baseline():
     )
     assert isinstance(inventory, Success)
     return source_items, registry, inventory.value
+
+
+def _unsafe_replace[T](value: T, /, **changes: object) -> T:
+    copy = replace(value)
+    for field, item in changes.items():
+        object.__setattr__(copy, field, item)
+    return copy
+
+
+def _replace_inventory_member(
+    inventory: PlanningInventory,
+    collection: str,
+    member: object,
+) -> PlanningInventory:
+    values = cast(tuple[object, ...], getattr(inventory, collection))
+    return _unsafe_replace(inventory, **{collection: (member, *values[1:])})
+
+
+def _malformed_inventory_cases(
+    inventory: PlanningInventory,
+) -> tuple[tuple[str, object, str], ...]:
+    phase = inventory.phases[0]
+    assignment = inventory.assignments[0]
+    plan = inventory.plans[0]
+    evidence = inventory.evidence[0]
+    observation = inventory.policy_observations[0]
+    cases: list[tuple[str, object, str]] = [
+        ("outer", object(), "mapping-input-invalid"),
+        (
+            "version-type",
+            _unsafe_replace(inventory, version=1),
+            "mapping-inventory-value-invalid",
+        ),
+        (
+            "change-id-type",
+            _unsafe_replace(inventory, change_id=1),
+            "mapping-inventory-value-invalid",
+        ),
+    ]
+    for collection in (
+        "phases",
+        "assignments",
+        "plans",
+        "evidence",
+        "policy_observations",
+    ):
+        values = cast(tuple[object, ...], getattr(inventory, collection))
+        cases.extend(
+            (
+                (
+                    f"{collection}-container",
+                    _unsafe_replace(inventory, **{collection: list(values)}),
+                    "mapping-inventory-value-invalid",
+                ),
+                (
+                    f"{collection}-limit",
+                    _unsafe_replace(
+                        inventory,
+                        **{collection: (values[0],) * 4097},
+                    ),
+                    "mapping-inventory-limit-exceeded",
+                ),
+                (
+                    f"{collection}-member",
+                    _replace_inventory_member(inventory, collection, None),
+                    "mapping-inventory-value-invalid",
+                ),
+            )
+        )
+    member_fields = (
+        ("phases-change-id", "phases", phase, "change_id"),
+        ("phases-phase-id", "phases", phase, "phase_id"),
+        ("phases-phase-path", "phases", phase, "phase_path"),
+        ("assignments-change-id", "assignments", assignment, "change_id"),
+        ("assignments-source-id", "assignments", assignment, "source_id"),
+        ("assignments-phase-id", "assignments", assignment, "phase_id"),
+        ("plans-change-id", "plans", plan, "change_id"),
+        ("plans-phase-id", "plans", plan, "phase_id"),
+        ("plans-path", "plans", plan, "path"),
+        ("evidence-change-id", "evidence", evidence, "change_id"),
+        ("evidence-phase-id", "evidence", evidence, "phase_id"),
+        ("evidence-path", "evidence", evidence, "path"),
+        ("evidence-source-id", "evidence", evidence, "source_id"),
+        ("evidence-plan-path", "evidence", evidence, "plan_path"),
+        (
+            "policy-reference-id",
+            "policy_observations",
+            observation,
+            "reference_id",
+        ),
+        (
+            "policy-raw-source-path",
+            "policy_observations",
+            observation,
+            "raw_source_path",
+        ),
+        (
+            "policy-source-path",
+            "policy_observations",
+            observation,
+            "source_path",
+        ),
+        (
+            "policy-raw-heading",
+            "policy_observations",
+            observation,
+            "raw_heading",
+        ),
+        (
+            "policy-normalized-heading",
+            "policy_observations",
+            observation,
+            "normalized_heading",
+        ),
+        (
+            "policy-normalized-body",
+            "policy_observations",
+            observation,
+            "normalized_body",
+        ),
+        (
+            "policy-body-length",
+            "policy_observations",
+            observation,
+            "body_length",
+        ),
+        ("policy-sha256", "policy_observations", observation, "sha256"),
+    )
+    cases.extend(
+        (
+            case,
+            _replace_inventory_member(
+                inventory,
+                collection,
+                _unsafe_replace(member, **{field: 1}),
+            ),
+            "mapping-inventory-value-invalid",
+        )
+        for case, collection, member, field in member_fields
+    )
+    cases.extend(
+        (
+            (
+                "assignment-policy-container",
+                _replace_inventory_member(
+                    inventory,
+                    "assignments",
+                    _unsafe_replace(
+                        assignment,
+                        policy_references=list(assignment.policy_references),
+                    ),
+                ),
+                "mapping-inventory-value-invalid",
+            ),
+            (
+                "assignment-policy-member",
+                _replace_inventory_member(
+                    inventory,
+                    "assignments",
+                    _unsafe_replace(assignment, policy_references=(1,)),
+                ),
+                "mapping-inventory-value-invalid",
+            ),
+            (
+                "policy-body-length-mismatch",
+                _replace_inventory_member(
+                    inventory,
+                    "policy_observations",
+                    replace(observation, body_length=observation.body_length + 1),
+                ),
+                "mapping-inventory-value-invalid",
+            ),
+        )
+    )
+    return tuple(cases)
+
+
+def test_planning_inventory_runtime_validation_rejects_every_malformed_family() -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+    validator = getattr(execution_mapping, "validate_planning_inventory", None)
+    assert validator is not None
+
+    for case, malformed, expected_code in _malformed_inventory_cases(inventory):
+        validated = validator(malformed)
+        assert isinstance(validated, Failure), case
+        assert validated.issue.code == expected_code, case
+        built = build_manifest_mappings(
+            source_items,
+            cast(PlanningInventory, malformed),
+            registry,
+        )
+        assert isinstance(built, Failure), case
+        assert built.issue.code == expected_code, case
+        assert not hasattr(built, "value"), case
+
+
+def test_readiness_rejects_malformed_inventory_without_partial_result(
+    tmp_path: Path,
+) -> None:
+    source_items, _, baseline = _baseline()
+    inventory = _inventory_with_execution_declarations(baseline)
+
+    for case, malformed, expected_code in _malformed_inventory_cases(inventory):
+        result = validate_mapping_readiness(
+            tmp_path,
+            source_items,
+            (),
+            cast(PlanningInventory, malformed),
+            operation=MappingOperation.PLAN,
+            target_phase_id="02",
+        )
+        assert isinstance(result, Failure), case
+        assert result.issue.code == expected_code, case
+        assert not hasattr(result, "value"), case
+
+
+def test_planning_inventory_runtime_validation_covers_reader_policy_evidence() -> None:
+    result = read_planning_inventory(
+        REPOSITORY_ROOT,
+        ASSIGNMENT_FIXTURE,
+        policy_observations=cast(tuple[PolicySectionObservation, ...], (None,)),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "mapping-inventory-value-invalid"
 
 
 def test_planning_inventory_values_are_immutable() -> None:
