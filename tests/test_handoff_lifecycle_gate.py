@@ -78,12 +78,16 @@ from ai_coding_template_ja.openspec_gsd_handoff.preflight import (
     COMMAND_TIMEOUT_SECONDS,
     subprocess_runner,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
+from ai_coding_template_ja.openspec_gsd_handoff.progress import (
+    MAX_TASKS,
+    parse_task_progress,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.reader import (
     DEFAULT_ARTIFACT_LIMITS,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
+    SourceIdentityLimits,
     SourceIdentityState,
     SourceTombstone,
 )
@@ -1060,19 +1064,115 @@ def _with_malformed_canonical_string(
     raise AssertionError(field)
 
 
+def _with_task_count(
+    observation: CanonicalSourceObservation,
+    count: int,
+) -> CanonicalSourceObservation:
+    task = observation.progress.tasks[0]
+    tasks = tuple(
+        replace(task, id=f"{index:06d}", description=f"task-{index}", done=False)
+        for index in range(1, count + 1)
+    )
+    return replace(
+        observation,
+        progress=replace(
+            observation.progress,
+            total=count,
+            complete=0,
+            remaining=count,
+            tasks=tasks,
+        ),
+    )
+
+
+def _canonical_aggregate_bytes(observation: CanonicalSourceObservation) -> int:
+    values = [
+        value
+        for artifact in observation.artifacts
+        for value in (
+            artifact.path,
+            artifact.raw_sha256,
+            artifact.specification_sha256,
+        )
+    ]
+    values.extend(
+        value
+        for task in observation.progress.tasks
+        for value in (task.id, task.description)
+    )
+    values.extend(observation.changed_source_item_ids)
+    return sum(len(value.encode("utf-8")) for value in values)
+
+
+def _with_aggregate_bytes(
+    observation: CanonicalSourceObservation,
+    target: int,
+) -> CanonicalSourceObservation:
+    current = _canonical_aggregate_bytes(observation)
+    assert current <= target
+    task = observation.progress.tasks[0]
+    malformed_task = replace(
+        task, description=task.description + "x" * (target - current)
+    )
+    return replace(
+        observation,
+        progress=replace(
+            observation.progress,
+            tasks=(malformed_task, *observation.progress.tasks[1:]),
+        ),
+    )
+
+
+def _canonical_gate_mutation(
+    observation: CanonicalSourceObservation,
+    mutation: str,
+) -> CanonicalSourceObservation:
+    if mutation in {
+        "artifact-path",
+        "task-id",
+        "task-description",
+        "changed-source-id",
+    }:
+        return _with_malformed_canonical_string(observation, mutation)
+    if mutation == "tasks-4097":
+        return _with_task_count(observation, MAX_TASKS + 1)
+    if mutation == "aggregate-limit-plus-one":
+        return _with_aggregate_bytes(
+            observation,
+            DEFAULT_ARTIFACT_LIMITS.bytes_total + 1,
+        )
+    if mutation == "changed-source-ids-4097":
+        return replace(
+            observation,
+            changed_source_item_ids=tuple(
+                f"REQ-{index:06d}"
+                for index in range(1, SourceIdentityLimits().max_items + 2)
+            ),
+        )
+    raise AssertionError(mutation)
+
+
 @pytest.mark.parametrize("canonical_side", ["expected", "observed"])
 @pytest.mark.parametrize(
-    "field",
-    ["artifact-path", "task-id", "task-description", "changed-source-id"],
+    "mutation",
+    [
+        "artifact-path",
+        "task-id",
+        "task-description",
+        "changed-source-id",
+        "tasks-4097",
+        "aggregate-limit-plus-one",
+        "changed-source-ids-4097",
+    ],
 )
 def test_malformed_unicode_and_over_limit_canonical_observation_is_wholly_unknown(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     canonical_side: str,
-    field: str,
+    mutation: str,
 ) -> None:
     repository, boundary = _fixture(tmp_path)
-    malformed = _with_malformed_canonical_string(boundary.canonical_source, field)
+    malformed = _canonical_gate_mutation(boundary.canonical_source, mutation)
     if canonical_side == "expected":
         boundary.source_result = Success(
             SourceCommitObservation(

@@ -26,10 +26,17 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     KnownState,
     Success,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
-from ai_coding_template_ja.openspec_gsd_handoff.reader import ArtifactLimits
+from ai_coding_template_ja.openspec_gsd_handoff.progress import (
+    MAX_TASKS,
+    parse_task_progress,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.reader import (
+    DEFAULT_ARTIFACT_LIMITS,
+    ArtifactLimits,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
+    SourceIdentityLimits,
     SourceIdentityState,
     SourceTombstone,
 )
@@ -459,6 +466,86 @@ def _with_malformed_canonical_string(
     raise AssertionError(field)
 
 
+def _with_task_count(observation: Any, count: int) -> Any:
+    task = observation.progress.tasks[0]
+    tasks = tuple(
+        replace(task, id=f"{index:06d}", description=f"task-{index}", done=False)
+        for index in range(1, count + 1)
+    )
+    return replace(
+        observation,
+        progress=replace(
+            observation.progress,
+            total=count,
+            complete=0,
+            remaining=count,
+            tasks=tasks,
+        ),
+    )
+
+
+def _with_artifact_count(observation: Any, count: int) -> Any:
+    artifacts = list(observation.artifacts)
+    spec = next(
+        artifact for artifact in artifacts if artifact.kind is ArtifactKind.SPEC
+    )
+    artifacts.extend(
+        replace(
+            spec,
+            path=(f"openspec/changes/{CHANGE_ID}/specs/extra-{index:04d}/spec.md"),
+        )
+        for index in range(count - len(artifacts))
+    )
+    return replace(
+        observation,
+        artifacts=tuple(sorted(artifacts, key=lambda artifact: artifact.path)),
+    )
+
+
+def _with_changed_source_id_count(observation: Any, count: int) -> Any:
+    return replace(
+        observation,
+        changed_source_item_ids=tuple(
+            f"REQ-{index:06d}" for index in range(1, count + 1)
+        ),
+    )
+
+
+def _canonical_aggregate_bytes(observation: Any) -> int:
+    values = [
+        value
+        for artifact in observation.artifacts
+        for value in (
+            artifact.path,
+            artifact.raw_sha256,
+            artifact.specification_sha256,
+        )
+    ]
+    values.extend(
+        value
+        for task in observation.progress.tasks
+        for value in (task.id, task.description)
+    )
+    values.extend(observation.changed_source_item_ids)
+    return sum(len(value.encode("utf-8")) for value in values)
+
+
+def _with_aggregate_bytes(observation: Any, target: int) -> Any:
+    current = _canonical_aggregate_bytes(observation)
+    assert current <= target
+    task = observation.progress.tasks[0]
+    malformed_task = replace(
+        task, description=task.description + "x" * (target - current)
+    )
+    return replace(
+        observation,
+        progress=replace(
+            observation.progress,
+            tasks=(malformed_task, *observation.progress.tasks[1:]),
+        ),
+    )
+
+
 @pytest.mark.parametrize("malformed_side", ["expected", "observed"])
 @pytest.mark.parametrize(
     "field",
@@ -475,6 +562,72 @@ def test_canonical_observation_rejects_non_utf8_scalar_before_comparison(
     expected = malformed if malformed_side == "expected" else complete
     observed = malformed if malformed_side == "observed" else complete
 
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+def test_canonical_observation_accepts_4096_tasks_and_rejects_4097(
+    tmp_path: Path,
+    malformed_side: str,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    baseline = replace(complete.value, changed_source_item_ids=())
+    at_limit = Success(_with_task_count(baseline, MAX_TASKS))
+    over_limit = Success(_with_task_count(baseline, MAX_TASKS + 1))
+
+    at_limit_decision = classify_canonical_source_drift(at_limit, at_limit)
+    expected = over_limit if malformed_side == "expected" else at_limit
+    observed = over_limit if malformed_side == "observed" else at_limit
+
+    assert at_limit_decision.state is DriftState.CLEAN
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    ("bound", "at_limit", "over_limit"),
+    [
+        (
+            "artifacts",
+            DEFAULT_ARTIFACT_LIMITS.max_files,
+            DEFAULT_ARTIFACT_LIMITS.max_files + 1,
+        ),
+        (
+            "changed-source-ids",
+            SourceIdentityLimits().max_items,
+            SourceIdentityLimits().max_items + 1,
+        ),
+        (
+            "aggregate-bytes",
+            DEFAULT_ARTIFACT_LIMITS.bytes_total,
+            DEFAULT_ARTIFACT_LIMITS.bytes_total + 1,
+        ),
+    ],
+)
+def test_canonical_observation_rejects_count_and_aggregate_limit_plus_one(
+    tmp_path: Path,
+    malformed_side: str,
+    bound: str,
+    at_limit: int,
+    over_limit: int,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    baseline = replace(complete.value, changed_source_item_ids=())
+    mutate = {
+        "artifacts": _with_artifact_count,
+        "changed-source-ids": _with_changed_source_id_count,
+        "aggregate-bytes": _with_aggregate_bytes,
+    }[bound]
+    bounded = Success(mutate(baseline, at_limit))
+    excessive = Success(mutate(baseline, over_limit))
+
+    bounded_decision = classify_canonical_source_drift(bounded, bounded)
+    expected = excessive if malformed_side == "expected" else bounded
+    observed = excessive if malformed_side == "observed" else bounded
+
+    assert bounded_decision.state is not DriftState.UNKNOWN
     _assert_unknown(expected, observed, "canonical-observation-incomplete")
 
 
