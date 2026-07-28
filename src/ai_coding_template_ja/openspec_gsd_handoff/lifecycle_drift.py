@@ -115,6 +115,15 @@ def _has_required_artifact_cardinality(
     )
 
 
+def _are_utf8_scalars(*values: str) -> bool:
+    try:
+        for value in values:
+            value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def observe_canonical_source(
     repository_root: Path,
     change_id: str,
@@ -231,6 +240,15 @@ def _is_complete_observation(observation: object) -> bool:
         for artifact in observation.artifacts
     ):
         return False
+    if any(
+        not _are_utf8_scalars(
+            artifact.path,
+            artifact.raw_sha256,
+            artifact.specification_sha256,
+        )
+        for artifact in observation.artifacts
+    ):
+        return False
     if not _has_required_artifact_cardinality(
         tuple(artifact.kind for artifact in observation.artifacts)
     ):
@@ -254,6 +272,8 @@ def _is_complete_observation(observation: object) -> bool:
         type(source_item_id) is not str
         for source_item_id in observation.changed_source_item_ids
     ):
+        return False
+    if not _are_utf8_scalars(*observation.changed_source_item_ids):
         return False
     return observation.changed_source_item_ids == tuple(
         sorted(set(observation.changed_source_item_ids))
@@ -281,6 +301,8 @@ def _is_complete_progress(progress: object) -> bool:
         or type(task.done) is not bool
         for task in progress.tasks
     ):
+        return False
+    if any(not _are_utf8_scalars(task.id, task.description) for task in progress.tasks):
         return False
     complete = sum(task.done for task in progress.tasks)
     return (
