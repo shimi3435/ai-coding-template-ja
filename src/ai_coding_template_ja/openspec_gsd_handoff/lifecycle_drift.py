@@ -21,7 +21,7 @@ from .models import (
     Result,
     Success,
 )
-from .progress import parse_task_progress
+from .progress import MAX_TASKS, parse_task_progress
 from .reader import (
     DEFAULT_ARTIFACT_LIMITS,
     ArtifactLimits,
@@ -124,6 +124,29 @@ def _are_utf8_scalars(*values: str) -> bool:
     return True
 
 
+def _has_bounded_aggregate_bytes(
+    observation: CanonicalSourceObservation,
+) -> bool:
+    aggregate_bytes = 0
+    for values in (
+        *(
+            (
+                artifact.path,
+                artifact.raw_sha256,
+                artifact.specification_sha256,
+            )
+            for artifact in observation.artifacts
+        ),
+        *((task.id, task.description) for task in observation.progress.tasks),
+        *((source_item_id,) for source_item_id in observation.changed_source_item_ids),
+    ):
+        for value in values:
+            aggregate_bytes += len(value.encode("utf-8"))
+            if aggregate_bytes > DEFAULT_ARTIFACT_LIMITS.bytes_total:
+                return False
+    return True
+
+
 def observe_canonical_source(
     repository_root: Path,
     change_id: str,
@@ -222,6 +245,11 @@ def _is_complete_observation(observation: object) -> bool:
     if (
         type(observation.artifacts) is not tuple
         or type(observation.changed_source_item_ids) is not tuple
+    ):
+        return False
+    if (
+        len(observation.artifacts) > DEFAULT_ARTIFACT_LIMITS.max_files
+        or len(observation.changed_source_item_ids) > SourceIdentityLimits().max_items
         or not _is_complete_progress(observation.progress)
     ):
         return False
@@ -275,6 +303,8 @@ def _is_complete_observation(observation: object) -> bool:
         return False
     if not _are_utf8_scalars(*observation.changed_source_item_ids):
         return False
+    if not _has_bounded_aggregate_bytes(observation):
+        return False
     return observation.changed_source_item_ids == tuple(
         sorted(set(observation.changed_source_item_ids))
     )
@@ -292,6 +322,8 @@ def _is_complete_progress(progress: object) -> bool:
         or progress.remaining < 0
         or type(progress.tasks) is not tuple
     ):
+        return False
+    if len(progress.tasks) > MAX_TASKS:
         return False
     if any(not isinstance(task, NormalizedTask) for task in progress.tasks):
         return False
