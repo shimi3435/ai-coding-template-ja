@@ -2388,7 +2388,8 @@ def test_manifest_parent_identity_change_is_unknown_and_never_admitted(
         nonlocal replaced
         descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
         opened_descriptors.add(descriptor)
-        manifest_opened = (dir_fd is None and Path(path) == manifest_path) or (
+        absolute_path = Path(path.decode() if isinstance(path, bytes) else path)
+        manifest_opened = (dir_fd is None and absolute_path == manifest_path) or (
             dir_fd is not None and path == "handoff.json"
         )
         if not replaced and manifest_opened:
