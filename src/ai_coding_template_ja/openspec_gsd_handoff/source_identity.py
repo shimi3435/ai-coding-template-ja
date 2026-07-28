@@ -807,13 +807,40 @@ def _validate_counter(counter: object) -> int:
     return counter
 
 
-def _validate_source_state(state: SourceIdentityState) -> None:
+def _validate_source_state(value: object) -> SourceIdentityState:
+    if not isinstance(value, SourceIdentityState):
+        raise _SourceInputError("source-state-invalid")
+    state = value
     next_requirement_id = _validate_counter(state.next_requirement_id)
     next_scenario_id = _validate_counter(state.next_scenario_id)
     if type(state.active) is not tuple or type(state.tombstones) is not tuple:
         raise _SourceInputError("source-state-collection-invalid")
     if len(state.active) + len(state.tombstones) > _MAX_SOURCE_ITEMS:
         raise _SourceInputError("source-state-limit-exceeded")
+    if any(not isinstance(item, ActiveSourceItem) for item in state.active):
+        raise _SourceInputError("source-state-item-invalid")
+    if any(not isinstance(item, SourceTombstone) for item in state.tombstones):
+        raise _SourceInputError("source-state-item-invalid")
+    if any(
+        type(item.id) is not str
+        or type(item.category) is not SourceCategory
+        or type(item.source_path) is not str
+        or type(item.raw_heading) is not str
+        or (item.parent_id is not None and type(item.parent_id) is not str)
+        or type(item.fingerprint) is not str
+        for item in state.active
+    ):
+        raise _SourceInputError("source-state-item-invalid")
+    if any(
+        type(item.id) is not str
+        or type(item.category) is not SourceCategory
+        or type(item.last_source_path) is not str
+        or type(item.last_raw_heading) is not str
+        or (item.last_parent_id is not None and type(item.last_parent_id) is not str)
+        or type(item.fingerprint) is not str
+        for item in state.tombstones
+    ):
+        raise _SourceInputError("source-state-item-invalid")
 
     ids: set[str] = set()
     active_requirement_ids: set[str] = set()
@@ -910,6 +937,19 @@ def _validate_source_state(state: SourceIdentityState) -> None:
             or item.last_parent_id not in all_requirement_ids
         ):
             raise _SourceInputError("source-state-parent-invalid")
+    return state
+
+
+def validate_source_identity_state(
+    value: object,
+) -> Result[SourceIdentityState]:
+    """Validate one complete allocator state without unsafe member dereference."""
+
+    try:
+        state = _validate_source_state(value)
+    except _SourceInputError as error:
+        return _failure(error.code, category=IssueCategory.INPUT)
+    return Success(state)
 
 
 def _observation_key(
@@ -1120,8 +1160,11 @@ def reconcile_source_items(
 ) -> Result[SourceReconciliation]:
     """Reconcile one complete inventory without partial allocation or repair."""
 
+    validated_previous_state = validate_source_identity_state(previous_state)
+    if isinstance(validated_previous_state, Failure):
+        return validated_previous_state
+    previous_state = validated_previous_state.value
     try:
-        _validate_source_state(previous_state)
         _validate_inventory(inventory)
         explicit_by_observation = _validate_explicit_matches(
             explicit_matches,
@@ -1268,7 +1311,10 @@ def reconcile_source_items(
             active=tuple(active),
             tombstones=tombstones,
         )
-        _validate_source_state(state)
+        validated_state = validate_source_identity_state(state)
+        if isinstance(validated_state, Failure):
+            raise _SourceInputError(validated_state.issue.code)
+        state = validated_state.value
     except _SourceInputError as error:
         return _failure(error.code, category=IssueCategory.INPUT)
 

@@ -32,6 +32,7 @@ from .source_identity import (
     SourceIdentityState,
     read_source_inventory,
     reconcile_source_items,
+    validate_source_identity_state,
 )
 
 
@@ -213,8 +214,9 @@ def _is_complete_observation(observation: object) -> bool:
         type(observation.artifacts) is not tuple
         or type(observation.changed_source_item_ids) is not tuple
         or not _is_complete_progress(observation.progress)
-        or not isinstance(observation.source_items, SourceIdentityState)
     ):
+        return False
+    if isinstance(validate_source_identity_state(observation.source_items), Failure):
         return False
     if any(
         not isinstance(artifact, CanonicalArtifactObservation)

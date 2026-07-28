@@ -307,10 +307,12 @@ def _malformed_source_state(
             active=(*state.active, duplicate),
         )
     if case == "path-alias":
+        source_path_parts = requirement.source_path.split("/")
+        source_path_parts[-2] = source_path_parts[-2].upper()
         aliased = replace(
             requirement,
             id="REQ-000003",
-            source_path=requirement.source_path.replace("/lifecycle/", "/LIFECYCLE/"),
+            source_path="/".join(source_path_parts),
             raw_heading="### Requirement: Aliased admission",
         )
         return replace(
@@ -330,7 +332,10 @@ def _malformed_source_state(
     if case == "next-requirement-not-above-id":
         return replace(state, next_requirement_id=1)
     if case == "next-scenario-not-above-id":
-        return replace(state, next_scenario_id=4)
+        return replace(
+            state,
+            next_scenario_id=int(scenario.id.removeprefix("SCN-")),
+        )
     raise AssertionError(case)
 
 
