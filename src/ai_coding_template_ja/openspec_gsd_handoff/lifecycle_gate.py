@@ -17,6 +17,7 @@ from .execution_mapping import (
     MappingReadiness,
     PlanningInventory,
     validate_mapping_readiness,
+    validate_planning_inventory,
 )
 from .lifecycle_drift import (
     CanonicalSourceDriftDecision,
@@ -411,6 +412,10 @@ def _normalize_phase_nodes(
     )
 
 
+def _valid_commit(value: object) -> bool:
+    return type(value) is str and _COMMIT.fullmatch(value) is not None
+
+
 def _validate_source_commit(
     value: object,
     *,
@@ -419,9 +424,11 @@ def _validate_source_commit(
 ) -> bool:
     return (
         isinstance(value, SourceCommitObservation)
+        and type(value.repository_root) is str
+        and type(value.change_id) is str
+        and _valid_commit(value.source_commit)
         and value.repository_root == str(root)
         and value.change_id == change_id
-        and _COMMIT.fullmatch(value.source_commit) is not None
         and isinstance(value.canonical_source, CanonicalSourceObservation)
     )
 
@@ -436,18 +443,22 @@ def _validate_phase_graph(
         not isinstance(value, PhaseGraphObservation)
         or type(value.change_id) is not str
         or value.change_id != change_id
-        or type(value.source_commit) is not str
-        or _COMMIT.fullmatch(value.source_commit) is None
-        or not isinstance(value.planning_inventory, PlanningInventory)
-        or value.planning_inventory.change_id != change_id
+        or not _valid_commit(value.source_commit)
         or not _validate_phase_nodes(value.expected_nodes, limits=limits)
         or not _validate_phase_nodes(value.observed_nodes, limits=limits)
     ):
         return False
+    inventory_result = validate_planning_inventory(value.planning_inventory)
+    if (
+        isinstance(inventory_result, Failure)
+        or inventory_result.value.change_id != change_id
+    ):
+        return False
+    planning_inventory = inventory_result.value
     observed_paths = {node.phase_id: node.phase_path for node in value.observed_nodes}
     return all(
         observed_paths.get(phase.phase_id) == phase.phase_path
-        for phase in value.planning_inventory.phases
+        for phase in planning_inventory.phases
     )
 
 
@@ -459,8 +470,9 @@ def _validate_capabilities(
 ) -> bool:
     if (
         not isinstance(value, CapabilityObservation)
+        or type(value.change_id) is not str
         or value.change_id != change_id
-        or _COMMIT.fullmatch(value.source_commit) is None
+        or not _valid_commit(value.source_commit)
         or not isinstance(value.capabilities, ManifestCapabilities)
     ):
         return False
