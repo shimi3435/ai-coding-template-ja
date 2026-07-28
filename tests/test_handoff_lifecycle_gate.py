@@ -70,6 +70,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
     Success,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
+    PolicySectionObservation,
     observe_policy_sections,
     read_policy_reference_registry,
 )
@@ -662,6 +663,260 @@ def _fixture(tmp_path: Path) -> tuple[Path, FakeBoundary]:
         canonical_source=canonical_source,
         inventory=inventory,
     )
+
+
+def _unsafe_replace(value: Any, /, **changes: object) -> Any:
+    copy = replace(value)
+    for field, item in changes.items():
+        object.__setattr__(copy, field, item)
+    return copy
+
+
+def _inventory_with_policy_observation(
+    inventory: PlanningInventory,
+) -> PlanningInventory:
+    body = "policy body\n"
+    return replace(
+        inventory,
+        policy_observations=(
+            PolicySectionObservation(
+                reference_id="ACE-R1",
+                raw_source_path="docs/agents/workflow.md",
+                source_path="docs/agents/workflow.md",
+                raw_heading="### Runtime validation",
+                normalized_heading="Runtime validation",
+                normalized_body=body,
+                body_length=len(body.encode()),
+                sha256="a" * 64,
+            ),
+        ),
+    )
+
+
+def _replace_inventory_member(
+    inventory: PlanningInventory,
+    collection: str,
+    member: object,
+) -> PlanningInventory:
+    values = cast(tuple[object, ...], getattr(inventory, collection))
+    return _unsafe_replace(inventory, **{collection: (member, *values[1:])})
+
+
+def _malformed_boundary_inventory_cases(
+    inventory: PlanningInventory,
+) -> tuple[tuple[str, object], ...]:
+    phase = inventory.phases[0]
+    assignment = inventory.assignments[0]
+    plan = inventory.plans[0]
+    evidence = inventory.evidence[0]
+    observation = inventory.policy_observations[0]
+    cases: list[tuple[str, object]] = [
+        ("outer", object()),
+        ("version", _unsafe_replace(inventory, version=1)),
+        ("change-id", _unsafe_replace(inventory, change_id=1)),
+    ]
+    for collection in (
+        "phases",
+        "assignments",
+        "plans",
+        "evidence",
+        "policy_observations",
+    ):
+        values = cast(tuple[object, ...], getattr(inventory, collection))
+        cases.extend(
+            (
+                (
+                    f"{collection}-container",
+                    _unsafe_replace(inventory, **{collection: list(values)}),
+                ),
+                (
+                    f"{collection}-limit",
+                    _unsafe_replace(
+                        inventory,
+                        **{collection: (values[0],) * 4097},
+                    ),
+                ),
+                (
+                    f"{collection}-member",
+                    _replace_inventory_member(inventory, collection, None),
+                ),
+            )
+        )
+    member_fields = (
+        ("phase-change-id", "phases", phase, "change_id"),
+        ("phase-id", "phases", phase, "phase_id"),
+        ("phase-path", "phases", phase, "phase_path"),
+        ("assignment-change-id", "assignments", assignment, "change_id"),
+        ("assignment-source-id", "assignments", assignment, "source_id"),
+        ("assignment-phase-id", "assignments", assignment, "phase_id"),
+        ("plan-change-id", "plans", plan, "change_id"),
+        ("plan-phase-id", "plans", plan, "phase_id"),
+        ("plan-path", "plans", plan, "path"),
+        ("evidence-change-id", "evidence", evidence, "change_id"),
+        ("evidence-phase-id", "evidence", evidence, "phase_id"),
+        ("evidence-path", "evidence", evidence, "path"),
+        ("evidence-source-id", "evidence", evidence, "source_id"),
+        ("evidence-plan-path", "evidence", evidence, "plan_path"),
+        (
+            "policy-reference-id",
+            "policy_observations",
+            observation,
+            "reference_id",
+        ),
+        (
+            "policy-raw-source-path",
+            "policy_observations",
+            observation,
+            "raw_source_path",
+        ),
+        ("policy-source-path", "policy_observations", observation, "source_path"),
+        ("policy-raw-heading", "policy_observations", observation, "raw_heading"),
+        (
+            "policy-normalized-heading",
+            "policy_observations",
+            observation,
+            "normalized_heading",
+        ),
+        (
+            "policy-normalized-body",
+            "policy_observations",
+            observation,
+            "normalized_body",
+        ),
+        (
+            "policy-body-length",
+            "policy_observations",
+            observation,
+            "body_length",
+        ),
+        ("policy-sha256", "policy_observations", observation, "sha256"),
+    )
+    cases.extend(
+        (
+            case,
+            _replace_inventory_member(
+                inventory,
+                collection,
+                _unsafe_replace(member, **{field: 1}),
+            ),
+        )
+        for case, collection, member, field in member_fields
+    )
+    cases.extend(
+        (
+            (
+                "assignment-policy-container",
+                _replace_inventory_member(
+                    inventory,
+                    "assignments",
+                    _unsafe_replace(
+                        assignment,
+                        policy_references=list(assignment.policy_references),
+                    ),
+                ),
+            ),
+            (
+                "assignment-policy-member",
+                _replace_inventory_member(
+                    inventory,
+                    "assignments",
+                    _unsafe_replace(assignment, policy_references=(1,)),
+                ),
+            ),
+            (
+                "policy-body-length-mismatch",
+                _replace_inventory_member(
+                    inventory,
+                    "policy_observations",
+                    replace(observation, body_length=observation.body_length + 1),
+                ),
+            ),
+        )
+    )
+    return tuple(cases)
+
+
+def _assert_wholly_unknown(
+    decision: LifecycleGateDecision,
+    code: str,
+) -> None:
+    assert decision.issue_codes == (code,)
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
+
+
+@pytest.mark.parametrize("dimension", ["source", "capability"])
+def test_malformed_boundary_commit_is_dimension_unknown(
+    tmp_path: Path,
+    dimension: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    if dimension == "source":
+        boundary.source_result = Success(
+            SourceCommitObservation(
+                repository_root=str(repository.resolve()),
+                change_id=CHANGE_ID,
+                source_commit=cast(Any, 1),
+                canonical_source=boundary.canonical_source,
+            )
+        )
+        expected_code = "lifecycle-source-commit-observation-incomplete"
+    else:
+        boundary.capability_result = Success(
+            CapabilityObservation(
+                change_id=CHANGE_ID,
+                source_commit=cast(Any, 1),
+                capabilities=boundary.capabilities,
+            )
+        )
+        expected_code = "lifecycle-capability-observation-incomplete"
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    _assert_wholly_unknown(decision, expected_code)
+
+
+def test_malformed_boundary_inventory_is_phase_unknown(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    inventory = _inventory_with_policy_observation(boundary.inventory)
+
+    for _case, malformed in _malformed_boundary_inventory_cases(inventory):
+        boundary.phase_result = Success(
+            PhaseGraphObservation(
+                change_id=CHANGE_ID,
+                source_commit=SOURCE_COMMIT,
+                expected_nodes=boundary.expected_nodes,
+                observed_nodes=boundary.observed_nodes,
+                planning_inventory=cast(PlanningInventory, malformed),
+            )
+        )
+        decision = gate_lifecycle_operation(
+            repository,
+            CHANGE_ID,
+            LifecycleOperation.EXECUTE,
+            "03",
+            boundary=boundary,
+        )
+
+        _assert_wholly_unknown(
+            decision,
+            "lifecycle-phase-observation-incomplete",
+        )
 
 
 MALFORMED_CANONICAL_NESTED_CASES = (
