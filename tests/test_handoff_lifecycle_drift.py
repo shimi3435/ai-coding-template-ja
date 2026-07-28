@@ -29,7 +29,9 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
 from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
 from ai_coding_template_ja.openspec_gsd_handoff.reader import ArtifactLimits
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
+    SourceCategory,
     SourceIdentityState,
+    SourceTombstone,
 )
 
 CHANGE_ID = "fixture-change"
@@ -414,6 +416,184 @@ def test_malformed_changed_source_ids_observation_is_unknown_before_sorting(
     malformed_observation = replace(
         complete.value,
         changed_source_item_ids=changed_source_item_ids,
+    )
+    malformed: Any = Success(malformed_observation)
+    expected = malformed if malformed_side == "expected" else complete
+    observed = malformed if malformed_side == "observed" else complete
+
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
+
+
+SOURCE_STATE_MALFORMED_CASES = (
+    "outer-wrong-type",
+    "next-requirement-non-integer",
+    "next-scenario-boolean",
+    "counter-out-of-range",
+    "active-not-tuple",
+    "tombstones-not-tuple",
+    "active-member-none",
+    "active-member-wrong-class",
+    "tombstone-member-none",
+    "tombstone-member-wrong-class",
+    "active-id-invalid",
+    "active-category-invalid",
+    "active-path-invalid",
+    "active-heading-invalid",
+    "active-parent-invalid",
+    "active-fingerprint-invalid",
+    "tombstone-id-invalid",
+    "tombstone-category-invalid",
+    "tombstone-path-invalid",
+    "tombstone-heading-invalid",
+    "tombstone-parent-invalid",
+    "tombstone-fingerprint-invalid",
+    "duplicate-id",
+    "duplicate-identity",
+    "path-alias",
+    "item-count-limit",
+    "aggregate-byte-limit",
+    "next-requirement-not-above-id",
+    "next-scenario-not-above-id",
+)
+
+
+def _source_state_with_tombstone(state: SourceIdentityState) -> SourceIdentityState:
+    requirement = state.active[0]
+    return replace(
+        state,
+        next_requirement_id=3,
+        tombstones=(
+            SourceTombstone(
+                id="REQ-000002",
+                category=SourceCategory.REQUIREMENT,
+                last_source_path=requirement.source_path,
+                last_raw_heading="### Requirement: Retired admission",
+                last_parent_id=None,
+                fingerprint=requirement.fingerprint,
+            ),
+        ),
+    )
+
+
+def _malformed_source_state(
+    state: SourceIdentityState,
+    case: str,
+) -> object:
+    if case == "outer-wrong-type":
+        return object()
+    state = _source_state_with_tombstone(state)
+    requirement, scenario = state.active
+    tombstone = state.tombstones[0]
+    invalid: Any
+    if case == "next-requirement-non-integer":
+        invalid = "3"
+        return replace(state, next_requirement_id=invalid)
+    if case == "next-scenario-boolean":
+        invalid = True
+        return replace(state, next_scenario_id=invalid)
+    if case == "counter-out-of-range":
+        return replace(state, next_requirement_id=1_000_001)
+    if case == "active-not-tuple":
+        invalid = list(state.active)
+        return replace(state, active=invalid)
+    if case == "tombstones-not-tuple":
+        invalid = list(state.tombstones)
+        return replace(state, tombstones=invalid)
+    if case == "active-member-none":
+        invalid = (None, scenario)
+        return replace(state, active=invalid)
+    if case == "active-member-wrong-class":
+        invalid = (tombstone, scenario)
+        return replace(state, active=invalid)
+    if case == "tombstone-member-none":
+        invalid = (None,)
+        return replace(state, tombstones=invalid)
+    if case == "tombstone-member-wrong-class":
+        invalid = (requirement,)
+        return replace(state, tombstones=invalid)
+    if case.startswith("active-"):
+        field, value = {
+            "active-id-invalid": ("id", 1),
+            "active-category-invalid": ("category", "requirement"),
+            "active-path-invalid": ("source_path", None),
+            "active-heading-invalid": ("raw_heading", None),
+            "active-parent-invalid": ("parent_id", "REQ-999999"),
+            "active-fingerprint-invalid": ("fingerprint", None),
+        }[case]
+        invalid = value
+        active_item = scenario if field == "parent_id" else requirement
+        replacement = replace(active_item, **{field: invalid})
+        other = requirement if active_item is scenario else scenario
+        active = (
+            (other, replacement) if active_item is scenario else (replacement, other)
+        )
+        return replace(state, active=active)
+    if case.startswith("tombstone-"):
+        field, value = {
+            "tombstone-id-invalid": ("id", 2),
+            "tombstone-category-invalid": ("category", "requirement"),
+            "tombstone-path-invalid": ("last_source_path", None),
+            "tombstone-heading-invalid": ("last_raw_heading", None),
+            "tombstone-parent-invalid": ("last_parent_id", "REQ-000001"),
+            "tombstone-fingerprint-invalid": ("fingerprint", None),
+        }[case]
+        invalid = value
+        return replace(
+            state,
+            tombstones=(replace(tombstone, **{field: invalid}),),
+        )
+    if case == "duplicate-id":
+        return replace(
+            state,
+            tombstones=(replace(tombstone, id=requirement.id),),
+        )
+    if case == "duplicate-identity":
+        duplicate = replace(requirement, id="REQ-000003")
+        return replace(
+            state,
+            next_requirement_id=4,
+            active=(*state.active, duplicate),
+        )
+    if case == "path-alias":
+        aliased = replace(
+            requirement,
+            id="REQ-000003",
+            source_path=requirement.source_path.replace("/lifecycle/", "/LIFECYCLE/"),
+            raw_heading="### Requirement: Aliased admission",
+        )
+        return replace(
+            state,
+            next_requirement_id=4,
+            active=(*state.active, aliased),
+        )
+    if case == "item-count-limit":
+        invalid = state.active * 2049
+        return replace(state, active=invalid)
+    if case == "aggregate-byte-limit":
+        oversized = replace(
+            requirement,
+            raw_heading="### Requirement: " + "x" * 8_388_609,
+        )
+        return replace(state, active=(oversized, scenario))
+    if case == "next-requirement-not-above-id":
+        return replace(state, next_requirement_id=1)
+    if case == "next-scenario-not-above-id":
+        return replace(state, next_scenario_id=4)
+    raise AssertionError(case)
+
+
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+@pytest.mark.parametrize("case", SOURCE_STATE_MALFORMED_CASES)
+def test_malformed_source_state_observation_is_unknown_before_dereference(
+    tmp_path: Path,
+    malformed_side: str,
+    case: str,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    malformed_observation = replace(
+        complete.value,
+        source_items=_malformed_source_state(complete.value.source_items, case),
     )
     malformed: Any = Success(malformed_observation)
     expected = malformed if malformed_side == "expected" else complete

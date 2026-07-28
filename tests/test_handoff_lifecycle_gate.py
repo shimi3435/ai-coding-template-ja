@@ -84,6 +84,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.reader import (
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
     SourceIdentityState,
+    SourceTombstone,
 )
 
 CHANGE_ID = "fixture-change"
@@ -173,6 +174,164 @@ def _empty_source_state() -> SourceIdentityState:
         active=(),
         tombstones=(),
     )
+
+
+SOURCE_STATE_MALFORMED_CASES = (
+    "outer-wrong-type",
+    "next-requirement-non-integer",
+    "next-scenario-boolean",
+    "counter-out-of-range",
+    "active-not-tuple",
+    "tombstones-not-tuple",
+    "active-member-none",
+    "active-member-wrong-class",
+    "tombstone-member-none",
+    "tombstone-member-wrong-class",
+    "active-id-invalid",
+    "active-category-invalid",
+    "active-path-invalid",
+    "active-heading-invalid",
+    "active-parent-invalid",
+    "active-fingerprint-invalid",
+    "tombstone-id-invalid",
+    "tombstone-category-invalid",
+    "tombstone-path-invalid",
+    "tombstone-heading-invalid",
+    "tombstone-parent-invalid",
+    "tombstone-fingerprint-invalid",
+    "duplicate-id",
+    "duplicate-identity",
+    "path-alias",
+    "item-count-limit",
+    "aggregate-byte-limit",
+    "next-requirement-not-above-id",
+    "next-scenario-not-above-id",
+)
+
+
+def _source_state_with_tombstone(state: SourceIdentityState) -> SourceIdentityState:
+    requirement = state.active[0]
+    return replace(
+        state,
+        next_requirement_id=3,
+        tombstones=(
+            SourceTombstone(
+                id="REQ-000002",
+                category=SourceCategory.REQUIREMENT,
+                last_source_path=requirement.source_path,
+                last_raw_heading="### Requirement: Retired admission",
+                last_parent_id=None,
+                fingerprint=requirement.fingerprint,
+            ),
+        ),
+    )
+
+
+def _malformed_source_state(
+    state: SourceIdentityState,
+    case: str,
+) -> object:
+    if case == "outer-wrong-type":
+        return object()
+    state = _source_state_with_tombstone(state)
+    requirement, scenario = state.active
+    tombstone = state.tombstones[0]
+    invalid: Any
+    if case == "next-requirement-non-integer":
+        invalid = "3"
+        return replace(state, next_requirement_id=invalid)
+    if case == "next-scenario-boolean":
+        invalid = True
+        return replace(state, next_scenario_id=invalid)
+    if case == "counter-out-of-range":
+        return replace(state, next_requirement_id=1_000_001)
+    if case == "active-not-tuple":
+        invalid = list(state.active)
+        return replace(state, active=invalid)
+    if case == "tombstones-not-tuple":
+        invalid = list(state.tombstones)
+        return replace(state, tombstones=invalid)
+    if case == "active-member-none":
+        invalid = (None, scenario)
+        return replace(state, active=invalid)
+    if case == "active-member-wrong-class":
+        invalid = (tombstone, scenario)
+        return replace(state, active=invalid)
+    if case == "tombstone-member-none":
+        invalid = (None,)
+        return replace(state, tombstones=invalid)
+    if case == "tombstone-member-wrong-class":
+        invalid = (requirement,)
+        return replace(state, tombstones=invalid)
+    if case.startswith("active-"):
+        field, value = {
+            "active-id-invalid": ("id", 1),
+            "active-category-invalid": ("category", "requirement"),
+            "active-path-invalid": ("source_path", None),
+            "active-heading-invalid": ("raw_heading", None),
+            "active-parent-invalid": ("parent_id", "REQ-999999"),
+            "active-fingerprint-invalid": ("fingerprint", None),
+        }[case]
+        invalid = value
+        active_item = scenario if field == "parent_id" else requirement
+        replacement = replace(active_item, **{field: invalid})
+        other = requirement if active_item is scenario else scenario
+        active = (
+            (other, replacement) if active_item is scenario else (replacement, other)
+        )
+        return replace(state, active=active)
+    if case.startswith("tombstone-"):
+        field, value = {
+            "tombstone-id-invalid": ("id", 2),
+            "tombstone-category-invalid": ("category", "requirement"),
+            "tombstone-path-invalid": ("last_source_path", None),
+            "tombstone-heading-invalid": ("last_raw_heading", None),
+            "tombstone-parent-invalid": ("last_parent_id", "REQ-000001"),
+            "tombstone-fingerprint-invalid": ("fingerprint", None),
+        }[case]
+        invalid = value
+        return replace(
+            state,
+            tombstones=(replace(tombstone, **{field: invalid}),),
+        )
+    if case == "duplicate-id":
+        return replace(
+            state,
+            tombstones=(replace(tombstone, id=requirement.id),),
+        )
+    if case == "duplicate-identity":
+        duplicate = replace(requirement, id="REQ-000003")
+        return replace(
+            state,
+            next_requirement_id=4,
+            active=(*state.active, duplicate),
+        )
+    if case == "path-alias":
+        aliased = replace(
+            requirement,
+            id="REQ-000003",
+            source_path=requirement.source_path.replace("/lifecycle/", "/LIFECYCLE/"),
+            raw_heading="### Requirement: Aliased admission",
+        )
+        return replace(
+            state,
+            next_requirement_id=4,
+            active=(*state.active, aliased),
+        )
+    if case == "item-count-limit":
+        invalid = state.active * 2049
+        return replace(state, active=invalid)
+    if case == "aggregate-byte-limit":
+        oversized = replace(
+            requirement,
+            raw_heading="### Requirement: " + "x" * 8_388_609,
+        )
+        return replace(state, active=(oversized, scenario))
+    if case == "next-requirement-not-above-id":
+        return replace(state, next_requirement_id=1)
+    if case == "next-scenario-not-above-id":
+        return replace(state, next_scenario_id=4)
+    raise AssertionError(case)
 
 
 def _write_canonical_source(repository: Path) -> None:
@@ -498,6 +657,112 @@ def _fixture(tmp_path: Path) -> tuple[Path, FakeBoundary]:
         canonical_source=canonical_source,
         inventory=inventory,
     )
+
+
+MALFORMED_CANONICAL_NESTED_CASES = (
+    "progress-total",
+    "progress-complete",
+    "progress-remaining",
+    "progress-count-invariant",
+    "progress-tasks-container",
+    "progress-task-member",
+    "progress-task-id",
+    "progress-task-description",
+    "progress-task-done",
+    "changed-ids-container",
+    "changed-id-member",
+    *(f"source-state:{case}" for case in SOURCE_STATE_MALFORMED_CASES),
+)
+
+
+def _malformed_canonical_observation(
+    observation: CanonicalSourceObservation,
+    case: str,
+) -> CanonicalSourceObservation:
+    progress = observation.progress
+    task = progress.tasks[0]
+    invalid: Any
+    if case == "progress-total":
+        invalid = True
+        return replace(observation, progress=replace(progress, total=invalid))
+    if case == "progress-complete":
+        invalid = "1"
+        return replace(observation, progress=replace(progress, complete=invalid))
+    if case == "progress-remaining":
+        invalid = -1
+        return replace(observation, progress=replace(progress, remaining=invalid))
+    if case == "progress-count-invariant":
+        return replace(
+            observation,
+            progress=replace(progress, total=progress.total + 1),
+        )
+    if case == "progress-tasks-container":
+        invalid = list(progress.tasks)
+        return replace(observation, progress=replace(progress, tasks=invalid))
+    if case == "progress-task-member":
+        invalid = (None,)
+        return replace(observation, progress=replace(progress, tasks=invalid))
+    if case == "progress-task-id":
+        invalid = replace(task, id=1)
+        return replace(observation, progress=replace(progress, tasks=(invalid,)))
+    if case == "progress-task-description":
+        invalid = replace(task, description=None)
+        return replace(observation, progress=replace(progress, tasks=(invalid,)))
+    if case == "progress-task-done":
+        invalid = replace(task, done=1)
+        return replace(observation, progress=replace(progress, tasks=(invalid,)))
+    if case == "changed-ids-container":
+        invalid = list(observation.changed_source_item_ids)
+        return replace(observation, changed_source_item_ids=invalid)
+    if case == "changed-id-member":
+        invalid = ("REQ-000001", 1)
+        return replace(observation, changed_source_item_ids=invalid)
+    if case.startswith("source-state:"):
+        invalid = _malformed_source_state(
+            observation.source_items,
+            case.removeprefix("source-state:"),
+        )
+        return replace(observation, source_items=invalid)
+    raise AssertionError(case)
+
+
+@pytest.mark.parametrize("case", MALFORMED_CANONICAL_NESTED_CASES)
+def test_malformed_canonical_nested_state_public_gate_is_wholly_unknown(
+    tmp_path: Path,
+    case: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    malformed = _malformed_canonical_observation(
+        boundary.canonical_source,
+        case,
+    )
+    boundary.source_result = Success(
+        SourceCommitObservation(
+            repository_root=str(repository.resolve()),
+            change_id=CHANGE_ID,
+            source_commit=SOURCE_COMMIT,
+            canonical_source=malformed,
+        )
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.issue_codes == ("canonical-observation-incomplete",)
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
 
 
 def _rewrite_manifest(
