@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from hypothesis import given
@@ -588,6 +588,259 @@ def _scenario_observation(
             normalized_heading=f"Requirement: {parent_name}",
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "malformed_inventory",
+    [
+        pytest.param(object(), id="outer"),
+        pytest.param(
+            identity.SourceInventory(items=cast(Any, [])),
+            id="items-container",
+        ),
+        pytest.param(
+            identity.SourceInventory(items=(cast(Any, object()),)),
+            id="item-member",
+        ),
+        pytest.param(
+            identity.SourceInventory(
+                items=(
+                    replace(
+                        _requirement_observation("Malformed"),
+                        category=cast(Any, "requirement"),
+                    ),
+                )
+            ),
+            id="category",
+        ),
+        pytest.param(
+            identity.SourceInventory(
+                items=(
+                    replace(
+                        _requirement_observation("Malformed"),
+                        source_path=cast(Any, object()),
+                    ),
+                )
+            ),
+            id="source-path",
+        ),
+        pytest.param(
+            identity.SourceInventory(
+                items=(
+                    replace(
+                        _requirement_observation("Malformed"),
+                        raw_heading=cast(Any, object()),
+                    ),
+                )
+            ),
+            id="raw-heading",
+        ),
+        pytest.param(
+            identity.SourceInventory(
+                items=(
+                    replace(
+                        _requirement_observation("Malformed"),
+                        normalized_heading=cast(Any, object()),
+                    ),
+                )
+            ),
+            id="normalized-heading",
+        ),
+        pytest.param(
+            identity.SourceInventory(
+                items=(
+                    replace(
+                        _requirement_observation("Malformed"),
+                        normalized_block=cast(Any, object()),
+                    ),
+                )
+            ),
+            id="normalized-block",
+        ),
+    ],
+)
+def test_reconcile_rejects_malformed_inventory_runtime_shapes(
+    malformed_inventory: object,
+) -> None:
+    result = identity.reconcile_source_items(
+        cast(Any, malformed_inventory),
+        _empty_source_state(),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-inventory-invalid"
+    assert not hasattr(result, "value")
+
+
+@pytest.mark.parametrize(
+    ("parent_locator", "expected_code"),
+    [
+        pytest.param("parent", "source-inventory-invalid", id="string"),
+        pytest.param(object(), "source-inventory-invalid", id="object"),
+        pytest.param(
+            identity.SourceParentLocator(
+                source_path=cast(Any, object()),
+                normalized_heading="Requirement: Parent",
+            ),
+            "source-inventory-invalid",
+            id="source-path",
+        ),
+        pytest.param(
+            identity.SourceParentLocator(
+                source_path=SOURCE_PATH,
+                normalized_heading=cast(Any, object()),
+            ),
+            "source-inventory-invalid",
+            id="normalized-heading",
+        ),
+        pytest.param(None, "source-parent-unresolved", id="well-shaped-unresolved"),
+    ],
+)
+def test_reconcile_rejects_malformed_parent_locator_runtime_shapes(
+    parent_locator: object,
+    expected_code: str,
+) -> None:
+    scenario = replace(
+        _scenario_observation("Runs", parent_name="Parent"),
+        parent_locator=cast(Any, parent_locator),
+    )
+
+    result = identity.reconcile_source_items(
+        identity.SourceInventory(items=(scenario,)),
+        _empty_source_state(),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == expected_code
+    assert not hasattr(result, "value")
+
+
+@pytest.mark.parametrize(
+    "malformed_explicit_matches",
+    [
+        pytest.param(None, id="none-container"),
+        pytest.param(object(), id="object-container"),
+        pytest.param(set(), id="unsupported-sequence"),
+        pytest.param("match", id="string-container"),
+        pytest.param(b"match", id="bytes-container"),
+        pytest.param((object(),), id="member"),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=cast(Any, object()),
+                    normalized_heading="Requirement: Existing",
+                    parent_locator=None,
+                    source_id="REQ-000001",
+                ),
+            ),
+            id="source-path",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading=cast(Any, object()),
+                    parent_locator=None,
+                    source_id="REQ-000001",
+                ),
+            ),
+            id="normalized-heading",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading="Requirement: Existing",
+                    parent_locator=None,
+                    source_id=cast(Any, object()),
+                ),
+            ),
+            id="source-id-type",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading="Requirement: Existing",
+                    parent_locator=None,
+                    source_id="REQ-invalid",
+                ),
+            ),
+            id="source-id-format",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading="Scenario: Runs",
+                    parent_locator=cast(Any, "parent"),
+                    source_id="SCN-000001",
+                ),
+            ),
+            id="parent-string",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading="Scenario: Runs",
+                    parent_locator=cast(Any, object()),
+                    source_id="SCN-000001",
+                ),
+            ),
+            id="parent-object",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading="Scenario: Runs",
+                    parent_locator=identity.SourceParentLocator(
+                        source_path=cast(Any, object()),
+                        normalized_heading="Requirement: Existing",
+                    ),
+                    source_id="SCN-000001",
+                ),
+            ),
+            id="parent-source-path",
+        ),
+        pytest.param(
+            (
+                identity.ExplicitSourceMatch(
+                    source_path=SOURCE_PATH,
+                    normalized_heading="Scenario: Runs",
+                    parent_locator=identity.SourceParentLocator(
+                        source_path=SOURCE_PATH,
+                        normalized_heading=cast(Any, object()),
+                    ),
+                    source_id="SCN-000001",
+                ),
+            ),
+            id="parent-normalized-heading",
+        ),
+    ],
+)
+def test_reconcile_rejects_malformed_explicit_match_runtime_shapes(
+    malformed_explicit_matches: object,
+) -> None:
+    inventory = identity.SourceInventory(
+        items=(
+            _requirement_observation("Existing"),
+            _scenario_observation("Runs", parent_name="Existing"),
+        )
+    )
+    initial = identity.reconcile_source_items(inventory, _empty_source_state())
+    assert isinstance(initial, Success)
+
+    result = identity.reconcile_source_items(
+        inventory,
+        initial.value.state,
+        explicit_matches=cast(Any, malformed_explicit_matches),
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-explicit-match-invalid"
+    assert not hasattr(result, "value")
 
 
 def test_reconcile_allocates_namespaced_ids_in_canonical_identity_order(
