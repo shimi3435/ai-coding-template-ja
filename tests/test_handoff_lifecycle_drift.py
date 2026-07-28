@@ -143,6 +143,38 @@ def test_fixed_complete_equal_observations_are_clean(tmp_path: Path) -> None:
     assert decision.progress_update_candidate is None
 
 
+def test_source_pinned_reconciliation_changes_are_unknown(tmp_path: Path) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    allocated = _observe_initial(repository, claims)
+    stable = observe_canonical_source(
+        repository,
+        CHANGE_ID,
+        claims,
+        expected_source_items=allocated.value.source_items,
+    )
+    assert isinstance(stable, Success)
+    assert stable.value.changed_source_item_ids == ()
+
+    inconsistent_baseline = Success(
+        replace(
+            stable.value,
+            changed_source_item_ids=("REQ-000001",),
+        )
+    )
+    decision = classify_canonical_source_drift(inconsistent_baseline, stable)
+
+    assert decision.state is DriftState.UNKNOWN
+    assert decision.issue_code == "source-reconciliation-incomplete"
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
+
+    current_drift = classify_canonical_source_drift(stable, inconsistent_baseline)
+    assert current_drift.state is DriftState.DRIFTED
+    assert current_drift.issue_code is None
+    assert current_drift.changed_source_item_ids == ("REQ-000001",)
+
+
 @pytest.mark.parametrize(
     ("relative_path", "replacement"),
     [

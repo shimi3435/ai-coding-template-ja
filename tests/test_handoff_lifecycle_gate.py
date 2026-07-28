@@ -856,6 +856,33 @@ def _assert_wholly_unknown(
     assert decision.decision_identity is None
 
 
+def test_source_pinned_reconciliation_changes_are_wholly_unknown(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    boundary.source_result = Success(
+        SourceCommitObservation(
+            repository_root=str(repository.resolve()),
+            change_id=CHANGE_ID,
+            source_commit=SOURCE_COMMIT,
+            canonical_source=replace(
+                boundary.canonical_source,
+                changed_source_item_ids=("REQ-000001",),
+            ),
+        )
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    _assert_wholly_unknown(decision, "source-reconciliation-incomplete")
+
+
 @pytest.mark.parametrize("dimension", ["source", "capability"])
 def test_malformed_boundary_commit_is_dimension_unknown(
     tmp_path: Path,
