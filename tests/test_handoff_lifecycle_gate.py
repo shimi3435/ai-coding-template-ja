@@ -2207,6 +2207,111 @@ def test_cyclic_phase_graph_is_unknown_and_never_admitted(
 
 
 @pytest.mark.parametrize(
+    ("case", "operation", "target_phase"),
+    [
+        ("inventory-only", LifecycleOperation.EXECUTE, "03"),
+        ("expected-graph-only", LifecycleOperation.EXECUTE, "03"),
+        ("observed-graph-only", LifecycleOperation.EXECUTE, "03"),
+        ("expected-path-mismatch", LifecycleOperation.EXECUTE, "03"),
+        ("observed-path-mismatch", LifecycleOperation.EXECUTE, "03"),
+        ("same-extra-both-graphs", LifecycleOperation.EXECUTE, "03"),
+        ("same-extra-both-graphs", LifecycleOperation.FINALIZE, None),
+    ],
+)
+def test_phase_graph_and_inventory_membership_paths_must_match_exactly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    operation: LifecycleOperation,
+    target_phase: str | None,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    extra_phase_path = ".planning/phases/07-lifecycle-07"
+    extra_node = PhaseNodeObservation("07", extra_phase_path, ("06",))
+    if case == "inventory-only":
+        boundary.inventory = replace(
+            boundary.inventory,
+            phases=(
+                *boundary.inventory.phases,
+                PhaseDeclaration(CHANGE_ID, "07", extra_phase_path),
+            ),
+        )
+    elif case == "expected-graph-only":
+        boundary.expected_nodes = (*boundary.expected_nodes, extra_node)
+    elif case == "observed-graph-only":
+        boundary.observed_nodes = (*boundary.observed_nodes, extra_node)
+    elif case == "expected-path-mismatch":
+        boundary.expected_nodes = (
+            replace(
+                boundary.expected_nodes[0],
+                phase_path=".planning/phases/03-alternate",
+            ),
+            *boundary.expected_nodes[1:],
+        )
+    elif case == "observed-path-mismatch":
+        boundary.observed_nodes = (
+            replace(
+                boundary.observed_nodes[0],
+                phase_path=".planning/phases/03-alternate",
+            ),
+            *boundary.observed_nodes[1:],
+        )
+    elif case == "same-extra-both-graphs":
+        boundary.expected_nodes = (*boundary.expected_nodes, extra_node)
+        boundary.observed_nodes = (*boundary.observed_nodes, extra_node)
+    else:  # pragma: no cover - table is exhaustive
+        raise AssertionError(case)
+
+    original_mapping_readiness = lifecycle_gate.validate_mapping_readiness
+    original_decision_identity = lifecycle_gate._decision_identity
+    mapping_readiness_calls = 0
+    decision_identity_calls = 0
+
+    def record_mapping_readiness(*args: Any, **kwargs: Any):
+        nonlocal mapping_readiness_calls
+        mapping_readiness_calls += 1
+        return original_mapping_readiness(*args, **kwargs)
+
+    def record_decision_identity(*args: Any, **kwargs: Any) -> str:
+        nonlocal decision_identity_calls
+        decision_identity_calls += 1
+        return original_decision_identity(*args, **kwargs)
+
+    monkeypatch.setattr(
+        lifecycle_gate,
+        "validate_mapping_readiness",
+        record_mapping_readiness,
+    )
+    monkeypatch.setattr(
+        lifecycle_gate,
+        "_decision_identity",
+        record_decision_identity,
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        operation,
+        target_phase,
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert not decision.admitted
+    assert decision.issue_codes == ("lifecycle-phase-observation-incomplete",)
+    assert decision.drifted_artifact_paths == ()
+    assert decision.changed_source_item_ids == ()
+    assert decision.progress_update_candidate is None
+    assert decision.revalidation_targets == ()
+    assert decision.replanning_targets == ()
+    assert decision.next_action_codes == ()
+    assert decision.decision_identity is None
+    assert decision.manifest_sha256 is None
+    assert mapping_readiness_calls == 0
+    assert decision_identity_calls == 0
+
+
+@pytest.mark.parametrize(
     "component",
     [
         ".planning",
