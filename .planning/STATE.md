@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
-status: executing
-stopped_at: Completed 03-11-PLAN.md
-last_updated: "2026-07-28T13:41:18.118Z"
+status: verifying
+stopped_at: Completed 03-10-PLAN.md
+last_updated: "2026-07-28T13:58:28.910Z"
 last_activity: 2026-07-28
 last_activity_desc: Completed 03-09-PLAN.md
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
   percent: 33
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 03 (lifecycle-drift-gate) — EXECUTING
+Phase: 03 (lifecycle-drift-gate) — VERIFYING
 Plan: 11 of 11
-Status: Ready to execute
-Last activity: 2026-07-28 — Completed 03-09-PLAN.md
+Status: Plans complete — ready for independent verification
+Last activity: 2026-07-28 — Completed 03-10-PLAN.md
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -74,6 +74,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P08 | 15m | 2 tasks | 4 files |
 | Phase 03 P09 | 8min | 2 tasks | 3 files |
 | Phase 03 P11 | 10min | 2 tasks | 2 files |
+| Phase 03 P10 | 10min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Canonical classifier bounds reuse MAX_TASKS, DEFAULT_ARTIFACT_LIMITS, and SourceIdentityLimits so exact producer limits remain accepted and limit+1 is identity-free unknown.
 - [Phase 03]: Mapping public APIs reuse validate_source_identity_state and expose only mapping-input-invalid for malformed source state. — Prevents malformed nested source values from being dereferenced or leaking validator internals.
 - [Phase 03]: ManifestMapping values are fully validated before semantic or filesystem operations, and both public APIs derive canonical mappings through one pure helper. — Prevents partial admission and construction/readiness projection drift.
+- [Phase 03]: Manifest bytes are read only through retained no-follow descriptors rooted at the validated repository, with every entry revalidated after the bounded read. — Prevents repository-external manifest substitution and parent identity races from contributing authorization input.
+- [Phase 03]: Expected and observed phase ID/path maps must each exactly equal the validated PlanningInventory map before mapping readiness or identity generation. — Prevents undeclared or partially observed phases from being admitted as ordinary drift or clean state.
 
 ### Pending Todos
 
@@ -139,6 +142,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-28T13:41:18.108Z
-Stopped at: Completed 03-11-PLAN.md
+Last session: 2026-07-28T13:58:28.903Z
+Stopped at: Completed 03-10-PLAN.md
 Resume file: None
