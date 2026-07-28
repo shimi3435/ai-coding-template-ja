@@ -622,11 +622,15 @@ def test_builder_rejects_invalid_declarations_without_partial_mappings(
             assignments=(*inventory.assignments, inventory.assignments[0]),
         )
     elif case == "tombstone":
-        removed = source_items.active[0]
+        removed = next(
+            item
+            for item in reversed(source_items.active)
+            if item.category is SourceCategory.SCENARIO
+        )
         source_items = SourceIdentityState(
             next_requirement_id=source_items.next_requirement_id,
             next_scenario_id=source_items.next_scenario_id,
-            active=source_items.active[1:],
+            active=tuple(item for item in source_items.active if item.id != removed.id),
             tombstones=(
                 SourceTombstone(
                     id=removed.id,

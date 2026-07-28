@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 from .manifest_v2 import ManifestMapping
 from .models import (
@@ -673,9 +674,6 @@ def build_manifest_mappings(
         return _failure("mapping-source-unknown")
     if declared_ids != active_ids:
         return _failure("mapping-source-coverage-incomplete")
-    phases = {phase.phase_id: phase for phase in planning_inventory.phases}
-    if len(phases) != len(planning_inventory.phases):
-        return _failure("mapping-phase-conflict")
     referenced_ids = tuple(
         sorted(
             {
@@ -694,43 +692,10 @@ def build_manifest_mappings(
     if isinstance(policy_result, Failure):
         return _failure(f"mapping-{policy_result.issue.code}")
 
-    mappings = tuple(
-        ManifestMapping(
-            source_id=assignment.source_id,
-            phase_id=assignment.phase_id,
-            phase_path=phases[assignment.phase_id].phase_path,
-            plan_paths=tuple(
-                sorted(
-                    (
-                        plan.path
-                        for plan in planning_inventory.plans
-                        if plan.phase_id == assignment.phase_id
-                    ),
-                    key=str.encode,
-                )
-            ),
-            evidence_paths=tuple(
-                sorted(
-                    (
-                        evidence.path
-                        for evidence in planning_inventory.evidence
-                        if evidence.phase_id == assignment.phase_id
-                        and (
-                            evidence.source_id == assignment.source_id
-                            or evidence.plan_path is not None
-                        )
-                    ),
-                    key=str.encode,
-                )
-            ),
-            policy_references=assignment.policy_references,
-        )
-        for assignment in sorted(assignments, key=lambda item: item.source_id)
-    )
-    return Success(mappings)
+    return Success(_project_canonical_manifest_mappings(planning_inventory))
 
 
-def _expected_mappings(
+def _project_canonical_manifest_mappings(
     inventory: PlanningInventory,
 ) -> tuple[ManifestMapping, ...]:
     phases = {phase.phase_id: phase for phase in inventory.phases}
@@ -765,8 +730,107 @@ def _expected_mappings(
             ),
             policy_references=assignment.policy_references,
         )
-        for assignment in sorted(inventory.assignments, key=lambda item: item.source_id)
+        for assignment in sorted(
+            inventory.assignments,
+            key=lambda item: item.source_id,
+        )
     )
+
+
+def _validate_manifest_mappings(
+    value: object,
+) -> Result[tuple[ManifestMapping, ...]]:
+    if type(value) is not tuple or len(value) > _MAX_ENTRIES:
+        return _failure("mapping-set-invalid")
+    if any(type(mapping) is not ManifestMapping for mapping in value):
+        return _failure("mapping-set-invalid")
+    mappings = cast(tuple[ManifestMapping, ...], value)
+    if any(
+        type(field) is not str
+        for mapping in mappings
+        for field in (mapping.source_id, mapping.phase_id, mapping.phase_path)
+    ):
+        return _failure("mapping-set-invalid")
+    for mapping in mappings:
+        for values in (
+            mapping.plan_paths,
+            mapping.evidence_paths,
+            mapping.policy_references,
+        ):
+            if (
+                type(values) is not tuple
+                or len(values) > _MAX_ENTRIES
+                or any(type(item) is not str for item in values)
+            ):
+                return _failure("mapping-set-invalid")
+
+    aggregate_bytes = 0
+    try:
+        for mapping in mappings:
+            aggregate_bytes += sum(
+                len(item.encode("utf-8"))
+                for item in (
+                    mapping.source_id,
+                    mapping.phase_id,
+                    mapping.phase_path,
+                    *mapping.plan_paths,
+                    *mapping.evidence_paths,
+                    *mapping.policy_references,
+                )
+            )
+    except UnicodeEncodeError:
+        return _failure("mapping-set-invalid")
+
+    for mapping in mappings:
+        if (
+            _SOURCE_ID.fullmatch(mapping.source_id) is None
+            or _PHASE_ID.fullmatch(mapping.phase_id) is None
+        ):
+            return _failure("mapping-set-invalid")
+        try:
+            _canonical_path(mapping.phase_path)
+            for path in (*mapping.plan_paths, *mapping.evidence_paths):
+                _canonical_path(path)
+        except _InventoryError:
+            return _failure("mapping-set-invalid")
+        phase_parts = PurePosixPath(mapping.phase_path).parts
+        if (
+            len(phase_parts) != 3
+            or phase_parts[:2] != (".planning", "phases")
+            or not phase_parts[2].startswith(f"{mapping.phase_id}-")
+        ):
+            return _failure("mapping-set-invalid")
+        if any(
+            not path.startswith(f"{mapping.phase_path}/")
+            or not PurePosixPath(path).name.startswith(f"{mapping.phase_id}-")
+            or not path.endswith("-PLAN.md")
+            for path in mapping.plan_paths
+        ):
+            return _failure("mapping-set-invalid")
+        if any(
+            _POLICY_ID.fullmatch(reference_id) is None
+            for reference_id in mapping.policy_references
+        ):
+            return _failure("mapping-set-invalid")
+        for values in (
+            mapping.plan_paths,
+            mapping.evidence_paths,
+            mapping.policy_references,
+        ):
+            if values != tuple(sorted(set(values), key=str.encode)):
+                return _failure("mapping-set-invalid")
+        for paths in (mapping.plan_paths, mapping.evidence_paths):
+            if len({_alias_key(path) for path in paths}) != len(paths):
+                return _failure("mapping-set-invalid")
+
+    source_ids = tuple(mapping.source_id for mapping in mappings)
+    if (
+        source_ids != tuple(sorted(source_ids, key=str.encode))
+        or len(source_ids) != len(set(source_ids))
+        or aggregate_bytes > _MAX_BYTES
+    ):
+        return _failure("mapping-set-invalid")
+    return Success(mappings)
 
 
 @dataclass(frozen=True)
@@ -1066,8 +1130,10 @@ def validate_mapping_readiness(
     if isinstance(source_result, Failure):
         return _failure("mapping-input-invalid")
     source_items = source_result.value
-    if type(mappings) is not tuple or len(mappings) > _MAX_ENTRIES:
-        return _failure("mapping-set-invalid")
+    mappings_result = _validate_manifest_mappings(mappings)
+    if isinstance(mappings_result, Failure):
+        return mappings_result
+    mappings = mappings_result.value
     inventory_result = validate_planning_inventory(planning_inventory)
     if isinstance(inventory_result, Failure):
         return inventory_result
@@ -1088,14 +1154,10 @@ def validate_mapping_readiness(
         return _failure("mapping-source-unknown")
     if assignment_ids != active_ids:
         return _failure("mapping-source-coverage-incomplete")
-    if any(not isinstance(mapping, ManifestMapping) for mapping in mappings):
-        return _failure("mapping-set-invalid")
     mapping_ids = [mapping.source_id for mapping in mappings]
-    if len(mapping_ids) != len(set(mapping_ids)):
-        return _failure("mapping-source-duplicate")
     if set(mapping_ids) & tombstone_ids:
         return _failure("mapping-tombstone-reference")
-    if mappings != _expected_mappings(planning_inventory):
+    if mappings != _project_canonical_manifest_mappings(planning_inventory):
         return _failure("mapping-set-conflict")
 
     phases = {phase.phase_id: phase for phase in planning_inventory.phases}
