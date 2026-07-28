@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-09-PLAN.md
-last_updated: "2026-07-28T13:27:38.796Z"
+stopped_at: Completed 03-11-PLAN.md
+last_updated: "2026-07-28T13:41:18.118Z"
 last_activity: 2026-07-28
 last_activity_desc: Completed 03-09-PLAN.md
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
   percent: 33
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 10 of 11
+Plan: 11 of 11
 Status: Ready to execute
 Last activity: 2026-07-28 — Completed 03-09-PLAN.md
 
@@ -73,6 +73,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P07 | 14min | 2 tasks | 4 files |
 | Phase 03 P08 | 15m | 2 tasks | 4 files |
 | Phase 03 P09 | 8min | 2 tasks | 3 files |
+| Phase 03 P11 | 10min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Lifecycle source and capability commits require exact strings, and phase inventories are rejected at the phase boundary before mapping readiness.
 - [Phase 03]: SourceIdentityState strings remain exclusively validated by validate_source_identity_state and are excluded from the canonical aggregate-byte recount.
 - [Phase 03]: Canonical classifier bounds reuse MAX_TASKS, DEFAULT_ARTIFACT_LIMITS, and SourceIdentityLimits so exact producer limits remain accepted and limit+1 is identity-free unknown.
+- [Phase 03]: Mapping public APIs reuse validate_source_identity_state and expose only mapping-input-invalid for malformed source state. — Prevents malformed nested source values from being dereferenced or leaking validator internals.
+- [Phase 03]: ManifestMapping values are fully validated before semantic or filesystem operations, and both public APIs derive canonical mappings through one pure helper. — Prevents partial admission and construction/readiness projection drift.
 
 ### Pending Todos
 
@@ -136,6 +139,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-28T13:27:38.706Z
-Stopped at: Completed 03-09-PLAN.md
+Last session: 2026-07-28T13:41:18.108Z
+Stopped at: Completed 03-11-PLAN.md
 Resume file: None
