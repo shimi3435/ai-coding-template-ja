@@ -5,14 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-10-PLAN.md
-last_updated: "2026-07-28T14:44:52.163Z"
+stopped_at: Completed 03-12-PLAN.md
+last_updated: "2026-07-28T15:43:53.878Z"
 last_activity: 2026-07-28
+last_activity_desc: Completed 03-12-PLAN.md
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
   percent: 33
 ---
 
@@ -30,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 03 (lifecycle-drift-gate) — PLANNED
-Plan: 11 of 13 (2 gap-closure plans pending)
+Phase: 03 (lifecycle-drift-gate) — EXECUTING
+Plan: 13 of 13
 Status: Ready to execute
-Last activity: 2026-07-28
+Last activity: 2026-07-28 — Completed 03-12-PLAN.md
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -74,6 +75,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P09 | 8min | 2 tasks | 3 files |
 | Phase 03 P11 | 10min | 2 tasks | 2 files |
 | Phase 03 P10 | 10min | 2 tasks | 2 files |
+| Phase 03 P12 | 6min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -117,6 +119,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: ManifestMapping values are fully validated before semantic or filesystem operations, and both public APIs derive canonical mappings through one pure helper. — Prevents partial admission and construction/readiness projection drift.
 - [Phase 03]: Manifest bytes are read only through retained no-follow descriptors rooted at the validated repository, with every entry revalidated after the bounded read. — Prevents repository-external manifest substitution and parent identity races from contributing authorization input.
 - [Phase 03]: Expected and observed phase ID/path maps must each exactly equal the validated PlanningInventory map before mapping readiness or identity generation. — Prevents undeclared or partially observed phases from being admitted as ordinary drift or clean state.
+- [Phase 03]: A complete source-pinned baseline must have an empty changed_source_item_ids tuple before canonical comparison or identity-relevant projection. — Prevents internally inconsistent baseline evidence from becoming clean or reusable.
+- [Phase 03]: Expected-side reconciliation inconsistency returns only source-reconciliation-incomplete; observed-side changes remain deterministic drift evidence. — Keeps baseline validity distinct from current-tree remediation evidence.
 
 ### Pending Todos
 
@@ -141,6 +145,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-28T13:58:28.903Z
-Stopped at: Completed 03-10-PLAN.md
+Last session: 2026-07-28T15:43:53.868Z
+Stopped at: Completed 03-12-PLAN.md
 Resume file: None
