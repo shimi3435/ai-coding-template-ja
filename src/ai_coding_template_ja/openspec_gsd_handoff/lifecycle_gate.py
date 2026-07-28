@@ -265,16 +265,83 @@ def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
     )
 
 
-def _read_manifest_bytes(path: Path, limit: int) -> Result[bytes]:
-    descriptor: int | None = None
+def _read_manifest_bytes(root: Path, change_id: str, limit: int) -> Result[bytes]:
+    descriptors: list[int] = []
+    anchored_entries: list[
+        tuple[int | None, Path | str, int, bool, os.stat_result]
+    ] = []
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
-        before = os.stat(path, follow_symlinks=False)
-        if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        linked_root = os.stat(root, follow_symlinks=False)
+        if stat.S_ISLNK(linked_root.st_mode) or not stat.S_ISDIR(linked_root.st_mode):
             return _failure("lifecycle-manifest-unreadable")
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
-        opened = os.fstat(descriptor)
-        if not _same_identity(before, opened) or not stat.S_ISREG(opened.st_mode):
+        root_descriptor = os.open(root, directory_flags)
+        descriptors.append(root_descriptor)
+        opened_root = os.fstat(root_descriptor)
+        if not stat.S_ISDIR(opened_root.st_mode) or not _same_identity(
+            linked_root, opened_root
+        ):
             return _failure("lifecycle-manifest-identity-changed")
+        anchored_entries.append((None, root, root_descriptor, True, linked_root))
+
+        descriptor = root_descriptor
+        parts = (".planning", "openspec", change_id, "handoff.json")
+        for index, part in enumerate(parts):
+            expect_directory = index < len(parts) - 1
+            linked = os.stat(
+                part,
+                dir_fd=descriptor,
+                follow_symlinks=False,
+            )
+            linked_type_matches = (
+                stat.S_ISDIR(linked.st_mode)
+                if expect_directory
+                else stat.S_ISREG(linked.st_mode)
+            )
+            if stat.S_ISLNK(linked.st_mode) or not linked_type_matches:
+                return _failure("lifecycle-manifest-unreadable")
+
+            parent_descriptor = descriptor
+            flags = directory_flags if expect_directory else file_flags
+            try:
+                opened_descriptor = os.open(
+                    part,
+                    flags,
+                    dir_fd=parent_descriptor,
+                )
+            except OSError:
+                try:
+                    current = os.stat(
+                        part,
+                        dir_fd=parent_descriptor,
+                        follow_symlinks=False,
+                    )
+                except OSError:
+                    return _failure("lifecycle-manifest-read-failed")
+                if stat.S_ISLNK(current.st_mode) or not _same_identity(linked, current):
+                    return _failure("lifecycle-manifest-identity-changed")
+                return _failure("lifecycle-manifest-read-failed")
+            descriptors.append(opened_descriptor)
+            opened = os.fstat(opened_descriptor)
+            opened_type_matches = (
+                stat.S_ISDIR(opened.st_mode)
+                if expect_directory
+                else stat.S_ISREG(opened.st_mode)
+            )
+            if not opened_type_matches or not _same_identity(linked, opened):
+                return _failure("lifecycle-manifest-identity-changed")
+            anchored_entries.append(
+                (
+                    parent_descriptor,
+                    part,
+                    opened_descriptor,
+                    expect_directory,
+                    linked,
+                )
+            )
+            descriptor = opened_descriptor
+
         chunks: list[bytes] = []
         remaining = limit + 1
         while remaining:
@@ -284,16 +351,42 @@ def _read_manifest_bytes(path: Path, limit: int) -> Result[bytes]:
             chunks.append(chunk)
             remaining -= len(chunk)
         content = b"".join(chunks)
-        after = os.stat(path, follow_symlinks=False)
-        if not _same_identity(after, opened):
-            return _failure("lifecycle-manifest-identity-changed")
+
+        for (
+            parent_descriptor,
+            part,
+            opened_descriptor,
+            expect_directory,
+            linked,
+        ) in reversed(anchored_entries):
+            current_link = (
+                os.stat(part, follow_symlinks=False)
+                if parent_descriptor is None
+                else os.stat(
+                    part,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+            )
+            current_opened = os.fstat(opened_descriptor)
+            type_matches = (
+                stat.S_ISDIR(current_opened.st_mode)
+                if expect_directory
+                else stat.S_ISREG(current_opened.st_mode)
+            )
+            if (
+                not type_matches
+                or not _same_identity(linked, current_opened)
+                or not _same_identity(current_link, current_opened)
+            ):
+                return _failure("lifecycle-manifest-identity-changed")
         if len(content) > limit:
             return _failure("lifecycle-manifest-size-limit-exceeded")
         return Success(content)
     except (OSError, ValueError):
         return _failure("lifecycle-manifest-read-failed")
     finally:
-        if descriptor is not None:
+        for descriptor in reversed(descriptors):
             try:
                 os.close(descriptor)
             except OSError:
@@ -550,7 +643,8 @@ def observe_lifecycle_operation(
         return _failure("lifecycle-repository-root-invalid")
 
     manifest_bytes_result = _read_manifest_bytes(
-        root / ".planning" / "openspec" / change_id / "handoff.json",
+        root,
+        change_id,
         limits.max_manifest_bytes,
     )
     if isinstance(manifest_bytes_result, Failure):
