@@ -80,7 +80,7 @@ No separate refactor commit was warranted: the GREEN implementations already con
 - Keep lifecycle failure projection unchanged: each boundary dimension owns its existing observation-incomplete issue code and rejected evidence never reaches identity generation.
 - Use fixed parameterized examples only; the existing lifecycle drift property family remains the sole `@given` use across the three lifecycle test modules.
 
-## Verification
+## Validation Results
 
 - Focused inventory validation: **3 passed, 26 deselected**
 - Focused lifecycle boundary validation: **3 passed, 127 deselected**
