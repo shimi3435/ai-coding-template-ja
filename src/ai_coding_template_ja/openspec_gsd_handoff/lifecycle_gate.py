@@ -1306,9 +1306,14 @@ def gate_lifecycle_operation(
     assert decision.decision_identity is not None
     if hmac.compare_digest(prior_decision_identity, decision.decision_identity):
         return decision
-    return replace(
+    stale_decision = replace(
         decision,
         state=LifecycleGateState.DRIFTED,
         admitted=False,
         issue_codes=_utf8_sorted((*decision.issue_codes, "lifecycle-decision-stale")),
+        decision_identity=None,
+    )
+    return replace(
+        stale_decision,
+        decision_identity=_decision_identity(observation.value, stale_decision),
     )
