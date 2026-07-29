@@ -617,10 +617,19 @@ def source_inventory_from_bytes(
 
     if not _valid_limits(limits):
         return _failure("source-limits-invalid", category=IssueCategory.INPUT)
+    if isinstance(source_files, (str, bytes)) or not isinstance(source_files, Sequence):
+        return _failure("source-files-invalid", category=IssueCategory.INPUT)
     if not source_files:
         return _failure("source-paths-empty", category=IssueCategory.INPUT)
     if len(source_files) > limits.max_items:
         return _failure("source-path-count-limit-exceeded")
+    if any(
+        type(source_file) is not tuple or len(source_file) != 2
+        for source_file in source_files
+    ):
+        return _failure("source-files-invalid", category=IssueCategory.INPUT)
+    if any(not isinstance(source_file[0], (str, Path)) for source_file in source_files):
+        return _failure("source-files-invalid", category=IssueCategory.INPUT)
 
     prepared: list[tuple[str, bytes]] = []
     aliases: set[str] = set()
