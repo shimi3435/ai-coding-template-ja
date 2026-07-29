@@ -16,8 +16,8 @@ OpenSpec に残す。
 ### Validated
 
 - ✓ MVP handoff bridge と schema v1 が `d96e451` で `origin/main` に統合済み
-- ✓ canonical hardening artifacts と readiness observation boundary が current source commit
-  `4d8b5b173927ed518d39dee18a29b0271628afbd` に再固定済み
+- ✓ canonical hardening artifacts、54-item execution mapping、lifecycle drift authority が
+  current source commit `9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901` に再固定済み
 - ✓ 旧 source commit の handoff は started 状態の監査証跡として保持し、manual recovery が明示承認済み
 
 ### Active
@@ -47,7 +47,7 @@ OpenSpec に残す。
 - Handoff brief:
   `.planning/openspec/harden-openspec-gsd-handoff-lifecycle/handoff-brief.md`
 - OpenSpec source commit:
-  `4d8b5b173927ed518d39dee18a29b0271628afbd`
+  `9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901`
 - OpenSpec が WHAT / WHY と最終完了を所有し、GSD は詳細な実行分解だけを所有する。
 - 旧 started manifest / brief は旧 dispatch の historical / stale evidence であり、再prepare、
   `mark-started`、上書き、削除の対象にしない。
@@ -59,7 +59,9 @@ OpenSpec に残す。
 - **Ordering**: phase と plan は依存順に逐次実行する
 - **Scope**: 一つの phase には本 change だけを含める
 - **Testing**: TDD、plan check、verifier、Nyquist validation、source groundingを有効にする
-- **Properties**: property tests は allocator、normalizer、manifest round-trip、ownership graph、preview builderに限定する
+- **Properties**: property tests は allocator、normalizer、manifest round-trip、checkbox normalization、
+  phase graph/remediation projection (`A-P-GRAPH`)、canonical path-role invariants
+  (`B-P-PATH-ROLE`)、ownership graph、preview builderに限定する
 - **Evidence**: 同じ failure / seam / risk を重複検証する低価値な証跡を増やさない
 - **Safety**: path escape、symlink、Unicode / case alias、巨大入力、partial failureをfail-closedにする
 - **Automation**: 自動 route switch、rollback、repairを実装・実行しない
@@ -69,7 +71,7 @@ OpenSpec に残す。
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| OpenSpec artifactsをsource commitに固定して参照する | GSD側で仕様を複製せずdriftを検出するため | Phase 1は`2cbb127…`、current Phase 2 authorityは`4d8b5b1…`へrepin |
+| OpenSpec artifactsをsource commitに固定して参照する | GSD側で仕様を複製せずdriftを検出するため | Phase 1は`2cbb127…`、current Phase 3 authorityは`9a7a313…`へrepin |
 | Mapping readinessをpoint-in-time execution decisionとして扱う | Atomic snapshot / leaseを主張せず、次のoperation boundaryでfreshnessを再確認するため | Phase 2 D-04を後続planning / verificationの前提にする |
 | 6つの依存phaseを逐次実行する | stable identityからfinalizeまでの前提関係を保つため | — Pending |
 | planning docsをGit追跡する | interruption後の再開とレビュー可能性を保つため | — Pending |
@@ -94,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-22 after readiness observation authority repin*
+*Last updated: 2026-07-29 during approved Phase 3 authority publication*

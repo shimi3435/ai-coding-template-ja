@@ -1535,6 +1535,23 @@ def _checkbox_only_progress_evidence(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob)
 
+    working_root = tmp_path / "checkbox-only-working-tree"
+    working_root.mkdir()
+    for relative_path, blob in pinned_blobs.items():
+        working_blob = blob
+        if relative_path.endswith("/tasks.md"):
+            marker = b"- [ ] 3.1 "
+            assert working_blob.count(marker) == 1
+            working_blob = working_blob.replace(marker, b"- [x] 3.1 ", 1)
+        target = working_root.joinpath(
+            *_assert_canonical_manifest_path(relative_path, REAL_CHANGE_ID).parts
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(working_blob)
+    working_manifest = working_root / REAL_HANDOFF_PATH
+    working_manifest.parent.mkdir(parents=True, exist_ok=True)
+    working_manifest.write_bytes(handoff_bytes)
+
     source_pinned = observe_canonical_source(
         pinned_root,
         REAL_CHANGE_ID,
@@ -1543,7 +1560,7 @@ def _checkbox_only_progress_evidence(
         limits=DEFAULT_ARTIFACT_LIMITS,
     )
     working_tree = observe_canonical_source(
-        repository_root,
+        working_root,
         REAL_CHANGE_ID,
         claims,
         expected_source_items=manifest.source_items,
@@ -1560,7 +1577,7 @@ def _checkbox_only_progress_evidence(
     )
     pinned_tasks = pinned_blobs[tasks_artifact.path]
     current_tasks = _read_bounded_bytes(
-        repository_root / tasks_artifact.path,
+        working_root / tasks_artifact.path,
         DEFAULT_ARTIFACT_LIMITS.bytes_per_file,
     )
     pinned_text = pinned_tasks.decode("utf-8")
@@ -1589,9 +1606,11 @@ def _checkbox_only_progress_evidence(
     assert classification.progress_update_candidate == current_progress.value
 
     inventory = _real_planning_inventory(repository_root)
+    for phase in inventory.phases:
+        (working_root / phase.phase_path).mkdir(parents=True, exist_ok=True)
     phase_nodes = _real_phase_nodes(inventory)
     boundary = FakeBoundary(
-        repository=repository_root,
+        repository=working_root,
         canonical_source=source_pinned.value,
         inventory=inventory,
         expected_nodes=phase_nodes,
@@ -1599,7 +1618,7 @@ def _checkbox_only_progress_evidence(
         capabilities=manifest.capabilities,
     )
     decision = gate_lifecycle_operation(
-        repository_root,
+        working_root,
         REAL_CHANGE_ID,
         LifecycleOperation.PLAN,
         "03",

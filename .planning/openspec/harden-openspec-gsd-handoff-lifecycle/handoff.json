@@ -6,7 +6,7 @@
     {
       "kind": "design",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/design.md",
-      "sha256": "3561792edfe750f5815fad72ff2e133888848b2733e770e2b6f66f87c413e783"
+      "sha256": "04e0fc577b7f9ad0f5e6d6499f945f9a4ebf313c1932dab80a0015315b236d10"
     },
     {
       "kind": "proposal",
@@ -16,19 +16,19 @@
     {
       "kind": "spec",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
-      "sha256": "7d076d2a946a8e8f3346f48ae80d4fbeb8ae0fb9ea6d20ccf19e01847edfd784"
+      "sha256": "185db1c419690b6c2f61e81ac6cb6c5c78698806052b1adf5a6915d430cdd8e0"
     },
     {
       "kind": "tasks",
       "path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md",
-      "sha256": "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
+      "sha256": "c12d93a780b03bcf8b1c8a3c1df888f53433b5f5399528d3f1f23699f11a3935"
     }
   ],
-  "source_commit": "4d8b5b173927ed518d39dee18a29b0271628afbd",
+  "source_commit": "9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901",
   "progress": {
     "total": 12,
-    "complete": 4,
-    "remaining": 8,
+    "complete": 5,
+    "remaining": 7,
     "tasks": [
       {
         "id": "1",
@@ -53,7 +53,7 @@
       {
         "id": "5",
         "description": "2.2 source-to-phase / plan / evidence mapping の phase を完了し、対応する OpenSpec scenarios の検証を通す",
-        "done": false
+        "done": true
       },
       {
         "id": "6",
@@ -113,7 +113,7 @@
   },
   "source_items": {
     "next_requirement_id": 7,
-    "next_scenario_id": 44,
+    "next_scenario_id": 49,
     "active": [
       {
         "id": "REQ-000001",
@@ -129,7 +129,7 @@
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
         "raw_heading": "### Requirement: HARD-R2 lifecycle 操作前に source と派生状態の drift を検査する",
         "parent_id": null,
-        "fingerprint": "1c4c714d25e1124b346f5b2aaefa8bdd4fed155295c3f24c1f25e886fa74ba57"
+        "fingerprint": "c398939e60d173dd6e099c75422c3b8d2030bf35edb712f85a01a6aca2739977"
       },
       {
         "id": "REQ-000003",
@@ -170,6 +170,22 @@
         "raw_heading": "#### Scenario: MVP schema v1 の migration をpreviewする",
         "parent_id": "REQ-000001",
         "fingerprint": "b81ea727db8f8886fa6faffb2c7548661907bef640181dba201c807dbc195dff"
+      },
+      {
+        "id": "SCN-000044",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: Phase 3 public contract の互換性を維持する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "6749c54b6e7b691ea9b9f6e29ccd82ca418bd2e8480e36a89040c8d1953c7fba"
+      },
+      {
+        "id": "SCN-000045",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: Phase 3 の完了を判定する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "ee939f831dd2beb06470ff108165d062fc0ceb590c7dfcb521112ce857cdc28f"
       },
       {
         "id": "SCN-000002",
@@ -236,6 +252,14 @@
         "fingerprint": "fbcffd1b3509c4a8f3f30c1aa72090045ffb1c534f0e191dbe8ee1e67f857440"
       },
       {
+        "id": "SCN-000046",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: lifecycle target phase を分類する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "e76bb508c754abd00b6c255fcd44813424cecba9cee518a6a22e57e585b3d896"
+      },
+      {
         "id": "SCN-000010",
         "category": "scenario",
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
@@ -250,6 +274,14 @@
         "raw_heading": "#### Scenario: manifest migration のstagingが失敗する",
         "parent_id": "REQ-000001",
         "fingerprint": "f3f7ed9aa18a9740dcf0ec9933698a35ecb1d2e3c307228e141cce53b00b8b50"
+      },
+      {
+        "id": "SCN-000047",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: mapping artifact の path role を分離する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "8baa52cefe9bdb7004efd06e850204cb8e957c4b2847c9b735e3c44e1d4b291f"
       },
       {
         "id": "SCN-000012",
@@ -460,6 +492,14 @@
         "fingerprint": "28886f1af8c1f7af634e2957f66f9709ad578cddfb32ce25cbdc54173c20d05a"
       },
       {
+        "id": "SCN-000048",
+        "category": "scenario",
+        "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
+        "raw_heading": "#### Scenario: 完全な phase graph drift を分類して remediation を投影する",
+        "parent_id": "REQ-000002",
+        "fingerprint": "d7d3b413205009cfe54329c266c22df43e8a302e5d55de97a9a5328cdb7abdbd"
+      },
+      {
         "id": "SCN-000031",
         "category": "scenario",
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
@@ -497,7 +537,7 @@
         "source_path": "openspec/changes/harden-openspec-gsd-handoff-lifecycle/specs/openspec-gsd-handoff-lifecycle-hardening/spec.md",
         "raw_heading": "#### Scenario: 検査を完了できない",
         "parent_id": "REQ-000002",
-        "fingerprint": "186ba40604fcd1fb933af729ba6bac305ba4acccbedb15ac4839ab57e8d6363a"
+        "fingerprint": "8be590dc0d949d4f12f1d38c9e3a921553dd1ce192d7cbe609028152490f9108"
       },
       {
         "id": "SCN-000036",
@@ -1017,6 +1057,61 @@
       "plan_paths": [],
       "evidence_paths": [],
       "policy_references": []
+    },
+    {
+      "source_id": "SCN-000044",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S4-SOURCE-PINNED"
+      ]
+    },
+    {
+      "source_id": "SCN-000045",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-SPEC-CHANGE-REPLAN",
+        "ACE-S5-REVALIDATE-ON-DRIFT"
+      ]
+    },
+    {
+      "source_id": "SCN-000046",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S2-ONE-PHASE-ONE-CHANGE",
+        "ACE-S4-CONTEXT-PARITY"
+      ]
+    },
+    {
+      "source_id": "SCN-000047",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S4-NO-AUTO-FALLBACK",
+        "ACE-S4-SOURCE-PINNED"
+      ]
+    },
+    {
+      "source_id": "SCN-000048",
+      "phase_id": "03",
+      "phase_path": ".planning/phases/03-lifecycle-drift-gate",
+      "plan_paths": [],
+      "evidence_paths": [],
+      "policy_references": [
+        "ACE-S5-OPEN-SPEC-FINAL",
+        "ACE-S5-SINGLE-ACTIVE-CLOSE"
+      ]
     }
   ],
   "ownership": {

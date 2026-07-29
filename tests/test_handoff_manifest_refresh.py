@@ -56,29 +56,23 @@ ASSIGNMENT_PATH = (
     "tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json"
 )
 POLICY_REGISTRY_PATH = "docs/agents/adaptive-change-execution.references.json"
-SOURCE_COMMIT = "4d8b5b173927ed518d39dee18a29b0271628afbd"
-ALTERNATE_SOURCE_COMMIT = "cca33916805a46a712f60da6a5f22a358889cffe"
+SOURCE_COMMIT = "9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901"
+ALTERNATE_SOURCE_COMMIT = "41b853fa81d2387647bf18dc1a1d8a5dd21a308c"
 HISTORICAL_HANDOFF_SHA256 = (
-    "554690a1eee6e632eaf7c4fce3517cba69ff38eb8a06a1873b7a5e6822e59914"
-)
-PUBLISHED_HANDOFF_SHA256 = (
     "6cc9bcf4caa3f9f839742f6d86660a8039c2370cf5cf7d054ba04199e3775fc5"
 )
+PUBLISHED_HANDOFF_SHA256 = (
+    "d2425591c60355594e65253cf2bcc56424160ab677ccd93605f8606f6a940b48"
+)
 TRACKED_TASKS_SHA256 = (
-    "cf4a9dc56afc15b98a008cff686989bd446215c95b3962ea3efd5a4f9eb30220"
+    "c12d93a780b03bcf8b1c8a3c1df888f53433b5f5399528d3f1f23699f11a3935"
 )
-POST_SOURCE_COMMIT_TASK_IDS = (
-    "2.2",
-    "3.1",
-    "3.2",
-    "4.1",
-    "4.2",
-    "5.1",
-    "5.2",
-    "6.1",
+HISTORICAL_ASSIGNMENT_SHA256 = (
+    "73443cb463a83ff8c37af80670bcb444371687bf9cda3c947556b28f3e1b550f"
 )
+POST_SOURCE_COMMIT_TASK_IDS: tuple[str, ...] = ()
 REFRESH_EVIDENCE_PATH = (
-    ".planning/phases/02-source-to-execution-mapping/02-REFRESH-PREVIEW.json"
+    ".planning/phases/03-lifecycle-drift-gate/03-REFRESH-PREVIEW.json"
 )
 EXPECTED = json.loads(
     (
@@ -135,7 +129,7 @@ def _historical_manifest_bytes() -> bytes:
     preview = evidence["preview"]
     assert isinstance(preview, dict)
     assert preview["observed_source_commit"] == (
-        "2cbb127917feaa637ef5eac439478227ac5f717b"
+        "4d8b5b173927ed518d39dee18a29b0271628afbd"
     )
     raw = json.loads(preview["candidate_bytes_utf8"])
     raw["artifacts"] = preview["previous_artifacts"]
@@ -382,7 +376,7 @@ def _preview(repository: Path, **overrides):
     return preview_manifest_refresh(repository, Path(HANDOFF_PATH), **arguments)
 
 
-def test_published_target_matches_immutable_historical_evidence() -> None:
+def test_published_target_matches_exact_approved_refresh_evidence() -> None:
     target = REPOSITORY_ROOT / HANDOFF_PATH
     target_before = target.read_bytes()
     evidence = _refresh_evidence()
@@ -394,6 +388,7 @@ def test_published_target_matches_immutable_historical_evidence() -> None:
         "preview_sha256",
         "target_observation",
         "tasks_observation",
+        "assignment_observation",
         "staging_observation",
         "reconciliation",
         "mapping_coverage",
@@ -414,17 +409,35 @@ def test_published_target_matches_immutable_historical_evidence() -> None:
         "after_sha256": TRACKED_TASKS_SHA256,
         "unchanged": True,
     }
-    assert evidence["staging_observation"] == {"before": [], "after": []}
+    assert evidence["assignment_observation"] == {
+        "path": ASSIGNMENT_PATH,
+        "before_sha256": HISTORICAL_ASSIGNMENT_SHA256,
+        "after_sha256": HISTORICAL_ASSIGNMENT_SHA256,
+        "unchanged": True,
+        "candidate_mode": "in-memory-only",
+    }
+    assert evidence["staging_observation"] == {
+        "pattern": ".handoff.*.tmp",
+        "before": [],
+        "after": [],
+    }
     assert evidence["reconciliation"] == {
-        "previous_active": 42,
-        "candidate_active": 49,
-        "created": 7,
+        "previous_active": 49,
+        "candidate_active": 54,
+        "created": 5,
         "updated": 2,
         "tombstoned": 0,
         "next_requirement_id": 7,
-        "next_scenario_id": 44,
+        "next_scenario_id": 49,
+        "previous_scenarios": 43,
+        "candidate_scenarios": 48,
     }
-    assert evidence["mapping_coverage"] == {"active": 49, "mapped": 49}
+    assert evidence["mapping_coverage"] == {
+        "previous_active": 49,
+        "previous_mapped": 49,
+        "candidate_active": 54,
+        "candidate_mapped": 54,
+    }
     preview = evidence["preview"]
     assert isinstance(preview, dict)
     candidate_text = preview["candidate_bytes_utf8"]
@@ -435,27 +448,24 @@ def test_published_target_matches_immutable_historical_evidence() -> None:
     assert isinstance(candidate, Success)
     assert candidate.value.source_commit == SOURCE_COMMIT
     assert candidate.value.handoff_state is HandoffState.STARTED
-    assert len(candidate.value.source_items.active) == 49
-    assert len(candidate.value.mappings) == 49
+    assert len(candidate.value.source_items.active) == 54
+    assert len(candidate.value.mappings) == 54
+    assert preview["assignment_inventory_sha256"] == (
+        "46b18454f18a30f6cac738be43b474a76de533e4f81830c2c33fd3cd723cbb14"
+    )
     assert target_before == candidate_text.encode()
     assert _sha256(target_before) == PUBLISHED_HANDOFF_SHA256
     assert target.read_bytes() == target_before
     assert not tuple(target.parent.glob(".handoff.*.tmp"))
 
 
-def test_source_pinned_tasks_ignore_only_post_pin_completion_checkboxes() -> None:
+def test_source_pinned_tasks_match_current_canonical_pin_exactly() -> None:
     pinned = _source_pinned_tasks_bytes()
-    checked = pinned
-    for task_id in POST_SOURCE_COMMIT_TASK_IDS:
-        checked = checked.replace(
-            f"- [ ] {task_id} ".encode(),
-            f"- [x] {task_id} ".encode(),
-            1,
-        )
+    checked = (REPOSITORY_ROOT / TASKS_PATH).read_bytes()
 
-    assert checked != pinned
+    assert POST_SOURCE_COMMIT_TASK_IDS == ()
+    assert checked == pinned
     assert _source_pinned_tasks_bytes(pinned) == pinned
-    assert _source_pinned_tasks_bytes(checked) == pinned
 
 
 def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
@@ -469,13 +479,13 @@ def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
     assert isinstance(result, Success)
     preview = result.value
     assert preview.old_target_sha256 == EXPECTED["old_target_sha256"]
-    assert len(preview.previous_source_items.active) == 42
-    assert len(preview.candidate_source_items.active) == 49
+    assert len(preview.previous_source_items.active) == 49
+    assert len(preview.candidate_source_items.active) == 54
     assert preview.candidate_source_items.tombstones == ()
     assert (
         preview.candidate_source_items.next_requirement_id,
         preview.candidate_source_items.next_scenario_id,
-    ) == (7, 44)
+    ) == (7, 49)
     assert [
         change.source_id for change in preview.changes if change.kind == "created"
     ] == EXPECTED["created"]
@@ -488,7 +498,7 @@ def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
             change.previous_fingerprint,
             change.candidate_fingerprint,
         ] == fingerprints
-    assert len(preview.candidate_mappings) == 49
+    assert len(preview.candidate_mappings) == 54
     assert {item.source_id for item in preview.candidate_mappings} == {
         item.id for item in preview.candidate_source_items.active
     }
@@ -504,6 +514,9 @@ def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
         for item in preview.protected_subtrees
     )
     assert preview.candidate_sha256 == EXPECTED["candidate_sha256"]
+    assert (
+        preview.assignment_inventory_sha256 == EXPECTED["assignment_inventory_sha256"]
+    )
     assert json.loads(preview.candidate_bytes) == EXPECTED["candidate_manifest"]
     assert preview.candidate_bytes.decode() == EXPECTED["candidate_bytes_utf8"]
     assert target.read_bytes() == before

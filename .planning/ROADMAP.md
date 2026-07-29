@@ -4,7 +4,7 @@
 
 This roadmap plans only OpenSpec change
 `harden-openspec-gsd-handoff-lifecycle`, pinned to source commit
-`4d8b5b173927ed518d39dee18a29b0271628afbd`. OpenSpec owns WHAT / WHY,
+`9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901`. OpenSpec owns WHAT / WHY,
 canonical requirements, scenarios, acceptance criteria, and final completion. GSD
 owns the sequential phase, plan, and phase-progress decomposition without copying
 or redefining canonical specification prose.
@@ -19,8 +19,8 @@ CI. Failure preserves inspectable state and stops; no automatic route switch,
 rollback, repair, or downstream phase advance is allowed.
 
 Manual recovery from the stale started handoff is approved. Phase 1 was replanned and
-verified against its `2cbb127…` source pin. The current Phase 2 authority is repinned to
-`4d8b5b1…`, including the approved point-in-time readiness decision D-04, without adding
+verified against its `2cbb127…` source pin. The current Phase 3 authority is repinned to
+`9a7a313…`, including the approved point-in-time readiness decision D-04, without adding
 a phase or switching route. The final review blocker's specification question is resolved.
 The 4/4 earlier plans remain historical execution evidence, while corrective Plan 02-05
 repins the derived preview and expected-preview fixture to the current authority. Focused
@@ -29,7 +29,8 @@ and independent verification passed 7/7. The operator then explicitly approved p
 `90b52e…`; its exact candidate `6cc9bc…` was atomically published to the tracked handoff in
 commit `2cc802c`, with 49/49 mappings and no staging residue. Phase 2 and OpenSpec task 2.2 are
 complete, Phase 3 is unblocked, Phases 4–6 retain their declared dependency order, and no
-Phase 7 is added.
+Phase 7 is added. Plan 03-17 has published the exact approved 54-item authority; Plan
+03-18 and independent reverification remain pending, so Phase 4 stays blocked on Phase 3.
 The old handoff preimage and brief remain preserved in historical evidence rather than the
 current planning authority.
 
@@ -40,8 +41,8 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [x] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (16/16 plans complete; independent verification pending)
-- [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions.
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (16/18 plans complete; Plan 03-17 approved publication in progress; 03-18 and independent reverification pending)
+- [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
 
@@ -115,12 +116,34 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
+**Plans:** 18 plans
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
 2. Missing, unreadable, malformed, over-limit, or otherwise incomplete observations stop progression instead of being reported as clean.
 3. Approval-relevant evidence is bound to the observed inputs and cannot silently reuse a stale result.
 4. TDD evidence uses fixed public drift and path-role examples; property testing remains limited to the approved pure seams: checkbox normalization, phase graph/remediation projection (`A-P-GRAPH`), and canonical path-role invariants (`B-P-PATH-ROLE`). Filesystem and I/O races remain fixed integration evidence.
+
+Plans:
+
+- [x] 03-01-PLAN.md
+- [x] 03-02-PLAN.md
+- [x] 03-03-PLAN.md
+- [x] 03-04-PLAN.md
+- [x] 03-05-PLAN.md
+- [x] 03-06-PLAN.md
+- [x] 03-07-PLAN.md
+- [x] 03-08-PLAN.md
+- [x] 03-09-PLAN.md
+- [x] 03-10-PLAN.md
+- [x] 03-11-PLAN.md
+- [x] 03-12-PLAN.md
+- [x] 03-13-PLAN.md
+- [x] 03-14-PLAN.md
+- [x] 03-15-PLAN.md
+- [x] 03-16-PLAN.md
+- [ ] 03-17-PLAN.md — Approved publication in progress
+- [ ] 03-18-PLAN.md — Independent reverification pending
 
 ### Phase 4: Repository-Wide Ownership
 
@@ -184,7 +207,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 16/16 | Complete   | 2026-07-29 |
-| 4. Repository-Wide Ownership | 0/TBD | Ready to plan | - |
+| 3. Lifecycle Drift Gate | 16/18 | In progress | - |
+| 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |

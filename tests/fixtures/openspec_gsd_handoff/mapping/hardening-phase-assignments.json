@@ -58,7 +58,12 @@
     {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000040","phase_id":"02","policy_references":[]},
     {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000041","phase_id":"02","policy_references":[]},
     {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000042","phase_id":"02","policy_references":[]},
-    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000043","phase_id":"02","policy_references":[]}
+    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000043","phase_id":"02","policy_references":[]},
+    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000044","phase_id":"03","policy_references":["ACE-S4-NO-AUTO-FALLBACK","ACE-S4-SOURCE-PINNED"]},
+    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000045","phase_id":"03","policy_references":["ACE-S2-SPEC-CHANGE-REPLAN","ACE-S5-REVALIDATE-ON-DRIFT"]},
+    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000046","phase_id":"03","policy_references":["ACE-S2-ONE-PHASE-ONE-CHANGE","ACE-S4-CONTEXT-PARITY"]},
+    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000047","phase_id":"03","policy_references":["ACE-S4-NO-AUTO-FALLBACK","ACE-S4-SOURCE-PINNED"]},
+    {"change_id":"harden-openspec-gsd-handoff-lifecycle","source_id":"SCN-000048","phase_id":"03","policy_references":["ACE-S5-OPEN-SPEC-FINAL","ACE-S5-SINGLE-ACTIVE-CLOSE"]}
   ],
   "plans": [],
   "evidence": []

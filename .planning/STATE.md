@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-16-PLAN.md; ready for independent verification
-last_updated: "2026-07-29T09:44:06.595Z"
+stopped_at: Executing 03-17-PLAN.md; approved publication in progress
+last_updated: "2026-07-29T10:05:43.659Z"
 last_activity: 2026-07-29
-last_activity_desc: Plan 03-16 completed; ready for independent verification
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 26
+  completed_phases: 2
+  total_plans: 28
   completed_plans: 26
-  percent: 50
+  percent: 33
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 **Core value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
 **Current focus:** Phase 03 — lifecycle-drift-gate
 **Change:** `harden-openspec-gsd-handoff-lifecycle`
-**Source commit:** `4d8b5b173927ed518d39dee18a29b0271628afbd`
+**Source commit:** `9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901`
 **Project mode:** standard
 
 ## Current Position
 
-Phase: 03 (lifecycle-drift-gate) — VERIFYING
-Plan: 16 of 16
-Status: Ready to execute
-Last activity: 2026-07-29 — Plan 03-16 completed; ready for independent verification
+Phase: 03 (lifecycle-drift-gate) — EXECUTING
+Plan: 17 of 18
+Status: Executing Phase 03
+Last activity: 2026-07-29 — Phase 03 execution started
 
-Progress: [█████░░░░░] 3 of 6 phases complete (50%)
+Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
 ## Performance Metrics
 
@@ -138,7 +138,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Run independent Phase 03 verification against all three closed gap families before planning Phase 4.
+- Complete Plan 03-18 and independent Phase 03 reverification against all closed gap
+  families before planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -147,7 +148,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - The old started handoff preimage and brief remain historical audit evidence; the tracked handoff now contains the approved Phase 2 candidate.
 - The final review is clean and independent Phase 2 verification passed 7/7 without overrides or unverified behavior.
 - The tracked refresh was published only after explicit approval for preview hash `90b52efd98d6718796548151ea9c808dfd1e14484bcacd2f847b09ea71054bea`; candidate SHA is `6cc9bcf4caa3f9f839742f6d86660a8039c2370cf5cf7d054ba04199e3775fc5`.
-- Phase 03 implementation plans are complete and ready for independent verification; Phase 4 remains blocked on that verification, while Phases 5–6 retain their dependency order.
+- Plan 03-17 is publishing the exact approved 54-item authority; 03-18 and independent
+  reverification remain pending. Phase 4 remains blocked on Phase 3, while Phases 5–6
+  retain their dependency order.
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
 ## Deferred Items
@@ -160,5 +163,5 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-07-29T05:34:28.978Z
-Stopped at: Completed 03-16-PLAN.md; ready for independent verification
+Stopped at: Executing 03-17-PLAN.md; approved publication in progress
 Resume file: None

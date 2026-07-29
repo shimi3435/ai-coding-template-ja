@@ -682,7 +682,7 @@ def preview_manifest_refresh(
         or reconciliation.value.tombstoned
     ):
         return _failure("refresh-pinned-reconciliation-mismatch", IssueCategory.INPUT)
-    if len(previous.source_items.active) not in {42, 49}:
+    if len(previous.source_items.active) not in {42, 49, 54}:
         return _failure("refresh-canonical-snapshot-stale", IssueCategory.INPUT)
 
     mappings = build_manifest_mappings(
