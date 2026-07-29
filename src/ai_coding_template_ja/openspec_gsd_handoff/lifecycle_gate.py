@@ -726,6 +726,13 @@ def observe_lifecycle_operation(
         change_id=change_id,
     ):
         return _failure("lifecycle-source-commit-observation-incomplete")
+    if isinstance(phase_graph, PhaseGraphObservation):
+        inventory_result = validate_planning_inventory(phase_graph.planning_inventory)
+        if (
+            isinstance(inventory_result, Failure)
+            and inventory_result.issue.code == "mapping-path-role-conflict"
+        ):
+            return _failure(inventory_result.issue.code)
     if not _validate_phase_graph(
         phase_graph,
         change_id=change_id,
