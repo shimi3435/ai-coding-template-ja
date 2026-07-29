@@ -381,6 +381,56 @@ def test_inventory_contains_repository_root_symlink_loop(tmp_path: Path) -> None
     assert result.issue.code == "source-root-unreadable"
 
 
+@pytest.mark.parametrize("replacement_kind", ["missing", "symlink", "directory"])
+def test_source_inventory_rejects_repository_root_replacement_during_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replacement_kind: str,
+) -> None:
+    repository, source_path = _write_source(
+        tmp_path,
+        b"### Requirement: Trusted\nTrusted body.\n",
+    )
+    detached_repository = tmp_path / "detached-repository"
+    attacker_repository = tmp_path / "attacker-repository"
+    attacker_source = attacker_repository / source_path
+    attacker_source.parent.mkdir(parents=True)
+    attacker_source.write_bytes(
+        b"### Requirement: Attacker\nAttacker body.\n",
+    )
+
+    original_os_read = os.read
+    swapped = False
+
+    def racing_os_read(descriptor: int, length: int) -> bytes:
+        nonlocal swapped
+        content = original_os_read(descriptor, length)
+        if not swapped:
+            swapped = True
+            repository.rename(detached_repository)
+            if replacement_kind == "symlink":
+                repository.symlink_to(
+                    attacker_repository,
+                    target_is_directory=True,
+                )
+            elif replacement_kind == "directory":
+                repository.mkdir()
+                replacement_source = repository / source_path
+                replacement_source.parent.mkdir(parents=True)
+                replacement_source.write_bytes(attacker_source.read_bytes())
+        return content
+
+    monkeypatch.setattr(os, "read", racing_os_read)
+
+    result = read_source_inventory(repository, [source_path])
+
+    assert swapped
+    assert isinstance(result, Failure)
+    assert result.issue.code == "source-root-identity-changed"
+    assert not hasattr(result, "value")
+    assert "Requirement: Trusted" not in repr(result)
+
+
 def test_inventory_rejects_parent_swap_before_source_open(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
