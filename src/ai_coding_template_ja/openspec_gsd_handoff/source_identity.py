@@ -682,10 +682,14 @@ def read_source_inventory(
 
     if not _valid_limits(limits):
         return _failure("source-limits-invalid", category=IssueCategory.INPUT)
+    if isinstance(source_paths, (str, bytes)) or not isinstance(source_paths, Sequence):
+        return _failure("source-files-invalid", category=IssueCategory.INPUT)
     if not source_paths:
         return _failure("source-paths-empty", category=IssueCategory.INPUT)
     if len(source_paths) > limits.max_items:
         return _failure("source-path-count-limit-exceeded")
+    if any(not isinstance(source_path, (str, Path)) for source_path in source_paths):
+        return _failure("source-files-invalid", category=IssueCategory.INPUT)
     try:
         repository = repository_root.resolve(strict=True)
     except (OSError, RuntimeError):
