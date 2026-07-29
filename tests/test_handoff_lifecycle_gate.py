@@ -2880,6 +2880,52 @@ def test_identity_stale_reuse_is_rejected_after_bound_input_changes(
     assert stale.decision_identity != previous.decision_identity
 
 
+def test_stale_rejection_identity_cannot_be_replayed_into_admission(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    initial = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+    )
+    manifest_path = repository / MANIFEST_PATH
+    manifest_path.write_bytes(manifest_path.read_bytes() + b" \n")
+
+    first_stale = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+        prior_decision_identity=initial.decision_identity,
+    )
+    repeated_stale = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.PLAN,
+        "03",
+        boundary=boundary,
+        prior_decision_identity=first_stale.decision_identity,
+    )
+
+    assert initial.state is LifecycleGateState.CLEAN
+    assert initial.admitted
+    assert initial.decision_identity is not None
+    assert first_stale.state is LifecycleGateState.DRIFTED
+    assert not first_stale.admitted
+    assert first_stale.issue_codes == ("lifecycle-decision-stale",)
+    assert first_stale.decision_identity is not None
+    assert re.fullmatch(r"[0-9a-f]{64}", first_stale.decision_identity) is not None
+    assert first_stale.decision_identity != initial.decision_identity
+    assert repeated_stale.state is LifecycleGateState.DRIFTED
+    assert not repeated_stale.admitted
+    assert repeated_stale.issue_codes == ("lifecycle-decision-stale",)
+    assert repeated_stale.decision_identity == first_stale.decision_identity
+
+
 @pytest.mark.parametrize("malformed", ["", "A" * 64, "0" * 63, "g" * 64])
 def test_identity_malformed_text_is_unknown(
     tmp_path: Path,
