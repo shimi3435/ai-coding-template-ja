@@ -1,91 +1,124 @@
 ---
 phase: 03-lifecycle-drift-gate
-reviewed: 2026-07-29T05:46:06Z
+reviewed: 2026-07-29T11:33:08Z
 depth: standard
-files_reviewed: 9
+files_reviewed: 13
 files_reviewed_list:
   - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_drift.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py
   - tests/fixtures/openspec_gsd_handoff/lifecycle/expected-lifecycle-evidence.json
+  - tests/fixtures/openspec_gsd_handoff/manifest/expected-refresh-preview.json
+  - tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json
   - tests/test_handoff_execution_mapping.py
   - tests/test_handoff_identity.py
   - tests/test_handoff_lifecycle_drift.py
   - tests/test_handoff_lifecycle_gate.py
+  - tests/test_handoff_manifest_refresh.py
 findings:
   critical: 2
-  warning: 0
+  warning: 2
   info: 0
-  total: 2
+  total: 4
 status: issues_found
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-07-29T05:46:06Z
+**Reviewed:** 2026-07-29T11:33:08Z
 **Depth:** standard
-**Files Reviewed:** 9
+**Files Reviewed:** 13
 **Status:** issues_found
 
 ## Summary
 
-指定された lifecycle gate、canonical drift、execution mapping、source identity と対応するテスト・golden evidence を標準深度でレビューした。前回レビューの stale decision identity、repository root identity、malformed public reader の 3 件は現実装で閉じており、対象テスト 450 件も成功した。
+Phase 03 の lifecycle drift、gate、mapping、manifest refresh、source identity と対応するテスト・fixture を標準深度でレビューした。前回レビューで指摘された phase graph の集合差短絡と mapping path role 競合は現実装で修正されている。
 
-一方、adversarial probe で 2 件の admission 契約違反を再現した。完全に観測できる phase 追加が `DRIFTED` ではなく `UNKNOWN` に短絡して必要な再計画情報を失う。また、同一ファイルを plan とその source/plan evidence の両方に宣言すると、独立した evidence が存在しなくても VERIFY readiness が green になる。
+一方、canonical phase path の検証漏れにより malformed graph が再利用可能な identity を持つ `DRIFTED` として扱われる契約違反と、refresh の最終 state guard 後の競合書き込みを成功扱いで上書きするデータ損失リスクを再現した。加えて、source identity の malformed limits が structured failure ではなく例外になる問題と、refresh preview の source change 一覧が tombstone を欠落させる問題がある。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: [BLOCKER] 完全に観測できる phase 追加が drift ではなく unknown に短絡する
+### CR-01: [BLOCKER] malformed な expected phase path が identity 付き DRIFTED として受理される
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py:551-556`
-**Issue:** `_validate_phase_graph` は source-pinned `expected_nodes` と current `observed_nodes` の両方について、phase ID/path の集合が単一の `planning_inventory` と完全一致することを要求する。このため、current graph と current inventory に同じ新 phase が追加され、各入力が個別には完全・valid でも、source-pinned expected graph だけが旧集合である正規の phase-addition drift を observation incomplete として拒否する。後段 `_phase_changes` の `phase-added:*` / `phase-removed:*` / `phase-path-changed:*` 分岐はこの validation により到達不能で、canonical HARD-R2 の「phase の追加・削除を検出したら必要な mapping 更新・再計画手順を示す」を満たさない。
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py:408-420`
+**Issue:** `_canonical_phase_path` は `PurePosixPath` の形と phase prefix だけを確認し、backslash、NUL、非 NFC component を拒否しない。`observed_nodes` は planning inventory との一致で間接的に拒否されるが、source-pinned `expected_nodes` にはその照合がないため、これらの path が `_validate_phase_nodes` を通過する。public gate の実測では `.planning/phases/03-bad\path`、NUL を含む path、NFD path のすべてが `phase-path-changed:03` を持つ identity 付き `DRIFTED` になった。仕様は expected / observed graph の canonical scalar を独立検査し、malformed graph を identity と remediation のない `UNKNOWN` にするよう要求しているため、malformed source-pinned evidence に再利用可能な decision identity を発行する契約違反である。
 
-再現結果:
-
-```text
-unknown ('lifecycle-phase-observation-incomplete',) () ()
-```
-
-この結果には `phase-added:07`、`phase:07`、`replan-affected-phases` が一切含まれない。
-
-**Fix:** source-pinned graph と current graph をそれぞれ対応する snapshot inventory に照合できるデータモデルへ分ける。少なくとも expected/current の集合差を malformed evidence と混同せず、各 graph 自体の shape、path、dependency、DAG を検証した後に `_phase_changes` へ渡す。current mapping inventory との整合は observed side に適用し、expected side は source-pinned inventory または manifest snapshot に照合する。phase add/remove/path-change が public gate から `DRIFTED` と正確な remediation を返す固定回帰テストを追加する。
-
-### CR-02: [BLOCKER] plan ファイル自身を enforcement evidence として再利用すると VERIFY が green になる
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py:513-533`
-**Issue:** planning inventory validation は plan path 内と evidence path 内の重複だけを拒否し、両 collection 間の path 衝突を拒否しない。したがって 1 つの `EvidenceDeclaration` に `path == plan_path` を設定し、同じ path に `source_id` も付ければ、1 個の `*-PLAN.md` が「plan 本体」「source evidence」「plan evidence」の全役割を同時に満たす。`_readiness_issues` は owner coverage と regular-file existence しか確認しないため、独立した実行・検証 evidence が 0 件でも VERIFY を `ready=True` にする。これは stable mapping / enforcement evidence を検査してから操作を許可する admission 契約を迂回する。
-
-再現結果:
-
-```text
-Success(value=MappingReadiness(
-    operation=<MappingOperation.VERIFY: 'verify'>,
-    target_phase_id='02',
-    ready=True,
-    issues=()
-))
-```
-
-**Fix:** inventory invariant で phase、plan、evidence の canonical path namespace を役割横断で disjoint にする。最低限 `evidence.path` が任意の `plan.path` または `phase.phase_path` と一致する場合は structured non-success にする。
+**Fix:**
 
 ```python
-if evidence_path in plan_paths or evidence_path in phase_ids_by_path:
-    raise _InventoryError("mapping-evidence-path-conflict")
+def _canonical_phase_path(value: object, phase_id: str) -> bool:
+    if (
+        type(value) is not str
+        or not value
+        or value.startswith("/")
+        or "\\" in value
+        or "\0" in value
+    ):
+        return False
+    parts = tuple(value.split("/"))
+    if any(
+        part in {"", ".", ".."} or unicodedata.normalize("NFC", part) != part
+        for part in parts
+    ):
+        return False
+    return (
+        len(parts) == 3
+        and parts[:2] == (".planning", "phases")
+        and parts[2].startswith(f"{phase_id}-")
+    )
 ```
 
-同一 plan path を source/plan evidence に兼用した inventory が builder と readiness の双方で拒否される public regression を追加する。1 個の独立した evidence artifact が source と plan の両 owner を持つ既存の合法ケースは維持できる。
+expected / observed の両側について backslash、NUL、NFD を public gate へ与え、`UNKNOWN`、identity なし、remediation なしを確認する回帰テストを追加する。
+
+### CR-02: [BLOCKER] refresh の最終 state guard 後の target 更新を上書きして Success を返す
+
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:1193-1226`
+**Issue:** apply は `_current_preview` と target hash を再検査した後、別呼び出しの `replace_at` で staging を target へ置換する。この検査と置換の間に target が更新されても compare-and-swap または排他制御がない。`replace_at` の冒頭で target を別 bytes に更新してから通常の replace を実行する固定 probe では、競合更新が失われ、candidate bytes が入り、`apply_manifest_refresh` は `Success` を返した。承認後に変化した disk bytes を変更せず non-success にする state-guard 契約に反し、並行 refresh/operator update を失うデータ損失リスクがある。
+
+**Fix:** target の再観測から置換完了までを repository/change 単位の排他ロック下で行い、同じロック規約を全 writer に適用する。`replace_at` 境界にも expected target identity/hash を渡し、ロック下で一致を再確認してから rename する。最終検査直後に target を変更する固定 integration test を追加し、structured non-success と競合 bytes の保持を要求する。
+
+## Warnings
+
+### WR-01: [WARNING] source identity の malformed limits が structured failure ではなく例外になる
+
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:405-409`
+**Issue:** `_valid_limits` は outer object の型を確認せず `max_items` 等を直接参照する。したがって `source_inventory_from_bytes(..., limits=object())` と `read_source_inventory(..., limits=object())` はどちらも `AttributeError` を送出する。両 public reader は他の malformed aggregate を structured `Failure` に変換しているため、limits だけが fail-closed 境界を迂回する。
+
+**Fix:**
+
+```python
+def _valid_limits(limits: object) -> bool:
+    return type(limits) is SourceIdentityLimits and all(
+        type(value) is int and value > 0
+        for value in (limits.max_items, limits.bytes_per_file, limits.bytes_total)
+    )
+```
+
+`None`、`object()`、subclass、bool/float/zero/negative field を両 public reader で検証し、`source-limits-invalid` を確認する。
+
+### WR-02: [WARNING] refresh preview の change 一覧が tombstone 差分を欠落させる
+
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:449-482`
+**Issue:** `_changes` は candidate の active items だけを走査するため、previous active item が candidate tombstone に移った差分を返さない。1 active item を同じ ID の tombstone に移した有効な state の実測結果は空 tuple だった。preview 本体には before/after state があるものの、`RefreshCandidateChange` が「one exact source-state difference」と定義され、machine view が `changes` を承認 evidence として公開している以上、削除差分を空と表示するのは誤解を招き、reviewer が source removal を見落とす。
+
+**Fix:** previous/candidate の ID 集合差を計算し、candidate tombstone に移った item を `kind="tombstoned"`、`reason="source-removed"` として決定的に追加する。created / updated / tombstoned がすべて exact、unique、UTF-8 byte 順になる回帰テストを追加する。
 
 ## Verification Performed
 
-- `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_identity.py tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py -q --no-cov` — 450 passed
-- current graph/current inventory に phase 07 を追加し、source-pinned expected graph を保持する public gate probe — `UNKNOWN`, `lifecycle-phase-observation-incomplete`, remediation 空
-- 1 個の `02-01-PLAN.md` を plan/source evidence/plan evidence に兼用する public readiness probe — `VERIFY ready=True`
+- `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_identity.py tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_manifest_refresh.py -q` — 542 passed
+- `uv run ruff check <reviewed Python files>` — passed
+- `uv run basedpyright <reviewed source files>` — 0 errors, 0 warnings, 0 notes
+- malformed expected phase path の public gate probe — 3/3 が identity 付き `DRIFTED` として再現
+- final state guard 後の target race probe — 競合 bytes を上書きし `Success` として再現
+- malformed source limits probe — 両 reader で `AttributeError` を再現
+- active-to-tombstone change probe — `_changes(...) == ()` を再現
 
 ---
 
-_Reviewed: 2026-07-29T05:46:06Z_
+_Reviewed: 2026-07-29T11:33:08Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
