@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-17-PLAN.md; 03-18 independent reverification pending
-last_updated: "2026-07-29T10:51:51.226Z"
+stopped_at: Completed 03-18-PLAN.md; independent Phase 03 reverification pending
+last_updated: "2026-07-29T11:20:20.620Z"
 last_activity: 2026-07-29
-last_activity_desc: Plan 03-17 completed; Plan 03-18 independent reverification pending
+last_activity_desc: Plan 03-18 completed; independent Phase 03 reverification pending
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 28
-  completed_plans: 27
+  completed_plans: 28
   percent: 33
 ---
 
@@ -33,8 +33,8 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
 Plan: 18 of 18
-Status: Ready to execute
-Last activity: 2026-07-29 — Plan 03-17 completed; Plan 03-18 independent reverification pending
+Status: Plan execution complete; independent reverification pending
+Last activity: 2026-07-29 — Plan 03-18 completed; independent Phase 03 reverification pending
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -42,9 +42,9 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
 **Velocity:**
 
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 11 min
-- Total execution time: 209 min
+- Total execution time: 224 min
 
 **By Phase:**
 
@@ -52,12 +52,12 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 |-------|-------|-------|----------|
 | Phase 1 | 5 | 48 min | 10 min |
 | Phase 2 | 5 | 64 min | 13 min |
-| Phase 3 | 9 | 97 min | 11 min |
+| Phase 3 | 10 | 112 min | 11 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 6 min, 8 min, 14 min, 15 min, 8 min
-- Trend: Increasing
+- Last 5 plans: 8 min, 14 min, 15 min, 8 min, 15 min
+- Trend: Stable
 
 **Latest Plan:**
 
@@ -81,6 +81,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P15 | 5min | 1 tasks | 2 files |
 | Phase 03 P16 | 8min | 2 tasks | 2 files |
 | Phase 03 P17 | 14 min | 3 tasks | 15 files |
+| Phase 03 P18 | 15 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -138,11 +139,14 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Independent verification still owns the Phase 03 and OpenSpec 3.1 completion boundary.
 - [Phase 03]: Expected and observed phase graphs are independently validated; only the observed graph must match the current PlanningInventory phase map. — Preserves a source-pinned expected baseline while current inventory authorizes only the observed graph.
 - [Phase 03]: Exact preview 069990c0 and assignment inventory 46b18454 authorized the single 54-item Plan A publication at source pin 9a7a313. — Binds tracked assignment, handoff, and derived evidence to the human-approved candidate without a second mutation authority.
+- [Phase 03]: Canonical artifact paths are validated before disjoint phase, plan, and evidence alias namespaces are compared. — Preserves malformed-path precedence while preventing cross-role evidence reuse.
+- [Phase 03]: Duplicate evidence declarations are role conflicts, while one independent artifact may retain combined source/plan ownership and one owner may have multiple distinct evidence paths. — Rejects self-evidence without weakening valid sharing.
+- [Phase 03]: Phase 3 remains incomplete after all 18 plans until independent reverification completes. — Preserves the canonical OpenSpec completion boundary.
 
 ### Pending Todos
 
-- Complete Plan 03-18 and independent Phase 03 reverification against all closed gap
-  families before planning Phase 4.
+- Complete independent Phase 03 reverification against all closed gap families before
+  planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -151,9 +155,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - The old started handoff preimage and brief remain historical audit evidence; the tracked handoff now contains the approved Phase 2 candidate.
 - The final review is clean and independent Phase 2 verification passed 7/7 without overrides or unverified behavior.
 - The tracked refresh was published only after explicit approval for preview hash `90b52efd98d6718796548151ea9c808dfd1e14484bcacd2f847b09ea71054bea`; candidate SHA is `6cc9bcf4caa3f9f839742f6d86660a8039c2370cf5cf7d054ba04199e3775fc5`.
-- Plan 03-17 published the exact approved 54-item authority; 03-18 and independent
-  reverification remain pending. Phase 4 remains blocked on Phase 3, while Phases 5–6
-  retain their dependency order.
+- Plan 03-18 closed the path-role gap and all project checks passed; independent
+  reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
+  5–6 retain their dependency order.
 
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -166,6 +170,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-29T10:51:51.219Z
-Stopped at: Completed 03-17-PLAN.md; 03-18 independent reverification pending
+Last session: 2026-07-29T11:19:52.710Z
+Stopped at: Completed 03-18-PLAN.md; independent Phase 03 reverification pending
 Resume file: None
