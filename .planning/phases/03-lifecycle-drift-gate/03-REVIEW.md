@@ -1,6 +1,6 @@
 ---
 phase: 03-lifecycle-drift-gate
-reviewed: 2026-07-28T16:09:52Z
+reviewed: 2026-07-29T05:46:06Z
 depth: standard
 files_reviewed: 9
 files_reviewed_list:
@@ -14,110 +14,78 @@ files_reviewed_list:
   - tests/test_handoff_lifecycle_drift.py
   - tests/test_handoff_lifecycle_gate.py
 findings:
-  critical: 3
+  critical: 2
   warning: 0
   info: 0
-  total: 3
+  total: 2
 status: issues_found
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-07-28T16:09:52Z
+**Reviewed:** 2026-07-29T05:46:06Z
 **Depth:** standard
 **Files Reviewed:** 9
 **Status:** issues_found
 
 ## Summary
 
-指定された lifecycle gate、canonical drift、execution mapping、source identity と対応するテスト・golden evidence を標準深度でレビューした。対象テスト 417 件は成功したが、追加の adversarial probe で 3 件の fail-closed 違反を再現した。
+指定された lifecycle gate、canonical drift、execution mapping、source identity と対応するテスト・golden evidence を標準深度でレビューした。前回レビューの stale decision identity、repository root identity、malformed public reader の 3 件は現実装で閉じており、対象テスト 450 件も成功した。
 
-stale 判定が返す `decision_identity` は返却された decision を表しておらず、その ID の再送で次回 admission が通る。source inventory は読み取り中の repository root 差し替えを検出せず、現在の root ではなく切り離された旧 root の内容を Success として返す。また、2 つの public inventory reader は malformed container/member を structured failure に変換せず例外終了する。
+一方、adversarial probe で 2 件の admission 契約違反を再現した。完全に観測できる phase 追加が `DRIFTED` ではなく `UNKNOWN` に短絡して必要な再計画情報を失う。また、同一ファイルを plan とその source/plan evidence の両方に宣言すると、独立した evidence が存在しなくても VERIFY readiness が green になる。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: [BLOCKER] stale decision が clean decision の identity を公開し、その再送を admission する
+### CR-01: [BLOCKER] 完全に観測できる phase 追加が drift ではなく unknown に短絡する
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py:1306-1314`
-**Issue:** `_decision_from_observation` が clean decision とその digest を作った後、prior identity mismatch の分岐は `state`、`admitted`、`issue_codes` だけを `replace` する。`decision_identity` は clean decision 用のまま残るため、返却された `DRIFTED` / `admitted=False` / `lifecycle-decision-stale` の各 field を認証していない。実際に任意の古い 64-hex identity を渡した 1 回目は stale で拒否されるが、その拒否結果に含まれる `decision_identity` を次の呼び出しへ渡すと、入力を変更していなくても `CLEAN` / `admitted=True` になる。versioned encoder は decision state、admission、issue codes も bind する設計なので、返却値と digest の不一致は stale-safe identity contract を破る。
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py:551-556`
+**Issue:** `_validate_phase_graph` は source-pinned `expected_nodes` と current `observed_nodes` の両方について、phase ID/path の集合が単一の `planning_inventory` と完全一致することを要求する。このため、current graph と current inventory に同じ新 phase が追加され、各入力が個別には完全・valid でも、source-pinned expected graph だけが旧集合である正規の phase-addition drift を observation incomplete として拒否する。後段 `_phase_changes` の `phase-added:*` / `phase-removed:*` / `phase-path-changed:*` 分岐はこの validation により到達不能で、canonical HARD-R2 の「phase の追加・削除を検出したら必要な mapping 更新・再計画手順を示す」を満たさない。
 
 再現結果:
 
 ```text
-drifted False ('lifecycle-decision-stale',) identity_present=True
-clean True ()
+unknown ('lifecycle-phase-observation-incomplete',) () ()
 ```
 
-**Fix:**
+この結果には `phase-added:07`、`phase:07`、`replan-affected-phases` が一切含まれない。
+
+**Fix:** source-pinned graph と current graph をそれぞれ対応する snapshot inventory に照合できるデータモデルへ分ける。少なくとも expected/current の集合差を malformed evidence と混同せず、各 graph 自体の shape、path、dependency、DAG を検証した後に `_phase_changes` へ渡す。current mapping inventory との整合は observed side に適用し、expected side は source-pinned inventory または manifest snapshot に照合する。phase add/remove/path-change が public gate から `DRIFTED` と正確な remediation を返す固定回帰テストを追加する。
+
+### CR-02: [BLOCKER] plan ファイル自身を enforcement evidence として再利用すると VERIFY が green になる
+
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py:513-533`
+**Issue:** planning inventory validation は plan path 内と evidence path 内の重複だけを拒否し、両 collection 間の path 衝突を拒否しない。したがって 1 つの `EvidenceDeclaration` に `path == plan_path` を設定し、同じ path に `source_id` も付ければ、1 個の `*-PLAN.md` が「plan 本体」「source evidence」「plan evidence」の全役割を同時に満たす。`_readiness_issues` は owner coverage と regular-file existence しか確認しないため、独立した実行・検証 evidence が 0 件でも VERIFY を `ready=True` にする。これは stable mapping / enforcement evidence を検査してから操作を許可する admission 契約を迂回する。
+
+再現結果:
+
+```text
+Success(value=MappingReadiness(
+    operation=<MappingOperation.VERIFY: 'verify'>,
+    target_phase_id='02',
+    ready=True,
+    issues=()
+))
+```
+
+**Fix:** inventory invariant で phase、plan、evidence の canonical path namespace を役割横断で disjoint にする。最低限 `evidence.path` が任意の `plan.path` または `phase.phase_path` と一致する場合は structured non-success にする。
 
 ```python
-stale = replace(
-    decision,
-    state=LifecycleGateState.DRIFTED,
-    admitted=False,
-    issue_codes=_utf8_sorted(
-        (*decision.issue_codes, "lifecycle-decision-stale")
-    ),
-    decision_identity=None,
-)
-return replace(
-    stale,
-    decision_identity=_decision_identity(observation.value, stale),
-)
+if evidence_path in plan_paths or evidence_path in phase_ids_by_path:
+    raise _InventoryError("mapping-evidence-path-conflict")
 ```
 
-拒否結果の identity を再送しても clean identity と一致せず、再度 stale になる public-seam regression を追加する。別の明示的な再承認 token を返したい場合は、decision identity と兼用せず別 field/contract に分離する。
-
-### CR-02: [BLOCKER] source 読み取り中の repository root 差し替えを検出せず detached root を採用する
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:680-713`
-**Issue:** `read_source_inventory` は resolved repository を descriptor で開き、子 entry の inode は `_verify_anchored_entry` で再検証するが、repository path 自体が最後まで同じ inode を指しているかを検証しない。source file の `os.read` 中に repository directory を rename し、元の path を別 directory への symlink に置換すると、関数は detached になった旧 directory の trusted content を `Success` として返した。この時点で caller-visible repository path は attacker-controlled replacement を指している。planning inventory と manifest reader にある root identity の終端再検証が source reader だけ欠けており、canonical source の point-in-time observation が repository path と結び付かない。
-
-再現結果:
-
-```text
-Success True Requirement: Trusted current_root_is_replacement=True
-```
-
-**Fix:** repository を開く前に `follow_symlinks=False` の `stat` を取り、open descriptor の `fstat` と device/inode/type を比較する。全 source の読み取り後、descriptor を閉じる前に repository path を再度 `stat(..., follow_symlinks=False)` し、同一 identity でない場合は `source-root-identity-changed` などの structured `Failure` を返す。root rename、symlink replacement、別 directory replacementを fault injection する regression を追加する。
-
-### CR-03: [BLOCKER] public source inventory readers が malformed container/member で例外終了する
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:611-644,666-679`
-**Issue:** `source_inventory_from_bytes` と `read_source_inventory` は outer value が許可された `Sequence` かを確認する前に truthiness と `len()` を使用する。前者はさらに各 member の shape を検証する前に `for source_path, content_bytes in source_files` で unpack する。このため `object()` は両 public API で `TypeError`、malformed member は unpack の `TypeError` / `ValueError` となり、`source-paths-invalid` や `source-bytes-invalid` の structured non-success を返さない。source identity module の他の public reconciliation seam が malformed runtime shape を fail closed する一方、この byte/file observation seam だけ同じ保証を持たない。
-
-再現結果:
-
-```text
-read TypeError object of type 'object' has no len()
-bytes TypeError object of type 'object' has no len()
-```
-
-**Fix:** `len` と iteration より前に outer container を、unpack より前に各 member が exact 2-tuple であることを検証する。`str` / `bytes` を sequence container として受理しない。
-
-```python
-if (
-    isinstance(source_files, (str, bytes))
-    or not isinstance(source_files, Sequence)
-):
-    return _failure("source-files-invalid", category=IssueCategory.INPUT)
-if any(type(item) is not tuple or len(item) != 2 for item in source_files):
-    return _failure("source-files-invalid", category=IssueCategory.INPUT)
-```
-
-`read_source_inventory` にも同等の outer sequence validation を加え、`None`、`object()`、文字列、malformed member、limit+1 を public API から固定する。
+同一 plan path を source/plan evidence に兼用した inventory が builder と readiness の双方で拒否される public regression を追加する。1 個の独立した evidence artifact が source と plan の両 owner を持つ既存の合法ケースは維持できる。
 
 ## Verification Performed
 
-- `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_identity.py tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py -q --no-cov` — 417 passed
-- stale decision identity の二段再送 probe — 1 回目 `DRIFTED`、返却 identity の再送で 2 回目 `CLEAN/admitted=True`
-- source read 中の repository rename + symlink replacement probe — detached root の内容で `Success`
-- malformed outer source container probe — 2 public API とも `TypeError`
+- `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_identity.py tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py -q --no-cov` — 450 passed
+- current graph/current inventory に phase 07 を追加し、source-pinned expected graph を保持する public gate probe — `UNKNOWN`, `lifecycle-phase-observation-incomplete`, remediation 空
+- 1 個の `02-01-PLAN.md` を plan/source evidence/plan evidence に兼用する public readiness probe — `VERIFY ready=True`
 
 ---
 
-_Reviewed: 2026-07-28T16:09:52Z_
+_Reviewed: 2026-07-29T05:46:06Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
