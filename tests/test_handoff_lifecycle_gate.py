@@ -504,18 +504,38 @@ def _inventory_for_phase_nodes(
     nodes: tuple[PhaseNodeObservation, ...],
 ) -> PlanningInventory:
     phase_ids = {node.phase_id for node in nodes}
+    phase_paths = {node.phase_id: node.phase_path for node in nodes}
+    original_phase_paths = {
+        phase.phase_id: phase.phase_path for phase in inventory.phases
+    }
     phases = tuple(
         PhaseDeclaration(CHANGE_ID, node.phase_id, node.phase_path) for node in nodes
     )
-    plans = tuple(plan for plan in inventory.plans if plan.phase_id in phase_ids)
+    assignments = tuple(
+        item for item in inventory.assignments if item.phase_id in phase_ids
+    )
+    plans = tuple(
+        plan
+        for plan in inventory.plans
+        if plan.phase_id in phase_ids
+        and phase_paths[plan.phase_id] == original_phase_paths.get(plan.phase_id)
+    )
     plan_paths = {plan.path for plan in plans}
+    source_ids = {item.source_id for item in assignments}
     evidence = tuple(
         item
         for item in inventory.evidence
         if item.phase_id in phase_ids
+        and (item.source_id is None or item.source_id in source_ids)
         and (item.plan_path is None or item.plan_path in plan_paths)
     )
-    return replace(inventory, phases=phases, plans=plans, evidence=evidence)
+    return replace(
+        inventory,
+        phases=phases,
+        assignments=assignments,
+        plans=plans,
+        evidence=evidence,
+    )
 
 
 def _malformed_phase_nodes(case: str) -> object:
@@ -1921,10 +1941,6 @@ def test_repository_root_lifecycle_evidence_matches_tracked_record(
     [
         ("unknown", "03", "lifecycle-operation-invalid"),
         (LifecycleOperation.FINALIZE, "03", "lifecycle-target-phase-invalid"),
-        (LifecycleOperation.PLAN, None, "lifecycle-target-phase-required"),
-        (LifecycleOperation.EXECUTE, None, "lifecycle-target-phase-required"),
-        (LifecycleOperation.RESUME, None, "lifecycle-target-phase-required"),
-        (LifecycleOperation.VERIFY, None, "lifecycle-target-phase-required"),
     ],
 )
 def test_incomplete_dimension_rejects_invalid_operation_target_pairs(
@@ -2491,8 +2507,11 @@ def test_a_e_graph_removed_phase_uses_old_edges_and_observed_replanning_set(
         boundary=boundary,
     )
 
-    assert decision.issue_codes == ("phase-removed:04",)
-    assert decision.revalidation_targets == ("phase:04",)
+    assert decision.issue_codes == (
+        "phase-dependencies-changed:05",
+        "phase-removed:04",
+    )
+    assert decision.revalidation_targets == ("phase:04", "phase:05")
     assert decision.replanning_targets == ("05", "06")
     assert decision.next_action_codes == (
         "replan-affected-phases",

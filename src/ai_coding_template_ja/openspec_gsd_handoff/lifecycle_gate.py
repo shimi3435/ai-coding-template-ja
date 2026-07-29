@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from .execution_mapping import (
+    MappingIssue,
     MappingOperation,
     MappingReadiness,
     PlanningInventory,
@@ -248,12 +249,7 @@ def _validate_operation_target(
             return _failure("lifecycle-target-phase-invalid")
         return operation, None
     if type(target_phase) is not str or _PHASE_ID.fullmatch(target_phase) is None:
-        code = (
-            "lifecycle-target-phase-required"
-            if target_phase is None
-            else "lifecycle-target-phase-invalid"
-        )
-        return _failure(code)
+        return _failure("lifecycle-target-input-invalid")
     return operation, target_phase
 
 
@@ -551,9 +547,30 @@ def _validate_phase_graph(
     inventory_paths = {
         phase.phase_id: phase.phase_path for phase in planning_inventory.phases
     }
-    expected_paths = {node.phase_id: node.phase_path for node in value.expected_nodes}
     observed_paths = {node.phase_id: node.phase_path for node in value.observed_nodes}
-    return expected_paths == inventory_paths and observed_paths == inventory_paths
+    return observed_paths == inventory_paths
+
+
+def _classify_target_relation(
+    operation: LifecycleOperation,
+    target_phase: object,
+    graph: PhaseGraphObservation | None,
+) -> str:
+    if operation is LifecycleOperation.FINALIZE:
+        return "not-applicable"
+    if type(target_phase) is not str or _PHASE_ID.fullmatch(target_phase) is None:
+        return "malformed"
+    if graph is None:
+        return "pending"
+    in_expected = any(node.phase_id == target_phase for node in graph.expected_nodes)
+    in_observed = any(node.phase_id == target_phase for node in graph.observed_nodes)
+    if in_expected and not in_observed:
+        return "expected-only"
+    if in_observed and not in_expected:
+        return "observed-only"
+    if in_expected:
+        return "both"
+    return "neither"
 
 
 def _validate_capabilities(
@@ -630,6 +647,8 @@ def observe_lifecycle_operation(
     if isinstance(operation_target, Failure):
         return operation_target
     operation, target_phase = operation_target
+    if _classify_target_relation(operation, target_phase, None) == "malformed":
+        return _failure("lifecycle-input-invalid")
     if (
         type(change_id) is not str
         or _CHANGE_ID.fullmatch(change_id) is None
@@ -719,6 +738,13 @@ def observe_lifecycle_operation(
         expected_nodes=_normalize_phase_nodes(phase_graph.expected_nodes),
         observed_nodes=_normalize_phase_nodes(phase_graph.observed_nodes),
     )
+    target_relation = _classify_target_relation(
+        operation,
+        target_phase,
+        phase_graph,
+    )
+    if target_relation == "neither":
+        return _failure("lifecycle-target-phase-unknown")
     if not _validate_capabilities(
         capabilities,
         change_id=change_id,
@@ -743,20 +769,46 @@ def observe_lifecycle_operation(
         return _failure(source_decision.issue_code or "lifecycle-source-unknown")
 
     mapping_operation = _mapping_operation(operation)
-    mapping_result = validate_mapping_readiness(
-        root,
-        manifest.source_items,
-        manifest.mappings,
-        phase_graph.planning_inventory,
-        operation=mapping_operation,
-        target_phase_id=target_phase,
-    )
-    if isinstance(mapping_result, Failure):
-        return _failure(mapping_result.issue.code)
-    if operation is not LifecycleOperation.FINALIZE and not any(
-        node.phase_id == target_phase for node in phase_graph.observed_nodes
+    phase_affected, _, _ = _phase_changes(phase_graph)
+    if not phase_graph.expected_nodes and not phase_graph.observed_nodes:
+        mapping_result = validate_mapping_readiness(
+            root,
+            manifest.source_items,
+            manifest.mappings,
+            phase_graph.planning_inventory,
+            operation=mapping_operation,
+            target_phase_id=target_phase,
+        )
+        if isinstance(mapping_result, Failure):
+            mapping_readiness = MappingReadiness(
+                operation=mapping_operation,
+                target_phase_id=target_phase,
+                ready=False,
+                issues=(MappingIssue(mapping_result.issue.code),),
+            )
+        else:
+            mapping_readiness = mapping_result.value
+    elif target_relation == "expected-only" or (
+        phase_affected and not phase_graph.observed_nodes
     ):
-        return _failure("lifecycle-target-phase-unknown")
+        mapping_readiness = MappingReadiness(
+            operation=mapping_operation,
+            target_phase_id=target_phase,
+            ready=False,
+            issues=(),
+        )
+    else:
+        mapping_result = validate_mapping_readiness(
+            root,
+            manifest.source_items,
+            manifest.mappings,
+            phase_graph.planning_inventory,
+            operation=mapping_operation,
+            target_phase_id=target_phase,
+        )
+        if isinstance(mapping_result, Failure):
+            return _failure(mapping_result.issue.code)
+        mapping_readiness = mapping_result.value
 
     return Success(
         LifecycleGateObservation(
@@ -767,7 +819,7 @@ def observe_lifecycle_operation(
             manifest=manifest,
             source_commit=source_commit,
             source_decision=source_decision,
-            mapping_readiness=mapping_result.value,
+            mapping_readiness=mapping_readiness,
             phase_graph=phase_graph,
             capabilities=capabilities,
         )
@@ -789,12 +841,15 @@ def _phase_changes(
             issues.append(f"phase-added:{phase_id}")
         elif after is None:
             issues.append(f"phase-removed:{phase_id}")
-        elif before.phase_path != after.phase_path:
-            issues.append(f"phase-path-changed:{phase_id}")
-        elif before.depends_on != after.depends_on:
-            issues.append(f"phase-dependencies-changed:{phase_id}")
         else:
-            continue
+            if before.phase_path != after.phase_path:
+                issues.append(f"phase-path-changed:{phase_id}")
+            if before.depends_on != after.depends_on:
+                issues.append(f"phase-dependencies-changed:{phase_id}")
+            if before.phase_path == after.phase_path and (
+                before.depends_on == after.depends_on
+            ):
+                continue
         affected.add(phase_id)
         targets.add(f"phase:{phase_id}")
     return affected, issues, targets
@@ -850,16 +905,20 @@ def _downstream_phases(
     directly_affected: set[str],
 ) -> set[str]:
     affected = set(directly_affected)
+    observed_phase_ids = {node.phase_id for node in graph.observed_nodes}
+    dependency_relations = {
+        (node.phase_id, dependency)
+        for node in (*graph.expected_nodes, *graph.observed_nodes)
+        for dependency in node.depends_on
+    }
     changed = True
     while changed:
         changed = False
-        for node in graph.observed_nodes:
-            if node.phase_id not in affected and any(
-                dependency in affected for dependency in node.depends_on
-            ):
-                affected.add(node.phase_id)
+        for phase_id, dependency in dependency_relations:
+            if phase_id not in affected and dependency in affected:
+                affected.add(phase_id)
                 changed = True
-    return affected
+    return affected & observed_phase_ids
 
 
 def _manifest_consistency_issues(
@@ -1193,7 +1252,16 @@ def _decision_from_observation(
         issues.extend(phase_issues)
         revalidation_targets.update(phase_targets)
         replanning_seeds.update(phase_affected)
-        actions.update(("revalidate-mapping", "replan-affected-phases"))
+        actions.add("revalidate-mapping")
+        if (
+            _classify_target_relation(
+                observation.operation,
+                observation.target_phase,
+                observation.phase_graph,
+            )
+            == "expected-only"
+        ):
+            actions.add("lifecycle-target-phase-removed")
 
     capability_issues, capability_targets = _capability_changes(
         observation.manifest.capabilities,
@@ -1213,6 +1281,8 @@ def _decision_from_observation(
         observation.phase_graph,
         replanning_seeds,
     )
+    if replanning_targets:
+        actions.add("replan-affected-phases")
     state = LifecycleGateState.DRIFTED if issues else LifecycleGateState.CLEAN
     decision = LifecycleGateDecision(
         operation=observation.operation,
@@ -1243,6 +1313,13 @@ def _unknown_decision(
     target_phase: object,
     code: str,
 ) -> LifecycleGateDecision:
+    action_only = code in {
+        "lifecycle-target-input-invalid",
+        "lifecycle-target-phase-unknown",
+    }
+    public_code = (
+        "lifecycle-input-invalid" if code == "lifecycle-target-input-invalid" else code
+    )
     return LifecycleGateDecision(
         operation=operation if isinstance(operation, LifecycleOperation) else None,
         target_phase=target_phase if type(target_phase) is str else None,
@@ -1253,13 +1330,13 @@ def _unknown_decision(
         ),
         state=LifecycleGateState.UNKNOWN,
         admitted=False,
-        issue_codes=(code,),
+        issue_codes=() if action_only else (public_code,),
         drifted_artifact_paths=(),
         changed_source_item_ids=(),
         progress_update_candidate=None,
         revalidation_targets=(),
         replanning_targets=(),
-        next_action_codes=(),
+        next_action_codes=(public_code,) if action_only else (),
         decision_identity=None,
         manifest_sha256=None,
     )
