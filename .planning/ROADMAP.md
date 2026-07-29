@@ -126,24 +126,64 @@ Plans:
 4. TDD evidence uses fixed public drift and path-role examples; property testing remains limited to the approved pure seams: checkbox normalization, phase graph/remediation projection (`A-P-GRAPH`), and canonical path-role invariants (`B-P-PATH-ROLE`). Filesystem and I/O races remain fixed integration evidence.
 
 Plans:
+**Wave 1**
 
 - [x] 03-01-PLAN.md
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 03-02-PLAN.md
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 03-03-PLAN.md
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [x] 03-04-PLAN.md
 - [x] 03-05-PLAN.md
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [x] 03-06-PLAN.md
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [x] 03-07-PLAN.md
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [x] 03-08-PLAN.md
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [x] 03-09-PLAN.md
-- [x] 03-10-PLAN.md
 - [x] 03-11-PLAN.md
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [x] 03-10-PLAN.md
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [x] 03-12-PLAN.md
 - [x] 03-13-PLAN.md
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [x] 03-14-PLAN.md
 - [x] 03-15-PLAN.md
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [x] 03-16-PLAN.md
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [x] 03-17-PLAN.md — Approved Plan A publication complete
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
 - [x] 03-18-PLAN.md — Path-role gap closure complete; independent reverification pending
 
 ### Phase 4: Repository-Wide Ownership
