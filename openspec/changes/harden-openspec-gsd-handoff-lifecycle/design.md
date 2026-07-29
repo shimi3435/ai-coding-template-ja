@@ -261,6 +261,103 @@ mechanical contractも、参照対象外である理由を表へ明記する。
 | `HARD-R5`: stale preview / 部分失敗 | `ACE-S5-REVALIDATE-ON-DRIFT`, `ACE-S4-RESUME`, `ACE-S4-NO-AUTO-FALLBACK` |
 | `HARD-R6`: optional toolsなしの通常CI / fixtures / properties / integration / smoke | `ACE-S1-START-GATES`, `ACE-S5-OPEN-SPEC-FINAL` |
 
+### Gate D. Phase 3のgraph authorityとevidence roleを固定する
+
+Phase 3 / HND-03 / HARD-R2のgap closureでは、`planning_inventory`だけをcurrent treeのinventory authorityとする。
+`observed_nodes`はその`planning_inventory.phases`とphase ID / canonical pathを完全一致させる。
+`expected_nodes`は`observe_phase_graph(..., source_commit)`が返すsource-pinned observationであり、
+current inventoryとの集合差は正規のdrift入力である。`expected_inventory`は追加しない。expected / observed graphは
+片方の結果を流用せず、それぞれruntime shape、canonical phase ID / POSIX path、dependency参照、DAG、件数、
+aggregate bytesを独立に検査する。duplicate node / edge、self-edge、unknown dependency、cycleはmalformedである。
+node / edgeは各4096件、canonical aggregate inputは8 MiBを上限とし、N-1 / Nを受理してN+1を
+decision identityなしの`UNKNOWN`にする。boundまたはcountを表すscalarはexact positive integerだけを許し、
+`bool`、float、負数、NaN、infを拒否する。malformed、不完全、timeout、切捨てなど比較を完了できないgraphだけを
+identityとremediation projectionなしの`UNKNOWN`とし、独立検査を通る完全なgraphの集合差は`DRIFTED`とする。
+
+両graphが空ならgraph比較自身は`CLEAN`である。ただしtarget必須operationでtargetが両方に不在ならtarget relationにより
+`UNKNOWN`となる。expectedが空でobservedが非空なら全observed phaseのadd、expectedが非空でobservedが空なら
+全expected phaseのremoveである。0 / 1 phase、全phase削除、add / remove / path / dependencyの同時変更を通常の
+完全比較として扱う。dependency tupleは集合として比較し、順序だけの違いはdriftにしない。同じphaseにpathと
+dependencyの変更があれば`phase-path-changed:<id>`と`phase-dependencies-changed:<id>`を両方保持する。
+add / removeはそれぞれ`phase-added:<id>` / `phase-removed:<id>`を保持する。
+
+downstreamは変更phaseへ直接または推移的に依存するphaseと定義し、expected / observed graphのnodeと旧edge /
+新edgeの和集合から決定的に求める。revalidation targetは削除済みphaseを含むdrift証拠を保持するが、最終replanning
+targetはobserved graphとの積集合にする。各変更phase自身をrevalidation targetとし、変更phaseと和集合上の
+downstreamを合わせたreplanning候補をobserved graphと積集合してreplanning targetにする。issues、
+revalidation targets、replanning targets、next action codesはそれぞれset-likeに重複排除し、UTF-8 bytes順に
+整列する。input tupleの並び替えはprojectionとidentityを変えない。
+
+| graph change | revalidation / replanning projection |
+| --- | --- |
+| added phase | added phase自身と和集合上のdownstreamを再計画する |
+| removed phase | removed phaseをrevalidation targetへ残し、observedに存在しないremoved phase自身はreplanning targetへ入れない。旧edge側だけに存在するdownstreamも和集合で検出し、observedとの積集合後に再計画する |
+| path change | 当該phaseと、旧path側または新path側のgraphで影響を受けるdownstreamを再計画する |
+| dependency change | 当該phaseと、旧edgeまたは新edgeのいずれかだけに存在するdownstreamも再計画する |
+
+完全なgraph drift decisionは`admitted=false`とし、state、issues、revalidation / replanning targets、
+next actionsの最終projectionを含む再利用可能なdecision identityを持つ。graph driftでは
+`revalidate-mapping`を返し、最終replanning targetsが非空の場合だけ`replan-affected-phases`を返す。
+全phase削除またはtarget / downstreamの同時削除で積集合が空なら後者を返さない。
+
+target phaseはgraph completenessとは別に、mapping readinessやその他のgraph change集約より先にrelationを分類する。
+runtime shapeまたはcanonical phase ID scalarが空文字、`None`、wrong type、その他malformedならgraph比較前にinput
+errorとする。valid targetが変更phaseと一致するか否かはrelation classificationを変えず、その他のgraph changesは
+その後に別集約する。
+
+| target relation | state / issue / next action |
+| --- | --- |
+| expectedに存在しobservedから消えた | `DRIFTED` / `phase-removed:<id>` / `lifecycle-target-phase-removed` |
+| observedにだけ存在する | `DRIFTED` / `phase-added:<id>` / target relation固有actionなし |
+| expected / observedの両方に存在する | target relation固有issue / actionなし。graph全体の差分に従う |
+| expected / observedの両方に存在しない | identityなしの`UNKNOWN` / issueなし / `lifecycle-target-phase-unknown` |
+| malformed | identityなしの`UNKNOWN` / issueなし / `lifecycle-input-invalid` |
+
+`lifecycle-target-phase-removed`と`lifecycle-target-phase-unknown`はnext action codes専用でissue codesへ複製しない。
+expected-only targetはmapping readinessに失敗する前にidentityありの`DRIFTED`として保持する。targetとdownstreamが
+すべて削除済みなら`revalidate-mapping`と`lifecycle-target-phase-removed`だけを返し、
+`replan-affected-phases`は返さない。
+
+phase path、plan path、evidence pathは非空のcanonical POSIX repository-relative pathだけを許し、backslash、
+absolute path、`.` / `..` component、NUL、empty、wrong type、malformed encodingを暗黙に正規化しない。
+PlanningInventoryは4096 entriesとcanonical aggregate 8 MiBのN-1 / Nを受理し、N+1を拒否する。
+検査順序は (1) runtime shape / canonical scalar / limit、(2) role disjointness、(3) filesystem observation /
+readiness / hash / identity とする。
+
+role namespaceはphase=plan、phase=evidence、plan=evidenceのexact collisionだけでなく、Unicode NFC / NFD、
+platform caseのalias keyが等しいcross-role collisionも拒否する。alias keyは比較専用であり、入力pathを
+暗黙変換して受理しない。separator変形や`.` / `..`除去後に別pathと一致し得る入力はcanonicalizeせず、
+role比較前の形式不正として拒否する。plan artifact自身をevidence artifactとして数えない。一つの独立したevidence artifactについて、
+一つの`EvidenceDeclaration`内にsource ownerとplan ownerの両方を宣言することと、同じownerが異なるevidenceを持つことは
+許可する。同じevidence pathを複数の`EvidenceDeclaration`へ分割することは拒否する。
+`PlanningInventory`のcross-role collisionまたは同一evidence pathの宣言分割は`mapping-path-role-conflict`、
+public builderを迂回して直接構築されたderived `ManifestMapping`の同じrole不変条件違反は
+`mapping-set-invalid`とする。malformed / oversizeは既存のdimension-specificなstructured failure codeを維持する。
+lifecycle gateでは不正構造全体をidentity・remediation projectionなしの`UNKNOWN`にする。
+fixed public contract testは拒否時のfilesystem boundary call countが0であることを観測する。
+
+wire compatibilityとして`PhaseGraphObservation`にfieldを追加せず、`lifecycle-gate-decision-v1`、
+manifest schema、関連versionをbumpしない。valid clean decisionの既存identity bytesを維持する。完全なgraph driftを
+`UNKNOWN`からidentityありの`DRIFTED`へ戻す変更は既存契約の回復であってschema変更ではない。同じvalid inputの再実行は
+同じoutputs / identity、valid driftはtuple順序によらない決定的identityを返す。保存済みdecisionのreplayではcurrent
+inputからfresh decisionを計算し、identity mismatchをidentityありの`DRIFTED`、
+`lifecycle-decision-stale`として扱う。identityなしはmalformed、不完全、検査不能な`UNKNOWN`だけに限定する。
+互換性を破るのは従来誤ってadmitしていたinvalid graph / path-role inputの拒否だけとする。
+
+Phase 3の再実装はPlan A「phase graph drift contract」とPlan B「path role separation」の二つの独立したTDD planに
+分ける。Plan Aはpure graph / remediation Hypothesis properties、固定public graph / target / compatibility examples、
+source-pinned handoff manifest、旧49-ID mapping / expected preview fixture、lifecycle golden / tracked evidenceその他の
+派生authorityのrepinを一括所有する。今回の5 scenario追加によりcanonical active source items / mappingsは49から54、
+scenario headingsは43から48となる。Plan Bはcanonical path-role Hypothesis propertiesと固定builder / readiness /
+gate examplesを所有し、Plan Aの派生authorityを再repinしない。I/O / filesystem raceはproperty対象にせず、
+観測中のmissing / alias / symlink / identity changeをfixed integrationで検証する。非協調なexternal processによる
+各pathのfinal observation後の変更保証はスコープ外とし、consumerが実operation直前に再検査する。
+
+Phase 3のexit gateは`task check`成功、code review reportが存在してstatus `clean`かつCritical 0 / Warning 0、
+verifier reportが存在して`passed`かつ10/10、`behavior_unverified: 0`、`overrides_applied: 0`、
+HND-03 / HARD-R2 traceability `Complete`、security reportが存在してopen threats 0の同時成立である。
+一つでも欠落、失敗、未実行ならPhase 3は未完了であり、Phase 4を開始しない。
+
 ### 1. stable ID は単調増加し、曖昧一致を拒否する
 
 MVP manifest の schema migration により raw source identity と正規化 fingerprint を保存する。既存のexactな
@@ -301,8 +398,9 @@ no-op として扱うが、finalized receipt は同じ gate を通す。
 
 ### 7. tests は pure core、filesystem integration、opt-in smoke に分ける
 
-allocator、normalizer、manifest round-trip、ownership graph、preview builderだけをproperty tests対象にする。
-mapping validatorは固定fixture / example、filesystem、Git、atomic journalはisolated integration tests、
+allocator、normalizer、manifest round-trip、ownership graph、preview builderに加え、Gate Dのpureなphase graph /
+remediation projectionとcanonical path-role invariantだけをproperty tests対象にする。public lifecycle gateとmapping
+builder / readinessは固定fixture / exampleを一次証拠とし、filesystem、Git、atomic journalはisolated integration tests、
 実 OpenSpec / GSD signalsはopt-in smokeとする。
 通常 CI は optional tools と時刻・locale に依存しない。
 
@@ -360,18 +458,18 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
-| 1 | 空・ゼロ長・None | 該当 | hash / commit / phase state 不在 | 1: unknownとして操作停止 |
-| 2 | 境界値 | 該当 | 1項目だけ不一致・0 phases | 1: 必須項目1件でも不一致なら停止 |
-| 3 | 重複・衝突 | 該当 | source commit / phase identity競合 | 1: 競合列挙後に再計画要求 |
-| 4 | 順序 | 該当 | 操作後にpreflight | 1: 全操作の書込前に共通検査 |
-| 5 | 型・形式不正 | 該当 | schema/hash/phase graph不正 | 1: 比較不能をunknownとして停止 |
-| 6 | エラー経路 | 該当 | read/probe timeout・部分成功 | 1: 部分greenを採用しない |
-| 7 | 冪等性・再実行 | 該当 | 同じ状態で判定が変わる | 1: 共通normalizer/matrixで決定的判定 |
-| 8 | 時刻・タイムゾーン | 非該当 | mtimeでdriftを決めない | 2: mtime最適化は対象外 |
-| 9 | 文字列 | 該当 | checkbox、改行、Unicode差 | 1: checkbox-only normalizerをfixture化 |
-| 10 | 数値 | 非該当 | 類似度や閾値で一致させない | 2: fuzzy drift判定は対象外 |
-| 11 | 巨大入力・リソース枯渇 | 該当 | 全artifact/phase検査不能 | 1: 切捨て時はunknownとして停止 |
-| 12 | 状態遷移の未定義パス | 該当 | drift中のexecute/finalize | 1: 再同期まで対象操作を禁止 |
+| 1 | 空・ゼロ長・None | 該当 | expected / observedの片方または両方が空、全phase削除、必須targetの空文字 / `None`、空path、空remediation | 1: 両graph空はgraph比較としてclean、片方空は全add / remove、全削除は全removedをrevalidationかつreplanning空。必須target両方不在はtarget unknown、malformed target / pathはinput invalid。空replanningでは`replan-affected-phases`を出さない |
+| 2 | 境界値 | 該当 | 0 / 1 phase、node / edge / aggregate bytesとPlanningInventoryのN-1 / N / N+1、変更・issue・targetが各1件 | 1: node / edge各4096、canonical aggregate 8 MiBとinventory 4096件 / 8 MiBはNまで受理しN+1をidentityなしUNKNOWN。1 phaseも完全graphとして比較する |
+| 3 | 重複・衝突 | 該当 | duplicate node / edge、同phaseのpath+dependency変更、phase=plan / phase=evidence / plan=evidence、evidence宣言の共有 / 分割、重複projection | 1: duplicate graph要素はmalformed UNKNOWN。変更issueを種類別に両方保持する。cross-role aliasと複数宣言への同一evidence分割を拒否し、同一宣言内のsource / plan owner共有と同ownerの異なるevidenceは許可。各outputはset-likeに重複排除 |
+| 4 | 順序 | 該当 | dependency / input tuple / declarationsの順序でdrift、downstream、identity、issue/action順が変わる | 1: dependencyを集合比較し順序差はno drift。graph / role projectionは入力順不変、outputsはUTF-8 bytes順。structural validationをfilesystem observationより先に行う |
+| 5 | 型・形式不正 | 該当 | malformed graph / target / path、wrong type、duplicate/self/unknown edge、cycle、backslash / absolute / dot component / NUL | 1: runtime shape→canonical scalar→limit→graph / role invariantの順に検査し、暗黙normalizeせずidentity / remediationなしUNKNOWN。role不変条件はPlanningInventoryで`mapping-path-role-conflict`、直接ManifestMappingで`mapping-set-invalid`、その他は既存のdimension-specific code |
+| 6 | エラー経路 | 該当 | graph片側のparse / read / probe timeout、部分・切捨て、filesystem観測中のrace、stale replay | 1: expected / observedを独立検査して比較不能だけをUNKNOWN。観測中のmissing / alias / symlink / identity changeはfixed integrationでfail-closed。replayはfresh再計算しidentity mismatchをidentityありDRIFTED / `lifecycle-decision-stale`にする |
+| 7 | 冪等性・再実行 | 該当 | 同じvalid inputの再実行でoutputs / identityが変わる、clean identity byte互換、valid drift identity、二重repin | 1: 同じinputは同じUTF-8順projectionとidentity。valid clean identity bytesとv1 discriminatorを維持し、Plan Aだけが派生authorityを一括repin、Plan Bは再repinしない |
+| 8 | 時刻・タイムゾーン | 非該当 | graph / target / role / identity / exit判定にmtime、timezone、DST、TTLを使わない | 2: mtime / timezone / TTLによる判定はスコープ外。point-in-time filesystem observationは時刻値ではなく観測結果を検査する |
+| 9 | 文字列 | 該当 | phase / plan / evidenceのexact・NFC/NFD・case alias、separator変形、空白 / encoding、canonical phase ID / POSIX path | 1: strict scalarとcanonical POSIX relative pathを要求し、cross-role alias key collisionを拒否する。separator等の非canonical表記は暗黙変換せず、alias keyは比較専用で入力を書き換えない |
+| 10 | 数値 | 該当 | bound / count / length fieldの0、負数、`bool`、float、NaN、inf、上限off-by-one | 1: exact positive integerだけを許可し、node / edge 4096とaggregate 8 MiBをNまで受理、N+1とnon-integerをUNKNOWNにする。fuzzy scoreは使用しない |
+| 11 | 巨大入力・リソース枯渇 | 該当 | graph / inventoryが件数・aggregate bytes上限超過、timeout、完全projection生成不能 | 1: graphごとに4096 node / edge・8 MiB、inventory 4096件・8 MiBを切捨てず検査し、超過 / timeoutはidentityなしUNKNOWN。HypothesisへI/O stressを混ぜずfixed bounded example / integrationで検証 |
+| 12 | 状態遷移の未定義パス | 該当 | targetのexpected-only / observed-only / both / neither、targetとgraph変更の一致 / 不一致、全削除、stale decision、exit evidence欠落 | 1: target relationをmapping readiness / graph集約より先に4分類し、その他変更を別集約。removed actionとunknown actionはnext action専用。driftは再検証まで操作禁止。review / verifier / security / `task check`の欠落・失敗・未実行を未達としてPhase 4を禁止 |
 
 ### HARD-R3: 複数 manifests 間の artifact ownership を検査する
 
@@ -444,8 +542,9 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 ## Spec holes Phase 2 の検証対応（実装時）
 
 `tasks.md` 5.1 で上記すべての「該当」行を fixture test、例示 test、property test、または理由付き未検証へ
-一対一で対応付ける。allocator / normalizer / ownership graph / manifest round-trip / preview builderだけを
-property test候補とし、mappingはfixture / example、filesystem / Git / journal / actual toolsはintegration test
+一対一で対応付ける。allocator / normalizer / ownership graph / manifest round-trip / preview builderに加え、
+Gate Dのpure graph / remediation projectionとcanonical path-role invariantだけをproperty test候補とする。
+mapping / lifecycle public seamはfixture / fixed public example、filesystem / Git / journal / actual toolsはintegration test
 またはopt-in smoke候補とする。
 
 ### TDDで確認するpublic seams
@@ -481,6 +580,15 @@ property test候補とし、mappingはfixture / example、filesystem / Git / jou
 | `E-POLICY` | fixture / example | current-tree stable record、ID一意性、`adaptive-policy-section-v1`のexact section hash、duplicate / fence / alias拒否、history非依存 |
 | `E-BOUNDS` | bounded example | suffix`1..999999`、counter sentinel`1000000`、source / policy section / item / manifest / journal / previewの境界とlimit+1停止 |
 | `S-TOOLS` | opt-in smoke | 実OpenSpec / GSD probe、drift、中断resume、no-op finalize、未検証報告 |
+| `A-P-GRAPH` | Hypothesis property（Plan A） | pure graph / remediation projectionの入力順不変、set-like重複排除、UTF-8 bytes順、旧新edge union downstream、observedとのreplanning積集合、同じvalid inputのidentity決定性 |
+| `A-E-GRAPH` | fixed public example（Plan A） | expected / observed独立validation、両空 / 片側空 / 1 phase / 全削除、同時add / remove / path / dependency、同phase複数issue、dependency順序だけのno drift、duplicate / self / unknown edge / cycle、4096 / 8 MiBのN-1 / N / N+1 |
+| `A-E-TARGET` | fixed public example（Plan A） | malformed / expected-only / observed-only / both / neitherの先行分類、変更phaseとの一致 / 不一致、target / downstream同時削除、removed / unknown actionのissue非重複 |
+| `A-E-COMPAT` | fixed public / golden example（Plan A） | valid clean identity bytes、valid drift identity、同じinputの再実行、fresh recomputeによるstale replay、v1 discriminator / field / schema / version維持 |
+| `A-E-REPIN` | source-pinned fixture / tracked evidence（Plan A） | 5 scenario追加によるactive source items / mappings 49→54（scenario headings 43→48）のhandoff manifest、旧49-ID mapping / expected preview fixture、lifecycle golden / tracked evidenceの一括repin |
+| `A-E-EXIT` | fixed report / command evidence（Plan A） | `task check`、review reportのstatus clean / Critical 0 / Warning 0、verifier passed 10/10 / behavior_unverified 0 / overrides 0 / traceability Complete、security report present / open threats 0と欠落・失敗・未実行時のPhase 4拒否 |
+| `B-P-PATH-ROLE` | Hypothesis property（Plan B） | canonical path-role invariantの入力順不変、phase / plan / evidenceのexact・NFC/NFD・case alias disjointness、valid owner / evidence sharing |
+| `B-E-PATH-ROLE` | fixed public example（Plan B） | canonical POSIX scalar、empty / wrong type / backslash / absolute / dot / NUL、4096 / 8 MiB境界、3組のrole collision、evidence共有 / 分割、PlanningInventory / direct ManifestMappingのcode差、早期拒否時filesystem call count 0 |
+| `B-I-PATH-RACE` | fixed filesystem integration（Plan B） | filesystem観測中のmissing / alias / symlink / identity changeをfail-closedし、final observation後は実operation直前に再検査する |
 
 ### Spec-holes Phase 1 → Phase 2 一対一対応
 
@@ -494,11 +602,37 @@ mapping readinessのconcurrency / TOCTOU境界は新しいholeを追加せず、
 | requirement | H01 | H02 | H03 | H04 | H05 | H06 | H07 | H08 | H09 | H10 | H11 | H12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `HARD-R1` stable identity / mapping | `E-MAPPING`,`E-REFRESH` | `P-ALLOC`,`E-BOUNDS`,`E-MAPPING` | `P-ALLOC`,`E-MAPPING` | `P-ALLOC`,`P-NORMALIZER`,`E-MAPPING` | `P-MANIFEST-RT`,`E-MAPPING`,`P-NORMALIZER`,`E-POLICY` | `E-MIGRATION`,`E-REFRESH`,`E-MAPPING` | `P-ALLOC`,`P-MANIFEST-RT`,`P-NORMALIZER`,`E-REFRESH` | N/A: identityへ時刻不使用 | `P-NORMALIZER`,`E-MAPPING`,`E-POLICY` | `P-ALLOC`,`E-BOUNDS` | `E-BOUNDS`,`P-NORMALIZER`,`E-REFRESH` | `P-ALLOC`,`E-MIGRATION`,`E-MAPPING`,`E-REFRESH` |
-| `HARD-R2` drift | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `E-DRIFT` | `P-NORMALIZER`,`E-DRIFT` | N/A: mtime判定なし | `P-NORMALIZER`,`E-DRIFT` | N/A: fuzzy判定なし | `E-BOUNDS`,`E-DRIFT` | `E-DRIFT` |
+| `HARD-R2` drift | `A-E-GRAPH`,`A-E-TARGET`,`B-E-PATH-ROLE` | `A-E-GRAPH`,`B-E-PATH-ROLE` | `A-P-GRAPH`,`A-E-GRAPH`,`B-P-PATH-ROLE`,`B-E-PATH-ROLE` | `A-P-GRAPH`,`A-E-GRAPH`,`B-P-PATH-ROLE` | `A-E-GRAPH`,`A-E-TARGET`,`B-E-PATH-ROLE` | `A-E-GRAPH`,`A-E-COMPAT`,`B-I-PATH-RACE` | `A-P-GRAPH`,`A-E-COMPAT`,`A-E-REPIN` | N/A: mtime / TZ / TTL判定なし | `B-P-PATH-ROLE`,`B-E-PATH-ROLE` | `A-E-GRAPH`,`B-E-PATH-ROLE` | `A-E-GRAPH`,`B-E-PATH-ROLE` | `A-E-TARGET`,`A-E-COMPAT`,`A-E-EXIT` |
 | `HARD-R3` ownership | `P-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP`,`I-OWNERSHIP` | `P-OWNERSHIP` | `I-OWNERSHIP` | `I-OWNERSHIP` | `P-OWNERSHIP` | N/A: 時刻優先なし | `I-OWNERSHIP` | N/A: score推定なし | `E-BOUNDS`,`I-OWNERSHIP` | `I-OWNERSHIP`,`I-FINALIZE` |
 | `HARD-R4` recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |
 | `HARD-R5` finalize | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | N/A: TTL失効なし | `I-FINALIZE`,`I-OWNERSHIP` | N/A: 件数自動承認なし | `E-BOUNDS`,`P-PREVIEW` | `I-FINALIZE`,`E-DRIFT` |
 | `HARD-R6` verification | `E-MAPPING` | `E-BOUNDS` | `E-MAPPING`,`I-OWNERSHIP` | `P-ALLOC`,`P-OWNERSHIP`,`P-PREVIEW` | `P-MANIFEST-RT`,`I-RECOVERY` | `E-MIGRATION`,`I-RECOVERY`,`I-FINALIZE` | `P-ALLOC`,`P-NORMALIZER`,`P-MANIFEST-RT`,`P-OWNERSHIP`,`P-PREVIEW` | `S-TOOLS`（通常CIはclock固定） | `E-MAPPING`,`I-OWNERSHIP` | `E-BOUNDS` | `E-BOUNDS`,`I-RECOVERY` | `S-TOOLS`（明示opt-inのみ） |
+
+### HARD-R2 Phase 2検証明細とplan所有
+
+HARD-R2の該当holeには未検証を残さない。Hypothesisはpure projection / invariantだけへ限定し、public builder /
+readiness / gate、bounded failure、report gateはfixed example、filesystem observation中のraceはfixed integrationで
+検証する。非協調なexternal processが各pathのfinal observation後に変更しないことの保証はH08と同様にスコープ外であり、
+その代わりconsumerが実operation直前にreadinessとdrift preflightを再実行する契約を`B-I-PATH-RACE`で確認する。
+
+| hole | 検証形態 | evidence / 反証内容 | 所有plan |
+| --- | --- | --- | --- |
+| H01 空・ゼロ長・None | fixed public example | `A-E-GRAPH`: 両空 / 片側空 / 全削除と空replanning action、`A-E-TARGET`: empty / `None` target、`B-E-PATH-ROLE`: empty path | Plan A / Plan B（各seamを分離） |
+| H02 境界値 | fixed public bounded example | `A-E-GRAPH`: 0 / 1 phaseとgraph 4096 / 8 MiB N-1 / N / N+1、`B-E-PATH-ROLE`: inventory 4096 / 8 MiB N-1 / N / N+1 | Plan A / Plan B（各入力上限） |
+| H03 重複・衝突 | Hypothesis + fixed public example | `A-P-GRAPH`,`A-E-GRAPH`: duplicate / multi-change / set-like projection、`B-P-PATH-ROLE`,`B-E-PATH-ROLE`: 3組のrole collisionとevidence共有 / 分割 | Plan A / Plan B（各invariant） |
+| H04 順序 | Hypothesis + fixed public example | `A-P-GRAPH`,`A-E-GRAPH`: dependency / tuple順序不変とUTF-8順、`B-P-PATH-ROLE`: declaration順序不変 | Plan A / Plan B |
+| H05 型・形式不正 | fixed public example | `A-E-GRAPH`: duplicate / self / unknown edge / cycle / scalar不正、`A-E-TARGET`: malformed target、`B-E-PATH-ROLE`: malformed pathとerror code precedence / filesystem call count 0 | Plan A / Plan B |
+| H06 エラー経路 | fixed public + fixed integration | `A-E-GRAPH`: 独立validationの部分失敗 / timeout / truncation、`A-E-COMPAT`: stale replay、`B-I-PATH-RACE`: 観測中のrace | Plan A / Plan B |
+| H07 冪等性・再実行 | Hypothesis + fixed golden / tracked evidence | `A-P-GRAPH`,`A-E-COMPAT`: same input / tuple shuffleのoutputs・identityとclean bytes、`A-E-REPIN`: Plan A一括repinの一回性 | Plan A |
+| H08 時刻・タイムゾーン | 非該当 / scope assertion | mtime / timezone / DST / TTLをdecision inputへ含めない。`B-I-PATH-RACE`は時刻値でなくpoint-in-time observation resultを検査 | Plan B（integration境界だけ） |
+| H09 文字列 | Hypothesis + fixed public example | `B-P-PATH-ROLE`,`B-E-PATH-ROLE`: canonical POSIX、NFC/NFD / case aliasと、separator / NUL / encoding / 空白を含むmalformed境界 | Plan B |
+| H10 数値 | fixed public bounded example | `A-E-GRAPH`,`B-E-PATH-ROLE`: exact positive integer、`bool` / float / negative / NaN / inf拒否、4096 / 8 MiB off-by-one | Plan A / Plan B（各入力上限） |
+| H11 巨大入力・リソース枯渇 | fixed public bounded example | `A-E-GRAPH`,`B-E-PATH-ROLE`: N+1 / aggregate oversize / timeoutを切捨てずidentityなしUNKNOWN | Plan A / Plan B |
+| H12 状態遷移の未定義パス | fixed public / report example | `A-E-TARGET`: target 4関係と削除時action、`A-E-COMPAT`: stale→fresh DRIFTED、`A-E-EXIT`: evidence欠落 / fail / unrun時のPhase 4拒否 | Plan A |
+
+Plan Aは`A-*` evidenceとsource-pinned handoff manifest、旧49-ID mapping / expected preview fixture、lifecycle golden /
+tracked evidenceその他の派生authorityのrepinを一括所有する。Plan Bは`B-*` evidenceだけを所有し、同じauthorityを
+再repinしない。第3のproduction planは追加しない。
 
 実装完了時はevidence IDを実在するtest node ID / fixture pathへ置換または併記する。opt-in smokeを実行できない
 場合は`S-TOOLS`を検証済みにせず、環境または安全なdry-run seam不在を理由付き未検証として残す。

@@ -132,9 +132,95 @@ manifest、stable mapping、phase state、capability evidence を同じ検査契
 - **WHEN** phase の追加・削除・依存変更、source commit 不一致、manifest schema 不一致、または必要 capability signal の変化を検出する
 - **THEN** bridge は影響する操作を禁止し、再probe、migration、mapping 更新、影響 phases の再計画のうち必要な手順を示す
 
+#### Scenario: 完全な phase graph drift を分類して remediation を投影する
+- **WHEN** `planning_inventory`、source commitで`observe_phase_graph(..., source_commit)`が返した
+  `expected_nodes`、およびcurrent treeの`observed_nodes`を比較する
+- **THEN** bridgeはexpected / observed graphを互いに独立してruntime shape、canonical scalar、node / edge各4096件、
+  canonical aggregate 8 MiB、duplicate node / edge、self-edge、unknown dependency、cycleまで検査する。
+  malformed、不完全、または検査不能ならidentityとremediation projectionのない`UNKNOWN`とし、上限の
+  N-1 / Nは受理してN+1は`UNKNOWN`とする。`observed_nodes`はcurrent treeの正本である
+  `planning_inventory.phases`と完全一致させ、`expected_nodes`はsource-pinned observationとし、
+  `expected_inventory`または同等の第二のinventoryを要求しない
+- **AND** 両graphが完全なら、両方空はgraph比較として`CLEAN`、expectedだけ空は全observed phaseのadd、
+  observedだけ空は全expected phaseのremoveとして`DRIFTED`にする。0 / 1 phase、全phase削除、add / remove /
+  path / dependencyの同時変更を通常の完全な比較として扱い、dependency tupleの順序だけの違いはdriftにしない。
+  同じphaseにpathとdependencyの両変更があれば両issueを保持する
+- **AND** 完全な差分は`DRIFTED`、`admitted=false`、再利用可能なdecision identityを返す。downstreamは
+  expected / observed graphのnodeと旧edge / 新edgeの和集合で求め、added phaseは自身とdownstream、
+  path / dependency changed phaseは自身と旧新いずれかで影響を受けるdownstream、removed phaseは自身と
+  downstreamをreplanning候補に含める。各変更phase自身をrevalidation targetにし、最終replanning targetは
+  変更phaseとdownstreamの和集合をobserved graphと積集合したものに限定し、
+  全phase削除またはtargetとdownstreamの同時削除で空になれば`replan-affected-phases`を出さず
+  `revalidate-mapping`だけをgraph drift actionとして返す
+- **AND** issues、revalidation targets、replanning targets、next action codesをそれぞれset-likeに重複排除して
+  UTF-8 bytes順に整列し、input tupleの順序にかかわらず同じprojectionとdecision identityを返す
+
+#### Scenario: lifecycle target phase を分類する
+- **WHEN** lifecycle gateが必須のtarget phaseをexpected / observed graphと照合する
+- **THEN** bridgeはtargetのruntime shapeとcanonical phase ID scalarをgraph比較とmapping readinessより先に検査し、
+  空文字、`None`、wrong type、その他malformed targetをidentityとremediation projectionのない`UNKNOWN`、
+  next action `lifecycle-input-invalid`として停止する
+- **AND** valid targetをexpectedにだけ持つ場合は`DRIFTED`、issue `phase-removed:<id>`、next action
+  `lifecycle-target-phase-removed`、observedにだけ持つ場合は`DRIFTED`、issue `phase-added:<id>`、
+  両方に持つ場合はtarget relation自身のissue / actionを追加せずgraph全体の差分に従い、両方に持たない場合は
+  identityなしの`UNKNOWN`、next action `lifecycle-target-phase-unknown`とする。
+  `lifecycle-target-phase-removed`と`lifecycle-target-phase-unknown`はnext action codes専用でissue codesへ複製しない
+- **AND** targetが変更phaseと一致するか否かにかかわらずtarget relationを先に確定し、その他のgraph changesを
+  別に集約する。expected-only targetはmapping readinessより先にidentityありの`DRIFTED`として保持し、
+  targetとdownstreamがすべて削除済みなら`replan-affected-phases`を出さず、
+  `revalidate-mapping`と`lifecycle-target-phase-removed`を返す。同じvalid inputの再実行は同じ分類、
+  projection、decision identityを返す
+
+#### Scenario: mapping artifact の path role を分離する
+- **WHEN** phase、plan、evidence pathを持つ`PlanningInventory`、またはそこから派生した
+  `ManifestMapping`をlifecycle gateへ入力する
+- **THEN** bridgeはruntime shape、canonical scalar、PlanningInventoryの4096件 / canonical aggregate 8 MiB上限を
+  検査してからrole disjointnessを検査し、その後にだけfilesystem observation、readiness、hash、identity生成へ進む。
+  pathは非空のcanonical POSIX repository-relative pathだけを許し、backslash、absolute path、空、
+  `.` / `..` component、NUL、wrong type、malformed encodingを暗黙に正規化せず拒否する
+- **AND** phase / plan / evidenceのpath roleを互いに素とし、phase=plan、phase=evidence、plan=evidenceの
+  exact collision、Unicode NFC / NFD alias、case alias、
+  plan artifact自身のevidence利用、および同じevidence pathを複数の`EvidenceDeclaration`へ分割する入力を拒否する。
+  separator変形や`.` / `..`の除去後に別pathと一致し得る入力はcanonicalizeして受理せず、形式不正として先に拒否する。
+  一つの独立したevidence artifactが同一宣言内でsourceとplanの両ownerを持つことと、同じownerが異なる
+  evidence pathsを持つことは許可する
+- **AND** `PlanningInventory`のcross-role collisionまたは同一evidence pathの宣言分割は
+  `mapping-path-role-conflict`、public builderを迂回して直接構築されたderived `ManifestMapping`の同じ
+  role不変条件違反は`mapping-set-invalid`として報告する。malformed / oversizeは既存のdimension-specificな
+  structured failure codeを維持する。lifecycle gateはこれらの不正構造をdecision identityとremediation projectionの
+  ない`UNKNOWN`として停止し、public contract testからfilesystem boundaryのcall countが0であることを観測可能にする
+
 #### Scenario: 検査を完了できない
 - **WHEN** artifact read、Git inspection、manifest parse、phase inspection、または capability probe の一部が失敗・timeout・切捨てになる
-- **THEN** bridge は部分的な green 判定を採用せず、drift state を unknown として操作を停止する
+- **THEN** bridge は部分的な green 判定を採用せず、malformed、不完全、または検査不能なgraphだけを
+  decision identityとremediation projectionのない`UNKNOWN`として操作を停止し、完全なexpected / observed graphの
+  差分を`UNKNOWN`へ縮退させない
+
+#### Scenario: Phase 3 public contract の互換性を維持する
+- **WHEN** phase graph authority、target phase分類、またはpath role separationを実装する
+- **THEN** bridgeは`PhaseGraphObservation`へfieldを追加せず、`lifecycle-gate-decision-v1`とschema / versionを維持し、
+  valid clean decisionの既存identity bytesを変えない。完全なgraph driftの`UNKNOWN`から`DRIFTED`への変更は
+  既存契約の回復としてschema bumpを行わず、同じvalid inputの再実行は同じoutputsとidentity、valid driftは
+  input tuple順序によらない決定的identityを返す。意図的な非互換は従来誤って受理されていたinvalid graph /
+  path-role inputの拒否だけとする
+- **AND** 保存済みdecisionをreplayするときはcurrent inputからfresh decisionを再計算し、保存済みidentityと
+  不一致ならidentityありの`DRIFTED`、issue `lifecycle-decision-stale`として扱う。
+  malformed、不完全、検査不能なinputを`UNKNOWN`とした場合だけidentityを返さない
+
+#### Scenario: Phase 3 の完了を判定する
+- **WHEN** HND-03 / HARD-R2の後続実装を完了扱いにする、またはPhase 4へ進もうとする
+- **THEN** projectはphase graph drift contractとpath role separationを別々のTDD planとして実行し、固定public
+  contract testsとHypothesis propertiesのREDからGREENへの証拠を作る。5つのscenario追加でcanonical active source
+  items / mappingsが49から54、scenario headingsが43から48になったsource-pinned handoff manifest、旧49-ID mapping /
+  expected preview fixture、lifecycle golden / tracked evidenceその他の派生authorityのrepinはphase graph drift contract
+  planが一括所有し、path role separation planは再repinしない
+- **AND** phase graph drift contract planはpure graph / remediationのHypothesis propertiesと固定public examples、
+  path role separation planはcanonical path-roleのHypothesis propertiesと固定builder / readiness / gate examplesを
+  所有する。I/Oとfilesystem raceはHypothesisへ入れず固定integration exampleで観測中のraceを検証する
+- **AND** `task check`成功、code review reportが存在してstatus `clean`かつCritical 0 / Warning 0、verifier reportが
+  存在して`passed`かつ10/10、`behavior_unverified: 0`、`overrides_applied: 0`、HND-03 / HARD-R2 traceability
+  `Complete`、security reportが存在してopen threats 0をすべて満たすまでPhase 3を未完了としてPhase 4を開始しない。
+  いずれかのevidenceの欠落、失敗、未実行も未達とする
 
 ### Requirement: HARD-R3 複数 manifests 間の artifact ownership を検査する
 bridge は MUST repository 内で有効な全 handoff manifests を照合し、各派生 artifact の所有と参照を
