@@ -4,17 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
-status: executing
-stopped_at: Completed 03-15-PLAN.md
-last_updated: "2026-07-29T05:18:40.994Z"
+status: verifying
+stopped_at: Completed 03-16-PLAN.md; ready for independent verification
+last_updated: "2026-07-29T05:35:05.554Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 26
-  completed_plans: 25
-  percent: 33
+  completed_plans: 26
+  percent: 50
 ---
 
 # Project State
@@ -31,12 +30,12 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 03 (lifecycle-drift-gate) — EXECUTING
+Phase: 03 (lifecycle-drift-gate) — VERIFYING
 Plan: 16 of 16
-Status: Ready to execute
-Last activity: 2026-07-29 — Phase 03 execution started
+Status: Phase complete — ready for verification
+Last activity: 2026-07-29 — Plan 03-16 completed; ready for independent verification
 
-Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
+Progress: [█████░░░░░] 3 of 6 phases complete (50%)
 
 ## Performance Metrics
 
@@ -79,6 +78,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P13 | 8min | 1 tasks | 2 files |
 | Phase 03 P14 | 6min | 1 tasks | 2 files |
 | Phase 03 P15 | 5min | 1 tasks | 2 files |
+| Phase 03 P16 | 8min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -131,10 +131,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: No REFACTOR commit was added because GREEN retained one explicit stale decision and the existing single identity authority.
 - [Phase 03]: Source inventory success requires the no-follow resolved root path and retained descriptor to match by device, inode, and file type before traversal and after all bounded reads. — Prevents detached old-root content from becoming canonical evidence.
 - [Phase 03]: No REFACTOR commit was added because direct root identity tuples intentionally mirror the established child-entry comparison without a second representation.
+- [Phase 03]: Both public source readers reject malformed aggregate runtime shapes with source-files-invalid before Python runtime or filesystem use.
+- [Phase 03]: No REFACTOR commit was added because the two explicit public-seam validators preserve distinct member contracts without behavior-preserving duplication.
+- [Phase 03]: Independent verification still owns the Phase 03 and OpenSpec 3.1 completion boundary.
 
 ### Pending Todos
 
-- Discuss and plan Phase 4 against the completed fail-closed lifecycle decision boundary.
+- Run independent Phase 03 verification against all three closed gap families before planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -143,7 +146,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - The old started handoff preimage and brief remain historical audit evidence; the tracked handoff now contains the approved Phase 2 candidate.
 - The final review is clean and independent Phase 2 verification passed 7/7 without overrides or unverified behavior.
 - The tracked refresh was published only after explicit approval for preview hash `90b52efd98d6718796548151ea9c808dfd1e14484bcacd2f847b09ea71054bea`; candidate SHA is `6cc9bcf4caa3f9f839742f6d86660a8039c2370cf5cf7d054ba04199e3775fc5`.
-- Phases 1–3 are complete; Phase 4 is ready to plan, while Phases 5–6 remain dependency-blocked.
+- Phase 03 implementation plans are complete and ready for independent verification; Phase 4 remains blocked on that verification, while Phases 5–6 retain their dependency order.
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
 ## Deferred Items
@@ -155,6 +158,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-29T05:18:40.987Z
-Stopped at: Completed 03-15-PLAN.md
+Last session: 2026-07-29T05:34:28.978Z
+Stopped at: Completed 03-16-PLAN.md; ready for independent verification
 Resume file: None
