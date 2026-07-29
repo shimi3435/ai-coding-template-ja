@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-13-PLAN.md
-last_updated: "2026-07-28T17:47:02.079Z"
-last_activity: 2026-07-28
-last_activity_desc: Phase 03 planning complete
+stopped_at: Completed 03-14-PLAN.md
+last_updated: "2026-07-29T05:09:48.599Z"
+last_activity: 2026-07-29
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 23
-  completed_plans: 23
-  percent: 50
+  completed_phases: 2
+  total_plans: 26
+  completed_plans: 24
+  percent: 33
 ---
 
 # Project State
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 13 of 13
+Plan: 15 of 16
 Status: Ready to execute
-Last activity: 2026-07-28 — Phase 03 planning complete
+Last activity: 2026-07-29 — Phase 03 execution started
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -77,6 +77,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P10 | 10min | 2 tasks | 2 files |
 | Phase 03 P12 | 6min | 1 tasks | 3 files |
 | Phase 03 P13 | 8min | 1 tasks | 2 files |
+| Phase 03 P14 | 6min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Inventory and explicit-match aggregates validate every outer, container, member, scalar, and nested-parent shape before path, normalization, set, hash, lookup, sort, or allocation work.
 - [Phase 03]: A well-shaped unresolved scenario parent retains source-parent-unresolved, while malformed inventory and explicit-match shapes use their dedicated stable public issue codes.
 - [Phase 03]: No REFACTOR commit was added because the GREEN validators already preserve one authority per aggregate without behavior-preserving duplication.
+- [Phase 03]: Stale rejection identities are recomputed only after DRIFTED state, non-admission, and lifecycle-decision-stale are final. — Prevents a rejected stale identity from admitting its unchanged replay.
+- [Phase 03]: No REFACTOR commit was added because GREEN retained one explicit stale decision and the existing single identity authority.
 
 ### Pending Todos
 
@@ -149,6 +152,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-28T15:55:38.988Z
-Stopped at: Completed 03-13-PLAN.md
+Last session: 2026-07-29T05:09:48.508Z
+Stopped at: Completed 03-14-PLAN.md
 Resume file: None
