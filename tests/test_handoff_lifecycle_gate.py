@@ -5,11 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tempfile
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff import lifecycle_gate
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
@@ -494,6 +497,25 @@ def _phase_nodes() -> tuple[PhaseNodeObservation, ...]:
         PhaseNodeObservation("05", ".planning/phases/05-lifecycle-05", ("04",)),
         PhaseNodeObservation("06", ".planning/phases/06-lifecycle-06", ("05",)),
     )
+
+
+def _inventory_for_phase_nodes(
+    inventory: PlanningInventory,
+    nodes: tuple[PhaseNodeObservation, ...],
+) -> PlanningInventory:
+    phase_ids = {node.phase_id for node in nodes}
+    phases = tuple(
+        PhaseDeclaration(CHANGE_ID, node.phase_id, node.phase_path) for node in nodes
+    )
+    plans = tuple(plan for plan in inventory.plans if plan.phase_id in phase_ids)
+    plan_paths = {plan.path for plan in plans}
+    evidence = tuple(
+        item
+        for item in inventory.evidence
+        if item.phase_id in phase_ids
+        and (item.plan_path is None or item.plan_path in plan_paths)
+    )
+    return replace(inventory, phases=phases, plans=plans, evidence=evidence)
 
 
 def _malformed_phase_nodes(case: str) -> object:
@@ -2237,9 +2259,7 @@ def test_cyclic_phase_graph_is_unknown_and_never_admitted(
     ("case", "operation", "target_phase"),
     [
         ("inventory-only", LifecycleOperation.EXECUTE, "03"),
-        ("expected-graph-only", LifecycleOperation.EXECUTE, "03"),
         ("observed-graph-only", LifecycleOperation.EXECUTE, "03"),
-        ("expected-path-mismatch", LifecycleOperation.EXECUTE, "03"),
         ("observed-path-mismatch", LifecycleOperation.EXECUTE, "03"),
         ("same-extra-both-graphs", LifecycleOperation.EXECUTE, "03"),
         ("same-extra-both-graphs", LifecycleOperation.FINALIZE, None),
@@ -2336,6 +2356,325 @@ def test_phase_graph_and_inventory_membership_paths_must_match_exactly(
     assert decision.manifest_sha256 is None
     assert mapping_readiness_calls == 0
     assert decision_identity_calls == 0
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "phase-added",
+        "phase-removed",
+        "phase-path",
+        "phase-dependencies",
+        "phase-path-and-dependencies",
+        "simultaneous",
+        "both-empty",
+        "expected-empty",
+        "observed-empty",
+        "one-phase",
+        "all-removed",
+    ],
+)
+def test_a_e_graph_complete_phase_graph_cases_never_become_incomplete(
+    tmp_path: Path,
+    case: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    expected = _phase_nodes()
+    observed = _phase_nodes()
+    operation = LifecycleOperation.EXECUTE
+    target_phase: str | None = "03"
+    if case == "phase-added":
+        observed = (
+            *observed,
+            PhaseNodeObservation("07", ".planning/phases/07-lifecycle-07", ("06",)),
+        )
+    elif case == "phase-removed":
+        expected = (
+            *expected,
+            PhaseNodeObservation("07", ".planning/phases/07-lifecycle-07", ("06",)),
+        )
+    elif case == "phase-path":
+        observed = tuple(
+            replace(node, phase_path=".planning/phases/04-renamed")
+            if node.phase_id == "04"
+            else node
+            for node in observed
+        )
+    elif case == "phase-dependencies":
+        observed = tuple(
+            replace(node, depends_on=()) if node.phase_id == "04" else node
+            for node in observed
+        )
+    elif case == "phase-path-and-dependencies":
+        observed = tuple(
+            replace(
+                node,
+                phase_path=".planning/phases/04-renamed",
+                depends_on=(),
+            )
+            if node.phase_id == "04"
+            else node
+            for node in observed
+        )
+    elif case == "simultaneous":
+        expected = (
+            *expected,
+            PhaseNodeObservation("07", ".planning/phases/07-lifecycle-07", ("06",)),
+        )
+        observed = (
+            *tuple(
+                replace(node, depends_on=()) if node.phase_id == "04" else node
+                for node in observed
+            ),
+            PhaseNodeObservation("08", ".planning/phases/08-lifecycle-08", ("06",)),
+        )
+    elif case == "both-empty":
+        expected = ()
+        observed = ()
+        operation = LifecycleOperation.FINALIZE
+        target_phase = None
+    elif case == "expected-empty":
+        expected = ()
+    elif case in {"observed-empty", "all-removed"}:
+        observed = ()
+        operation = LifecycleOperation.FINALIZE
+        target_phase = None
+    elif case == "one-phase":
+        expected = expected[:1]
+        observed = observed[:1]
+    else:  # pragma: no cover - table is exhaustive
+        raise AssertionError(case)
+    boundary.expected_nodes = expected
+    boundary.observed_nodes = observed
+    boundary.inventory = _inventory_for_phase_nodes(boundary.inventory, observed)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        operation,
+        target_phase,
+        boundary=boundary,
+    )
+
+    assert decision.issue_codes != ("lifecycle-phase-observation-incomplete",)
+    assert decision.state in {LifecycleGateState.CLEAN, LifecycleGateState.DRIFTED}
+    assert decision.decision_identity is not None
+    if case == "phase-path-and-dependencies":
+        assert "phase-path-changed:04" in decision.issue_codes
+        assert "phase-dependencies-changed:04" in decision.issue_codes
+
+
+def test_a_e_graph_removed_phase_uses_old_edges_and_observed_replanning_set(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    boundary.expected_nodes = (
+        PhaseNodeObservation("03", ".planning/phases/03-lifecycle-drift-gate", ()),
+        PhaseNodeObservation("04", ".planning/phases/04-lifecycle-04", ("03",)),
+        PhaseNodeObservation("05", ".planning/phases/05-lifecycle-05", ("04",)),
+        PhaseNodeObservation("06", ".planning/phases/06-lifecycle-06", ("05",)),
+    )
+    boundary.observed_nodes = (
+        boundary.expected_nodes[0],
+        replace(boundary.expected_nodes[2], depends_on=()),
+        boundary.expected_nodes[3],
+    )
+    boundary.inventory = _inventory_for_phase_nodes(
+        boundary.inventory, boundary.observed_nodes
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision.issue_codes == ("phase-removed:04",)
+    assert decision.revalidation_targets == ("phase:04",)
+    assert decision.replanning_targets == ("05", "06")
+    assert decision.next_action_codes == (
+        "replan-affected-phases",
+        "revalidate-mapping",
+    )
+
+
+@pytest.mark.parametrize(
+    ("target", "relation", "expected_state", "issues", "actions", "identity"),
+    [
+        (
+            "06",
+            "expected-only",
+            LifecycleGateState.DRIFTED,
+            ("phase-removed:06",),
+            ("lifecycle-target-phase-removed", "revalidate-mapping"),
+            True,
+        ),
+        (
+            "06",
+            "observed-only",
+            LifecycleGateState.DRIFTED,
+            ("phase-added:06",),
+            ("replan-affected-phases", "revalidate-mapping"),
+            True,
+        ),
+        (
+            "03",
+            "both",
+            LifecycleGateState.CLEAN,
+            (),
+            (),
+            True,
+        ),
+        (
+            "07",
+            "neither",
+            LifecycleGateState.UNKNOWN,
+            (),
+            ("lifecycle-target-phase-unknown",),
+            False,
+        ),
+    ],
+)
+def test_a_e_target_phase_relation_precedes_mapping_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+    relation: str,
+    expected_state: LifecycleGateState,
+    issues: tuple[str, ...],
+    actions: tuple[str, ...],
+    identity: bool,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    if relation == "expected-only":
+        boundary.observed_nodes = boundary.observed_nodes[:-1]
+    elif relation == "observed-only":
+        boundary.expected_nodes = boundary.expected_nodes[:-1]
+    boundary.inventory = _inventory_for_phase_nodes(
+        boundary.inventory, boundary.observed_nodes
+    )
+    readiness_calls = 0
+    original = lifecycle_gate.validate_mapping_readiness
+
+    def record_readiness(*args: Any, **kwargs: Any):
+        nonlocal readiness_calls
+        readiness_calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(lifecycle_gate, "validate_mapping_readiness", record_readiness)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        target,
+        boundary=boundary,
+    )
+
+    assert decision.state is expected_state
+    assert decision.issue_codes == issues
+    assert decision.next_action_codes == actions
+    assert (decision.decision_identity is not None) is identity
+    assert readiness_calls == (0 if relation in {"expected-only", "neither"} else 1)
+
+
+@pytest.mark.parametrize("target", [None, "", "invalid", object()])
+def test_a_e_target_malformed_phase_is_action_only_unknown(
+    tmp_path: Path,
+    target: object,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        cast(Any, target),
+        boundary=boundary,
+    )
+
+    assert decision.state is LifecycleGateState.UNKNOWN
+    assert decision.issue_codes == ()
+    assert decision.next_action_codes == ("lifecycle-input-invalid",)
+    assert decision.decision_identity is None
+    assert boundary.source_calls == 0
+
+
+@st.composite
+def _small_graph_permutations(
+    draw: st.DrawFn,
+) -> tuple[
+    tuple[PhaseNodeObservation, ...],
+    tuple[PhaseNodeObservation, ...],
+    tuple[PhaseNodeObservation, ...],
+    tuple[PhaseNodeObservation, ...],
+]:
+    count = draw(st.integers(min_value=2, max_value=4))
+    nodes = _phase_nodes()[:count]
+    changed_index = draw(st.integers(min_value=1, max_value=count - 1))
+    observed = list(nodes)
+    observed[changed_index] = replace(observed[changed_index], depends_on=())
+    expected_permuted = tuple(reversed(nodes)) if draw(st.booleans()) else nodes
+    observed_tuple = tuple(observed)
+    observed_permuted = (
+        tuple(reversed(observed_tuple)) if draw(st.booleans()) else observed_tuple
+    )
+    return nodes, observed_tuple, expected_permuted, observed_permuted
+
+
+@settings(
+    max_examples=12,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(graphs=_small_graph_permutations())
+def test_a_p_graph_public_projection_is_order_invariant_and_deterministic(
+    tmp_path: Path,
+    graphs: tuple[
+        tuple[PhaseNodeObservation, ...],
+        tuple[PhaseNodeObservation, ...],
+        tuple[PhaseNodeObservation, ...],
+        tuple[PhaseNodeObservation, ...],
+    ],
+) -> None:
+    expected, observed, expected_permuted, observed_permuted = graphs
+    with tempfile.TemporaryDirectory(dir=tmp_path) as example_directory:
+        repository, boundary = _fixture(Path(example_directory))
+        inventory = _inventory_for_phase_nodes(boundary.inventory, observed)
+        boundary.expected_nodes = expected
+        boundary.observed_nodes = observed
+        boundary.inventory = inventory
+        baseline = gate_lifecycle_operation(
+            repository,
+            CHANGE_ID,
+            LifecycleOperation.EXECUTE,
+            "03",
+            boundary=boundary,
+        )
+        permuted = FakeBoundary(
+            repository=repository,
+            canonical_source=boundary.canonical_source,
+            inventory=inventory,
+            expected_nodes=expected_permuted,
+            observed_nodes=observed_permuted,
+        )
+        repeated = gate_lifecycle_operation(
+            repository,
+            CHANGE_ID,
+            LifecycleOperation.EXECUTE,
+            "03",
+            boundary=permuted,
+        )
+
+    assert baseline.state is LifecycleGateState.DRIFTED
+    assert repeated.state is LifecycleGateState.DRIFTED
+    assert repeated.issue_codes == baseline.issue_codes
+    assert repeated.revalidation_targets == baseline.revalidation_targets
+    assert repeated.replanning_targets == baseline.replanning_targets
+    assert repeated.next_action_codes == baseline.next_action_codes
+    assert repeated.decision_identity == baseline.decision_identity
 
 
 @pytest.mark.parametrize(
