@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Executing 03-17-PLAN.md; approved publication in progress
-last_updated: "2026-07-29T10:05:43.659Z"
+stopped_at: Completed 03-17-PLAN.md; 03-18 independent reverification pending
+last_updated: "2026-07-29T10:51:51.226Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 03 execution started
+last_activity_desc: Plan 03-17 completed; Plan 03-18 independent reverification pending
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 28
-  completed_plans: 26
+  completed_plans: 27
   percent: 33
 ---
 
@@ -21,7 +21,7 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-22)
+See: .planning/PROJECT.md (updated 2026-07-29)
 
 **Core value:** 一つの OpenSpec change を、仕様の正本を複製せず、fail-closed な依存順序で安全に実装・再開・検証できること。
 **Current focus:** Phase 03 — lifecycle-drift-gate
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 17 of 18
-Status: Executing Phase 03
-Last activity: 2026-07-29 — Phase 03 execution started
+Plan: 18 of 18
+Status: Ready to execute
+Last activity: 2026-07-29 — Plan 03-17 completed; Plan 03-18 independent reverification pending
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -80,6 +80,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P14 | 6min | 1 tasks | 2 files |
 | Phase 03 P15 | 5min | 1 tasks | 2 files |
 | Phase 03 P16 | 8min | 2 tasks | 2 files |
+| Phase 03 P17 | 14 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Both public source readers reject malformed aggregate runtime shapes with source-files-invalid before Python runtime or filesystem use.
 - [Phase 03]: No REFACTOR commit was added because the two explicit public-seam validators preserve distinct member contracts without behavior-preserving duplication.
 - [Phase 03]: Independent verification still owns the Phase 03 and OpenSpec 3.1 completion boundary.
+- [Phase 03]: Expected and observed phase graphs are independently validated; only the observed graph must match the current PlanningInventory phase map. — Preserves a source-pinned expected baseline while current inventory authorizes only the observed graph.
+- [Phase 03]: Exact preview 069990c0 and assignment inventory 46b18454 authorized the single 54-item Plan A publication at source pin 9a7a313. — Binds tracked assignment, handoff, and derived evidence to the human-approved candidate without a second mutation authority.
 
 ### Pending Todos
 
@@ -148,9 +151,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - The old started handoff preimage and brief remain historical audit evidence; the tracked handoff now contains the approved Phase 2 candidate.
 - The final review is clean and independent Phase 2 verification passed 7/7 without overrides or unverified behavior.
 - The tracked refresh was published only after explicit approval for preview hash `90b52efd98d6718796548151ea9c808dfd1e14484bcacd2f847b09ea71054bea`; candidate SHA is `6cc9bcf4caa3f9f839742f6d86660a8039c2370cf5cf7d054ba04199e3775fc5`.
-- Plan 03-17 is publishing the exact approved 54-item authority; 03-18 and independent
+- Plan 03-17 published the exact approved 54-item authority; 03-18 and independent
   reverification remain pending. Phase 4 remains blocked on Phase 3, while Phases 5–6
   retain their dependency order.
+
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
 ## Deferred Items
@@ -162,6 +166,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-29T05:34:28.978Z
-Stopped at: Executing 03-17-PLAN.md; approved publication in progress
+Last session: 2026-07-29T10:51:51.219Z
+Stopped at: Completed 03-17-PLAN.md; 03-18 independent reverification pending
 Resume file: None
