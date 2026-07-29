@@ -59,6 +59,155 @@ def _normalized_projection(
     )
 
 
+@pytest.mark.parametrize(
+    ("source_files", "limits", "expected_code"),
+    [
+        pytest.param(
+            cast(Any, None),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="none-container",
+        ),
+        pytest.param(
+            cast(Any, object()),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="object-container",
+        ),
+        pytest.param(
+            cast(Any, "files"),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="string-container",
+        ),
+        pytest.param(
+            cast(Any, b"files"),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="bytes-container",
+        ),
+        pytest.param(
+            cast(Any, set()),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="unsupported-container",
+        ),
+        pytest.param(
+            cast(Any, [object()]),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="non-tuple-member",
+        ),
+        pytest.param(
+            cast(Any, [[SOURCE_PATH, b"### Requirement: Valid\nBody.\n"]]),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="list-member",
+        ),
+        pytest.param(
+            cast(Any, [(SOURCE_PATH,)]),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="short-tuple-member",
+        ),
+        pytest.param(
+            cast(
+                Any,
+                [(SOURCE_PATH, b"### Requirement: Valid\nBody.\n", b"extra")],
+            ),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="long-tuple-member",
+        ),
+        pytest.param(
+            cast(
+                Any,
+                [(object(), b"### Requirement: Valid\nBody.\n")],
+            ),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            id="path-member",
+        ),
+        pytest.param(
+            cast(Any, [(SOURCE_PATH, object())]),
+            SourceIdentityLimits(),
+            "source-bytes-invalid",
+            id="content-member",
+        ),
+        pytest.param(
+            [("spec.md", b"### Requirement: Valid\nBody.\n")],
+            SourceIdentityLimits(),
+            "source-path-noncanonical",
+            id="noncanonical-path",
+        ),
+        pytest.param(
+            [],
+            SourceIdentityLimits(),
+            "source-paths-empty",
+            id="empty-list",
+        ),
+        pytest.param(
+            (),
+            SourceIdentityLimits(),
+            "source-paths-empty",
+            id="empty-tuple",
+        ),
+        pytest.param(
+            [
+                (SOURCE_PATH, b"### Requirement: First\nBody.\n"),
+                (
+                    "openspec/changes/fixture/specs/other/spec.md",
+                    b"### Requirement: Second\nBody.\n",
+                ),
+            ],
+            SourceIdentityLimits(max_items=1),
+            "source-path-count-limit-exceeded",
+            id="path-count-limit-plus-one",
+        ),
+        pytest.param(
+            [(SOURCE_PATH, b"### Requirement: Valid\nBody.\n")],
+            SourceIdentityLimits(),
+            None,
+            id="valid-list",
+        ),
+        pytest.param(
+            ((SOURCE_PATH, b"### Requirement: Valid\nBody.\n"),),
+            SourceIdentityLimits(),
+            None,
+            id="valid-tuple",
+        ),
+    ],
+)
+def test_source_inventory_from_bytes_rejects_malformed_file_inputs(
+    source_files: object,
+    limits: SourceIdentityLimits,
+    expected_code: str | None,
+) -> None:
+    result = identity.source_inventory_from_bytes(
+        cast(Any, source_files),
+        limits=limits,
+    )
+
+    if expected_code is not None:
+        assert isinstance(result, Failure)
+        assert result.issue.code == expected_code
+        assert not hasattr(result, "value")
+        return
+    assert isinstance(result, Success)
+    assert result.value == identity.SourceInventory(
+        items=(
+            identity.SourceObservation(
+                category=SourceCategory.REQUIREMENT,
+                source_path=SOURCE_PATH,
+                raw_heading="### Requirement: Valid",
+                normalized_heading="Requirement: Valid",
+                normalized_block="Body.\n",
+                parent_locator=None,
+            ),
+        )
+    )
+
+
 def test_inventory_normalizes_supported_atx_blocks_and_fingerprints_literals(
     tmp_path: Path,
 ) -> None:
