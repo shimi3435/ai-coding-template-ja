@@ -208,6 +208,169 @@ def test_source_inventory_from_bytes_rejects_malformed_file_inputs(
     )
 
 
+@pytest.mark.parametrize(
+    ("source_paths", "limits", "expected_code", "filesystem_expected"),
+    [
+        pytest.param(
+            cast(Any, None),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            False,
+            id="none-container",
+        ),
+        pytest.param(
+            cast(Any, object()),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            False,
+            id="object-container",
+        ),
+        pytest.param(
+            cast(Any, "paths"),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            False,
+            id="string-container",
+        ),
+        pytest.param(
+            cast(Any, b"paths"),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            False,
+            id="bytes-container",
+        ),
+        pytest.param(
+            cast(Any, set()),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            False,
+            id="unsupported-container",
+        ),
+        pytest.param(
+            cast(Any, [object()]),
+            SourceIdentityLimits(),
+            "source-files-invalid",
+            False,
+            id="path-member",
+        ),
+        pytest.param(
+            [],
+            SourceIdentityLimits(),
+            "source-paths-empty",
+            False,
+            id="empty-list",
+        ),
+        pytest.param(
+            (),
+            SourceIdentityLimits(),
+            "source-paths-empty",
+            False,
+            id="empty-tuple",
+        ),
+        pytest.param(
+            [
+                SOURCE_PATH,
+                "openspec/changes/fixture/specs/other/spec.md",
+            ],
+            SourceIdentityLimits(max_items=1),
+            "source-path-count-limit-exceeded",
+            False,
+            id="path-count-limit-plus-one",
+        ),
+        pytest.param(
+            ["spec.md"],
+            SourceIdentityLimits(),
+            "source-path-noncanonical",
+            True,
+            id="noncanonical-path",
+        ),
+        pytest.param(
+            [SOURCE_PATH],
+            SourceIdentityLimits(),
+            None,
+            True,
+            id="valid-list",
+        ),
+        pytest.param(
+            (SOURCE_PATH,),
+            SourceIdentityLimits(),
+            None,
+            True,
+            id="valid-tuple",
+        ),
+    ],
+)
+def test_read_source_inventory_rejects_malformed_path_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_paths: object,
+    limits: SourceIdentityLimits,
+    expected_code: str | None,
+    filesystem_expected: bool,
+) -> None:
+    repository, _ = _write_source(
+        tmp_path,
+        b"### Requirement: Valid\nBody.\n",
+    )
+    filesystem_calls: list[str] = []
+    if not filesystem_expected:
+        original_resolve = Path.resolve
+        original_stat = os.stat
+        original_open = os.open
+
+        def recording_resolve(
+            path: Path,
+            *args: Any,
+            **kwargs: Any,
+        ) -> Path:
+            filesystem_calls.append("resolve")
+            return original_resolve(path, *args, **kwargs)
+
+        def recording_stat(*args: Any, **kwargs: Any) -> os.stat_result:
+            filesystem_calls.append("stat")
+            return original_stat(*args, **kwargs)
+
+        def recording_open(*args: Any, **kwargs: Any) -> int:
+            filesystem_calls.append("open")
+            return original_open(*args, **kwargs)
+
+        with monkeypatch.context() as filesystem_patch:
+            filesystem_patch.setattr(Path, "resolve", recording_resolve)
+            filesystem_patch.setattr(os, "stat", recording_stat)
+            filesystem_patch.setattr(os, "open", recording_open)
+            result = read_source_inventory(
+                repository,
+                cast(Any, source_paths),
+                limits=limits,
+            )
+        assert filesystem_calls == []
+    else:
+        result = read_source_inventory(
+            repository,
+            cast(Any, source_paths),
+            limits=limits,
+        )
+
+    if expected_code is not None:
+        assert isinstance(result, Failure)
+        assert result.issue.code == expected_code
+        assert not hasattr(result, "value")
+        return
+    assert isinstance(result, Success)
+    assert result.value == identity.SourceInventory(
+        items=(
+            identity.SourceObservation(
+                category=SourceCategory.REQUIREMENT,
+                source_path=SOURCE_PATH,
+                raw_heading="### Requirement: Valid",
+                normalized_heading="Requirement: Valid",
+                normalized_block="Body.\n",
+                parent_locator=None,
+            ),
+        )
+    )
+
+
 def test_inventory_normalizes_supported_atx_blocks_and_fingerprints_literals(
     tmp_path: Path,
 ) -> None:
