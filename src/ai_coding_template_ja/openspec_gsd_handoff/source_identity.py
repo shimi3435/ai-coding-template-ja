@@ -682,8 +682,30 @@ def read_source_inventory(
     except (OSError, RuntimeError):
         return _failure("source-root-unreadable")
     try:
+        linked_repository = os.stat(repository, follow_symlinks=False)
+    except OSError:
+        return _failure("source-root-unreadable")
+    if stat.S_ISLNK(linked_repository.st_mode):
+        return _failure("source-root-unreadable")
+    if not stat.S_ISDIR(linked_repository.st_mode):
+        return _failure("source-root-invalid")
+    try:
         repository_fd = os.open(repository, _DIRECTORY_OPEN_FLAGS)
     except OSError:
+        try:
+            current_repository = os.stat(repository, follow_symlinks=False)
+        except OSError:
+            return _failure("source-root-identity-changed")
+        if (
+            current_repository.st_dev,
+            current_repository.st_ino,
+            stat.S_IFMT(current_repository.st_mode),
+        ) != (
+            linked_repository.st_dev,
+            linked_repository.st_ino,
+            stat.S_IFMT(linked_repository.st_mode),
+        ):
+            return _failure("source-root-identity-changed")
         return _failure("source-root-unreadable")
     try:
         repository_stat = os.fstat(repository_fd)
@@ -693,18 +715,42 @@ def read_source_inventory(
         except OSError:
             pass
         return _failure("source-root-unreadable")
-    if not stat.S_ISDIR(repository_stat.st_mode):
+    if (
+        linked_repository.st_dev,
+        linked_repository.st_ino,
+        stat.S_IFMT(linked_repository.st_mode),
+    ) != (
+        repository_stat.st_dev,
+        repository_stat.st_ino,
+        stat.S_IFMT(repository_stat.st_mode),
+    ):
         try:
             os.close(repository_fd)
         except OSError:
             pass
-        return _failure("source-root-invalid")
+        return _failure("source-root-identity-changed")
 
     result = _read_inventory_from_repository_fd(
         repository_fd,
         source_paths,
         limits,
     )
+    try:
+        linked_repository = os.stat(repository, follow_symlinks=False)
+        repository_stat = os.fstat(repository_fd)
+    except OSError:
+        result = _failure("source-root-identity-changed")
+    else:
+        if (
+            linked_repository.st_dev,
+            linked_repository.st_ino,
+            stat.S_IFMT(linked_repository.st_mode),
+        ) != (
+            repository_stat.st_dev,
+            repository_stat.st_ino,
+            stat.S_IFMT(repository_stat.st_mode),
+        ):
+            result = _failure("source-root-identity-changed")
     try:
         os.close(repository_fd)
     except OSError:
