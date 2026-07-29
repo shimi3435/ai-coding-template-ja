@@ -120,7 +120,7 @@ Plans:
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
 2. Missing, unreadable, malformed, over-limit, or otherwise incomplete observations stop progression instead of being reported as clean.
 3. Approval-relevant evidence is bound to the observed inputs and cannot silently reuse a stale result.
-4. TDD evidence uses fixed drift examples and limits property testing to the approved normalization seam.
+4. TDD evidence uses fixed public drift and path-role examples; property testing remains limited to the approved pure seams: checkbox normalization, phase graph/remediation projection (`A-P-GRAPH`), and canonical path-role invariants (`B-P-PATH-ROLE`). Filesystem and I/O races remain fixed integration evidence.
 
 ### Phase 4: Repository-Wide Ownership
 

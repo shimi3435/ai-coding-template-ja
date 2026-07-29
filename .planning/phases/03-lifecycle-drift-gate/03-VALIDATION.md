@@ -17,11 +17,11 @@ created: 2026-07-27
 
 | Property | Value |
 |----------|-------|
-| **Framework** | pytest 9.1.1; Hypothesis 6.155.7 only for the existing checkbox-normalization property family |
+| **Framework** | pytest 9.1.1; Hypothesis 6.155.7 for the existing checkbox-normalization family and the two canonical pure seams `A-P-GRAPH` and `B-P-PATH-ROLE` |
 | **Config file** | `pyproject.toml` (`[tool.pytest.ini_options]`) |
 | **Quick run command** | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q` |
-| **Full suite command** | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q && task check` |
-| **Estimated runtime** | Focused commands ≤30 seconds; three-suite sample ~45 seconds; final `task check` uses the project-wide budget |
+| **Full suite command** | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py tests/test_handoff_manifest_refresh.py tests/test_handoff_identity.py -q && task openspec:validate && task check` |
+| **Estimated runtime** | Focused commands target ≤30 seconds; the five-suite sample and final `task check` use the separate project-wide budget |
 
 ---
 
@@ -33,9 +33,14 @@ created: 2026-07-27
 - **After Wave 7 / Plan 03-08:** Run `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q`, then run `task check` as the final project gate after both 03-08 tasks are complete.
 - **After Wave 8 / Plans 03-09 and 03-11:** Run `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q`; this samples all canonical-observation, mapping-validation, and canonical-projection regression families before Wave 9.
 - **After Wave 9 / Plan 03-10 Task 1:** Run its focused manifest-ancestry command before starting Task 2.
-- **After Wave 9 / Plan 03-10 Task 2:** Run its focused graph/inventory command and then `task check`; this is the final integrated project gate after all Wave 8 and Wave 9 work.
+- **After Wave 9 / Plan 03-10 Task 2:** Run its focused graph/inventory command and then `task check`; this preserves the historical Wave 8/9 integrated gate but does not replace the new Wave 13/14 exit sampling.
+- **After Wave 13 / Plan 03-17 Task 1:** Run the focused phase-graph/target/identity command; the read-only preview must report 54 active items/mappings, 48 scenario headings, and an exact `assignment_inventory_sha256` while the tracked 49-item assignment and all publication authorities remain unchanged.
+- **At Wave 13 / Plan 03-17 Task 2:** Hash and inspect the immutable refresh preview, display both `preview_sha256` and `assignment_inventory_sha256`, and stop unless the user freshly approves that exact preview hash.
+- **After Wave 13 / Plan 03-17 Task 3:** Run the complete manifest-refresh and lifecycle-gate suites; require the tracked assignment hash to equal the approved candidate hash, the 54-item handoff apply to succeed once, all four GSD metadata authorities to use the new pin while Phase 3 remains incomplete across 18 plans, and OpenSpec task 3.1 to remain unchecked.
+- **After Wave 14 / Plan 03-18 Task 1:** Run the complete focused public builder/readiness/direct-mapping/lifecycle/zero-I/O role-disjointness command; every counterexample belongs to this single RED→GREEN unit.
+- **After Wave 14 / Plan 03-18 Task 2:** Run both complete mapping/lifecycle suites and the remaining drift/identity/refresh backstops, then run `task openspec:validate`, `task check`, and `git diff --check` as the final integrated project gate before independent reverification.
 - **Before `$gsd-verify-work`:** `task check`, `git diff --check`, and protected-surface review must be green.
-- **Max task-level feedback latency:** 30 seconds; plan-level and final `task check` sampling may use the recorded ~45-second full-suite budget.
+- **Max task-level feedback latency:** 30 seconds; plan-level five-suite and final `task check` sampling use the separate project-wide budget.
 
 ---
 
@@ -58,7 +63,12 @@ created: 2026-07-27
 | 03-11-01 | 11 | 8 | HND-03 / HARD-R2 | T-03-11-01 | Builder/readiness reject every malformed SourceIdentityState family before member iteration | fixed public builder/readiness matrix | `uv run pytest tests/test_handoff_execution_mapping.py::test_builder_and_readiness_reject_malformed_source_identity_state -q` | ✅ | ⬜ pending |
 | 03-11-02 | 11 | 8 | HND-03 / HARD-R2 | T-03-11-02, T-03-11-03, T-03-11-04 | Complete mapping values are validated before semantics and builder/readiness share one canonical projection authority | fixed malformed matrices + literal equivalence + narrow source assertion | `uv run pytest tests/test_handoff_execution_mapping.py::test_readiness_rejects_manifest_mapping_outer_container_and_member_families tests/test_handoff_execution_mapping.py::test_readiness_rejects_manifest_mapping_field_tuple_order_uniqueness_and_path_families tests/test_handoff_execution_mapping.py::test_builder_and_readiness_share_canonical_mapping_projection -q` | ✅ | ⬜ pending |
 | 03-10-01 | 10 | 9 | HND-03 / HARD-R2 | T-03-10-01, T-03-10-02 | Repository-relative no-follow descriptor traversal rejects intermediate symlinks and parent identity changes | fixed public-gate symlink/TOCTOU examples | `uv run pytest tests/test_handoff_lifecycle_gate.py::test_manifest_intermediate_symlink_is_unknown_and_never_admitted tests/test_handoff_lifecycle_gate.py::test_manifest_parent_identity_change_is_unknown_and_never_admitted -q` | ✅ | ⬜ pending |
-| 03-10-02 | 10 | 9 | HND-03 / HARD-R2 | T-03-10-03 | Expected/observed phase maps equal validated inventory exactly, then final project gate proves integrated Wave 8/9 state | fixed public-gate mismatch matrix + project gate | `uv run pytest tests/test_handoff_lifecycle_gate.py::test_phase_graph_and_inventory_membership_paths_must_match_exactly tests/test_handoff_lifecycle_gate.py::test_identity_ignores_semantically_irrelevant_phase_tuple_order -q && task check` | ✅ | ⬜ pending |
+| 03-10-02 | 10 | 9 | HND-03 / HARD-R2 | T-03-10-03 | Historical exact-both-graphs/current-inventory backstop is superseded by Wave 13: only observed phase IDs/paths equal current PlanningInventory, while expected remains independently validated source-pinned evidence | superseded fixed public-gate backstop; rerun through 03-17 graph suite | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "phase_graph or phase_added or phase_removed or phase_path or phase_dependencies or identity"` | ✅ | ⬜ pending |
+| 03-17-01 | 17 | 13 | HND-03 / HARD-R2 | T-03-17-GRAPH, T-03-17-TARGET, T-03-17-PROJECTION | Complete graph changes, target relations, deterministic remediation, and `A-P-GRAPH` properties reach the public decision while only observed nodes equal current inventory | fixed public-gate examples + approved pure Hypothesis property | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "phase_graph or phase_added or phase_removed or phase_path or phase_dependencies or target_phase or identity"` | ✅ | ⬜ pending |
+| 03-17-02 | 17 | 13 | HND-03 / HARD-R2 | T-03-17-REFRESH | The immutable preview binds the exact 54-item assignment candidate and no tracked authority mutates before fresh exact-hash approval | blocking decision + deterministic hash check | `sha256sum .planning/phases/03-lifecycle-drift-gate/03-REFRESH-PREVIEW.json && git diff --check` | ❌ created by 03-17-01 | ⬜ pending |
+| 03-17-03 | 17 | 13 | HND-03 / HARD-R2 | T-03-17-REFRESH, T-03-17-EVIDENCE | Approved assignment, handoff, derived evidence, and GSD source/state metadata publish once; Phase 3 remains incomplete across 18 plans and OpenSpec task 3.1 stays unchecked | approval-bound filesystem integration + public producer equality + deterministic per-authority positive/negative metadata assertions | `uv run pytest tests/test_handoff_manifest_refresh.py tests/test_handoff_lifecycle_gate.py -q && bash -ec 'new=9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901; old=4d8b5b173927ed518d39dee18a29b0271628afbd; for file in .planning/PROJECT.md .planning/ROADMAP.md .planning/REQUIREMENTS.md .planning/STATE.md; do rg -qF "$new" "$file"; ! rg -qF "$old" "$file"; done; rg -qF "**Plans:** 18 plans" .planning/ROADMAP.md; rg -q "^- \\[ \\] \\*\\*Phase 3: Lifecycle Drift Gate\\*\\*" .planning/ROADMAP.md; rg -q "^- \\[ \\] 03-18-PLAN\\.md" .planning/ROADMAP.md; rg -qi "independent reverification.*pending|pending.*independent reverification" .planning/ROADMAP.md; rg -qi "Phase 4.*blocked on Phase 3" .planning/ROADMAP.md; rg -q "^\\| 3\\. Lifecycle Drift Gate \\| 16/18 \\| In progress \\| - \\|$" .planning/ROADMAP.md; ! rg -qi "16/16 plans complete|Lifecycle Drift Gate \\| 16/16 \\| Complete|Phase 3: Lifecycle Drift Gate.*complete|ready[- ]for[- ]verification|Phase 4.*ready" .planning/ROADMAP.md; rg -q "^status: executing$" .planning/STATE.md; rg -q "^  completed_phases: 2$" .planning/STATE.md; rg -q "^  total_plans: 28$" .planning/STATE.md; rg -q "^  completed_plans: 26$" .planning/STATE.md; rg -q "^  percent: 33$" .planning/STATE.md; rg -q "^Plan: 17 of 18$" .planning/STATE.md; rg -qi "03-18.*pending" .planning/STATE.md; rg -qi "reverification.*pending" .planning/STATE.md; rg -qi "Phase 4.*blocked" .planning/STATE.md; ! rg -qi "completed_phases: 3|Plan: 16 of 16|16-of-16|16/16|ready[- ]for[- ]verification|Phase 4.*ready" .planning/STATE.md; rg -q "^- \\[ \\] 3\\.1 " openspec/changes/harden-openspec-gsd-handoff-lifecycle/tasks.md'` | ✅ | ⬜ pending |
+| 03-18-01 | 18 | 14 | HND-03 / HARD-R2 | T-03-18-ROLE, T-03-18-DIRECT, T-03-18-VERIFY, T-03-18-I/O | One coherent RED→GREEN unit rejects exact/case/Unicode role collisions at builder, readiness, direct mapping, and lifecycle seams, proves zero filesystem calls, and preserves valid independent sharing | fixed public examples + approved pure Hypothesis property | `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_lifecycle_gate.py -q -k "path_role or own_evidence or evidence or malformed or readiness"` | ✅ | ⬜ pending |
+| 03-18-02 | 18 | 14 | HND-03 / HARD-R2 | T-03-18-I/O | Post-GREEN fixed filesystem-race backstops and all integrated project gates pass against the 54-item authority | fixed race backstops + complete suites + static/type/OpenSpec/project gates | `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_lifecycle_gate.py -q && uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_identity.py tests/test_handoff_manifest_refresh.py -q && uv run ruff check src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py tests/test_handoff_execution_mapping.py tests/test_handoff_lifecycle_gate.py && uv run basedpyright src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py tests/test_handoff_execution_mapping.py tests/test_handoff_lifecycle_gate.py && task openspec:validate && task check && git diff --check` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -68,11 +78,12 @@ created: 2026-07-27
 
 | Backstop | Purpose | Command / Assertion | Failure Signal |
 |----------|---------|---------------------|----------------|
-| Complete drift suite | Preserve clean, artifact drift, stable source IDs, checkbox-only behavior, and the sole property family | `uv run pytest tests/test_handoff_lifecycle_drift.py -q` | Existing valid behavior changes or a second property family appears |
-| Complete lifecycle suite | Preserve the five-operation matrix, mapping horizons, remediation, freshness, and stale handling | `uv run pytest tests/test_handoff_lifecycle_gate.py -q` | Wrong horizon, issue-bearing admission, or stale identity acceptance |
-| Complete execution-mapping suite | Preserve inventory parsing, 49-item mapping baseline, operation readiness, and bounded path behavior while validation is centralized | `uv run pytest tests/test_handoff_execution_mapping.py -q` | Mapping baseline changes, malformed inventory escapes, or a readiness horizon regresses |
+| Complete drift suite | Preserve clean, artifact drift, stable source IDs, and the existing checkbox-normalization property family | `uv run pytest tests/test_handoff_lifecycle_drift.py -q` | Existing valid behavior or checkbox-only normalization changes |
+| Complete lifecycle suite | Preserve the five-operation matrix, mapping horizons, remediation, freshness, stale handling, and canonical `A-P-GRAPH` pure properties | `uv run pytest tests/test_handoff_lifecycle_gate.py -q` | Wrong horizon, issue-bearing admission, stale identity acceptance, or graph/remediation invariant failure |
+| Complete execution-mapping suite | Preserve inventory parsing, the 54-item mapping baseline, operation readiness, bounded path behavior, and canonical `B-P-PATH-ROLE` pure properties | `uv run pytest tests/test_handoff_execution_mapping.py -q` | The 54-item baseline changes, malformed/role-invalid inventory escapes, or a readiness horizon regresses |
 | Canonical mapping projection authority | Prevent WR-01 from reintroducing separate builder/readiness projections | `uv run pytest tests/test_handoff_execution_mapping.py::test_builder_and_readiness_share_canonical_mapping_projection -q` | Literal output differs, readiness rejects builder output, either public consumer bypasses the helper, or another construction projection appears |
-| Valid graph order invariance | Ensure hardening does not make semantic tuple order identity-relevant | `uv run pytest tests/test_handoff_lifecycle_gate.py::test_identity_ignores_semantically_irrelevant_phase_tuple_order -q` | Valid reorderings produce different identity or non-clean state |
+| Observed-only current inventory authority | Ensure `observed_nodes` exactly matches current PlanningInventory while independently valid source-pinned `expected_nodes` may differ as ordinary drift | `uv run pytest tests/test_handoff_lifecycle_gate.py -q -k "phase_graph or phase_added or phase_removed or phase_path or phase_dependencies"` | Observed mismatch is admitted, or valid expected/current set differences become incomplete instead of deterministic drift |
+| Approved pure property seams | Permit only checkbox normalization, `A-P-GRAPH`, and `B-P-PATH-ROLE`; keep lifecycle I/O/filesystem races as fixed integration examples | `uv run pytest tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_execution_mapping.py -q` | A required pure family is absent, or filesystem/I/O behavior is moved into generative testing |
 | Independent portable golden | Detect omitted public fields and portable evidence schema drift | Two producer runs are byte-identical and equal the literal golden | Raw path/digest leak, missing field, false relation, or nondeterministic bytes |
 | Protected input invariance | Ensure evidence generation remains read-only | Existing before/after hashes and `mutation_operations=[]` | Protected hash changes or staging residue appears |
 | Optional smoke isolation | Keep unrequested external proof outside normal CI | `uv run pytest tests/test_taskfile.py::test_handoff_smoke_is_explicit_and_isolated_from_normal_check -q` | Smoke enters the normal `check` path |
@@ -93,6 +104,10 @@ created: 2026-07-27
 - [ ] Add 03-09 malformed-Unicode, 4096/4097, count, and aggregate-byte fixed regressions to classifier and public-gate seams.
 - [ ] Add 03-11 malformed SourceIdentityState and ManifestMapping public-API matrices plus the fixed canonical-projection equivalence/source assertion.
 - [ ] Add 03-10 manifest intermediate-symlink/identity-change and exact graph/inventory mismatch public-gate regressions.
+- [ ] Add 03-17 `A-P-GRAPH` and fixed A-E-GRAPH/A-E-TARGET/A-E-COMPAT public cases; replace the obsolete exact-both-graphs/current-inventory assertion with observed-only current inventory authority.
+- [ ] Generate the 03-17 immutable preview from a non-authoritative in-memory 54-item `PlanningInventory` candidate passed to the existing preview seam, bind `assignment_inventory_sha256`, and keep every tracked publication authority unchanged until fresh exact-preview-hash approval.
+- [ ] After approval, publish the 54-item assignment/handoff/derived evidence and synchronize PROJECT/ROADMAP/REQUIREMENTS/STATE to `9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901`, with an incomplete 18-plan Phase 3 and unchecked OpenSpec task 3.1.
+- [ ] Add all 03-18 `B-P-PATH-ROLE` plus fixed B-E-PATH-ROLE/VERIFY/gate/zero-filesystem-call counterexamples to Task 1 before its single GREEN implementation; reserve Task 2 for fixed race backstops and integrated project gates.
 - Existing pytest/Hypothesis infrastructure is sufficient; no dependency, fixture framework, or config installation is required.
 
 ---
@@ -105,10 +120,12 @@ All phase gap-closure behaviors have automated verification. Real OpenSpec/GSD/h
 
 ## Failure Policy
 
-- A RED test must fail for the intended counterexample before its GREEN production change; an unexpectedly green RED test or a different exception stops that task for diagnosis.
+- A RED test in a TDD task must fail for the intended counterexample before its GREEN production change; an unexpectedly green RED test or a different exception stops that task for diagnosis. All 03-18 public builder/readiness/direct-mapping/lifecycle/zero-I/O RED counterexamples belong to Task 1; Task 2 is a post-GREEN, non-TDD auto task with no RED expectation.
 - Any focused task command failure blocks the next task commit in that plan. Record the exact failing node and do not weaken, delete, or reclassify the assertion.
 - Any Wave 8 three-suite failure blocks Wave 9. Plans 03-09 and 03-11 must both be green before 03-10 starts.
-- Any final `task check` failure in 03-10 Task 2 blocks phase sign-off and `$gsd-verify-work`, even when the focused Wave 9 nodes pass. Fix the integrated regression and rerun the focused command followed by `task check`.
+- Any `task check` failure in historical 03-10 Task 2 remains a regression and blocks continuation, but its old green result is not current phase sign-off; Wave 14 must run a fresh project gate.
+- Any Wave 13 candidate-assignment, preview-byte, approval-hash, tracked-publication, metadata-pin/status, or OpenSpec 3.1 checkbox mismatch blocks Plan 03-18. No tracked 54-item authority may exist before exact-preview approval.
+- Any Wave 14 focused or integrated failure blocks independent reverification. `A-P-GRAPH` and `B-P-PATH-ROLE` failures may not be reclassified as disallowed properties because both are canonical approved pure seams.
 - Flaky or environment-blocked results are not green evidence; record them in the relevant SUMMARY and leave validation pending.
 
 ---
@@ -117,15 +134,21 @@ All phase gap-closure behaviors have automated verification. Real OpenSpec/GSD/h
 
 - [x] All tasks have automated verification commands.
 - [x] Sampling continuity has no three consecutive tasks without automated verification.
-- [x] Wave 0 identifies every missing regression example and evidence repin.
+- [x] Wave 0 identifies every missing regression example, approval-bound repin, and metadata synchronization.
 - [x] Plans 03-09/03-10/03-11 contribute all six tasks to the verification map.
-- [x] Wave 8 sampling covers both parallel plans, and Wave 9 ends with a project-wide `task check`.
-- [x] New regression node families cover canonical Unicode/bounds, mapping runtime validation/projection authority, manifest ancestry, and graph/inventory equality.
+- [x] Wave 8 sampling covers both parallel plans, and Wave 9 preserves its historical project-wide `task check`.
+- [x] New regression node families cover canonical Unicode/bounds, mapping runtime validation/projection authority, manifest ancestry, and observed-only current graph/inventory authority.
+- [x] Plans 03-17/03-18 contribute all five tasks to the Wave 13/14 verification map.
+- [x] Canonical property coverage is exactly the existing checkbox-normalization family plus pure `A-P-GRAPH` and `B-P-PATH-ROLE`; I/O and filesystem races remain fixed integration examples.
+- [x] The active mapping baseline is 54 items, and current-inventory authority applies exactly to observed phase nodes rather than both source-pinned and observed graphs.
+- [x] Wave 13 samples graph behavior, exact assignment/preview approval binding, post-approval publication, metadata synchronization, and the unchecked OpenSpec 3.1 boundary; Wave 14 ends with full project gates.
 - [x] Failure policy blocks later waves and final sign-off on focused, integrated, flaky, or environment-blocked failures.
 - [x] No watch-mode flags are used.
-- [x] Expected task-level focused feedback latency is below 30 seconds; plan-level and final `task check` use the separate full-suite budget.
+- [x] Expected task-level focused feedback latency is below 30 seconds; plan-level five-suite and final `task check` use the separate project-wide budget.
 - [x] `nyquist_compliant: true` is set in frontmatter.
 
 **Approval:** validation strategy revised and re-signed 2026-07-28 for Plans 03-07/03-08 and Waves 6/7; execution evidence pending.
 
-**Approval:** validation strategy extended and re-signed 2026-07-28 for Plans 03-09/03-10/03-11, all six tasks, and Waves 8/9; final sign-off requires the 03-10 Task 2 integrated `task check`.
+**Approval:** validation strategy extended and re-signed 2026-07-28 for Plans 03-09/03-10/03-11, all six tasks, and Waves 8/9; that historical sign-off condition is superseded by the Wave 13/14 gap-closure contract below.
+
+**Approval:** validation strategy regenerated and re-signed 2026-07-29 against canonical commit `9a7a313d06ae6df1c102f2515a3ad4bd5c0ca901` for Plans 03-17/03-18 and Waves 13/14; final sign-off requires exact-hash-approved 54-item publication, metadata synchronization, the Wave 14 integrated gates, and fresh independent review/verifier/security evidence while OpenSpec task 3.1 remains unchecked.
