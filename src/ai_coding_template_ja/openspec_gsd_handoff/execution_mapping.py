@@ -443,19 +443,28 @@ def _validate_inventory_invariants(inventory: PlanningInventory) -> None:
     ):
         raise _InventoryError("mapping-cross-change-reference")
 
+    phase_paths = tuple(_canonical_path(phase.phase_path) for phase in inventory.phases)
+    plan_paths = tuple(_canonical_path(plan.path) for plan in inventory.plans)
+    evidence_paths = tuple(
+        _canonical_path(evidence.path) for evidence in inventory.evidence
+    )
+    evidence_plan_paths = tuple(
+        (None if evidence.plan_path is None else _canonical_path(evidence.plan_path))
+        for evidence in inventory.evidence
+    )
+
     phases_by_id: dict[str, PhaseDeclaration] = {}
     phase_ids_by_path: dict[str, str] = {}
-    aliases: dict[str, str] = {}
-    for phase in inventory.phases:
+    phase_aliases: dict[str, str] = {}
+    for phase, phase_path in zip(inventory.phases, phase_paths, strict=True):
         if _PHASE_ID.fullmatch(phase.phase_id) is None:
             raise _InventoryError("mapping-phase-invalid")
         if phase.phase_id in phases_by_id:
             raise _InventoryError("mapping-phase-conflict")
-        phase_path = _canonical_path(phase.phase_path)
         if phase_path in phase_ids_by_path:
             raise _InventoryError("mapping-phase-path-conflict")
         alias = _alias_key(phase_path)
-        if alias in aliases and aliases[alias] != phase_path:
+        if alias in phase_aliases and phase_aliases[alias] != phase_path:
             raise _InventoryError("mapping-path-alias")
         parts = PurePosixPath(phase_path).parts
         if (
@@ -466,7 +475,7 @@ def _validate_inventory_invariants(inventory: PlanningInventory) -> None:
             raise _InventoryError("mapping-phase-path-invalid")
         phases_by_id[phase.phase_id] = phase
         phase_ids_by_path[phase_path] = phase.phase_id
-        aliases[alias] = phase_path
+        phase_aliases[alias] = phase_path
 
     assignment_ids: set[str] = set()
     for assignment in inventory.assignments:
@@ -488,12 +497,40 @@ def _validate_inventory_invariants(inventory: PlanningInventory) -> None:
         ):
             raise _InventoryError("mapping-policy-reference-invalid")
 
-    plan_paths: set[str] = set()
+    declared_plan_paths: set[str] = set()
     plans_by_phase: dict[str, set[str]] = {}
-    for plan in inventory.plans:
+    plan_aliases: dict[str, str] = {}
+    for plan, plan_path in zip(inventory.plans, plan_paths, strict=True):
         if plan.phase_id not in phases_by_id:
             raise _InventoryError("mapping-plan-invalid")
-        plan_path = _canonical_path(plan.path)
+        if plan_path in declared_plan_paths:
+            raise _InventoryError("mapping-plan-duplicate")
+        alias = _alias_key(plan_path)
+        if alias in plan_aliases and plan_aliases[alias] != plan_path:
+            raise _InventoryError("mapping-path-alias")
+        plan_aliases[alias] = plan_path
+        declared_plan_paths.add(plan_path)
+        plans_by_phase.setdefault(plan.phase_id, set()).add(plan_path)
+
+    declared_evidence_paths: set[str] = set()
+    evidence_aliases: dict[str, str] = {}
+    for evidence, evidence_path in zip(inventory.evidence, evidence_paths, strict=True):
+        if evidence.phase_id not in phases_by_id:
+            raise _InventoryError("mapping-evidence-invalid")
+        alias = _alias_key(evidence_path)
+        if evidence_path in declared_evidence_paths or alias in evidence_aliases:
+            raise _InventoryError("mapping-path-role-conflict")
+        evidence_aliases[alias] = evidence_path
+        declared_evidence_paths.add(evidence_path)
+
+    if (
+        phase_aliases.keys() & plan_aliases.keys()
+        or phase_aliases.keys() & evidence_aliases.keys()
+        or plan_aliases.keys() & evidence_aliases.keys()
+    ):
+        raise _InventoryError("mapping-path-role-conflict")
+
+    for plan, plan_path in zip(inventory.plans, plan_paths, strict=True):
         phase = phases_by_id[plan.phase_id]
         if (
             not plan_path.startswith(f"{phase.phase_path}/")
@@ -501,36 +538,19 @@ def _validate_inventory_invariants(inventory: PlanningInventory) -> None:
             or not plan_path.endswith("-PLAN.md")
         ):
             raise _InventoryError("mapping-plan-path-invalid")
-        if plan_path in plan_paths:
-            raise _InventoryError("mapping-plan-duplicate")
-        alias = _alias_key(plan_path)
-        if alias in aliases and aliases[alias] != plan_path:
-            raise _InventoryError("mapping-path-alias")
-        aliases[alias] = plan_path
-        plan_paths.add(plan_path)
-        plans_by_phase.setdefault(plan.phase_id, set()).add(plan_path)
 
-    evidence_paths: set[str] = set()
-    for evidence in inventory.evidence:
-        if evidence.phase_id not in phases_by_id:
-            raise _InventoryError("mapping-evidence-invalid")
-        evidence_path = _canonical_path(evidence.path)
+    for evidence, evidence_plan_path in zip(
+        inventory.evidence, evidence_plan_paths, strict=True
+    ):
         if evidence.source_id is None and evidence.plan_path is None:
             raise _InventoryError("mapping-evidence-owner-missing")
         if evidence.source_id is not None and evidence.source_id not in assignment_ids:
             raise _InventoryError("mapping-source-unknown")
         if (
-            evidence.plan_path is not None
-            and evidence.plan_path not in plans_by_phase.get(evidence.phase_id, set())
+            evidence_plan_path is not None
+            and evidence_plan_path not in plans_by_phase.get(evidence.phase_id, set())
         ):
             raise _InventoryError("mapping-plan-unknown")
-        if evidence_path in evidence_paths:
-            raise _InventoryError("mapping-evidence-duplicate")
-        alias = _alias_key(evidence_path)
-        if alias in aliases and aliases[alias] != evidence_path:
-            raise _InventoryError("mapping-path-alias")
-        aliases[alias] = evidence_path
-        evidence_paths.add(evidence_path)
 
 
 def validate_planning_inventory(value: object) -> Result[PlanningInventory]:
@@ -781,6 +801,9 @@ def _validate_manifest_mappings(
     except UnicodeEncodeError:
         return _failure("mapping-set-invalid")
 
+    phase_role_aliases: set[str] = set()
+    plan_role_aliases: set[str] = set()
+    evidence_role_aliases: set[str] = set()
     for mapping in mappings:
         if (
             _SOURCE_ID.fullmatch(mapping.source_id) is None
@@ -793,6 +816,20 @@ def _validate_manifest_mappings(
                 _canonical_path(path)
         except _InventoryError:
             return _failure("mapping-set-invalid")
+        phase_role_aliases.add(_alias_key(mapping.phase_path))
+        plan_role_aliases.update(_alias_key(path) for path in mapping.plan_paths)
+        evidence_role_aliases.update(
+            _alias_key(path) for path in mapping.evidence_paths
+        )
+
+    if (
+        phase_role_aliases & plan_role_aliases
+        or phase_role_aliases & evidence_role_aliases
+        or plan_role_aliases & evidence_role_aliases
+    ):
+        return _failure("mapping-set-invalid")
+
+    for mapping in mappings:
         phase_parts = PurePosixPath(mapping.phase_path).parts
         if (
             len(phase_parts) != 3
