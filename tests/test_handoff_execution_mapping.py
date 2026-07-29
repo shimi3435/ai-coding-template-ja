@@ -5,10 +5,12 @@ from __future__ import annotations
 import ast
 import inspect
 from dataclasses import FrozenInstanceError, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff import execution_mapping
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
@@ -22,6 +24,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     build_manifest_mappings,
     read_planning_inventory,
     validate_mapping_readiness,
+    validate_planning_inventory,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     ManifestMapping,
@@ -60,7 +63,7 @@ def _current_source_items():
     assert isinstance(inventory, Success)
     reconciled = reconcile_source_items(inventory.value, previous.value.source_items)
     assert isinstance(reconciled, Success)
-    assert len(reconciled.value.state.active) == 49
+    assert len(reconciled.value.state.active) == 54
     assert reconciled.value.state.tombstones == ()
     return reconciled.value.state
 
@@ -73,7 +76,7 @@ def _policy_evidence():
     return registry.value, observations.value
 
 
-def test_fixed_inventory_builds_exact_sorted_49_mapping_baseline() -> None:
+def test_fixed_inventory_builds_exact_sorted_54_mapping_baseline() -> None:
     source_items = _current_source_items()
     registry, observations = _policy_evidence()
     inventory = read_planning_inventory(
@@ -86,11 +89,11 @@ def test_fixed_inventory_builds_exact_sorted_49_mapping_baseline() -> None:
     result = build_manifest_mappings(source_items, inventory.value, registry)
 
     assert isinstance(result, Success)
-    assert len(result.value) == 49
+    assert len(result.value) == 54
     assert tuple(mapping.source_id for mapping in result.value) == tuple(
         sorted(item.id for item in source_items.active)
     )
-    assert len({mapping.source_id for mapping in result.value}) == 49
+    assert len({mapping.source_id for mapping in result.value}) == 54
     assert not {mapping.source_id for mapping in result.value} & {
         item.id for item in source_items.tombstones
     }
@@ -767,6 +770,331 @@ def _mappings(source_items, registry, inventory):
     result = build_manifest_mappings(source_items, inventory, registry)
     assert isinstance(result, Success)
     return result.value
+
+
+def _role_ready_inventory(
+    inventory: PlanningInventory,
+) -> PlanningInventory:
+    return _inventory_with_execution_declarations(inventory, ("02",))
+
+
+def _role_collision_inventory(
+    inventory: PlanningInventory,
+    pair: str,
+    alias: str,
+) -> PlanningInventory:
+    phase_index = next(
+        index for index, phase in enumerate(inventory.phases) if phase.phase_id == "02"
+    )
+    plan_index = next(
+        index for index, plan in enumerate(inventory.plans) if plan.phase_id == "02"
+    )
+    evidence_index = next(
+        index
+        for index, evidence in enumerate(inventory.evidence)
+        if evidence.phase_id == "02"
+    )
+    phase = inventory.phases[phase_index]
+    plan = inventory.plans[plan_index]
+    evidence = inventory.evidence[evidence_index]
+
+    if pair.startswith("phase-"):
+        if alias == "exact":
+            left = right = phase.phase_path
+        elif alias == "case":
+            left, right = phase.phase_path, phase.phase_path.swapcase()
+        else:
+            left = ".planning/phases/02-Straße"
+            right = ".planning/phases/02-STRASSE"
+        phases = (
+            *inventory.phases[:phase_index],
+            replace(phase, phase_path=left),
+            *inventory.phases[phase_index + 1 :],
+        )
+    else:
+        phases = inventory.phases
+
+    if pair == "phase-plan":
+        plan_path = right
+        evidence_path = evidence.path
+    elif pair == "phase-evidence":
+        plan_path = plan.path
+        evidence_path = right
+    elif pair == "plan-evidence":
+        if alias == "exact":
+            plan_path = evidence_path = plan.path
+        elif alias == "case":
+            plan_path, evidence_path = plan.path, plan.path.swapcase()
+        else:
+            parent = PurePosixPath(plan.path).parent.as_posix()
+            plan_path = f"{parent}/02-Straße-PLAN.md"
+            evidence_path = f"{parent}/02-STRASSE-PLAN.md"
+    else:  # pragma: no cover - callers use a closed table
+        raise AssertionError(pair)
+
+    plans = (
+        *inventory.plans[:plan_index],
+        replace(plan, path=plan_path),
+        *inventory.plans[plan_index + 1 :],
+    )
+    evidence_values = (
+        *inventory.evidence[:evidence_index],
+        replace(evidence, path=evidence_path),
+        *inventory.evidence[evidence_index + 1 :],
+    )
+    return replace(
+        inventory,
+        phases=phases,
+        plans=plans,
+        evidence=evidence_values,
+    )
+
+
+@pytest.mark.parametrize(
+    ("pair", "alias"),
+    [
+        (pair, alias)
+        for pair in ("phase-plan", "phase-evidence", "plan-evidence")
+        for alias in ("exact", "case", "unicode")
+    ],
+)
+def test_path_role_collisions_fail_every_inventory_public_seam(
+    tmp_path: Path,
+    pair: str,
+    alias: str,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _role_collision_inventory(
+        _role_ready_inventory(baseline),
+        pair,
+        alias,
+    )
+
+    validated = validate_planning_inventory(inventory)
+    built = build_manifest_mappings(source_items, inventory, registry)
+    readiness = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        (),
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+
+    for result in (validated, built, readiness):
+        assert isinstance(result, Failure), (pair, alias)
+        assert result.issue.code == "mapping-path-role-conflict", (pair, alias)
+        assert not hasattr(result, "value"), (pair, alias)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "",
+        "/absolute",
+        "nested\\path",
+        "nested/../path",
+        "nested/./path",
+        "nested/path\0.json",
+        "Cafe\u0301/evidence.json",
+    ],
+)
+def test_malformed_inventory_paths_precede_path_role_checks(path: str) -> None:
+    _, _, baseline = _baseline()
+    inventory = _role_ready_inventory(baseline)
+    evidence = inventory.evidence[0]
+    malformed = replace(
+        inventory,
+        evidence=(replace(evidence, path=path), *inventory.evidence[1:]),
+    )
+
+    result = validate_planning_inventory(malformed)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "mapping-path-invalid"
+
+
+def test_split_evidence_declarations_are_role_conflicts() -> None:
+    _, _, baseline = _baseline()
+    inventory = _role_ready_inventory(baseline)
+    source_evidence = next(
+        evidence for evidence in inventory.evidence if evidence.source_id is not None
+    )
+    plan = next(plan for plan in inventory.plans if plan.phase_id == "02")
+    split = replace(
+        source_evidence,
+        source_id=None,
+        plan_path=plan.path,
+    )
+    malformed = replace(inventory, evidence=(*inventory.evidence, split))
+
+    result = validate_planning_inventory(malformed)
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "mapping-path-role-conflict"
+
+
+def test_independent_evidence_can_share_owners_and_one_owner_can_have_many_paths(
+    tmp_path: Path,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _role_ready_inventory(baseline)
+    source_evidence = next(
+        evidence
+        for evidence in inventory.evidence
+        if evidence.phase_id == "02" and evidence.source_id is not None
+    )
+    plan_evidence = next(
+        evidence
+        for evidence in inventory.evidence
+        if evidence.phase_id == "02" and evidence.plan_path is not None
+    )
+    shared = replace(
+        source_evidence,
+        path=".planning/evidence/shared-source-plan.json",
+        plan_path=plan_evidence.plan_path,
+    )
+    additional = replace(
+        source_evidence,
+        path=".planning/evidence/additional-source.json",
+    )
+    inventory = replace(
+        inventory,
+        evidence=tuple(
+            evidence
+            for evidence in inventory.evidence
+            if evidence not in {source_evidence, plan_evidence}
+        )
+        + (shared, additional),
+    )
+    mappings = _mappings(source_items, registry, inventory)
+    _write_declared_paths(tmp_path, inventory, evidence=True)
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        mappings,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+
+    assert isinstance(result, Success)
+    assert result.value.ready
+    assert result.value.issues == ()
+
+
+@pytest.mark.parametrize(
+    ("pair", "alias"),
+    [
+        (pair, alias)
+        for pair in ("phase-plan", "phase-evidence", "plan-evidence")
+        for alias in ("exact", "case", "unicode")
+    ],
+)
+def test_direct_manifest_mapping_path_role_collisions_are_mapping_set_invalid(
+    tmp_path: Path,
+    pair: str,
+    alias: str,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    inventory = _role_ready_inventory(baseline)
+    mappings = _mappings(source_items, registry, inventory)
+    first = mappings[0]
+    phase_path = first.phase_path
+    plan_path = first.plan_paths[0]
+    if alias == "case":
+        collision_path = (
+            phase_path.swapcase() if pair.startswith("phase-") else plan_path.swapcase()
+        )
+    elif alias == "unicode":
+        if pair.startswith("phase-"):
+            phase_path = ".planning/phases/02-Straße"
+            collision_path = ".planning/phases/02-STRASSE"
+        else:
+            parent = PurePosixPath(plan_path).parent.as_posix()
+            plan_path = f"{parent}/02-Straße-PLAN.md"
+            collision_path = f"{parent}/02-STRASSE-PLAN.md"
+    else:
+        collision_path = phase_path if pair.startswith("phase-") else plan_path
+
+    if pair == "phase-plan":
+        changed = replace(first, phase_path=phase_path, plan_paths=(collision_path,))
+    elif pair == "phase-evidence":
+        changed = replace(
+            first, phase_path=phase_path, evidence_paths=(collision_path,)
+        )
+    else:
+        changed = replace(
+            first,
+            plan_paths=(plan_path,),
+            evidence_paths=(collision_path,),
+        )
+    malformed = (changed, *mappings[1:])
+
+    result = validate_mapping_readiness(
+        tmp_path,
+        source_items,
+        malformed,
+        inventory,
+        operation=MappingOperation.VERIFY,
+        target_phase_id="02",
+    )
+
+    assert isinstance(result, Failure)
+    assert result.issue.code == "mapping-set-invalid"
+
+
+@settings(
+    max_examples=18,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(
+    pair=st.sampled_from(("valid", "phase-plan", "phase-evidence", "plan-evidence")),
+    alias=st.sampled_from(("exact", "case", "unicode")),
+    reverse=st.booleans(),
+)
+def test_path_role_property_is_declaration_order_invariant(
+    pair: str,
+    alias: str,
+    reverse: bool,
+) -> None:
+    source_items, registry, baseline = _baseline()
+    valid = _role_ready_inventory(baseline)
+    inventory = (
+        valid if pair == "valid" else _role_collision_inventory(valid, pair, alias)
+    )
+    permuted = replace(
+        inventory,
+        phases=tuple(reversed(inventory.phases)) if reverse else inventory.phases,
+        assignments=(
+            tuple(reversed(inventory.assignments)) if reverse else inventory.assignments
+        ),
+        plans=tuple(reversed(inventory.plans)) if reverse else inventory.plans,
+        evidence=tuple(reversed(inventory.evidence)) if reverse else inventory.evidence,
+    )
+
+    baseline_validation = validate_planning_inventory(inventory)
+    permuted_validation = validate_planning_inventory(permuted)
+    baseline_build = build_manifest_mappings(source_items, inventory, registry)
+    permuted_build = build_manifest_mappings(source_items, permuted, registry)
+
+    if pair == "valid":
+        assert isinstance(baseline_validation, Success)
+        assert isinstance(permuted_validation, Success)
+        assert isinstance(baseline_build, Success)
+        assert isinstance(permuted_build, Success)
+        assert permuted_build.value == baseline_build.value
+    else:
+        for result in (
+            baseline_validation,
+            permuted_validation,
+            baseline_build,
+            permuted_build,
+        ):
+            assert isinstance(result, Failure), (pair, alias, reverse)
+            assert result.issue.code == "mapping-path-role-conflict"
 
 
 def _replace_mapping(

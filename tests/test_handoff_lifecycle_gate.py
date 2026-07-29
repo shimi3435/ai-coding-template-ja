@@ -14,7 +14,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from ai_coding_template_ja.openspec_gsd_handoff import lifecycle_gate
+from ai_coding_template_ja.openspec_gsd_handoff import execution_mapping, lifecycle_gate
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     EvidenceDeclaration,
     MappingOperation,
@@ -990,6 +990,57 @@ def test_malformed_boundary_inventory_is_phase_unknown(
             decision,
             "lifecycle-phase-observation-incomplete",
         )
+
+
+def test_path_role_invalid_inventory_is_unknown_before_declared_path_io(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    plan = next(plan for plan in boundary.inventory.plans if plan.phase_id == "03")
+    evidence = next(
+        evidence
+        for evidence in boundary.inventory.evidence
+        if evidence.phase_id == "03" and evidence.source_id is not None
+    )
+    boundary.inventory = replace(
+        boundary.inventory,
+        evidence=tuple(
+            replace(
+                declaration,
+                path=plan.path,
+                plan_path=plan.path,
+            )
+            if declaration is evidence
+            else declaration
+            for declaration in boundary.inventory.evidence
+        ),
+    )
+    declared_path_calls = 0
+    original_observe = execution_mapping._observe_declared_path
+
+    def record_declared_path(*args: Any, **kwargs: Any):
+        nonlocal declared_path_calls
+        declared_path_calls += 1
+        return original_observe(*args, **kwargs)
+
+    monkeypatch.setattr(
+        execution_mapping,
+        "_observe_declared_path",
+        record_declared_path,
+    )
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.VERIFY,
+        "03",
+        boundary=boundary,
+    )
+
+    _assert_wholly_unknown(decision, "mapping-path-role-conflict")
+    assert decision.manifest_sha256 is None
+    assert declared_path_calls == 0
 
 
 MALFORMED_CANONICAL_NESTED_CASES = (
