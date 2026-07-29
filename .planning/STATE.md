@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-14-PLAN.md
-last_updated: "2026-07-29T05:18:11.712Z"
+stopped_at: Completed 03-15-PLAN.md
+last_updated: "2026-07-29T05:18:40.994Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 03 execution started
 progress:
@@ -78,6 +78,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P12 | 6min | 1 tasks | 3 files |
 | Phase 03 P13 | 8min | 1 tasks | 2 files |
 | Phase 03 P14 | 6min | 1 tasks | 2 files |
+| Phase 03 P15 | 5min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: No REFACTOR commit was added because the GREEN validators already preserve one authority per aggregate without behavior-preserving duplication.
 - [Phase 03]: Stale rejection identities are recomputed only after DRIFTED state, non-admission, and lifecycle-decision-stale are final. — Prevents a rejected stale identity from admitting its unchanged replay.
 - [Phase 03]: No REFACTOR commit was added because GREEN retained one explicit stale decision and the existing single identity authority.
+- [Phase 03]: Source inventory success requires the no-follow resolved root path and retained descriptor to match by device, inode, and file type before traversal and after all bounded reads. — Prevents detached old-root content from becoming canonical evidence.
+- [Phase 03]: No REFACTOR commit was added because direct root identity tuples intentionally mirror the established child-entry comparison without a second representation.
 
 ### Pending Todos
 
@@ -152,6 +155,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-07-29T05:18:11.706Z
-Stopped at: Completed 03-14-PLAN.md
+Last session: 2026-07-29T05:18:40.987Z
+Stopped at: Completed 03-15-PLAN.md
 Resume file: None
