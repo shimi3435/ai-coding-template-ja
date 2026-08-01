@@ -42,7 +42,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (18/18 plans executed; independent reverification pending)
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (22/24 plans executed; Plan 03-24 gap closure precedes resumed Plan 03-23 independent reverification)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
@@ -117,7 +117,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
-**Plans:** 22/23 plans executed
+**Plans:** 22/24 plans executed
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
@@ -131,6 +131,7 @@ Plans:
 - [x] 03-20-PLAN.md
 - [x] 03-21-PLAN.md
 - [x] 03-22-PLAN.md
+- [ ] 03-24-PLAN.md — Close malformed refresh-preview input and append the exact 03-22 advisory-lock boundary
 - [ ] 03-23-PLAN.md
 
 **Wave 1**
@@ -192,6 +193,24 @@ Plans:
 **Wave 14** *(blocked on Wave 13 completion)*
 
 - [x] 03-18-PLAN.md — Path-role gap closure complete; independent reverification pending
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
+- [x] 03-19-PLAN.md
+- [x] 03-20-PLAN.md
+- [x] 03-21-PLAN.md
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
+- [x] 03-22-PLAN.md
+
+**Wave 17** *(blocked on Wave 16 completion)*
+
+- [ ] 03-24-PLAN.md — Gap implementation and append-only guarantee-boundary clarification
+
+**Wave 18** *(blocked on Wave 17 / Plan 03-24 completion)*
+
+- [ ] 03-23-PLAN.md — Fresh independent review, security audit, and final reverification
 
 ### Phase 4: Repository-Wide Ownership
 
@@ -255,7 +274,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 22/23 | In Progress|  |
+| 3. Lifecycle Drift Gate | 22/24 | In Progress |  |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |

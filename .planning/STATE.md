@@ -5,14 +5,14 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Plan 03-23 blocked at independent review; CR-01 and WR-01 require gap replanning
-last_updated: "2026-08-01T07:24:00.000Z"
+stopped_at: Plan 03-24 registered for CR-01/WR-01 gap closure; execute it before resuming Plan 03-23
+last_updated: "2026-08-01T09:42:26.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Plan 03-23 blocked by independent review findings; gap replanning required
+last_activity_desc: Plan 03-24 gap plan registered; Plan 03-23 resequenced after it for fresh independent exit evidence
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 33
+  total_plans: 34
   completed_plans: 32
   percent: 33
 ---
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 23 of 23
-Status: Blocked by independent review findings; gap replanning required
-Last activity: 2026-08-01 — Plan 03-23 blocked by CR-01 and WR-01
+Plan: 24 of 24 (next executable; Plan 03-23 resumes afterward)
+Status: 22 of 24 Phase 03 plans executed; Plan 03-24 planned but not executed
+Last activity: 2026-08-01 — Plan 03-24 registered in Wave 17; Plan 03-23 moved to dependent Wave 18
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -42,9 +42,9 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
 **Velocity:**
 
-- Total plans completed: 20
-- Average duration: 11 min
-- Total execution time: 224 min
+- Total plans completed: 32
+- Average duration: 10 min
+- Total execution time: 330 min
 
 **By Phase:**
 
@@ -52,11 +52,11 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 |-------|-------|-------|----------|
 | Phase 1 | 5 | 48 min | 10 min |
 | Phase 2 | 5 | 64 min | 13 min |
-| Phase 3 | 10 | 112 min | 11 min |
+| Phase 3 | 22 | 218 min | 10 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 8 min, 14 min, 15 min, 8 min, 15 min
+- Last 5 plans: 15 min, 6 min, 6 min, 10 min, 17 min
 - Trend: Stable
 
 **Latest Plan:**
@@ -156,11 +156,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Migration and refresh serialize final validation through durable rename with one non-blocking flock on the duplicated anchored change-directory descriptor. — Preserves approval-bound target bytes while giving both in-scope writers one repository/change-scoped synchronization identity.
 - [Phase 03]: Conditional replace requires an operations-owned live token plus the previewed target hash and rechecks target bytes after the fixed injection seam. — Rejects contention, token-integrity failure, and non-cooperative target mutation before candidate installation.
 - [Phase 03]: HND-03 traceability remains Pending until Plan 03-23 and the independent Phase 3 exit gate complete. — Preserves canonical OpenSpec completion ownership despite this plan closing the persistence race.
+- [Phase 03]: Plan 03-24 closes the CR-01/WR-01 review gaps before Plan 03-23 resumes; the dependency is 03-22 → 03-24 (Wave 17) → 03-23 (Wave 18). — Prevents fresh review/security/reverification from running against a pre-gap implementation while keeping Phase 3 at 22/24 executed.
 
 ### Pending Todos
 
-- Complete independent Phase 03 reverification against all closed gap families before
-  planning Phase 4.
+- Execute Plan 03-24, then resume Plan 03-23 for fresh independent review, ASVS L1
+  security audit, and all-24-plan reverification before planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -185,5 +186,5 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-08-01T07:01:05.280Z
-Stopped at: Completed 03-22-PLAN.md; Plan 03-23 and independent Phase 03 reverification pending
+Stopped at: 22/24 Phase 03 plans executed; Plan 03-24 is next, and Plan 03-23 remains pending behind it
 Resume file: None
