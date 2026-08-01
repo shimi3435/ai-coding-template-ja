@@ -1593,7 +1593,7 @@ def preview_manifest_migration(
 ) -> Result[ManifestMigrationPreview]:
     """Build complete approval evidence without creating or changing any path."""
 
-    filesystem = operations or ManifestMigrationFileOperations()
+    filesystem = ManifestMigrationFileOperations() if operations is None else operations
     resolved = _resolve_target(
         repository_root,
         target_path,
