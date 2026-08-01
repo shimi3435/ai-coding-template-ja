@@ -1,6 +1,6 @@
 ---
 phase: 03-lifecycle-drift-gate
-reviewed: 2026-08-01T12:38:49Z
+reviewed: 2026-08-01T13:19:19Z
 depth: standard
 files_reviewed: 15
 files_reviewed_list:
@@ -20,109 +20,133 @@ files_reviewed_list:
   - tests/test_handoff_manifest_refresh.py
   - tests/test_handoff_migration.py
 findings:
-  critical: 1
+  critical: 2
   warning: 0
   info: 0
-  total: 1
+  total: 2
 status: issues_found
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-08-01T12:38:49Z
+**Reviewed:** 2026-08-01T13:19:19Z
 **Depth:** standard
 **Files Reviewed:** 15
 **Status:** issues_found
 
 ## Summary
 
-Plan 03-27 後の指定 15 ファイルを、canonical OpenSpec design/spec と Plan 03-23 Task 1 の
-behavior/action/acceptance に照らして fresh review した。指定重点回帰 13 件、対象 6 test modules の
-637 件、および repository-wide `task check` の 961 件はすべて成功した。fixtures 3 件も有効な JSON である。
+Plan 03-28 後の指定 15 ファイルを、canonical OpenSpec design/spec と Plan 03-23 Task 1 の
+behavior/action/acceptance に照らして fresh review した。repository-wide `task check` は Ruff format/check、
+BasedPyright、全 962 pytest を含め成功した。Plan 03-23 の重点回帰 14 件、graph/path-role/identity analog
+119 件も成功し、fixtures 3 件は有効な JSON である。
 
-03-25 の falsey operations defect、03-26 の falsey previous-state collision defect、03-27 の
-正常な supported subclass に対する exact-type defectは、それぞれ public preview/apply 回帰で修正済みと
-再判定した。historical refresh canonical-scope/CAS 論点も、canonical guarantee が bridge-owned/cooperating
-writers と各 final observation までを対象とし、その後の non-cooperating write を対象外と明記しているため
-non-finding である。
+03-25 の falsey operations、03-26 の falsey previous-state collision、03-27 の valid supported subclass、
+03-28 の getter-throwing migration apply はすべて修正済みと再判定した。historical refresh の保証範囲も、
+bridge-owned/cooperating writer と各 path の final observation までであり、その後の non-cooperating write を
+対象外とする canonical contract に一致するため non-finding である。
 
-ただし、03-27 が受理対象に広げた `SourceIdentityState` subclass の属性取得が例外を送出する場合、
-malformed preview の state guard が分類失敗を返さず `RuntimeError` を public apply seam から漏らす。
-`_preview_identity` 自身の「input exceptions を漏らさない」という契約にも反し、Plan 03-23 Task 1 の
-malformed previous-state acceptance を満たさないため、本レビューは `clean` ではない。
+ただし、同じ supported-subclass threat model を隣接公開境界へ適用すると、refresh apply と canonical
+source-state validator が ordinary getter exception を structured non-success に変換せず `RuntimeError` を
+漏らす。いずれも malformed input に対する fail-closed/totality 契約を破るため、本レビューは `clean` ではない。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: [BLOCKER] malformed SourceIdentityState subclass が apply の state guard を例外で突破する
+### CR-01: [BLOCKER] malformed refresh preview の getter 例外が public apply から漏れる
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:949-952`
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:571-574`
 
-**Related validator:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:869-875`
+**Related apply guard:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:862-883`
 
-**Related test gap:** `/home/shimi3435/workspace/python/ai-coding-template-ja/tests/test_handoff_migration.py:1469-1518`
+**Related test gap:** `tests/test_handoff_manifest_refresh.py:1275-1313`
 
-**Issue:** `_preview_identity` は line 1048 で「validated preview identity without leaking input
-exceptions」を契約化しているが、例外捕捉へ入る前に `_preview_has_valid_shape` を呼ぶ。03-27 の変更で
-`validate_source_identity_state` は `isinstance(value, SourceIdentityState)` により subclass を supported
-input として受理する一方、属性取得を保護していない。したがって `active` getter が `RuntimeError` を送出する
-subclass を `previous_source_items` に持つ otherwise-valid preview を `apply_manifest_migration` に渡すと、
-`migration-preview-invalid` / `STATE_GUARD` / mutation なしを返さず、line 950 から未処理例外が送出される。
+**Issue:** `serialize_manifest_refresh_preview` は Result を返す公開 serializer だが、machine view の属性取得から
+発生する例外を列挙した型だけで捕捉する。`_preview_identity` も同じ限定列挙である。したがって otherwise-valid
+refresh preview の `previous_source_items` を、`active` getter が `RuntimeError("boom")` を送出する
+`SourceIdentityState` subclass に置換して `apply_manifest_refresh` へ渡すと、line 1123 の state guard は
+`refresh-preview-invalid` を返さず例外を public seam から漏らす。
 
-fresh counterexample では target/tree mutation より前に停止したが、public API の fail-closed structured
-contract を失い、呼び出し元をクラッシュさせる。既存 malformed matrix は exact-base でない `object()` のみを
-検査するため、この supported-subclass 経路を検出しない。
+fresh counterexample では mutation list は空、target bytes は不変だったが、呼び出し元をクラッシュさせ、
+HARD-R1/HARD-R6 の malformed input に対する structured non-success 契約を満たさない。既存 refresh apply
+malformed test は `candidate_bytes` の単純な置換だけで、supported subclass の属性例外を覆っていない。
 
-**Fix:** shape 検査を含む preview validation 全体を state-guard の例外境界内へ移し、untrusted preview の
-属性取得から発生する `Exception` を `None` identity に正規化して、既存の
-`migration-preview-invalid` failure を返す。通常 subclass の object identity を保持する 03-27 契約は維持する。
-同じ getter-throwing subclass を用い、apply が structured failure、mutation list 空、target/tree 不変となる
-回帰テストを追加する。
+**Fix:** refresh preview の machine-view/identity validation 全体で ordinary `Exception` を
+`refresh-preview-invalid` に正規化し、`BaseException` は伝播させる。getter-throwing state を埋めた public
+serializer/apply 回帰を追加し、failure point `STATE_GUARD`、mutation なし、target/tree/staging 不変を検証する。
 
 ```python
-def _preview_identity(preview: object) -> str | None:
+def serialize_manifest_refresh_preview(
+    preview: ManifestRefreshPreview,
+) -> Result[bytes]:
     try:
-        if (
-            not isinstance(preview, ManifestMigrationPreview)
-            or not _preview_has_valid_shape(preview)
-            or not _preview_is_consistent(preview)
-        ):
-            return None
-        machine_bytes = _compact_json(_preview_machine_view(preview))
+        data = _compact(_machine_view(preview))
     except Exception:
-        return None
-    if len(machine_bytes) > MAX_MANIFEST_BYTES:
-        return None
-    return _sha256(machine_bytes)
+        return _failure("refresh-preview-invalid")
+    return Success(data)
+```
+
+### CR-02: [BLOCKER] canonical source-state validator が supported subclass の属性例外を構造化しない
+
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:1002-1011`
+
+**Related dereference:** `src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:869-882`
+
+**Related test gap:** `tests/test_handoff_identity.py:1120-1154`
+
+**Issue:** `validate_source_identity_state` は「without unsafe member dereference」と明記し、Plan 03-27 では
+`SourceIdentityState` subclass の admission authority とされた。しかし `_validate_source_state` は
+`isinstance` で subclass を受理した直後にその属性を読み、public wrapper は内部 `_SourceInputError` しか
+捕捉しない。`active` getter が `RuntimeError("boom")` を送出する otherwise-valid subclass を直接渡すと、
+Failure ではなくその例外が漏れる。
+
+この validator を入口にする `reconcile_source_items`、mapping readiness、canonical drift completeness も同じ
+入力で structured Failure/UNKNOWN へ到達できない。既存 malformed matrices は exact-base dataclass の field を
+不正値へ置換するケースだけで、supported outer subclass の ordinary attribute failure を覆っていない。
+
+**Fix:** canonical public validator で `_SourceInputError` の詳細 code を維持しつつ、その他の ordinary
+`Exception` を汎用 `source-state-invalid` INPUT failure に正規化する。`BaseException` は捕捉しない。validator、
+reconciliation、mapping、drift classification の public analog 回帰を追加する。
+
+```python
+try:
+    state = _validate_source_state(value)
+except _SourceInputError as error:
+    return _failure(error.code, category=IssueCategory.INPUT)
+except Exception:
+    return _failure("source-state-invalid", category=IssueCategory.INPUT)
+return Success(state)
 ```
 
 ## Rejudgments
 
-- **03-25 operations CR:** fixed。default adapter は `operations is None` の場合だけ選択され、falsey supplied
-  adapter は preview/apply の両 seam で保持される。
+- **03-25 operations CR:** fixed。migration preview/apply と refresh apply は `operations is None` の場合だけ
+  default adapter を選び、falsey supplied adapter を保持する。
 - **03-26 collision CR:** fixed。falsey previous state の tombstones/counters は保持され、再利用は
   INPUT / `source-tombstone-identity-collision` / MANIFEST_ABSENT、value なし、tree 不変となる。
-- **03-27 exact-type CR:** well-behaved supported subclass については fixed。preview は同一 object を保持し、
-  no-collision preview/apply と exact-base control は成功する。ただし malformed subclass の totality は
-  CR-01 として未解決である。
-- **Historical refresh boundary:** non-finding。lock 内の source/target 再観測と conditional replace は
+- **03-27 exact-type CR:** fixed。well-behaved supported subclass は同一 object のまま preview/apply を通り、
+  exact-base control も成功する。
+- **03-28 migration totality CR:** fixed。getter-throwing malformed subclass は public migration apply で
+  `migration-preview-invalid` / `STATE_GUARD` / UNKNOWN target / ABSENT staging / NOT_NEEDED cleanup となり、
+  mutation なし、target/tree 不変である。`BaseException` を捕捉しない実装も維持される。
+- **Historical refresh boundary:** non-finding。shared writer lock 内の source/target 再観測と conditional replace は
   canonical scope を満たす。final observation 後の non-cooperating writer に対する CAS 保証は要求されない。
-- **Graph/path-role/identity analogs:** inventory path-role conflict、anchored path identity change、lifecycle
-  decision identity の各回帰は成功し、新規 finding はない。
+- **Graph/path-role/identity analogs:** path-role collision、anchored phase/evidence identity change、通常の malformed
+  exact-base source state、lifecycle UNKNOWN projection の既存回帰は成功した。ただし getter-throwing supported
+  subclass の identity totality は CR-02、refresh totality は CR-01 として未解決である。
 
 ## Verification Performed
 
-- Plan 03-23 Task 1 指定重点回帰 — 13 passed
-- 指定 6 test modules — 637 passed
-- `task check` — Ruff format/check、BasedPyright、全 961 pytest passed
+- `task check` — Ruff format/check、BasedPyright、全 962 pytest passed
+- Plan 03-23 Task 1 指定重点回帰 — 14 passed
+- graph/path-role/identity analog 回帰 — 119 passed
 - fixtures 3 件 — `jq empty` passed
-- fresh malformed-subclass counterexample — `RuntimeError: boom` を
-  `apply_manifest_migration` → `_preview_identity` → `_preview_has_valid_shape` →
-  `validate_source_identity_state` で再現
+- fresh refresh counterexample — `apply_manifest_refresh` から `RuntimeError: boom`、mutation なし、target 不変
+- fresh validator counterexample — `validate_source_identity_state` から `RuntimeError: boom`
 
 ---
 
-_Reviewed: 2026-08-01T12:38:49Z_
+_Reviewed: 2026-08-01T13:19:19Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
