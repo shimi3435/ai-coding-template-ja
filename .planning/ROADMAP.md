@@ -39,8 +39,10 @@ and the earlier operations fix, but found the no-collision supported-subclass pa
 fails the downstream preview-shape exact-type guard; Plan 03-27 aligns that guard with
 the canonical source-state validator. Fresh review after Plan 03-27 found that a
 getter-throwing malformed supported subclass still escapes the preview-identity exception
-boundary; Plan 03-28 closes that public apply totality gap before Plan 03-23 restarts fresh
-review/security/verifier evidence, so Phase 4 stays blocked on Phase 3.
+boundary; Plan 03-28 closed that migration apply totality gap. The following fresh review
+found two adjacent totality blockers in refresh apply/serialization and the canonical
+source-state validator, so another gap plan is required before Plan 03-23 can restart and
+Phase 4 remains blocked on Phase 3.
 The old handoff preimage and brief remain preserved in historical evidence rather than the
 current planning authority.
 
@@ -51,7 +53,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (27/28 plans executed; Plan 03-23 fresh independent exit workflow remains)
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (27/28 plans executed; fresh review Critical 2 requires another gap plan before 03-23)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.

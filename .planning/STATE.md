@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Plan 03-28 completed and verified; Plan 03-23 fresh independent exit workflow is next
-last_updated: "2026-08-01T13:02:00.000Z"
+stopped_at: Fresh review after Plan 03-28 found two adjacent totality blockers; gap planning is required before Plan 03-23
+last_updated: "2026-08-01T13:28:00.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Plan 03-28 completed with preview validation totality TDD and all project checks green
+last_activity_desc: Fresh independent review recorded Critical 2 for refresh apply/serialization and canonical source-state validator totality
 progress:
   total_phases: 6
   completed_phases: 2
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 27 of 28 (Plan 03-23 fresh independent exit workflow is next)
-Status: 27 of 28 Phase 03 plans executed; Plan 03-28 verified complete
-Last activity: 2026-08-01 — Plan 03-28 completed; focused, static, full-suite, and public behavior checks passed
+Plan: 27 of 28 (new review gap planning required before Plan 03-23)
+Status: 27 of 28 Phase 03 plans executed; fresh review is Critical 2 / Warning 0
+Last activity: 2026-08-01 — fresh review confirmed Plan 03-28 but found two adjacent structured-totality blockers
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -164,8 +164,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Restart Plan 03-23 for fresh independent review, ASVS L1 security audit, and
-  all-28-plan reverification before planning Phase 4.
+- Create and verify a consolidated gap plan for refresh preview/apply exception totality
+  and canonical source-state validator totality; only then restart Plan 03-23.
 
 ### Blockers/Concerns
 
@@ -177,9 +177,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Plan 03-18 closed the path-role gap and all project checks passed; independent
   reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
   5–6 retain their dependency order.
-- The current `03-REVIEW.md` remains the Critical 1 / Warning 0 historical report.
-  Plan 03-28 fixed the getter-throwing malformed-subclass behavior; only a fresh Plan
-  03-23 reviewer may replace the report and rejudge the finding.
+- The current fresh `03-REVIEW.md` is Critical 2 / Warning 0. Plan 03-28 fixed migration
+  totality, but refresh apply/serialization and the canonical source-state validator still
+  leak ordinary getter exceptions. Both require gap closure before Plan 03-23.
 
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -192,6 +192,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-08-01T13:02:00.000Z
-Stopped at: 27/28 Phase 03 plans executed; Plan 03-23 fresh independent exit workflow is next
+Last session: 2026-08-01T13:28:00.000Z
+Stopped at: 27/28 Phase 03 plans executed; fresh review Critical 2 requires gap planning before Plan 03-23
 Resume file: None
