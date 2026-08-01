@@ -402,8 +402,8 @@ def _observations_from_source(
     return observations
 
 
-def _valid_limits(limits: SourceIdentityLimits) -> bool:
-    return all(
+def _valid_limits(limits: object) -> bool:
+    return type(limits) is SourceIdentityLimits and all(
         type(value) is int and value > 0
         for value in (limits.max_items, limits.bytes_per_file, limits.bytes_total)
     )
