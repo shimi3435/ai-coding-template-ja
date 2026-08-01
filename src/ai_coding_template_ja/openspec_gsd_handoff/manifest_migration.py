@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -172,6 +173,24 @@ class _MigrationDirectoryAnchor:
     inode: int
 
 
+@dataclass
+class _WriterLockToken:
+    """One operations-owned lock on an anchored change-directory inode."""
+
+    descriptor: int
+    device: int
+    inode: int
+    released: bool = False
+
+
+class _ReplaceOutcome(StrEnum):
+    """Conditional replacement outcomes that do not imply recovery."""
+
+    REPLACED = "replaced"
+    TARGET_CHANGED = "target-changed"
+    LOCK_UNAVAILABLE = "lock-unavailable"
+
+
 class _StagingCreationError(OSError):
     """A post-open staging failure with adapter-owned cleanup evidence."""
 
@@ -283,6 +302,110 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
 
     def close_parent_directory(self, anchor: _MigrationDirectoryAnchor) -> None:
         os.close(anchor.descriptor)
+
+    def acquire_writer_lock_at(
+        self,
+        anchor: _MigrationDirectoryAnchor,
+        repository: Path,
+    ) -> _WriterLockToken | None:
+        """Take one non-blocking lock on the anchored change directory."""
+
+        descriptor: int | None = None
+        locked = False
+        try:
+            if not self.parent_directory_is_current(anchor, repository):
+                return None
+            descriptor = os.dup(anchor.descriptor)
+            observed = os.fstat(descriptor)
+            if not stat.S_ISDIR(observed.st_mode) or (
+                observed.st_dev,
+                observed.st_ino,
+            ) != (anchor.device, anchor.inode):
+                return None
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+            observed = os.fstat(descriptor)
+            if (
+                not stat.S_ISDIR(observed.st_mode)
+                or (observed.st_dev, observed.st_ino) != (anchor.device, anchor.inode)
+                or not self.parent_directory_is_current(anchor, repository)
+            ):
+                return None
+            token = _WriterLockToken(
+                descriptor=descriptor,
+                device=observed.st_dev,
+                inode=observed.st_ino,
+            )
+            tokens = getattr(self, "_writer_lock_tokens", None)
+            if tokens is None:
+                tokens = {}
+                self._writer_lock_tokens = tokens
+            tokens[id(token)] = token
+            descriptor = None
+            return token
+        except (OSError, ValueError):
+            return None
+        finally:
+            if descriptor is not None:
+                if locked:
+                    try:
+                        fcntl.flock(descriptor, fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+
+    def release_writer_lock(self, token: _WriterLockToken) -> bool:
+        """Unlock and close one live operations-owned token exactly once."""
+
+        tokens = getattr(self, "_writer_lock_tokens", {})
+        if (
+            type(token) is not _WriterLockToken
+            or token.released
+            or tokens.get(id(token)) is not token
+        ):
+            return False
+        tokens.pop(id(token), None)
+        token.released = True
+        descriptor = token.descriptor
+        token.descriptor = -1
+        succeeded = True
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        except OSError:
+            succeeded = False
+        try:
+            os.close(descriptor)
+        except OSError:
+            succeeded = False
+        return succeeded
+
+    def _writer_lock_is_live(
+        self,
+        token: _WriterLockToken,
+        parent_descriptor: int,
+    ) -> bool:
+        tokens = getattr(self, "_writer_lock_tokens", {})
+        if (
+            type(token) is not _WriterLockToken
+            or token.released
+            or tokens.get(id(token)) is not token
+        ):
+            return False
+        try:
+            token_state = os.fstat(token.descriptor)
+            parent_state = os.fstat(parent_descriptor)
+        except OSError:
+            return False
+        identity = (token.device, token.inode)
+        return (
+            stat.S_ISDIR(token_state.st_mode)
+            and stat.S_ISDIR(parent_state.st_mode)
+            and (token_state.st_dev, token_state.st_ino) == identity
+            and (parent_state.st_dev, parent_state.st_ino) == identity
+        )
 
     def parent_directory_is_current(
         self,
@@ -532,12 +655,29 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
     ) -> None:
         """Test seam immediately before the final directory identity guard."""
 
-    def replace_at(
+    def after_locked_target_validation_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
     ) -> None:
+        """Test seam after the first locked target validation."""
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
+        if _HEX_64.fullmatch(
+            expected_target_sha256
+        ) is None or not self._writer_lock_is_live(lock_token, parent_descriptor):
+            return _ReplaceOutcome.LOCK_UNAVAILABLE
         descriptor = os.open(
             source_name,
             self._open_flags(os.O_RDONLY),
@@ -559,6 +699,34 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
                 raise OSError("migration staging identity changed")
         finally:
             os.close(descriptor)
+        if not self._writer_lock_is_live(lock_token, parent_descriptor):
+            return _ReplaceOutcome.LOCK_UNAVAILABLE
+        try:
+            target_bytes = self.read_bounded_bytes_at(
+                parent_descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _ReplaceOutcome.TARGET_CHANGED
+        if _sha256(target_bytes) != expected_target_sha256:
+            return _ReplaceOutcome.TARGET_CHANGED
+        self.after_locked_target_validation_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+        )
+        if not self._writer_lock_is_live(lock_token, parent_descriptor):
+            return _ReplaceOutcome.LOCK_UNAVAILABLE
+        try:
+            target_bytes = self.read_bounded_bytes_at(
+                parent_descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            return _ReplaceOutcome.TARGET_CHANGED
+        if _sha256(target_bytes) != expected_target_sha256:
+            return _ReplaceOutcome.TARGET_CHANGED
         os.replace(
             source_name,
             target_name,
@@ -568,6 +736,8 @@ class ManifestMigrationFileOperations(ManifestFileOperations):
         getattr(self, "_staging_identities", {}).pop(
             (parent_descriptor, source_name), None
         )
+        os.fsync(parent_descriptor)
+        return _ReplaceOutcome.REPLACED
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         identities = getattr(self, "_staging_identities", {})
@@ -1523,6 +1693,178 @@ def preview_manifest_migration(
     return Success(replace(preview, preview_sha256=preview_identity))
 
 
+def _replace_locked_manifest_migration(
+    preview: ManifestMigrationPreview,
+    *,
+    operations: ManifestMigrationFileOperations,
+    repository_anchor: _MigrationDirectoryAnchor,
+    anchor: _MigrationDirectoryAnchor,
+    repository: Path,
+    resolved_target: tuple[Path, str, str],
+    staging_name: str,
+) -> ManifestMigrationFailure | None:
+    target_name = Path(preview.target_path).name
+    lock_token = operations.acquire_writer_lock_at(anchor, repository)
+    if lock_token is None:
+        return _migration_failure_after_staging_at(
+            "migration-writer-lock-unavailable",
+            MigrationFailurePoint.STATE_GUARD,
+            MigrationStagingState.VALIDATED,
+            operations=operations,
+            parent_descriptor=anchor.descriptor,
+            target_name=target_name,
+            expected_v1_sha256=preview.v1_sha256,
+            staging_name=staging_name,
+        )
+    try:
+        confirmed = _resolve_target(
+            repository,
+            Path(preview.target_path),
+            operations=operations,
+        )
+        snapshot_before_replace = _validate_source_snapshot(
+            repository,
+            repository_anchor,
+            preview.source_paths,
+            preview.current_artifacts,
+            preview.current_progress,
+            change_id=preview.candidate_manifest.change_id,
+            limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
+            operations=operations,
+        )
+        try:
+            target_before_replace = operations.read_bounded_bytes_at(
+                anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            target_before_replace = b""
+        if (
+            isinstance(confirmed, Failure)
+            or confirmed.value != resolved_target
+            or isinstance(snapshot_before_replace, Failure)
+            or not operations.parent_directory_is_current(anchor, repository)
+            or _sha256(target_before_replace) != preview.v1_sha256
+        ):
+            return _migration_failure_after_staging_at(
+                "migration-state-changed-before-replace",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=anchor.descriptor,
+                target_name=target_name,
+                expected_v1_sha256=preview.v1_sha256,
+                staging_name=staging_name,
+            )
+
+        try:
+            operations.before_replace_at(
+                anchor.descriptor,
+                anchor.path,
+                staging_name,
+                target_name,
+            )
+        except OSError:
+            return _migration_failure_after_staging_at(
+                "migration-replace-guard-failed",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=anchor.descriptor,
+                target_name=target_name,
+                expected_v1_sha256=preview.v1_sha256,
+                staging_name=staging_name,
+            )
+        confirmed_at_replace = _resolve_target(
+            repository,
+            Path(preview.target_path),
+            operations=operations,
+        )
+        snapshot_at_replace = _validate_source_snapshot(
+            repository,
+            repository_anchor,
+            preview.source_paths,
+            preview.current_artifacts,
+            preview.current_progress,
+            change_id=preview.candidate_manifest.change_id,
+            limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
+            operations=operations,
+        )
+        try:
+            target_at_replace = operations.read_bounded_bytes_at(
+                anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            target_at_replace = b""
+        if (
+            isinstance(confirmed_at_replace, Failure)
+            or confirmed_at_replace.value != resolved_target
+            or isinstance(snapshot_at_replace, Failure)
+            or not operations.parent_directory_is_current(
+                repository_anchor,
+                repository,
+            )
+            or not operations.parent_directory_is_current(anchor, repository)
+            or _sha256(target_at_replace) != preview.v1_sha256
+        ):
+            return _migration_failure_after_staging_at(
+                "migration-state-changed-at-replace",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=anchor.descriptor,
+                target_name=target_name,
+                expected_v1_sha256=preview.v1_sha256,
+                staging_name=staging_name,
+            )
+        try:
+            outcome = operations.replace_at(
+                anchor.descriptor,
+                anchor.path,
+                staging_name,
+                target_name,
+                lock_token=lock_token,
+                expected_target_sha256=preview.v1_sha256,
+            )
+        except OSError:
+            return _migration_failure_after_staging_at(
+                "migration-replace-failed",
+                MigrationFailurePoint.REPLACE,
+                MigrationStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=anchor.descriptor,
+                target_name=target_name,
+                expected_v1_sha256=preview.v1_sha256,
+                staging_name=staging_name,
+            )
+        if outcome is _ReplaceOutcome.TARGET_CHANGED:
+            return _migration_failure_after_staging_at(
+                "migration-state-changed-at-replace",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=anchor.descriptor,
+                target_name=target_name,
+                expected_v1_sha256=preview.v1_sha256,
+                staging_name=staging_name,
+            )
+        if outcome is not _ReplaceOutcome.REPLACED:
+            return _migration_failure_after_staging_at(
+                "migration-writer-lock-unavailable",
+                MigrationFailurePoint.STATE_GUARD,
+                MigrationStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=anchor.descriptor,
+                target_name=target_name,
+                expected_v1_sha256=preview.v1_sha256,
+                staging_name=staging_name,
+            )
+        return None
+    finally:
+        operations.release_writer_lock(lock_token)
+
+
 def _apply_anchored_manifest_migration(
     preview: ManifestMigrationPreview,
     *,
@@ -1647,124 +1989,17 @@ def _apply_anchored_manifest_migration(
             staging_name=staging_name,
         )
 
-    confirmed = _resolve_target(
-        repository,
-        Path(preview.target_path),
+    replacement_failure = _replace_locked_manifest_migration(
+        preview,
         operations=operations,
+        repository_anchor=repository_anchor,
+        anchor=anchor,
+        repository=repository,
+        resolved_target=resolved_target,
+        staging_name=staging_name,
     )
-    snapshot_before_replace = _validate_source_snapshot(
-        repository,
-        repository_anchor,
-        preview.source_paths,
-        preview.current_artifacts,
-        preview.current_progress,
-        change_id=preview.candidate_manifest.change_id,
-        limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
-        operations=operations,
-    )
-    try:
-        target_before_replace = operations.read_bounded_bytes_at(
-            anchor.descriptor,
-            target_name,
-        )
-    except (ManifestSizeLimitExceeded, OSError):
-        target_before_replace = b""
-    if (
-        isinstance(confirmed, Failure)
-        or confirmed.value != resolved_target
-        or isinstance(snapshot_before_replace, Failure)
-        or not operations.parent_directory_is_current(anchor, repository)
-        or _sha256(target_before_replace) != preview.v1_sha256
-    ):
-        return _migration_failure_after_staging_at(
-            "migration-state-changed-before-replace",
-            MigrationFailurePoint.STATE_GUARD,
-            MigrationStagingState.VALIDATED,
-            operations=operations,
-            parent_descriptor=anchor.descriptor,
-            target_name=target_name,
-            expected_v1_sha256=preview.v1_sha256,
-            staging_name=staging_name,
-        )
-
-    try:
-        operations.before_replace_at(
-            anchor.descriptor,
-            anchor.path,
-            staging_name,
-            target_name,
-        )
-    except OSError:
-        return _migration_failure_after_staging_at(
-            "migration-replace-guard-failed",
-            MigrationFailurePoint.STATE_GUARD,
-            MigrationStagingState.VALIDATED,
-            operations=operations,
-            parent_descriptor=anchor.descriptor,
-            target_name=target_name,
-            expected_v1_sha256=preview.v1_sha256,
-            staging_name=staging_name,
-        )
-    confirmed_at_replace = _resolve_target(
-        repository,
-        Path(preview.target_path),
-        operations=operations,
-    )
-    snapshot_at_replace = _validate_source_snapshot(
-        repository,
-        repository_anchor,
-        preview.source_paths,
-        preview.current_artifacts,
-        preview.current_progress,
-        change_id=preview.candidate_manifest.change_id,
-        limits=DEFAULT_SOURCE_IDENTITY_LIMITS,
-        operations=operations,
-    )
-    try:
-        target_at_replace = operations.read_bounded_bytes_at(
-            anchor.descriptor,
-            target_name,
-        )
-    except (ManifestSizeLimitExceeded, OSError):
-        target_at_replace = b""
-    if (
-        isinstance(confirmed_at_replace, Failure)
-        or confirmed_at_replace.value != resolved_target
-        or isinstance(snapshot_at_replace, Failure)
-        or not operations.parent_directory_is_current(
-            repository_anchor,
-            repository,
-        )
-        or not operations.parent_directory_is_current(anchor, repository)
-        or _sha256(target_at_replace) != preview.v1_sha256
-    ):
-        return _migration_failure_after_staging_at(
-            "migration-state-changed-at-replace",
-            MigrationFailurePoint.STATE_GUARD,
-            MigrationStagingState.VALIDATED,
-            operations=operations,
-            parent_descriptor=anchor.descriptor,
-            target_name=target_name,
-            expected_v1_sha256=preview.v1_sha256,
-            staging_name=staging_name,
-        )
-    try:
-        operations.replace_at(
-            anchor.descriptor,
-            staging_name,
-            target_name,
-        )
-    except OSError:
-        return _migration_failure_after_staging_at(
-            "migration-replace-failed",
-            MigrationFailurePoint.REPLACE,
-            MigrationStagingState.VALIDATED,
-            operations=operations,
-            parent_descriptor=anchor.descriptor,
-            target_name=target_name,
-            expected_v1_sha256=preview.v1_sha256,
-            staging_name=staging_name,
-        )
+    if replacement_failure is not None:
+        return replacement_failure
     try:
         installed_bytes = operations.read_bounded_bytes_at(
             anchor.descriptor,

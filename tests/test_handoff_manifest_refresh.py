@@ -30,6 +30,8 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
     MigrationFailurePoint,
     MigrationStagingState,
     MigrationTargetState,
+    _ReplaceOutcome,
+    _WriterLockToken,
     apply_manifest_migration,
     preview_manifest_migration,
 )
@@ -281,10 +283,24 @@ class MutationRecordingRefreshOperations(ManifestRefreshFileOperations):
         super().write_bytes_at(parent_descriptor, name, data)
 
     def replace_at(
-        self, parent_descriptor: int, source_name: str, target_name: str
-    ) -> None:
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
         self.mutations.append("replace")
-        super().replace_at(parent_descriptor, source_name, target_name)
+        return super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         self.mutations.append("unlink")
@@ -335,8 +351,15 @@ class FaultInjectingRefreshOperations(MutationRecordingRefreshOperations):
         return super().read_bounded_bytes_at(parent_descriptor, name, limit=limit)
 
     def replace_at(
-        self, parent_descriptor: int, source_name: str, target_name: str
-    ) -> None:
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
         if self.fault.startswith("replace-"):
             self.mutations.append("replace")
             if self.fault == "replace-changed":
@@ -346,7 +369,14 @@ class FaultInjectingRefreshOperations(MutationRecordingRefreshOperations):
             elif self.fault == "replace-oversized":
                 self.target.write_bytes(b"x" * (8 * 1024 * 1024 + 1))
             raise OSError("injected refresh replace failure")
-        super().replace_at(parent_descriptor, source_name, target_name)
+        return super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         if self.fault == "cleanup":
@@ -416,18 +446,24 @@ class AfterLockedValidationTargetMutationOperations(MutationRecordingRefreshOper
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
-        # RED compatibility: production does not yet expose the internal hook.
-        self.after_locked_target_validation_at(
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
+        outcome = super().replace_at(
             parent_descriptor,
-            self.target.parent,
+            parent,
             source_name,
             target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
         )
-        super().replace_at(parent_descriptor, source_name, target_name)
-        self.rename_events.append("replace")
+        if outcome is _ReplaceOutcome.REPLACED:
+            self.rename_events.append("replace")
+        return outcome
 
 
 class MigrationMutationRecordingOperations(ManifestMigrationFileOperations):
@@ -447,11 +483,22 @@ class MigrationMutationRecordingOperations(ManifestMigrationFileOperations):
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
         self.mutations.append("replace")
-        super().replace_at(parent_descriptor, source_name, target_name)
+        return super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         self.mutations.append("unlink")

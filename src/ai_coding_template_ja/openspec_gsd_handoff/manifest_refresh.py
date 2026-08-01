@@ -26,6 +26,8 @@ from .manifest import (
 from .manifest_migration import (
     ManifestMigrationFileOperations,
     MigrationCleanupOutcome,
+    _MigrationDirectoryAnchor,
+    _ReplaceOutcome,
     _StagingCreationError,
 )
 from .manifest_v2 import (
@@ -981,6 +983,122 @@ def _staging_name_is_safe(staging_name: str, target_name: str) -> bool:
     )
 
 
+def _replace_locked_manifest_refresh(
+    preview: ManifestRefreshPreview,
+    *,
+    operations: ManifestRefreshFileOperations,
+    repository_anchor: _MigrationDirectoryAnchor,
+    target_anchor: _MigrationDirectoryAnchor,
+    repository: Path,
+    staging_name: str,
+    target_name: str,
+) -> ManifestRefreshFailure | None:
+    lock_token = operations.acquire_writer_lock_at(target_anchor, repository)
+    if lock_token is None:
+        return _failure_after_staging(
+            "refresh-writer-lock-unavailable",
+            RefreshFailurePoint.STATE_GUARD,
+            RefreshStagingState.VALIDATED,
+            operations=operations,
+            parent_descriptor=target_anchor.descriptor,
+            target_name=target_name,
+            expected_sha256=preview.old_target_sha256,
+            staging_name=staging_name,
+        )
+    try:
+        try:
+            operations.before_replace_at(
+                target_anchor.descriptor,
+                target_anchor.path,
+                staging_name,
+                target_name,
+            )
+        except OSError:
+            return _failure_after_staging(
+                "refresh-replace-guard-failed",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        current_at_replace = _current_preview(preview, operations=operations)
+        try:
+            target_at_replace = operations.read_bounded_bytes_at(
+                target_anchor.descriptor,
+                target_name,
+            )
+        except (ManifestSizeLimitExceeded, OSError):
+            target_at_replace = b""
+        if (
+            isinstance(current_at_replace, Failure)
+            or current_at_replace.value != preview
+            or not operations.parent_directory_is_current(
+                repository_anchor,
+                repository,
+            )
+            or not operations.parent_directory_is_current(target_anchor, repository)
+            or _sha256(target_at_replace) != preview.old_target_sha256
+        ):
+            return _failure_after_staging(
+                "refresh-state-changed-before-replace",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        try:
+            outcome = operations.replace_at(
+                target_anchor.descriptor,
+                target_anchor.path,
+                staging_name,
+                target_name,
+                lock_token=lock_token,
+                expected_target_sha256=preview.old_target_sha256,
+            )
+        except OSError:
+            return _failure_after_staging(
+                "refresh-replace-failed",
+                RefreshFailurePoint.REPLACE,
+                RefreshStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        if outcome is _ReplaceOutcome.TARGET_CHANGED:
+            return _failure_after_staging(
+                "refresh-state-changed-at-replace",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        if outcome is not _ReplaceOutcome.REPLACED:
+            return _failure_after_staging(
+                "refresh-writer-lock-unavailable",
+                RefreshFailurePoint.STATE_GUARD,
+                RefreshStagingState.VALIDATED,
+                operations=operations,
+                parent_descriptor=target_anchor.descriptor,
+                target_name=target_name,
+                expected_sha256=preview.old_target_sha256,
+                staging_name=staging_name,
+            )
+        return None
+    finally:
+        operations.release_writer_lock(lock_token)
+
+
 def apply_manifest_refresh(
     preview: ManifestRefreshPreview,
     *,
@@ -1190,69 +1308,17 @@ def apply_manifest_refresh(
                 staging_name=staging_name,
             )
 
-        try:
-            filesystem.before_replace_at(
-                target_anchor.descriptor,
-                target_anchor.path,
-                staging_name,
-                target_name,
-            )
-        except OSError:
-            return _failure_after_staging(
-                "refresh-replace-guard-failed",
-                RefreshFailurePoint.STATE_GUARD,
-                RefreshStagingState.VALIDATED,
-                operations=filesystem,
-                parent_descriptor=target_anchor.descriptor,
-                target_name=target_name,
-                expected_sha256=preview.old_target_sha256,
-                staging_name=staging_name,
-            )
-        current_at_replace = _current_preview(preview, operations=filesystem)
-        try:
-            target_at_replace = filesystem.read_bounded_bytes_at(
-                target_anchor.descriptor,
-                target_name,
-            )
-        except (ManifestSizeLimitExceeded, OSError):
-            target_at_replace = b""
-        if (
-            isinstance(current_at_replace, Failure)
-            or current_at_replace.value != preview
-            or not filesystem.parent_directory_is_current(
-                repository_anchor,
-                repository,
-            )
-            or not filesystem.parent_directory_is_current(target_anchor, repository)
-            or _sha256(target_at_replace) != preview.old_target_sha256
-        ):
-            return _failure_after_staging(
-                "refresh-state-changed-before-replace",
-                RefreshFailurePoint.STATE_GUARD,
-                RefreshStagingState.VALIDATED,
-                operations=filesystem,
-                parent_descriptor=target_anchor.descriptor,
-                target_name=target_name,
-                expected_sha256=preview.old_target_sha256,
-                staging_name=staging_name,
-            )
-        try:
-            filesystem.replace_at(
-                target_anchor.descriptor,
-                staging_name,
-                target_name,
-            )
-        except OSError:
-            return _failure_after_staging(
-                "refresh-replace-failed",
-                RefreshFailurePoint.REPLACE,
-                RefreshStagingState.VALIDATED,
-                operations=filesystem,
-                parent_descriptor=target_anchor.descriptor,
-                target_name=target_name,
-                expected_sha256=preview.old_target_sha256,
-                staging_name=staging_name,
-            )
+        replacement_failure = _replace_locked_manifest_refresh(
+            preview,
+            operations=filesystem,
+            repository_anchor=repository_anchor,
+            target_anchor=target_anchor,
+            repository=repository,
+            staging_name=staging_name,
+            target_name=target_name,
+        )
+        if replacement_failure is not None:
+            return replacement_failure
         try:
             installed_bytes = filesystem.read_bounded_bytes_at(
                 target_anchor.descriptor,

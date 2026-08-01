@@ -22,6 +22,8 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
     MigrationFailurePoint,
     MigrationStagingState,
     MigrationTargetState,
+    _ReplaceOutcome,
+    _WriterLockToken,
     apply_manifest_migration,
     preview_manifest_migration,
 )
@@ -121,11 +123,22 @@ class MutationRecordingOperations(ManifestMigrationFileOperations):
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
         self.mutations.append("replace")
-        super().replace_at(parent_descriptor, source_name, target_name)
+        return super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         self.mutations.append("unlink")
@@ -197,9 +210,13 @@ class FaultInjectingOperations(MutationRecordingOperations):
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
         if self.fault.startswith("replace-"):
             self.mutations.append("replace")
             if self.fault == "replace-changed":
@@ -209,7 +226,14 @@ class FaultInjectingOperations(MutationRecordingOperations):
             elif self.fault == "replace-oversized":
                 self.target.write_bytes(b"x" * (MAX_MANIFEST_BYTES + 1))
             raise OSError("injected replace failure")
-        super().replace_at(parent_descriptor, source_name, target_name)
+        return super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
 
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         if self.fault == "cleanup":
@@ -332,11 +356,23 @@ class PostReplaceRereadAndCloseFaultOperations(ParentCloseAfterEffectOperations)
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
-        super().replace_at(parent_descriptor, source_name, target_name)
-        self.replaced = True
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
+        outcome = super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
+        self.replaced = outcome is _ReplaceOutcome.REPLACED
+        return outcome
 
 
 class PostReplaceParentRebindOperations(MutationRecordingOperations):
@@ -350,13 +386,26 @@ class PostReplaceParentRebindOperations(MutationRecordingOperations):
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
-        super().replace_at(parent_descriptor, source_name, target_name)
-        self.target.parent.rename(self.moved_parent)
-        self.target.parent.mkdir()
-        self.target.write_bytes(EXPECTED_V1)
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
+        outcome = super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
+        if outcome is _ReplaceOutcome.REPLACED:
+            self.target.parent.rename(self.moved_parent)
+            self.target.parent.mkdir()
+            self.target.write_bytes(EXPECTED_V1)
+        return outcome
 
 
 class PostReplaceFreshRereadFaultOperations(MutationRecordingOperations):
@@ -387,11 +436,23 @@ class PostReplaceFreshRereadFaultOperations(MutationRecordingOperations):
     def replace_at(
         self,
         parent_descriptor: int,
+        parent: Path,
         source_name: str,
         target_name: str,
-    ) -> None:
-        super().replace_at(parent_descriptor, source_name, target_name)
-        self.replaced = True
+        *,
+        lock_token: _WriterLockToken,
+        expected_target_sha256: str,
+    ) -> _ReplaceOutcome:
+        outcome = super().replace_at(
+            parent_descriptor,
+            parent,
+            source_name,
+            target_name,
+            lock_token=lock_token,
+            expected_target_sha256=expected_target_sha256,
+        )
+        self.replaced = outcome is _ReplaceOutcome.REPLACED
+        return outcome
 
 
 class SpecSwapBetweenSnapshotOperations(ReadOnlyCountingOperations):
