@@ -113,6 +113,15 @@ class FalseySourceIdentityState(SourceIdentityState):
         return False
 
 
+class ActiveGetterThrowingSourceIdentityState(SourceIdentityState):
+    """Represent a malformed supported state whose active getter fails."""
+
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise RuntimeError("boom")
+        return super().__getattribute__(name)
+
+
 class FalseyPreviewOpenFailureOperations(ManifestMigrationFileOperations):
     """Expose whether preview retains a valid falsey filesystem adapter."""
 
@@ -1518,6 +1527,44 @@ def test_apply_rejects_malformed_nested_preview_without_partial_evidence(
     assert operations.mutations == []
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_apply_rejects_getter_throwing_previous_source_state_without_partial_evidence(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    malformed_state = ActiveGetterThrowingSourceIdentityState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+    malformed = replace(preview, previous_source_items=malformed_state)
+    target_before = target.read_bytes()
+    tree_before = _tree_bytes(repository)
+    operations = MutationRecordingOperations()
+
+    applied = apply_manifest_migration(
+        malformed,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert applied.issue.code == "migration-preview-invalid"
+    assert applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is MigrationTargetState.UNKNOWN
+    assert applied.issue.staging_state is MigrationStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is MigrationCleanupOutcome.NOT_NEEDED
+    assert not hasattr(applied, "value")
+    assert operations.mutations == []
+    assert target.read_bytes() == target_before
+    assert _tree_bytes(repository) == tree_before
+    assert not any(target.parent.glob(".handoff.*.tmp"))
 
 
 @pytest.mark.parametrize(
