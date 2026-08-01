@@ -20,6 +20,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
     ManifestRefreshFailure,
     ManifestRefreshFileOperations,
+    RefreshCandidateChange,
     RefreshCleanupOutcome,
     RefreshFailurePoint,
     RefreshLimits,
@@ -43,6 +44,10 @@ from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
     read_policy_reference_registry,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
+from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
+    ExplicitSourceMatch,
+    SourceCategory,
+)
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 CHANGE_ID = "harden-openspec-gsd-handoff-lifecycle"
@@ -520,6 +525,143 @@ def test_pinned_started_v2_builds_exact_complete_read_only_candidate(
     assert json.loads(preview.candidate_bytes) == EXPECTED["candidate_manifest"]
     assert preview.candidate_bytes.decode() == EXPECTED["candidate_bytes_utf8"]
     assert target.read_bytes() == before
+
+
+def test_refresh_preview_lists_created_updated_and_tombstoned_changes(
+    tmp_path: Path,
+) -> None:
+    published = serialize_manifest_v2(_published_manifest())
+    assert isinstance(published, Success)
+    repository, _ = _repository(tmp_path, published.value)
+    manifest, artifacts, progress, inventory, registry = _inputs()
+    source = repository / SOURCE_PATH
+    source_text = source.read_text(encoding="utf-8")
+    removed_heading = (
+        "#### Scenario: 完全な phase graph drift を分類して remediation を投影する"
+    )
+    removed_start = source_text.index(removed_heading)
+    removed_end = source_text.index("\n#### Scenario:", removed_start)
+    created_block = """#### Scenario: refresh preview に source removal を列挙する
+- **WHEN** refresh candidate が active source identity を tombstone へ移す
+- **THEN** approval evidence は exact before / after fingerprint を返す
+"""
+    source_text = (
+        source_text[:removed_start] + created_block + source_text[removed_end:]
+    )
+    source.write_text(source_text, encoding="utf-8")
+
+    current_artifacts = tuple(
+        replace(item, sha256=_sha256((repository / item.path).read_bytes()))
+        for item in artifacts
+    )
+    planning_inventory = replace(
+        inventory,
+        assignments=tuple(
+            replace(item, source_id="SCN-000049")
+            if item.source_id == "SCN-000048"
+            else item
+            for item in inventory.assignments
+        ),
+    )
+    subprocess.run(  # noqa: S603 - fixed Git argv against isolated test paths
+        (
+            "git",
+            "-C",
+            str(repository),
+            "add",
+            "--",
+            *(item.path for item in current_artifacts),
+        ),
+        check=True,
+    )
+    subprocess.run(  # noqa: S603 - fixed Git argv against isolated test paths
+        (
+            "git",
+            "-C",
+            str(repository),
+            "-c",
+            "user.name=Refresh Test",
+            "-c",
+            "user.email=refresh-test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "refresh preview source changes",
+        ),
+        check=True,
+    )
+    source_commit = subprocess.run(  # noqa: S603 - fixed Git argv
+        ("git", "-C", str(repository), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    explicit_matches = (
+        ExplicitSourceMatch(
+            source_path=SOURCE_PATH,
+            normalized_heading=(
+                "Requirement: HARD-R2 lifecycle 操作前に source と派生状態の "
+                "drift を検査する"
+            ),
+            parent_locator=None,
+            source_id="REQ-000002",
+        ),
+    )
+
+    result = preview_manifest_refresh(
+        repository,
+        Path(HANDOFF_PATH),
+        current_source_commit=source_commit,
+        current_artifacts=current_artifacts,
+        current_progress=progress,
+        source_paths=(SOURCE_PATH,),
+        planning_inventory=planning_inventory,
+        policy_registry=registry,
+        explicit_matches=explicit_matches,
+    )
+
+    assert isinstance(result, Success)
+    assert result.value.previous_manifest == manifest
+    assert result.value.changes == (
+        RefreshCandidateChange(
+            kind="created",
+            source_id="SCN-000049",
+            category=SourceCategory.SCENARIO,
+            source_path=SOURCE_PATH,
+            previous_fingerprint=None,
+            candidate_fingerprint=(
+                "b342de1d1a34c4b1ac1be9c46e57bb5b02483ef5ba13c00696a395bfb300e69b"
+            ),
+            reason="new-source-identity",
+        ),
+        RefreshCandidateChange(
+            kind="updated",
+            source_id="REQ-000002",
+            category=SourceCategory.REQUIREMENT,
+            source_path=SOURCE_PATH,
+            previous_fingerprint=(
+                "c398939e60d173dd6e099c75422c3b8d2030bf35edb712f85a01a6aca2739977"
+            ),
+            candidate_fingerprint=(
+                "4ed623d00ded936d32de613f03e4dfd0722472cd9cfbc938d509cc473fa364a2"
+            ),
+            reason="source-content-changed",
+        ),
+        RefreshCandidateChange(
+            kind="tombstoned",
+            source_id="SCN-000048",
+            category=SourceCategory.SCENARIO,
+            source_path=SOURCE_PATH,
+            previous_fingerprint=(
+                "d7d3b413205009cfe54329c266c22df43e8a302e5d55de97a9a5328cdb7abdbd"
+            ),
+            candidate_fingerprint=(
+                "d7d3b413205009cfe54329c266c22df43e8a302e5d55de97a9a5328cdb7abdbd"
+            ),
+            reason="source-removed",
+        ),
+    )
+    assert len({item.source_id for item in result.value.changes}) == 3
 
 
 def test_preview_uses_supplied_read_only_operations_boundary(tmp_path: Path) -> None:
