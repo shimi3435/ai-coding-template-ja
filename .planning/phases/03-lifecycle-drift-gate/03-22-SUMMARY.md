@@ -150,3 +150,21 @@ None - no external service configuration required.
 ---
 *Phase: 03-lifecycle-drift-gate*
 *Completed: 2026-08-01*
+
+## Post-review guarantee boundary clarification (2026-08-01)
+
+- The 03-22 guaranteed writer set is (a) bridge-owned migration/refresh writers
+  and (b) cooperating writers that follow the same change-directory
+  advisory lock protocol.
+- The target-hash recheck is defense-in-depth for detectable interference, not an
+  atomic guarantee against a non-cooperating writer that changes target bytes after
+  final observation. Such post-observation non-cooperating writes are outside the
+  canonical HARD-R2 / Phase 03 guarantee; Phase 03 introduces no CAS-like persistence
+  protocol.
+- This clarification records the scope of the completed implementation. It does not
+  change canonical OpenSpec, its acceptance criteria, or the 03-22 implementation
+  evidence. The existing `03-REVIEW.md` remains unchanged historical `issues_found`
+  evidence and CR-01 is not marked resolved here.
+- CR-01 must be rejudged against canonical OpenSpec and this guarantee boundary by
+  the fresh independent review at the start of existing Plan 03-23, before its
+  security, traceability, verification, or Phase 4 completion steps.
