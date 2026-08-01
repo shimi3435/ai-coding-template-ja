@@ -2283,6 +2283,54 @@ def test_malformed_phase_graph_is_unknown_without_raising(
 
 
 @pytest.mark.parametrize("side", ["expected", "observed"])
+@pytest.mark.parametrize(
+    "malformed_path",
+    [
+        ".planning/phases/03-bad\\path",
+        ".planning/phases/03-bad\0path",
+        ".planning/phases/03-e\u0301",
+    ],
+)
+def test_malformed_canonical_phase_paths_are_unknown_on_both_graph_sides(
+    tmp_path: Path,
+    side: str,
+    malformed_path: str,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    nodes = list(_phase_nodes())
+    nodes[0] = replace(nodes[0], phase_path=malformed_path)
+    if side == "expected":
+        boundary.expected_nodes = tuple(nodes)
+    else:
+        boundary.observed_nodes = tuple(nodes)
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    assert decision == LifecycleGateDecision(
+        operation=LifecycleOperation.EXECUTE,
+        target_phase="03",
+        mapping_operation=MappingOperation.EXECUTE,
+        state=LifecycleGateState.UNKNOWN,
+        admitted=False,
+        issue_codes=("lifecycle-phase-observation-incomplete",),
+        drifted_artifact_paths=(),
+        changed_source_item_ids=(),
+        progress_update_candidate=None,
+        revalidation_targets=(),
+        replanning_targets=(),
+        next_action_codes=(),
+        decision_identity=None,
+        manifest_sha256=None,
+    )
+
+
+@pytest.mark.parametrize("side", ["expected", "observed"])
 def test_duplicate_phase_edge_is_rejected_before_normalization(
     tmp_path: Path,
     side: str,
