@@ -54,6 +54,7 @@ from .source_identity import (
     SourceReconciliation,
     reconcile_source_items,
     source_inventory_from_bytes,
+    validate_source_identity_state,
 )
 from .versioned_manifest import parse_versioned_manifest_bytes
 
@@ -930,7 +931,6 @@ def _preview_has_valid_shape(preview: object) -> bool:
         or not preview.candidate_bytes
         or len(preview.candidate_bytes) > MAX_MANIFEST_BYTES
         or type(preview.candidate_manifest) is not HandoffManifestV2
-        or type(preview.previous_source_items) is not SourceIdentityState
         or type(preview.explicit_matches) is not tuple
         or len(preview.explicit_matches) > _MAX_PREVIEW_ITEMS
         or type(preview.current_artifacts) is not tuple
@@ -944,6 +944,11 @@ def _preview_has_valid_shape(preview: object) -> bool:
         or len(preview.changes) > _MAX_PREVIEW_ITEMS
         or type(preview.exclusions) is not tuple
         or len(preview.exclusions) > _MAX_PREVIEW_ITEMS
+    ):
+        return False
+    if not isinstance(
+        validate_source_identity_state(preview.previous_source_items),
+        Success,
     ):
         return False
     if any(
@@ -1102,10 +1107,16 @@ def _preview_is_consistent(preview: ManifestMigrationPreview) -> bool:
     if isinstance(parsed, Failure) or parsed.value != preview.candidate_manifest:
         return False
     serialized = serialize_manifest_v2(preview.candidate_manifest)
+    serializable_previous_source_items = SourceIdentityState(
+        next_requirement_id=preview.previous_source_items.next_requirement_id,
+        next_scenario_id=preview.previous_source_items.next_scenario_id,
+        active=preview.previous_source_items.active,
+        tombstones=preview.previous_source_items.tombstones,
+    )
     previous_validation = serialize_manifest_v2(
         replace(
             preview.candidate_manifest,
-            source_items=preview.previous_source_items,
+            source_items=serializable_previous_source_items,
         )
     )
     expected_changes = _candidate_changes_from_states(
