@@ -267,6 +267,13 @@ class FaultInjectingOperations(MutationRecordingOperations):
         super().unlink_at(parent_descriptor, name)
 
 
+class FalseyFaultInjectingOperations(FaultInjectingOperations):
+    """A valid migration adapter whose truth value must not control injection."""
+
+    def __bool__(self) -> bool:
+        return False
+
+
 class ParentSwapAtReplaceOperations(MutationRecordingOperations):
     """Swap the target parent at the final replace boundary."""
 
@@ -1668,6 +1675,41 @@ def test_apply_reports_pre_replace_faults_and_preserves_exact_v1(
         assert target.read_bytes() == EXPECTED_V1
         if operations.staging is not None:
             assert not operations.staging.exists()
+
+
+def test_apply_uses_falsey_supplied_operations_without_default_fallback(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    preview_result = _preview(repository)
+    assert isinstance(preview_result, Success)
+    preview = preview_result.value
+    before = target.read_bytes()
+    operations = FalseyFaultInjectingOperations("create", target)
+
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestMigrationFailure)
+    assert (
+        applied.issue.failure_point,
+        applied.issue.target_state,
+        applied.issue.staging_state,
+        applied.issue.cleanup_outcome,
+    ) == (
+        MigrationFailurePoint.CREATE,
+        MigrationTargetState.V1_PRESERVED,
+        MigrationStagingState.UNKNOWN,
+        MigrationCleanupOutcome.NOT_NEEDED,
+    )
+    assert operations.mutations == ["create"]
+    assert before == EXPECTED_V1
+    assert target.read_bytes() == before
+    assert not any(target.parent.glob(".handoff.*.tmp"))
 
 
 @pytest.mark.parametrize("fault", ["fstat", "close"])
