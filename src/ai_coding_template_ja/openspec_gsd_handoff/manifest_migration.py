@@ -1630,7 +1630,9 @@ def preview_manifest_migration(
     if isinstance(snapshot, Failure):
         return snapshot
     v1_bytes, source_manifest, source_inventory = snapshot.value
-    previous = previous_source_items or _EMPTY_SOURCE_ITEMS
+    previous = (
+        _EMPTY_SOURCE_ITEMS if previous_source_items is None else previous_source_items
+    )
     frozen_explicit_matches = tuple(explicit_matches)
     reconciliation = reconcile_source_items(
         source_inventory,
