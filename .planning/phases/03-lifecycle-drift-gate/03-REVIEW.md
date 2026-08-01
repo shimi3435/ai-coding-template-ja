@@ -1,12 +1,13 @@
 ---
 phase: 03-lifecycle-drift-gate
-reviewed: 2026-07-29T11:33:08Z
-depth: standard
-files_reviewed: 13
+reviewed: 2026-08-01T07:22:01Z
+depth: deep
+files_reviewed: 15
 files_reviewed_list:
   - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_drift.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py
   - tests/fixtures/openspec_gsd_handoff/lifecycle/expected-lifecycle-evidence.json
@@ -17,108 +18,69 @@ files_reviewed_list:
   - tests/test_handoff_lifecycle_drift.py
   - tests/test_handoff_lifecycle_gate.py
   - tests/test_handoff_manifest_refresh.py
+  - tests/test_handoff_migration.py
 findings:
-  critical: 2
-  warning: 2
+  critical: 1
+  warning: 1
   info: 0
-  total: 4
+  total: 2
 status: issues_found
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-07-29T11:33:08Z
-**Depth:** standard
-**Files Reviewed:** 13
+**Reviewed:** 2026-08-01T07:22:01Z
+**Depth:** deep
+**Files Reviewed:** 15
 **Status:** issues_found
 
 ## Summary
 
-Phase 03 の lifecycle drift、gate、mapping、manifest refresh、source identity と対応するテスト・fixture を標準深度でレビューした。前回レビューで指摘された phase graph の集合差短絡と mapping path role 競合は現実装で修正されている。
+Phase 03 の lifecycle drift / gate、execution mapping、source identity、manifest migration / refresh と対応するテスト・fixture を深度 `deep` で再レビューした。前回の canonical phase path、source identity limits、tombstone projection は修正され、phase graph completeness と mapping path-role の回帰テストも通過した。
 
-一方、canonical phase path の検証漏れにより malformed graph が再利用可能な identity を持つ `DRIFTED` として扱われる契約違反と、refresh の最終 state guard 後の競合書き込みを成功扱いで上書きするデータ損失リスクを再現した。加えて、source identity の malformed limits が structured failure ではなく例外になる問題と、refresh preview の source change 一覧が tombstone を欠落させる問題がある。
+一方、refresh writer lock の修正後も、最後の target bytes 読み取りが完了してから `os.replace` するまでに非協調書き込みを失う競合窓が残る。また、refresh preview の公開入力 `current_source_commit` が文字列でない場合、structured `Failure` ではなく `TypeError` を送出する。したがって本レビューは `clean` ではない。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: [BLOCKER] malformed な expected phase path が identity 付き DRIFTED として受理される
+### CR-01: [BLOCKER] 最後の target 検証後の同時更新を上書きして Success を返す
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py:408-420`
-**Issue:** `_canonical_phase_path` は `PurePosixPath` の形と phase prefix だけを確認し、backslash、NUL、非 NFC component を拒否しない。`observed_nodes` は planning inventory との一致で間接的に拒否されるが、source-pinned `expected_nodes` にはその照合がないため、これらの path が `_validate_phase_nodes` を通過する。public gate の実測では `.planning/phases/03-bad\path`、NUL を含む path、NFD path のすべてが `phase-path-changed:03` を持つ identity 付き `DRIFTED` になった。仕様は expected / observed graph の canonical scalar を独立検査し、malformed graph を identity と remediation のない `UNKNOWN` にするよう要求しているため、malformed source-pinned evidence に再利用可能な decision identity を発行する契約違反である。
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:721-735`
+**Issue:** `replace_at` は共有 writer lock の生存と target hash を再検証するが、最後の `read_bounded_bytes_at` が旧 bytes を返してから `os.replace` を実行するまでの間は target identity を拘束していない。この間に raw operator writer や同じ lock 規約を使わない writer が target を更新すると、更新は candidate で上書きされ、呼び出し元の `apply_manifest_refresh` は `Success` を返す。最後の read が旧 bytes を取得した直後に別の有効な manifest bytes を書き込む public apply probe で、`concurrent_preserved=False`、`candidate_installed=True`、結果 `Success` を再現した。03-22 の回帰テストは最初の locked validation 後に更新を注入するため、2回目の read で検出できるケースしか覆わず、この最終窓を検証していない。承認後に変化した disk bytes を保持して non-success にする契約に反し、データ損失リスクがある。
 
-**Fix:**
-
-```python
-def _canonical_phase_path(value: object, phase_id: str) -> bool:
-    if (
-        type(value) is not str
-        or not value
-        or value.startswith("/")
-        or "\\" in value
-        or "\0" in value
-    ):
-        return False
-    parts = tuple(value.split("/"))
-    if any(
-        part in {"", ".", ".."} or unicodedata.normalize("NFC", part) != part
-        for part in parts
-    ):
-        return False
-    return (
-        len(parts) == 3
-        and parts[:2] == (".planning", "phases")
-        and parts[2].startswith(f"{phase_id}-")
-    )
-```
-
-expected / observed の両側について backslash、NUL、NFD を public gate へ与え、`UNKNOWN`、identity なし、remediation なしを確認する回帰テストを追加する。
-
-### CR-02: [BLOCKER] refresh の最終 state guard 後の target 更新を上書きして Success を返す
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:1193-1226`
-**Issue:** apply は `_current_preview` と target hash を再検査した後、別呼び出しの `replace_at` で staging を target へ置換する。この検査と置換の間に target が更新されても compare-and-swap または排他制御がない。`replace_at` の冒頭で target を別 bytes に更新してから通常の replace を実行する固定 probe では、競合更新が失われ、candidate bytes が入り、`apply_manifest_refresh` は `Success` を返した。承認後に変化した disk bytes を変更せず non-success にする state-guard 契約に反し、並行 refresh/operator update を失うデータ損失リスクがある。
-
-**Fix:** target の再観測から置換完了までを repository/change 単位の排他ロック下で行い、同じロック規約を全 writer に適用する。`replace_at` 境界にも expected target identity/hash を渡し、ロック下で一致を再確認してから rename する。最終検査直後に target を変更する固定 integration test を追加し、structured non-success と競合 bytes の保持を要求する。
+**Fix:** 現在の advisory lock だけで保護するなら、全 in-scope writer に同一 lock protocol を強制し、非協調 writer を保護対象外とする契約へ明示的に変更する。raw/operator update も保持する現契約を維持するなら、read-then-rename ではなく target の同一性を置換時まで原子的に拘束できる compare-and-swap 相当の protocol を導入する。いずれの場合も、最後の target read が戻った後、rename 前に target を更新する固定回帰テストを追加し、現契約では structured non-success と競合 bytes の保持を要求する。
 
 ## Warnings
 
-### WR-01: [WARNING] source identity の malformed limits が structured failure ではなく例外になる
+### WR-01: [WARNING] 非文字列の current source commit が structured failure ではなく TypeError になる
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:405-409`
-**Issue:** `_valid_limits` は outer object の型を確認せず `max_items` 等を直接参照する。したがって `source_inventory_from_bytes(..., limits=object())` と `read_source_inventory(..., limits=object())` はどちらも `AttributeError` を送出する。両 public reader は他の malformed aggregate を structured `Failure` に変換しているため、limits だけが fail-closed 境界を迂回する。
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:594-598`
+**Issue:** `preview_manifest_refresh` は `current_source_commit` の exact type を確認せず `_HEX_40.fullmatch` に渡す。型注釈を迂回する JSON / CLI 境界や直接呼び出しから `None`、整数、任意 object が入ると `TypeError` が公開 API から漏れ、`refresh-input-invalid` の structured `Failure` にならない。3種類すべてで例外を再現した。ほかの refresh limits や operations は同じ admission block で fail-closed に処理しており、この scalar だけ境界挙動が不整合である。
 
-**Fix:**
+**Fix:** 正規表現評価の前に exact string を検査する。
 
 ```python
-def _valid_limits(limits: object) -> bool:
-    return type(limits) is SourceIdentityLimits and all(
-        type(value) is int and value > 0
-        for value in (limits.max_items, limits.bytes_per_file, limits.bytes_total)
-    )
+if (
+    not _valid_limits(limits)
+    or type(current_source_commit) is not str
+    or _HEX_40.fullmatch(current_source_commit) is None
+):
+    return _failure("refresh-input-invalid", IssueCategory.INPUT)
 ```
 
-`None`、`object()`、subclass、bool/float/zero/negative field を両 public reader で検証し、`source-limits-invalid` を確認する。
-
-### WR-02: [WARNING] refresh preview の change 一覧が tombstone 差分を欠落させる
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:449-482`
-**Issue:** `_changes` は candidate の active items だけを走査するため、previous active item が candidate tombstone に移った差分を返さない。1 active item を同じ ID の tombstone に移した有効な state の実測結果は空 tuple だった。preview 本体には before/after state があるものの、`RefreshCandidateChange` が「one exact source-state difference」と定義され、machine view が `changes` を承認 evidence として公開している以上、削除差分を空と表示するのは誤解を招き、reviewer が source removal を見落とす。
-
-**Fix:** previous/candidate の ID 集合差を計算し、candidate tombstone に移った item を `kind="tombstoned"`、`reason="source-removed"` として決定的に追加する。created / updated / tombstoned がすべて exact、unique、UTF-8 byte 順になる回帰テストを追加する。
+`None`、整数、任意 object を public preview に渡し、repository / filesystem work の前に `refresh-input-invalid` を返す回帰テストを追加する。
 
 ## Verification Performed
 
-- `uv run pytest tests/test_handoff_execution_mapping.py tests/test_handoff_identity.py tests/test_handoff_lifecycle_drift.py tests/test_handoff_lifecycle_gate.py tests/test_handoff_manifest_refresh.py -q` — 542 passed
-- `uv run ruff check <reviewed Python files>` — passed
-- `uv run basedpyright <reviewed source files>` — 0 errors, 0 warnings, 0 notes
-- malformed expected phase path の public gate probe — 3/3 が identity 付き `DRIFTED` として再現
-- final state guard 後の target race probe — 競合 bytes を上書きし `Success` として再現
-- malformed source limits probe — 両 reader で `AttributeError` を再現
-- active-to-tombstone change probe — `_changes(...) == ()` を再現
+- `task check` — Ruff format/check、BasedPyright 0 errors、全 952 tests passed
+- 既知4修正と graph/path-role 回帰の重点 pytest — 71 passed
+- JSON fixture 3件の `python -m json.tool` 検証 — passed
+- 最後の target read 後・rename 前の更新を注入する public apply probe — `Success`、`concurrent_preserved=False`、`candidate_installed=True` を再現
+- malformed `current_source_commit` の public preview probe — `None`、整数、任意 object の全件で `TypeError` を再現
 
 ---
 
-_Reviewed: 2026-07-29T11:33:08Z_
+_Reviewed: 2026-08-01T07:22:01Z_
 _Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: deep_
