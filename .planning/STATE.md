@@ -5,14 +5,14 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Plan 03-27 completed and verified; Plan 03-23 fresh independent exit workflow is next
-last_updated: "2026-08-01T12:04:00.000Z"
+stopped_at: Plan 03-28 getter-throwing preview totality gap planned in Wave 21; execution is next
+last_updated: "2026-08-01T12:46:32.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Plan 03-27 completed with supported-subclass preview/apply TDD and all project checks green
+last_activity_desc: Fresh review found getter-throwing malformed-subclass CR-01; Plan 03-28 created before Plan 03-23 exit workflow
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 37
+  total_plans: 38
   completed_plans: 36
   percent: 33
 ---
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 26 of 27 (Plan 03-23 fresh independent exit workflow is next)
-Status: 26 of 27 Phase 03 plans executed; Plan 03-27 verified complete
-Last activity: 2026-08-01 — Plan 03-27 completed; focused, static, full-suite, and public behavior checks passed
+Plan: 26 of 28 (Plan 03-28 is next in Wave 21; Plan 03-23 follows in Wave 22)
+Status: 26 of 28 Phase 03 plans executed; current CR-01 awaits Plan 03-28
+Last activity: 2026-08-01 — Plan 03-28 planned from the fresh getter-throwing malformed-subclass review finding
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -159,12 +159,14 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Plan 03-24 closed WR-01 and recorded the advisory-lock guarantee boundary; the later fresh review exposed a new migration-adapter blocker before exit. — Preserves 03-24 as completed historical evidence without treating its once-planned direct handoff to 03-23 as current sequencing.
 - [Phase 03]: Fresh review after 03-24 found that truthiness fallback discarded valid falsey migration operations adapters; Plan 03-25 closed both public seams through RED→GREEN TDD and remains complete. — Preserves completed implementation evidence without reopening historical work.
 - [Phase 03]: Fresh review after 03-25 found that migration preview discarded a valid falsey previous SourceIdentityState; Plan 03-26 closed the reported collision seam through RED→GREEN TDD, while later review determined another supported-subclass path still needed gap closure before Plan 03-23. — Preserves the completed 03-26 collision evidence without treating it as current clean exit authority.
-- [Phase 03]: Fresh review after 03-26 found a supported-subclass preview-shape mismatch; Plan 03-27 aligned canonical admission and serialization-only base projection through RED→GREEN TDD, and Plan 03-23 now restarts in Wave 21. — Preserves the Critical finding as historical evidence until fresh independent re-review while Phase 3 remains at 26/27 executed.
+- [Phase 03]: Fresh review after 03-26 found a supported-subclass preview-shape mismatch; Plan 03-27 aligned canonical admission and serialization-only base projection through RED→GREEN TDD, and Plan 03-23 was then scheduled for Wave 21. — Preserves the exact-type finding as historical evidence; the later Plan 03-28 decision supersedes that sequencing.
+- [Phase 03]: Fresh review after 03-27 found that getter-throwing malformed SourceIdentityState subclasses escape `_preview_identity` before its exception boundary; Plan 03-28 closes the public apply totality gap in Wave 21, and Plan 03-23 moves to Wave 22. — Preserves valid subclass support while ordinary untrusted-input exceptions normalize to existing preview-invalid evidence and process-control BaseException remains visible.
 
 ### Pending Todos
 
-- Restart Plan 03-23 for fresh independent review, ASVS L1 security audit, and
-  all-27-plan reverification before planning Phase 4.
+- Execute Plan 03-28 through public RED→GREEN TDD, then restart Plan 03-23 for fresh
+  independent review, ASVS L1 security audit, and all-28-plan reverification before
+  planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -176,9 +178,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Plan 03-18 closed the path-role gap and all project checks passed; independent
   reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
   5–6 retain their dependency order.
-- The current `03-REVIEW.md` remains the Critical 1 / Warning 0 historical report.
-  Plan 03-27 fixed the supported-subclass preview/apply behavior; only a fresh Plan
-  03-23 reviewer may replace the report and rejudge the finding.
+- The current `03-REVIEW.md` remains Critical 1 / Warning 0 and records the
+  getter-throwing malformed-subclass CR-01. Plan 03-28 must close it before only a fresh
+  Plan 03-23 reviewer may replace the report and rejudge the finding.
 
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -191,6 +193,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-08-01T12:04:00.000Z
-Stopped at: 26/27 Phase 03 plans executed; Plan 03-23 fresh independent exit workflow is next
+Last session: 2026-08-01T12:46:32.000Z
+Stopped at: 26/28 Phase 03 plans executed; Plan 03-28 is next in Wave 21 and Plan 03-23 follows in Wave 22
 Resume file: None
