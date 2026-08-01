@@ -27,7 +27,13 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
     apply_manifest_migration,
     preview_manifest_migration,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
+from ai_coding_template_ja.openspec_gsd_handoff.models import (
+    ClassifiedIssue,
+    Failure,
+    IssueCategory,
+    KnownState,
+    Success,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceIdentityLimits,
@@ -95,6 +101,25 @@ class ReadOnlyCountingOperations(ManifestMigrationFileOperations):
 
     def unlink(self, path: Path) -> None:
         raise AssertionError(f"unexpected unlink: {path}")
+
+
+class FalseyPreviewOpenFailureOperations(ManifestMigrationFileOperations):
+    """Expose whether preview retains a valid falsey filesystem adapter."""
+
+    def __init__(self) -> None:
+        self.open_parent_directory_calls = 0
+
+    def __bool__(self) -> bool:
+        return False
+
+    def open_parent_directory(
+        self,
+        repository: Path,
+        relative_parent: Path,
+    ) -> Any:
+        del repository, relative_parent
+        self.open_parent_directory_calls += 1
+        raise OSError("injected repository open failure")
 
 
 class MutationRecordingOperations(ManifestMigrationFileOperations):
@@ -720,6 +745,37 @@ def test_preview_builds_complete_deterministic_schema_v2_without_mutation(
     assert len(preview.preview_sha256) == 64
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_preview_uses_falsey_supplied_operations_without_default_fallback(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    before = _tree_bytes(repository)
+    v1, current_artifacts = _inputs()
+    operations = FalseyPreviewOpenFailureOperations()
+
+    result = preview_manifest_migration(
+        repository,
+        Path(TARGET_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=current_artifacts,
+        current_progress=v1.progress,
+        source_paths=(SOURCE_PATH,),
+        operations=operations,
+    )
+
+    assert result == Failure(
+        ClassifiedIssue(
+            category=IssueCategory.INPUT,
+            code="migration-repository-unreadable",
+            known_state=KnownState.UNKNOWN,
+        )
+    )
+    assert operations.open_parent_directory_calls == 1
+    assert target.read_bytes() == EXPECTED_V1
+    assert _tree_bytes(repository) == before
+    assert not any(target.parent.glob(".handoff.*.tmp"))
 
 
 def test_preview_uses_exact_artifact_spec_bytes_for_source_identity(
