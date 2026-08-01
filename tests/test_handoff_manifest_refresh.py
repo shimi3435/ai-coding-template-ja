@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from hypothesis import HealthCheck, given, settings
@@ -53,8 +53,11 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     serialize_manifest_v2,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.models import (
+    ClassifiedIssue,
     Failure,
     HandoffState,
+    IssueCategory,
+    KnownState,
     Success,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
@@ -305,6 +308,27 @@ class MutationRecordingRefreshOperations(ManifestRefreshFileOperations):
     def unlink_at(self, parent_descriptor: int, name: str) -> None:
         self.mutations.append("unlink")
         super().unlink_at(parent_descriptor, name)
+
+
+class RepositoryResolutionProbe:
+    def __init__(self) -> None:
+        self.probes = 0
+
+    def resolve(self, *, strict: bool = False) -> Path:
+        self.probes += 1
+        raise AssertionError("repository resolution must not be reached")
+
+
+class FilesystemForbiddenRefreshOperations(ManifestRefreshFileOperations):
+    def __init__(self) -> None:
+        self.probes = 0
+
+    def __getattribute__(self, name: str) -> Any:
+        if name == "probes":
+            return object.__getattribute__(self, name)
+        probes = object.__getattribute__(self, "probes")
+        object.__setattr__(self, "probes", probes + 1)
+        raise AssertionError(f"filesystem operation must not be reached: {name}")
 
 
 class FaultInjectingRefreshOperations(MutationRecordingRefreshOperations):
@@ -868,6 +892,44 @@ def test_preview_uses_supplied_read_only_operations_boundary(tmp_path: Path) -> 
         operations.repository_reads.count(artifact.path) == 2 for artifact in artifacts
     )
     assert operations.mutations == []
+
+
+@pytest.mark.parametrize(
+    "current_source_commit",
+    [
+        pytest.param(None, id="none"),
+        pytest.param(7, id="integer"),
+        pytest.param(object(), id="arbitrary-object"),
+    ],
+)
+def test_preview_rejects_non_string_source_commit_before_filesystem_work(
+    current_source_commit: Any,
+) -> None:
+    repository: Any = RepositoryResolutionProbe()
+    operations = FilesystemForbiddenRefreshOperations()
+    _, artifacts, progress, inventory, registry = _inputs()
+
+    result = preview_manifest_refresh(
+        repository,
+        Path(HANDOFF_PATH),
+        current_source_commit=current_source_commit,
+        current_artifacts=artifacts,
+        current_progress=progress,
+        source_paths=(SOURCE_PATH,),
+        planning_inventory=inventory,
+        policy_registry=registry,
+        operations=operations,
+    )
+
+    assert result == Failure(
+        ClassifiedIssue(
+            IssueCategory.INPUT,
+            "refresh-input-invalid",
+            KnownState.UNKNOWN,
+        )
+    )
+    assert repository.probes == 0
+    assert operations.probes == 0
 
 
 @pytest.mark.parametrize("git_state", ["missing", "unknown-commit", "blob-mismatch"])
