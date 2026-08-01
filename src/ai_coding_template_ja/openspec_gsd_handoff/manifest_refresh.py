@@ -450,6 +450,7 @@ def _changes(
     previous: SourceIdentityState, candidate: SourceIdentityState
 ) -> tuple[RefreshCandidateChange, ...]:
     old = {item.id: item for item in previous.active}
+    kind_rank = {"created": 0, "updated": 1, "tombstoned": 2}
     result: list[RefreshCandidateChange] = []
     for item in candidate.active:
         prior = old.get(item.id)
@@ -477,8 +478,25 @@ def _changes(
                     "source-content-changed",
                 )
             )
+    for item in candidate.tombstones:
+        prior = old.get(item.id)
+        if prior is not None:
+            result.append(
+                RefreshCandidateChange(
+                    "tombstoned",
+                    item.id,
+                    item.category,
+                    item.last_source_path,
+                    prior.fingerprint,
+                    item.fingerprint,
+                    "source-removed",
+                )
+            )
     return tuple(
-        sorted(result, key=lambda item: (item.kind != "created", item.source_id))
+        sorted(
+            result,
+            key=lambda item: (kind_rank[item.kind], item.source_id.encode("utf-8")),
+        )
     )
 
 
