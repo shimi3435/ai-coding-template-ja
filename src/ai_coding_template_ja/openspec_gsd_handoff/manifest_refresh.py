@@ -594,7 +594,11 @@ def preview_manifest_refresh(
     filesystem = ManifestRefreshFileOperations() if operations is None else operations
     if not isinstance(filesystem, ManifestRefreshFileOperations):
         return _failure("refresh-input-invalid", IssueCategory.INPUT)
-    if not _valid_limits(limits) or _HEX_40.fullmatch(current_source_commit) is None:
+    if (
+        not _valid_limits(limits)
+        or type(current_source_commit) is not str
+        or _HEX_40.fullmatch(current_source_commit) is None
+    ):
         return _failure("refresh-input-invalid", IssueCategory.INPUT)
     try:
         repository = repository_root.resolve(strict=True)
