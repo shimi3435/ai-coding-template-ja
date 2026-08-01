@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import replace
@@ -16,6 +18,20 @@ from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff.execution_mapping import (
     read_planning_inventory,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.manifest import (
+    HandoffManifest,
+    serialize_manifest,
+)
+from ai_coding_template_ja.openspec_gsd_handoff.manifest_migration import (
+    ManifestMigrationFailure,
+    ManifestMigrationFileOperations,
+    MigrationCleanupOutcome,
+    MigrationFailurePoint,
+    MigrationStagingState,
+    MigrationTargetState,
+    apply_manifest_migration,
+    preview_manifest_migration,
 )
 from ai_coding_template_ja.openspec_gsd_handoff.manifest_refresh import (
     ManifestRefreshFailure,
@@ -367,6 +383,81 @@ class DriftAtReplaceRefreshOperations(MutationRecordingRefreshOperations):
         self.path.write_bytes(self.path.read_bytes() + b"\nreplace-boundary drift\n")
 
 
+class AfterLockedValidationTargetMutationOperations(MutationRecordingRefreshOperations):
+    """Inject one raw target update at the internal replacement seam."""
+
+    def __init__(self, target: Path, concurrent_bytes: bytes) -> None:
+        super().__init__()
+        self.target = target
+        self.concurrent_bytes = concurrent_bytes
+        self.lock_contended = False
+        self.rename_events: list[str] = []
+
+    def after_locked_target_validation_at(
+        self,
+        parent_descriptor: int,
+        parent: Path,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        del parent_descriptor, source_name, target_name
+        contender = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            try:
+                fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                self.lock_contended = True
+            else:
+                fcntl.flock(contender, fcntl.LOCK_UN)
+            self.target.write_bytes(self.concurrent_bytes)
+        finally:
+            os.close(contender)
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        # RED compatibility: production does not yet expose the internal hook.
+        self.after_locked_target_validation_at(
+            parent_descriptor,
+            self.target.parent,
+            source_name,
+            target_name,
+        )
+        super().replace_at(parent_descriptor, source_name, target_name)
+        self.rename_events.append("replace")
+
+
+class MigrationMutationRecordingOperations(ManifestMigrationFileOperations):
+    """Record migration effects used by the shared writer-lock regression."""
+
+    def __init__(self) -> None:
+        self.mutations: list[str] = []
+
+    def create_staging_at(self, parent_descriptor: int, parent: Path) -> str:
+        self.mutations.append("create")
+        return super().create_staging_at(parent_descriptor, parent)
+
+    def write_bytes_at(self, parent_descriptor: int, name: str, data: bytes) -> None:
+        self.mutations.append("write")
+        super().write_bytes_at(parent_descriptor, name, data)
+
+    def replace_at(
+        self,
+        parent_descriptor: int,
+        source_name: str,
+        target_name: str,
+    ) -> None:
+        self.mutations.append("replace")
+        super().replace_at(parent_descriptor, source_name, target_name)
+
+    def unlink_at(self, parent_descriptor: int, name: str) -> None:
+        self.mutations.append("unlink")
+        super().unlink_at(parent_descriptor, name)
+
+
 def _preview(repository: Path, **overrides):
     _, artifacts, progress, inventory, registry = _inputs()
     arguments = {
@@ -379,6 +470,55 @@ def _preview(repository: Path, **overrides):
     }
     arguments.update(overrides)
     return preview_manifest_refresh(repository, Path(HANDOFF_PATH), **arguments)
+
+
+def _migration_preview_for_lock_test(repository: Path, target: Path):
+    parsed = parse_manifest_v2_bytes(target.read_bytes())
+    assert isinstance(parsed, Success)
+    previous = parsed.value
+    v1 = HandoffManifest(
+        schema_version=1,
+        change_id=previous.change_id,
+        handoff_state=previous.handoff_state,
+        artifacts=previous.artifacts,
+        source_commit=previous.source_commit,
+        progress=previous.progress,
+        capabilities=previous.capabilities,
+    )
+    serialized = serialize_manifest(v1)
+    assert isinstance(serialized, Success)
+    target.write_bytes(serialized.value)
+    current_artifacts = tuple(
+        replace(
+            artifact,
+            sha256=_sha256((repository / artifact.path).read_bytes()),
+        )
+        for artifact in previous.artifacts
+    )
+    progress = parse_task_progress(
+        (repository / TASKS_PATH).read_text(encoding="utf-8")
+    )
+    assert isinstance(progress, Success)
+    preview = preview_manifest_migration(
+        repository,
+        Path(HANDOFF_PATH),
+        current_source_commit=SOURCE_COMMIT,
+        current_artifacts=current_artifacts,
+        current_progress=progress.value,
+        source_paths=(SOURCE_PATH,),
+        previous_source_items=previous.source_items,
+    )
+    assert isinstance(preview, Success)
+    return preview.value, serialized.value
+
+
+def _assert_directory_lock_can_be_acquired(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
 
 
 def test_published_target_matches_exact_approved_refresh_evidence() -> None:
@@ -1203,6 +1343,106 @@ def test_apply_exact_preview_stages_validates_and_atomically_replaces(
     assert applied.value.capabilities == preview.previous_manifest.capabilities
     assert applied.value.ownership == preview.previous_manifest.ownership
     assert applied.value.lifecycle == preview.previous_manifest.lifecycle
+
+
+def test_apply_preserves_target_mutated_after_locked_validation_before_rename(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    concurrent = serialize_manifest_v2(
+        replace(
+            preview.previous_manifest,
+            source_commit=ALTERNATE_SOURCE_COMMIT,
+        )
+    )
+    assert isinstance(concurrent, Success)
+    assert concurrent.value not in {target.read_bytes(), preview.candidate_bytes}
+    operations = AfterLockedValidationTargetMutationOperations(
+        target,
+        concurrent.value,
+    )
+
+    applied = apply_manifest_refresh(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.code == "refresh-state-changed-at-replace"
+    assert applied.issue.failure_point is RefreshFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is RefreshTargetState.UNKNOWN
+    assert applied.issue.staging_state is RefreshStagingState.VALIDATED
+    assert applied.issue.cleanup_outcome is RefreshCleanupOutcome.REMOVED
+    assert operations.lock_contended is True
+    assert operations.rename_events == []
+    assert target.read_bytes() == concurrent.value
+    assert target.read_bytes() != preview.candidate_bytes
+    assert not tuple(target.parent.glob(".handoff.*.tmp"))
+
+
+def test_refresh_and_migration_writers_contend_on_one_change_directory_lock(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    refresh_result = _preview(repository)
+    assert isinstance(refresh_result, Success)
+    refresh_preview = refresh_result.value
+    refresh_before = target.read_bytes()
+    refresh_operations = MutationRecordingRefreshOperations()
+    holder = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        refresh_applied = apply_manifest_refresh(
+            refresh_preview,
+            approved_preview_sha256=refresh_preview.preview_sha256,
+            approved=True,
+            operations=refresh_operations,
+        )
+    finally:
+        fcntl.flock(holder, fcntl.LOCK_UN)
+        os.close(holder)
+
+    assert isinstance(refresh_applied, ManifestRefreshFailure)
+    assert refresh_applied.issue.code == "refresh-writer-lock-unavailable"
+    assert refresh_applied.issue.failure_point is RefreshFailurePoint.STATE_GUARD
+    assert refresh_applied.issue.target_state is RefreshTargetState.V2_PRESERVED
+    assert refresh_applied.issue.staging_state is RefreshStagingState.VALIDATED
+    assert refresh_applied.issue.cleanup_outcome is RefreshCleanupOutcome.REMOVED
+    assert refresh_operations.mutations == ["create", "write", "unlink"]
+    assert target.read_bytes() == refresh_before
+    assert not tuple(target.parent.glob(".handoff.*.tmp"))
+    _assert_directory_lock_can_be_acquired(target.parent)
+
+    migration_preview, v1_bytes = _migration_preview_for_lock_test(repository, target)
+    migration_operations = MigrationMutationRecordingOperations()
+    holder = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        migration_applied = apply_manifest_migration(
+            migration_preview,
+            approved_preview_sha256=migration_preview.preview_sha256,
+            approved=True,
+            operations=migration_operations,
+        )
+    finally:
+        fcntl.flock(holder, fcntl.LOCK_UN)
+        os.close(holder)
+
+    assert isinstance(migration_applied, ManifestMigrationFailure)
+    assert migration_applied.issue.code == "migration-writer-lock-unavailable"
+    assert migration_applied.issue.failure_point is MigrationFailurePoint.STATE_GUARD
+    assert migration_applied.issue.target_state is MigrationTargetState.V1_PRESERVED
+    assert migration_applied.issue.staging_state is MigrationStagingState.VALIDATED
+    assert migration_applied.issue.cleanup_outcome is MigrationCleanupOutcome.REMOVED
+    assert migration_operations.mutations == ["create", "write", "unlink"]
+    assert target.read_bytes() == v1_bytes
+    assert not tuple(target.parent.glob(".handoff.*.tmp"))
+    _assert_directory_lock_can_be_acquired(target.parent)
 
 
 def test_apply_complete_no_op_succeeds_without_create_write_or_replace(
