@@ -5,14 +5,14 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Plan 03-25 completed and verified; Plan 03-23 fresh independent exit workflow is next
-last_updated: "2026-08-01T10:52:00.000Z"
+stopped_at: Plan 03-26 review-gap TDD is next; Plan 03-23 fresh independent exit workflow follows
+last_updated: "2026-08-01T11:06:28.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Plan 03-25 completed with public preview/apply falsey-adapter TDD and all project checks green
+last_activity_desc: Plan 03-26 planned for falsey previous-source-state tombstone/counter preservation
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 35
+  total_plans: 36
   completed_plans: 34
   percent: 33
 ---
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 24 of 25 (Plan 03-23 fresh independent exit workflow is next)
-Status: 24 of 25 Phase 03 plans executed; Plan 03-25 verified complete
-Last activity: 2026-08-01 — Plan 03-25 completed; focused, static, full-suite, and public behavior checks passed
+Plan: 24 of 26 (Plan 03-26 review-gap TDD is next; Plan 03-23 follows)
+Status: 24 of 26 Phase 03 plans executed; Plan 03-25 remains verified complete
+Last activity: 2026-08-01 — Plan 03-26 created for the fresh falsey previous-source-state Critical finding
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -157,12 +157,14 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Conditional replace requires an operations-owned live token plus the previewed target hash and rechecks target bytes after the fixed injection seam. — Rejects contention, token-integrity failure, and non-cooperative target mutation before candidate installation.
 - [Phase 03]: HND-03 traceability remains Pending until Plan 03-23 and the independent Phase 3 exit gate complete. — Preserves canonical OpenSpec completion ownership despite this plan closing the persistence race.
 - [Phase 03]: Plan 03-24 closed WR-01 and recorded the advisory-lock guarantee boundary; the later fresh review exposed a new migration-adapter blocker before exit. — Preserves 03-24 as completed historical evidence without treating its once-planned direct handoff to 03-23 as current sequencing.
-- [Phase 03]: Fresh review after 03-24 found that truthiness fallback discarded valid falsey migration operations adapters; Plan 03-25 closed both public seams through RED→GREEN TDD, and Plan 03-23 now restarts in Wave 19. — Preserves the Critical finding as historical evidence until fresh independent re-review while Phase 3 remains at 24/25 executed.
+- [Phase 03]: Fresh review after 03-24 found that truthiness fallback discarded valid falsey migration operations adapters; Plan 03-25 closed both public seams through RED→GREEN TDD and remains complete. — Preserves completed implementation evidence without reopening historical work.
+- [Phase 03]: Fresh review after 03-25 found that migration preview still discarded a valid falsey previous SourceIdentityState, losing tombstones/counters and reusing reserved IDs; Plan 03-26 closes that public seam in Wave 19 before Plan 03-23 restarts in Wave 20. — Preserves the new Critical finding until fresh independent re-review while Phase 3 remains at 24/26 executed.
 
 ### Pending Todos
 
-- Restart Plan 03-23 for fresh independent review, ASVS L1 security audit, and
-  all-25-plan reverification before planning Phase 4.
+- Execute Plan 03-26 public migration-preview TDD, then restart Plan 03-23 for fresh
+  independent review, ASVS L1 security audit, and all-26-plan reverification before
+  planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -175,8 +177,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
   reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
   5–6 retain their dependency order.
 - The current `03-REVIEW.md` remains the preserved Critical 1 / Warning 0 historical
-  report. Plan 03-25 fixed that migration adapter behavior; only a fresh Plan 03-23
-  reviewer may replace the report and rejudge the finding.
+  report. Plan 03-25 fixed the operations-adapter behavior; Plan 03-26 must fix the
+  remaining previous-state behavior before a fresh Plan 03-23 reviewer may replace the
+  report and rejudge the finding; no implementation context may self-declare clean.
 
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -189,6 +192,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-08-01T10:52:00.000Z
-Stopped at: 24/25 Phase 03 plans executed; Plan 03-23 fresh independent exit workflow is next
+Last session: 2026-08-01T11:06:28.000Z
+Stopped at: 24/26 Phase 03 plans executed; Plan 03-26 is next, then Plan 03-23 fresh independent exit workflow
 Resume file: None
