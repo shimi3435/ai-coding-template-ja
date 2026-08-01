@@ -1047,22 +1047,15 @@ def _preview_machine_view(preview: ManifestMigrationPreview) -> dict[str, object
 def _preview_identity(preview: object) -> str | None:
     """Return one validated preview identity without leaking input exceptions."""
 
-    if not isinstance(
-        preview, ManifestMigrationPreview
-    ) or not _preview_has_valid_shape(preview):
-        return None
     try:
-        if not _preview_is_consistent(preview):
+        if (
+            not isinstance(preview, ManifestMigrationPreview)
+            or not _preview_has_valid_shape(preview)
+            or not _preview_is_consistent(preview)
+        ):
             return None
         machine_bytes = _compact_json(_preview_machine_view(preview))
-    except (
-        AttributeError,
-        TypeError,
-        ValueError,
-        UnicodeEncodeError,
-        OverflowError,
-        RecursionError,
-    ):
+    except Exception:
         return None
     if len(machine_bytes) > MAX_MANIFEST_BYTES:
         return None
