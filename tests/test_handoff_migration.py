@@ -764,6 +764,81 @@ def test_preview_builds_complete_deterministic_schema_v2_without_mutation(
     assert _tree_bytes(repository) == before
 
 
+def test_preview_and_apply_accept_valid_falsey_previous_source_state_subclass(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    state = FalseySourceIdentityState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+    validated = validate_source_identity_state(state)
+    assert isinstance(validated, Success)
+    assert validated.value is state
+    assert not state
+    target_before = target.read_bytes()
+    tree_before = _tree_bytes(repository)
+
+    result = _preview(repository, previous_source_items=state)
+
+    assert isinstance(result, Success)
+    preview = result.value
+    assert preview.previous_source_items is state
+    assert len(preview.source_context_sha256) == 64
+    assert len(preview.preview_sha256) == 64
+    assert tuple(
+        item.id for item in preview.candidate_manifest.source_items.active
+    ) == (
+        "REQ-000001",
+        "SCN-000001",
+    )
+    assert target.read_bytes() == target_before
+    assert _tree_bytes(repository) == tree_before
+    assert not any(target.parent.glob(".handoff.*.tmp"))
+
+    operations = MutationRecordingOperations()
+    applied = apply_manifest_migration(
+        preview,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(applied, Success)
+    assert applied.value == preview.candidate_manifest
+    assert applied.value.source_items == preview.candidate_manifest.source_items
+    assert target.read_bytes() == preview.candidate_bytes
+    assert _tree_bytes(repository) == {
+        **tree_before,
+        TARGET_PATH: preview.candidate_bytes,
+    }
+    assert operations.mutations == ["create", "write", "replace"]
+    assert not any(target.parent.glob(".handoff.*.tmp"))
+
+
+def test_preview_accepts_exact_base_empty_previous_source_state(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    state = SourceIdentityState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+    before = _tree_bytes(repository)
+
+    result = _preview(repository, previous_source_items=state)
+
+    assert isinstance(result, Success)
+    assert result.value.previous_source_items is state
+    assert target.read_bytes() == EXPECTED_V1
+    assert _tree_bytes(repository) == before
+    assert not any(target.parent.glob(".handoff.*.tmp"))
+
+
 def test_preview_preserves_falsey_previous_source_state_and_rejects_tombstone_reuse(
     tmp_path: Path,
 ) -> None:
@@ -1398,6 +1473,7 @@ def test_preview_contains_repository_and_target_parent_symlink_loops(
         "artifact-entry",
         "progress-task",
         "source-path-entry",
+        "previous-source-state",
         "candidate-mismatch",
     ],
 )
@@ -1417,6 +1493,7 @@ def test_apply_rejects_malformed_nested_preview_without_partial_evidence(
             current_progress=replace(preview.current_progress, tasks=("bad",)),
         ),
         "source-path-entry": replace(preview, source_paths=(object(),)),
+        "previous-source-state": replace(preview, previous_source_items=object()),
         "candidate-mismatch": replace(
             preview,
             candidate_manifest=replace(preview.candidate_manifest, artifacts=()),
