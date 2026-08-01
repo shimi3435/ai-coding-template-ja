@@ -36,8 +36,11 @@ from ai_coding_template_ja.openspec_gsd_handoff.models import (
 )
 from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progress
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
+    SourceCategory,
     SourceIdentityLimits,
     SourceIdentityState,
+    SourceTombstone,
+    validate_source_identity_state,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -101,6 +104,13 @@ class ReadOnlyCountingOperations(ManifestMigrationFileOperations):
 
     def unlink(self, path: Path) -> None:
         raise AssertionError(f"unexpected unlink: {path}")
+
+
+class FalseySourceIdentityState(SourceIdentityState):
+    """Represent a supported previous source state whose truth value is false."""
+
+    def __bool__(self) -> bool:
+        return False
 
 
 class FalseyPreviewOpenFailureOperations(ManifestMigrationFileOperations):
@@ -752,6 +762,64 @@ def test_preview_builds_complete_deterministic_schema_v2_without_mutation(
     assert len(preview.preview_sha256) == 64
     assert target.read_bytes() == EXPECTED_V1
     assert _tree_bytes(repository) == before
+
+
+def test_preview_preserves_falsey_previous_source_state_and_rejects_tombstone_reuse(
+    tmp_path: Path,
+) -> None:
+    repository, target = _write_repository(tmp_path)
+    target_before = target.read_bytes()
+    tree_before = _tree_bytes(repository)
+    previous_source_items = FalseySourceIdentityState(
+        next_requirement_id=2,
+        next_scenario_id=2,
+        active=(),
+        tombstones=(
+            SourceTombstone(
+                id="REQ-000001",
+                category=SourceCategory.REQUIREMENT,
+                last_source_path=SOURCE_PATH,
+                last_raw_heading="### Requirement: Durable preview",
+                last_parent_id=None,
+                fingerprint="a" * 64,
+            ),
+            SourceTombstone(
+                id="SCN-000001",
+                category=SourceCategory.SCENARIO,
+                last_source_path=SOURCE_PATH,
+                last_raw_heading="#### Scenario: Stable content edit",
+                last_parent_id="REQ-000001",
+                fingerprint="b" * 64,
+            ),
+        ),
+    )
+    validated = validate_source_identity_state(previous_source_items)
+    assert isinstance(validated, Success)
+    assert validated.value is previous_source_items
+    assert not previous_source_items
+    assert previous_source_items.next_requirement_id == 2
+    assert previous_source_items.next_scenario_id == 2
+    assert tuple(item.id for item in previous_source_items.tombstones) == (
+        "REQ-000001",
+        "SCN-000001",
+    )
+
+    result = _preview(
+        repository,
+        previous_source_items=previous_source_items,
+    )
+
+    assert result == Failure(
+        ClassifiedIssue(
+            category=IssueCategory.INPUT,
+            code="source-tombstone-identity-collision",
+            known_state=KnownState.MANIFEST_ABSENT,
+        )
+    )
+    assert not hasattr(result, "value")
+    assert target.read_bytes() == target_before
+    assert _tree_bytes(repository) == tree_before
+    assert not any(target.parent.glob(".handoff.*.tmp"))
 
 
 def test_preview_uses_falsey_supplied_operations_without_default_fallback(
