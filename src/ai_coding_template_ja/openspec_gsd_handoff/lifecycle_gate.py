@@ -7,9 +7,10 @@ import hmac
 import os
 import re
 import stat
+import unicodedata
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Protocol
 
 from .execution_mapping import (
@@ -405,18 +406,28 @@ def _claims_from_manifest(
     )
 
 
-def _canonical_phase_path(value: str, phase_id: str) -> bool:
-    try:
-        path = PurePosixPath(value)
-    except (TypeError, ValueError):
+def _canonical_phase_path(value: object, phase_id: str) -> bool:
+    if (
+        type(value) is not str
+        or not value
+        or value.startswith("/")
+        or "\\" in value
+        or "\0" in value
+    ):
         return False
-    parts = path.parts
+    parts = tuple(value.split("/"))
+    if any(
+        part in {"", ".", ".."} or unicodedata.normalize("NFC", part) != part
+        for part in parts
+    ):
+        return False
+    phase_prefix = f"{phase_id}-"
     return (
-        value == path.as_posix()
-        and not path.is_absolute()
+        "/".join(parts) == value
         and len(parts) == 3
         and parts[:2] == (".planning", "phases")
-        and parts[2].startswith(f"{phase_id}-")
+        and parts[2].startswith(phase_prefix)
+        and len(parts[2]) > len(phase_prefix)
     )
 
 
