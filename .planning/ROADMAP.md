@@ -46,7 +46,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (24/26 plans executed; Plan 03-26 is next, then Plan 03-23 fresh independent exit workflow)
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (25/26 plans executed; Plan 03-23 fresh independent exit workflow remains)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
@@ -121,7 +121,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
-**Plans:** 24/26 plans executed
+**Plans:** 25/26 plans executed
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
@@ -137,7 +137,7 @@ Plans:
 - [x] 03-22-PLAN.md
 - [x] 03-24-PLAN.md — Close malformed refresh-preview input and append the exact 03-22 advisory-lock boundary
 - [x] 03-25-PLAN.md — Preserve valid falsey migration adapters at public preview/apply seams
-- [ ] 03-26-PLAN.md — Preserve valid falsey previous source identity state and reject tombstone ID reuse
+- [x] 03-26-PLAN.md — Preserve valid falsey previous source identity state and reject tombstone ID reuse
 - [ ] 03-23-PLAN.md
 
 **Wave 1**
@@ -220,7 +220,7 @@ Plans:
 
 **Wave 19** *(blocked on Wave 18 / Plan 03-25 completion)*
 
-- [ ] 03-26-PLAN.md — TDD falsey previous-source-state preservation at public migration preview
+- [x] 03-26-PLAN.md — TDD falsey previous-source-state preservation at public migration preview
 
 **Wave 20** *(blocked on Wave 19 / Plan 03-26 completion)*
 
@@ -288,7 +288,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 24/26 | In Progress |  |
+| 3. Lifecycle Drift Gate | 25/26 | In Progress |  |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |
