@@ -33,9 +33,12 @@ Phase 7 is added. Plan 03-17 published the exact approved 54-item authority, and
 03-18 closed the canonical path-role gap with all project checks green. Fresh independent
 review after Plan 03-24 found one new Critical migration-adapter fallback blocker, which
 Plan 03-25 closed. Fresh review after Plan 03-25 found a second Critical truthiness
-fallback that discards valid falsey previous source identity state; Plan 03-26 closes
-that gap before Plan 03-23 restarts fresh review/security/verifier evidence, so Phase 4
-stays blocked on Phase 3.
+fallback that discards valid falsey previous source identity state; Plan 03-26 closed
+the reported tombstone-collision gap. A later fresh review confirmed that collision fix
+and the earlier operations fix, but found the no-collision supported-subclass path still
+fails the downstream preview-shape exact-type guard; Plan 03-27 aligns that guard with
+the canonical source-state validator before Plan 03-23 restarts fresh
+review/security/verifier evidence, so Phase 4 stays blocked on Phase 3.
 The old handoff preimage and brief remain preserved in historical evidence rather than the
 current planning authority.
 
@@ -46,7 +49,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (25/26 plans executed; Plan 03-23 fresh independent exit workflow remains)
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (25/27 plans executed; Plan 03-27 is next, then Plan 03-23 fresh independent exit workflow)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
@@ -121,7 +124,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
-**Plans:** 25/26 plans executed
+**Plans:** 25/27 plans executed
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
@@ -138,6 +141,7 @@ Plans:
 - [x] 03-24-PLAN.md — Close malformed refresh-preview input and append the exact 03-22 advisory-lock boundary
 - [x] 03-25-PLAN.md — Preserve valid falsey migration adapters at public preview/apply seams
 - [x] 03-26-PLAN.md — Preserve valid falsey previous source identity state and reject tombstone ID reuse
+- [ ] 03-27-PLAN.md — Align migration preview-shape admission with the supported source-state validator contract
 - [ ] 03-23-PLAN.md
 
 **Wave 1**
@@ -224,6 +228,10 @@ Plans:
 
 **Wave 20** *(blocked on Wave 19 / Plan 03-26 completion)*
 
+- [ ] 03-27-PLAN.md — TDD supported falsey source-state subclass preview/apply admission
+
+**Wave 21** *(blocked on Wave 20 / Plan 03-27 completion)*
+
 - [ ] 03-23-PLAN.md — Fresh independent review, security audit, and final reverification
 
 ### Phase 4: Repository-Wide Ownership
@@ -288,7 +296,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 25/26 | In Progress |  |
+| 3. Lifecycle Drift Gate | 25/27 | In Progress |  |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |

@@ -5,14 +5,14 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Plan 03-26 completed and verified; Plan 03-23 fresh independent exit workflow is next
+stopped_at: Plan 03-26 completed and verified; Plan 03-27 supported-subclass preview-shape gap closure is next
 last_updated: "2026-08-01T11:28:00.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Plan 03-26 completed with falsey previous-source-state collision TDD and all project checks green
+last_activity_desc: Fresh review confirmed Plan 03-26 collision behavior but found a no-collision supported-subclass preview-shape blocker; Plan 03-27 planned next
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 36
+  total_plans: 37
   completed_plans: 35
   percent: 33
 ---
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 25 of 26 (Plan 03-23 fresh independent exit workflow is next)
-Status: 25 of 26 Phase 03 plans executed; Plan 03-26 verified complete
-Last activity: 2026-08-01 — Plan 03-26 completed; focused, static, full-suite, and public behavior checks passed
+Plan: 25 of 27 (Plan 03-27 supported-subclass preview-shape gap closure is next)
+Status: 25 of 27 Phase 03 plans executed; Plan 03-26 verified complete and Plan 03-27 pending
+Last activity: 2026-08-01 — fresh review confirmed the 03-26 collision fix but found the no-collision falsey subclass preview-shape contract mismatch
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -158,12 +158,14 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: HND-03 traceability remains Pending until Plan 03-23 and the independent Phase 3 exit gate complete. — Preserves canonical OpenSpec completion ownership despite this plan closing the persistence race.
 - [Phase 03]: Plan 03-24 closed WR-01 and recorded the advisory-lock guarantee boundary; the later fresh review exposed a new migration-adapter blocker before exit. — Preserves 03-24 as completed historical evidence without treating its once-planned direct handoff to 03-23 as current sequencing.
 - [Phase 03]: Fresh review after 03-24 found that truthiness fallback discarded valid falsey migration operations adapters; Plan 03-25 closed both public seams through RED→GREEN TDD and remains complete. — Preserves completed implementation evidence without reopening historical work.
-- [Phase 03]: Fresh review after 03-25 found that migration preview discarded a valid falsey previous SourceIdentityState; Plan 03-26 closed that public seam through RED→GREEN collision TDD, and Plan 03-23 now restarts in Wave 20. — Preserves the Critical finding as historical evidence until fresh independent re-review while Phase 3 remains at 25/26 executed.
+- [Phase 03]: Fresh review after 03-25 found that migration preview discarded a valid falsey previous SourceIdentityState; Plan 03-26 closed the reported collision seam through RED→GREEN TDD, while later review determined another supported-subclass path still needed gap closure before Plan 03-23. — Preserves the completed 03-26 collision evidence without treating it as current clean exit authority.
+- [Phase 03]: Fresh review after 03-26 confirmed the collision and operations defects are fixed but found `_preview_has_valid_shape` still rejects a valid no-collision falsey SourceIdentityState subclass after canonical validation/reconciliation; Plan 03-27 closes that validator-contract mismatch in Wave 20, and Plan 03-23 moves to Wave 21. — Preserves the current Critical finding until fresh independent re-review while Phase 3 remains at 25/27 executed.
 
 ### Pending Todos
 
-- Restart Plan 03-23 for fresh independent review, ASVS L1 security audit, and
-  all-26-plan reverification before planning Phase 4.
+- Execute Plan 03-27 for supported-subclass preview/apply TDD, then restart Plan
+  03-23 for fresh independent review, ASVS L1 security audit, and all-27-plan
+  reverification before planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -176,8 +178,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
   reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
   5–6 retain their dependency order.
 - The current `03-REVIEW.md` remains the Critical 1 / Warning 0 historical report.
-  Plan 03-26 fixed the previous-state behavior; only a fresh Plan 03-23 reviewer may
-  replace the report and rejudge the finding.
+  Plan 03-26 fixed the reported collision behavior, but the no-collision supported
+  subclass still reaches `migration-preview-invalid`; Plan 03-27 owns that fix and only
+  a later fresh Plan 03-23 reviewer may replace the report and rejudge the finding.
 
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -191,5 +194,5 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-08-01T11:28:00.000Z
-Stopped at: 25/26 Phase 03 plans executed; Plan 03-23 fresh independent exit workflow is next
+Stopped at: 25/27 Phase 03 plans executed; Plan 03-27 supported-subclass gap closure is next
 Resume file: None
