@@ -2114,7 +2114,7 @@ def apply_manifest_migration(
 ) -> ManifestMigrationResult:
     """Apply only the exact approved preview through validated atomic replacement."""
 
-    filesystem = operations or ManifestMigrationFileOperations()
+    filesystem = ManifestMigrationFileOperations() if operations is None else operations
     preview_identity = _preview_identity(preview)
     if (
         preview_identity is None
