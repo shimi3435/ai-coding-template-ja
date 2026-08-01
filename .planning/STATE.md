@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Completed 03-21-PLAN.md; Plans 03-22 through 03-23 and independent Phase 03 reverification pending
-last_updated: "2026-08-01T06:38:13.860Z"
+stopped_at: Completed 03-22-PLAN.md; Plan 03-23 and independent Phase 03 reverification pending
+last_updated: "2026-08-01T07:01:05.286Z"
 last_activity: 2026-08-01
 last_activity_desc: Plan 03-21 completed; Plans 03-22 through 03-23 pending
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 33
-  completed_plans: 31
+  completed_plans: 32
   percent: 33
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 22 of 23
+Plan: 23 of 23
 Status: Ready to execute
 Last activity: 2026-08-01 — Plan 03-21 completed; Plans 03-22 through 03-23 pending
 
@@ -85,6 +85,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P19 | 6 min | 1 tasks | 2 files |
 | Phase 03 P20 | 6 min | 1 tasks | 2 files |
 | Phase 03 P21 | 10 min | 1 tasks | 2 files |
+| Phase 03 P22 | 17min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -152,6 +153,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Refresh approval evidence projects a tombstone only when its source ID existed in the previous active state. — Historical tombstones do not repeat as fresh changes.
 - [Phase 03]: Refresh changes use explicit created, updated, tombstoned rank followed by UTF-8 source ID bytes. — Approval evidence remains semantic and deterministic.
 - [Phase 03]: No REFACTOR commit was added because GREEN retained the existing single _changes projection authority.
+- [Phase 03]: Migration and refresh serialize final validation through durable rename with one non-blocking flock on the duplicated anchored change-directory descriptor. — Preserves approval-bound target bytes while giving both in-scope writers one repository/change-scoped synchronization identity.
+- [Phase 03]: Conditional replace requires an operations-owned live token plus the previewed target hash and rechecks target bytes after the fixed injection seam. — Rejects contention, token-integrity failure, and non-cooperative target mutation before candidate installation.
+- [Phase 03]: HND-03 traceability remains Pending until Plan 03-23 and the independent Phase 3 exit gate complete. — Preserves canonical OpenSpec completion ownership despite this plan closing the persistence race.
 
 ### Pending Todos
 
@@ -180,6 +184,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-08-01T06:37:56.721Z
-Stopped at: Completed 03-21-PLAN.md; Plans 03-22 through 03-23 and independent Phase 03 reverification pending
+Last session: 2026-08-01T07:01:05.280Z
+Stopped at: Completed 03-22-PLAN.md; Plan 03-23 and independent Phase 03 reverification pending
 Resume file: None
