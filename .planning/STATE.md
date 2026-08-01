@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
 status: executing
-stopped_at: Fresh review found migration falsey-adapter CR-01; Plan 03-25 gap closure is next before Plan 03-23 restarts
-last_updated: "2026-08-01T10:23:16.000Z"
+stopped_at: Plan 03-25 completed and verified; Plan 03-23 fresh independent exit workflow is next
+last_updated: "2026-08-01T10:52:00.000Z"
 last_activity: 2026-08-01
-last_activity_desc: Fresh independent review recorded Critical CR-01 and Plan 03-25 was registered for TDD closure
+last_activity_desc: Plan 03-25 completed with public preview/apply falsey-adapter TDD and all project checks green
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 35
-  completed_plans: 33
+  completed_plans: 34
   percent: 33
 ---
 
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 25 of 25 (Plan 03-25 falsey migration adapter gap closure is next)
-Status: 23 of 25 Phase 03 plans executed; Plan 03-24 remains complete, and Plan 03-23 is resequenced after 03-25
-Last activity: 2026-08-01 — Fresh review recorded one Critical migration adapter fallback blocker
+Plan: 24 of 25 (Plan 03-23 fresh independent exit workflow is next)
+Status: 24 of 25 Phase 03 plans executed; Plan 03-25 verified complete
+Last activity: 2026-08-01 — Plan 03-25 completed; focused, static, full-suite, and public behavior checks passed
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -42,9 +42,9 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
 **Velocity:**
 
-- Total plans completed: 33
+- Total plans completed: 34
 - Average duration: 10 min
-- Total execution time: 338 min
+- Total execution time: 344 min
 
 **By Phase:**
 
@@ -52,7 +52,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 |-------|-------|-------|----------|
 | Phase 1 | 5 | 48 min | 10 min |
 | Phase 2 | 5 | 64 min | 13 min |
-| Phase 3 | 23 | 226 min | 10 min |
+| Phase 3 | 24 | 232 min | 10 min |
 
 **Recent Trend:**
 
@@ -157,13 +157,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Conditional replace requires an operations-owned live token plus the previewed target hash and rechecks target bytes after the fixed injection seam. — Rejects contention, token-integrity failure, and non-cooperative target mutation before candidate installation.
 - [Phase 03]: HND-03 traceability remains Pending until Plan 03-23 and the independent Phase 3 exit gate complete. — Preserves canonical OpenSpec completion ownership despite this plan closing the persistence race.
 - [Phase 03]: Plan 03-24 closed WR-01 and recorded the advisory-lock guarantee boundary; the later fresh review exposed a new migration-adapter blocker before exit. — Preserves 03-24 as completed historical evidence without treating its once-planned direct handoff to 03-23 as current sequencing.
-- [Phase 03]: Fresh review after 03-24 found that truthiness fallback discards valid falsey migration operations adapters; Plan 03-25 owns public preview/apply TDD closure, then Plan 03-23 restarts in Wave 19. — Preserves the Critical finding until behavior is fixed and independently re-reviewed while Phase 3 remains at 23/25 executed.
+- [Phase 03]: Fresh review after 03-24 found that truthiness fallback discarded valid falsey migration operations adapters; Plan 03-25 closed both public seams through RED→GREEN TDD, and Plan 03-23 now restarts in Wave 19. — Preserves the Critical finding as historical evidence until fresh independent re-review while Phase 3 remains at 24/25 executed.
 
 ### Pending Todos
 
-- Execute Plan 03-25 for falsey migration adapter preview/apply TDD, focused/static/project
-  verification, and self-review; then restart Plan 03-23 for fresh independent review,
-  ASVS L1 security audit, and all-25-plan reverification before planning Phase 4.
+- Restart Plan 03-23 for fresh independent review, ASVS L1 security audit, and
+  all-25-plan reverification before planning Phase 4.
 
 ### Blockers/Concerns
 
@@ -175,9 +174,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Plan 03-18 closed the path-role gap and all project checks passed; independent
   reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
   5–6 retain their dependency order.
-- The current fresh `03-REVIEW.md` has Critical 1 / Warning 0: valid falsey migration
-  operations adapters are replaced by the default filesystem adapter in public preview/apply.
-  Plan 03-25 must close this before Plan 03-23 can regenerate exit evidence.
+- The current `03-REVIEW.md` remains the preserved Critical 1 / Warning 0 historical
+  report. Plan 03-25 fixed that migration adapter behavior; only a fresh Plan 03-23
+  reviewer may replace the report and rejudge the finding.
 
 - Manual recovery does not add Phase 7 and does not reprepare, restart, switch route, roll back, or repair automatically.
 
@@ -190,6 +189,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-08-01T10:23:16.000Z
-Stopped at: 23/25 Phase 03 plans executed; Plan 03-25 is next and Plan 03-23 follows
+Last session: 2026-08-01T10:52:00.000Z
+Stopped at: 24/25 Phase 03 plans executed; Plan 03-23 fresh independent exit workflow is next
 Resume file: None

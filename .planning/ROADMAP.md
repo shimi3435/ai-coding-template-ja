@@ -44,7 +44,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (23/25 plans executed; Plan 03-25 is next, then Plan 03-23 fresh independent exit workflow)
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (24/25 plans executed; Plan 03-23 fresh independent exit workflow remains)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
@@ -119,7 +119,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
-**Plans:** 23/25 plans executed
+**Plans:** 24/25 plans executed
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
@@ -134,7 +134,7 @@ Plans:
 - [x] 03-21-PLAN.md
 - [x] 03-22-PLAN.md
 - [x] 03-24-PLAN.md — Close malformed refresh-preview input and append the exact 03-22 advisory-lock boundary
-- [ ] 03-25-PLAN.md — Preserve valid falsey migration adapters at public preview/apply seams
+- [x] 03-25-PLAN.md — Preserve valid falsey migration adapters at public preview/apply seams
 - [ ] 03-23-PLAN.md
 
 **Wave 1**
@@ -213,7 +213,7 @@ Plans:
 
 **Wave 18** *(blocked on Wave 17 / Plan 03-24 completion)*
 
-- [ ] 03-25-PLAN.md — TDD falsey migration adapter preservation at public preview/apply seams
+- [x] 03-25-PLAN.md — TDD falsey migration adapter preservation at public preview/apply seams
 
 **Wave 19** *(blocked on Wave 18 / Plan 03-25 completion)*
 
@@ -281,7 +281,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 23/25 | In Progress |  |
+| 3. Lifecycle Drift Gate | 24/25 | In Progress |  |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |
