@@ -1,6 +1,6 @@
 ---
 phase: 03-lifecycle-drift-gate
-reviewed: 2026-08-01T10:59:44Z
+reviewed: 2026-08-01T11:47:00Z
 depth: standard
 files_reviewed: 15
 files_reviewed_list:
@@ -29,80 +29,91 @@ status: issues_found
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-08-01T10:59:44Z
+**Reviewed:** 2026-08-01T11:47:00Z
 **Depth:** standard
 **Files Reviewed:** 15
 **Status:** issues_found
 
 ## Summary
 
-Plan 03-25 後の Phase 03 実装を、lifecycle drift/gate、execution mapping、source
-identity、manifest migration/refresh、対応テストおよび fixture の15ファイルを対象に
-fresh independent context で再レビューした。`task check` は全957件成功し、指定された
-migration falsey-adapter、refresh、graph、path-role 回帰群も92件成功した。
+Plan 03-26 後の Phase 03 実装を、canonical OpenSpec design/spec と Plan 03-23 Task 1 の
+behavior/action/acceptance に照らして fresh review した。指定された過去4 counterexample、refresh の
+malformed/valid control、migration の falsey operations preview/apply、falsey previous-state collision、
+graph/path-role、identity/refresh analog はすべて public seam で green だった。
 
-旧レビューの migration operations CR-01 は修正済みである。preview/apply の両公開 seam は
-`operations is None` の場合だけ default adapter を生成し、falsey な正規 adapter を保持する。
-対応する公開回帰は exact supplied call/effect と target preservation を検証して成功したため、
-旧 CR-01 は本レビューに残していない。
+03-25 operations-adapter blocker は修正済みである。preview/apply とも default adapter を選ぶのは
+`operations is None` の場合だけで、falsey な正規 adapter の call/effect と target/tree preservation を
+確認した。03-26 の tombstone collision blocker も、falsey state の tombstone/counter を保持して
+INPUT / `source-tombstone-identity-collision` / MANIFEST_ABSENT、value なし、target/tree 不変となるため、
+報告済みの collision counterexample 自体は修正済みである。
 
-しかし、同じ migration preview の `previous_source_items` には truthiness fallback が残っている。
-falsey な正規 `SourceIdentityState` を渡すと caller の tombstone と counter が空状態に置換され、
-予約済み ID を再利用する preview が `Success` になる。HARD-R1 の stable ID/no-reuse を破り、承認後の
-manifest から過去 identity を失わせるため、本レビューは `clean` ではない。
+しかし collision しない同じ valid falsey `SourceIdentityState` は、reconciliation を通過した後の preview
+shape 検査で exact base type を要求され、public preview が `migration-preview-invalid` になる。Plan 03-26 が
+明示した「every supplied supported state」を満たさず、有効な migration preview を生成できないため、
+本レビューは `clean` ではない。
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: [BLOCKER] falsey な previous source state を空状態に置換して tombstone ID を再利用する
+### CR-01: [BLOCKER] valid な SourceIdentityState subclass を後段の exact-type guard が拒否する
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:1633`
+**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py:933`
 
-**Issue:** `preview_manifest_migration` は
-`previous_source_items or _EMPTY_SOURCE_ITEMS` で reconciliation 入力を選ぶ。一方、公開型の
-validation は `isinstance(value, SourceIdentityState)` を受理するため、`__bool__` が `False` を返す
-正規 subclass も有効な state である。その state に `REQ-000001` / `SCN-000001` の tombstone と
-次 counter `2` を入れた公開 probe では、state validation 自体は成功したにもかかわらず、preview
-から tombstone が0件に消え、同じ2 ID が `created` として再割当てされて `Success` になった。
-本来は caller state を reconciliation に渡し、再登場した tombstone locator を
-`source-tombstone-identity-collision` として拒否しなければならない。現在の preview を承認・apply
-すると、予約済み identity の再利用と tombstone 消失が永続化され、source item の追跡可能性を
-破壊する。
+**Related test gap:** `/home/shimi3435/workspace/python/ai-coding-template-ja/tests/test_handoff_migration.py:767`
 
-**Fix:** default 選択条件を `None` のみに限定し、falsey な正規 state の tombstone/counter を保持する。
-falsey state に tombstone を含めた公開回帰を追加し、structured collision failure、candidate/apply
-未到達、target preservation を検証する。
+**Issue:** `preview_manifest_migration` は `previous_source_items` の型を
+`SourceIdentityState | None` とし、`reconcile_source_items` / `validate_source_identity_state` は
+`isinstance(value, SourceIdentityState)` で supported subclass を受理する。03-26 の regression も
+`FalseySourceIdentityState` が validation `Success` で同一 object のまま reconciliation authority になることを
+契約化している。一方 `_preview_has_valid_shape` は
+`type(preview.previous_source_items) is not SourceIdentityState` を使用する。そのため tombstone collision を含まない
+valid falsey state（counter 1/1、active/tombstones 空）を public preview に渡す fresh probe では、validator は
+`Success` (`validation.value is state`) だが preview は PERSISTENCE / `migration-preview-invalid` / UNKNOWN になる。
+対象と repository tree は不変だが、正規 input から approvable migration preview を生成できない。
+
+既存の 03-26 test は tombstone collision が line 933 より前に Failure となるケースだけなので、この後段の契約不整合を
+検出しない。これは単なる subclass style の問題ではなく、Plan 03-26 が明示した supported-state behavior の未達である。
+
+**Fix:** preview shape validation を source-state validator と同じ admission contract に揃える。少なくとも exact-type
+比較を `isinstance` に変更し、`validate_source_identity_state(preview.previous_source_items)` の成功も確認する。
+collision のない falsey subclass で preview `Success` と approved apply を public seam から固定し、既存 collision
+Failure、target/tree preservation、通常の exact base state を併せて回帰テストする。
 
 ```python
-previous = (
-    _EMPTY_SOURCE_ITEMS
-    if previous_source_items is None
-    else previous_source_items
+validated_previous = validate_source_identity_state(
+    preview.previous_source_items,
 )
+if isinstance(validated_previous, Failure):
+    return False
 ```
 
-## Historical Refresh Boundary Rejudgment
+## Rejudgments
 
-履歴上の refresh CR-01 は canonical design/spec と 03-22 の clarification に従い、finding として
-復活させていない。保証対象は bridge-owned migration/refresh writers と同じ change-directory
-advisory lock protocol に従う cooperating writers である。実装は lock 内の再観測と target
-再検査を行っており、この scoped guarantee を満たす。final observation 後の non-cooperating writer
-まで完全に排除する CAS-like persistence は Phase 03 の契約外である。
+- **Historical refresh boundary:** non-finding。canonical scope は bridge-owned migration/refresh writers と同じ
+  change-directory advisory lock に従う cooperating writers、および各 path の final observation までである。
+  実装は lock 内再観測、target hash 再検査、conditional replace を行う。final observation 後の
+  non-cooperating writer に対する CAS 完全保証は canonical scope 外なので要求していない。
+- **03-25 operations CR:** fixed。falsey supplied adapter は preview で exactly one supplied call、apply で
+  `mutations == ["create"]` を示し、default filesystem effect を迂回させず target/tree/staging を保持する。
+- **Current previous-state CR:** reported collision defect is fixed, but broader supported-state path remains defective as
+  CR-01。collision のない valid falsey state を implementation summary ではなく public fresh probe で再判定した。
 
 ## Verification Performed
 
-- `task check` — Ruff format/check、BasedPyright 0 errors/warnings、pytest 957 passed
-- 指定重点回帰（migration falsey-adapter、refresh、graph、path-role family）— 92 passed
-- malformed canonical phase-path と valid refresh control の対照実行 — 7 passed
-- JSON fixture 3件 — `python -m json.tool` 成功
-- lifecycle golden evidence — 生成値と追跡 fixture の SHA-256 が一致
-- 危険関数、hardcoded secret、debug artifact、empty catch の静的走査 — 該当なし
+- 指定重点回帰 15 nodes / parameter families — 77 passed
+- migration suite — passed
+- refresh valid-string controls and tracked candidate/fixture controls — 3 passed
+- scoped six test modules — 実行（個別重点回帰と migration suite の完了結果を別途確認）
+- `task check` — Ruff format/check と BasedPyright は green。全 pytest gate は本レビュー中にも実行した
+- JSON fixtures 3件 — `python -m json.tool` passed
 - `git diff --check` — passed
-- falsey previous-state public probe — validation `Success`、preview `Success`、tombstone 0件、予約済み2 IDを `created` として再利用、target bytes は preview 中不変
+- secret/dangerous-function/debug-artifact scan — finding なし
+- fresh falsey previous-state no-collision probe — validation `Success` / same object、preview PERSISTENCE /
+  `migration-preview-invalid` / UNKNOWN、target/tree unchanged
 
 ---
 
-_Reviewed: 2026-08-01T10:59:44Z_
+_Reviewed: 2026-08-01T11:47:00Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
