@@ -12,7 +12,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ai_coding_template_ja.openspec_gsd_handoff import source_identity as identity
-from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
+from ai_coding_template_ja.openspec_gsd_handoff.models import (
+    ClassifiedIssue,
+    Failure,
+    IssueCategory,
+    KnownState,
+    Success,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     SourceCategory,
     SourceIdentityLimits,
@@ -369,6 +375,96 @@ def test_read_source_inventory_rejects_malformed_path_inputs(
             ),
         )
     )
+
+
+@pytest.mark.parametrize("reader", ["bytes", "filesystem"])
+@pytest.mark.parametrize(
+    ("invalid_kind", "field_name", "invalid_value"),
+    [
+        pytest.param("none", None, None, id="none-outer"),
+        pytest.param("object", None, None, id="object-outer"),
+        pytest.param("subclass", None, None, id="subclass-outer"),
+        pytest.param("field", "max_items", True, id="max-items-bool"),
+        pytest.param("field", "max_items", 1.5, id="max-items-float"),
+        pytest.param("field", "max_items", 0, id="max-items-zero"),
+        pytest.param("field", "max_items", -1, id="max-items-negative"),
+        pytest.param("field", "bytes_per_file", True, id="bytes-per-file-bool"),
+        pytest.param("field", "bytes_per_file", 1.5, id="bytes-per-file-float"),
+        pytest.param("field", "bytes_per_file", 0, id="bytes-per-file-zero"),
+        pytest.param("field", "bytes_per_file", -1, id="bytes-per-file-negative"),
+        pytest.param("field", "bytes_total", True, id="bytes-total-bool"),
+        pytest.param("field", "bytes_total", 1.5, id="bytes-total-float"),
+        pytest.param("field", "bytes_total", 0, id="bytes-total-zero"),
+        pytest.param("field", "bytes_total", -1, id="bytes-total-negative"),
+    ],
+)
+def test_public_source_readers_reject_malformed_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reader: str,
+    invalid_kind: str,
+    field_name: str | None,
+    invalid_value: object,
+) -> None:
+    if invalid_kind == "none":
+        invalid_limits = cast(Any, None)
+    elif invalid_kind == "object":
+        invalid_limits = cast(Any, object())
+    elif invalid_kind == "subclass":
+
+        class SourceIdentityLimitsSubclass(SourceIdentityLimits):
+            pass
+
+        invalid_limits = SourceIdentityLimitsSubclass()
+    else:
+        assert field_name is not None
+        invalid_limits = replace(
+            SourceIdentityLimits(),
+            **cast(Any, {field_name: invalid_value}),
+        )
+
+    filesystem_calls: list[str] = []
+    original_resolve = Path.resolve
+    original_stat = os.stat
+    original_open = os.open
+
+    def recording_resolve(path: Path, *args: Any, **kwargs: Any) -> Path:
+        filesystem_calls.append("resolve")
+        return original_resolve(path, *args, **kwargs)
+
+    def recording_stat(*args: Any, **kwargs: Any) -> os.stat_result:
+        filesystem_calls.append("stat")
+        return original_stat(*args, **kwargs)
+
+    def recording_open(*args: Any, **kwargs: Any) -> int:
+        filesystem_calls.append("open")
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", recording_resolve)
+    monkeypatch.setattr(os, "stat", recording_stat)
+    monkeypatch.setattr(os, "open", recording_open)
+
+    if reader == "bytes":
+        result = identity.source_inventory_from_bytes(
+            [(SOURCE_PATH, b"### Requirement: Valid\nBody.\n")],
+            limits=invalid_limits,
+        )
+    else:
+        result = read_source_inventory(
+            tmp_path / "unobserved-repository",
+            [SOURCE_PATH],
+            limits=invalid_limits,
+        )
+
+    assert result == Failure(
+        ClassifiedIssue(
+            category=IssueCategory.INPUT,
+            code="source-limits-invalid",
+            known_state=KnownState.MANIFEST_ABSENT,
+        )
+    )
+    assert not hasattr(result, "value")
+    assert filesystem_calls == []
 
 
 def test_inventory_normalizes_supported_atx_blocks_and_fingerprints_literals(
