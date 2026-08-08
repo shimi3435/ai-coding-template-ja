@@ -39,10 +39,12 @@ and the earlier operations fix, but found the no-collision supported-subclass pa
 fails the downstream preview-shape exact-type guard; Plan 03-27 aligns that guard with
 the canonical source-state validator. Fresh review after Plan 03-27 found that a
 getter-throwing malformed supported subclass still escapes the preview-identity exception
-boundary; Plan 03-28 closed that migration apply totality gap. The following fresh review
-found two adjacent totality blockers in refresh apply/serialization and the canonical
-source-state validator, so another gap plan is required before Plan 03-23 can restart and
-Phase 4 remains blocked on Phase 3.
+boundary; Plan 03-28 closed that migration apply totality gap. Plan 03-29 closed the two
+adjacent totality blockers in refresh apply/serialization and the canonical source-state
+validator. Plan 03-23 then regenerated the planned exit evidence, but the required
+execute-phase post review found four Critical findings and one Warning. Independent
+re-verification therefore returned `gaps_found` at 3/10, restored HND-03 to Pending, and
+kept Phase 4 blocked on Phase 3.
 The old handoff preimage and brief remain preserved in historical evidence rather than the
 current planning authority.
 
@@ -53,7 +55,7 @@ do not replace, restate, or weaken the canonical OpenSpec acceptance criteria.
 
 - [x] **Phase 1: Stable Identity and Migration** - Establish the source-pinned identity and migration foundation required by later phases.
 - [x] **Phase 2: Source-to-Execution Mapping** - Make the change-specific execution mapping complete and reviewable. (5/5 plans complete; review clean, verification passed, approved publication complete)
-- [x] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (29/29 plans complete; review clean, security verified, verification passed) (completed 2026-08-08)
+- [ ] **Phase 3: Lifecycle Drift Gate** - Establish one fail-closed lifecycle drift decision boundary. (29/29 plans complete; verification gaps found: Critical 4 / Warning 1)
 - [ ] **Phase 4: Repository-Wide Ownership** - Make repository-wide ownership evidence available to later mutation decisions. (blocked on Phase 3)
 - [ ] **Phase 5: Recovery and Resume** - Make interrupted and partial execution states inspectable and safely resumable.
 - [ ] **Phase 6: Finalize Preview and Receipt** - Bind finalization to fresh evidence and reconcile cross-phase proof.
@@ -307,7 +309,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 29/29 | Complete   | 2026-08-08 |
+| 3. Lifecycle Drift Gate | 29/29 | Gaps Found | - |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |

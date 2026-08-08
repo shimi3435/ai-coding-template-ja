@@ -1,225 +1,223 @@
 ---
 phase: 03-lifecycle-drift-gate
-verified: 2026-08-08T11:11:14Z
-status: passed
-score: 10/10 must-haves verified
+verified: 2026-08-08T11:43:23Z
+status: gaps_found
+score: 3/10 must-haves verified
 behavior_unverified: 0
-human_verification: []
 overrides_applied: 0
 re_verification:
-  previous_status: gaps_found
-  previous_score: 5/10
-  gaps_remaining: []
-  regressions: []
+  previous_status: passed
+  previous_score: 10/10
+  gaps_closed: []
+  gaps_remaining:
+    - "Refresh apply の canonical target 再確認不足"
+    - "Refresh production API の change/Phase 02/test fixture 固定"
+    - "NFD source path から自己再現不能な NFC identity を生成"
+    - "Canonical drift classifier の getter 例外漏出"
+    - "Migration public input の collection/operations 検証不足"
+  regressions:
+    - "03-REVIEW.md が clean から issues_found（Critical 4 / Warning 1）へ更新された"
+gaps:
+  - truth: "Approval-relevant evidence remains bound to the canonical target through the protected refresh effect."
+    status: failed
+    reason: "apply_manifest_refresh は replace 後も置換前 parent descriptor を再読するため、canonical parent rebind 後に detached candidate を検証して Success を返す。"
+    artifacts:
+      - path: "src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py"
+        issue: "1327-1350 が fresh canonical anchor ではなく target_anchor.descriptor を再利用する。"
+      - path: "tests/test_handoff_manifest_refresh.py"
+        issue: "migration にある post-replace parent-rebind 回帰に相当する refresh 回帰がない。"
+    missing:
+      - "replace 後に repository anchor から canonical parent を no-follow で開き直す。"
+      - "fresh parent identity と candidate bytes を検証してから Success を返す。"
+      - "refresh parent-rebind / fresh-reread-failure の public regression tests を追加する。"
+  - truth: "Every later lifecycle operation can consume a generic fresh drift/refresh decision rather than one change-specific fixture."
+    status: failed
+    reason: "preview/apply refresh が固定 source counts、created/updated IDs、Phase 02、tests/fixtures の assignment path に依存し、正しい別 change/phase や installed wheel で成立しない。"
+    artifacts:
+      - path: "src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py"
+        issue: "66-71, 699-724, 886-916 に change-specific constants、target_phase_id='02'、test fixture path が埋め込まれている。"
+    missing:
+      - "previous/candidate から差分を導出し、fixed source-count/ID allowlist を除去する。"
+      - "target phase と assignment/policy source を caller input と preview identity に束縛する。"
+      - "別 change、Phase 02 のない valid inventory、installed wheel の public regressions を追加する。"
+  - truth: "Canonical source identity is stable and reusable for every accepted canonical path."
+    status: failed
+    reason: "NFD filesystem path を受理して NFC path を永続化するため、最初の read は Success でも保存 path は存在せず、次回 read が source-path-unreadable になる。"
+    artifacts:
+      - path: "src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py"
+        issue: "412-431 は NFC 化した値を返すが raw segment と NFC の byte-for-byte 一致を要求しない。"
+      - path: "tests/test_handoff_identity.py"
+        issue: "NFD 単独 path を source-path-noncanonical とする回帰がない。"
+    missing:
+      - "raw path segment が NFC と一致しない場合は source-path-noncanonical で拒否する。"
+      - "NFD 単独 path の public reader regression を追加する。"
+  - truth: "Malformed or adversarial structured canonical observations become identity-free UNKNOWN and never raise."
+    status: failed
+    reason: "CanonicalArtifactObservation subclass の path getter が RuntimeError を送出すると public classifier が canonical-observation-incomplete を返さず例外を漏出する。"
+    artifacts:
+      - path: "src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_drift.py"
+        issue: "242-310, 358-371 の completeness validation/comparison に ordinary Exception boundary がない。"
+      - path: "tests/test_handoff_lifecycle_drift.py"
+        issue: "source_items.active getter は覆うが outer/artifact/progress/task getter を覆わない。"
+      - path: "src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py"
+        issue: "boundary call 後の structured value validation/projection が同種の例外を totalize しない。"
+    missing:
+      - "classifier validation/comparison と gate projection を ordinary Exception 境界に含める。"
+      - "BaseException は伝播させたまま、左右両 side の outer/artifact/progress/task/graph/capability getter regressions を追加する。"
+  - truth: "Migration public seams return structured failure for malformed collection and operations inputs."
+    status: partial
+    reason: "current_artifacts/source_paths/explicit_matches の tuple 化と operations 使用が runtime validation より先で、None/object から TypeError/AttributeError が漏れる。最新 review は Warning と分類している。"
+    artifacts:
+      - path: "src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py"
+        issue: "1584-1640, 2114-2152 に collection/operations runtime validation がない。"
+    missing:
+      - "non-string Sequence、member、limits、operations adapter を filesystem work 前に検証する。"
+      - "ordinary iteration/getter errors を既存または明示的な structured invalid result に正規化する。"
 ---
 
 # Phase 3: Lifecycle Drift Gate Verification Report
 
-**Phase Goal:** Deliver a single fail-closed lifecycle gate that observes canonical source, phase, graph, capability, manifest, and approval state; classifies complete evidence deterministically; and prevents stale or partial evidence from authorizing protected lifecycle effects.
-**Verified:** 2026-08-08T11:11:14Z
-**Status:** passed
-**Re-verification:** Yes — fresh, independent goal-backward verification after gap closure
+**Phase Goal:** Every lifecycle operation planned after this phase can rely on the same fresh, fail-closed drift decision.
+**Verified:** 2026-08-08T11:43:23Z
+**Status:** gaps_found
+**Re-verification:** Yes — 旧 passed レポートを、HEAD `3861162` の最新 execute:post review と actual code に対して再評価
 
 ## Verdict
 
-The Phase 3 goal is achieved. All ten canonical truths are verified by actual production wiring and passing behavioral tests. All 29 plan must-have groups are closed: 132 declared truths were traced, 89/89 declared artifacts passed existence/substance checks, and 74/74 declared key links passed their plan queries and were sampled semantically at the public boundaries. No summary claim was accepted as implementation evidence.
+Phase 3 goal は現行コードでは未達である。既存 970-test suite（execute:post 提供結果）と今回の focused passing checks は既存ケースを通すが、未検証の public seam で Critical 4 件を再現できる。特に refresh apply は canonical target が候補値でない状態でも `Success` を返し、canonical drift classifier は malformed structured input を `UNKNOWN` にせず例外を漏出する。これは fail-closed decision boundary の中心契約を直接破る。
 
-There are no surviving gaps, deferred must-haves, regressions, overrides, behavior-unverified truths, human-verification items, unresolved prohibitions, review findings, or open threats.
+旧レポートの「REVIEW clean」「review findings 0」という根拠は失効した。最新 `03-REVIEW.md` は `status: issues_found`, Critical 4, Warning 1 であり、Plan 03-23 の clean-review must-have を満たさない。SUMMARY の 29/29 完了や 970 tests pass は goal achievement の代替証拠として扱っていない。
 
 ## Goal Achievement
 
-### Canonical Ten Truths
+### Observable Truths
 
-| # | Observable truth | Status | Code and behavioral evidence |
+| # | Truth | Status | Actual evidence |
 |---:|---|---|---|
-| 1 | Complete, well-formed canonical source inputs classify deterministically as clean, drifted, or unknown without a partial green result. | ✓ VERIFIED | `run_lifecycle_drift_gate` is the public classification seam; classifier and public-gate suites exercise clean, drifted, incomplete, and inconsistent inputs. The full suite passed. |
-| 2 | Malformed or over-limit canonical and phase observations become unknown before comparison, sorting, identity construction, or remediation. | ✓ VERIFIED | Canonical phase-path validation rejects non-string, absolute, backslash, NUL, empty/dot/dotdot, and non-NFC components before normalization. Source-limit and malformed graph/container regressions assert identity-free unknown results. |
-| 3 | Plan, execute, resume, verify, and finalize consume the same freshly invoked public gate and declared mapping horizons. | ✓ VERIFIED | The public lifecycle gate calls the canonical source reader, mapping readiness, graph/capability observation, classifier, decision identity, and remediation path; execution-mapping tests cover both public APIs and all lifecycle horizons. |
-| 4 | Approval and admission boundaries bind complete current evidence through the protected effect. | ✓ VERIFIED | Decision identity covers valid admission inputs; refresh and migration apply paths revalidate under the cooperating writer lock. Mutation-after-validation and writer-contention tests passed. |
-| 5 | Missing, malformed, over-limit, timed-out, truncated, or incomplete evidence yields identity-free unknown with no remediation. | ✓ VERIFIED | Source, graph, path-role, classifier, and wholly-unknown public-gate regressions assert no decision identity, evidence, or remediation on invalid observations. |
-| 6 | Decision identity binds every valid admission input and rejects stale reuse. | ✓ VERIFIED | Root identity, nested progress, commit/inventory, graph/capability, tombstone, path-role, and source-state changes are identity inputs; stale decision and reintroduction tests passed. |
-| 7 | Complete valid graph or capability drift exposes deterministic changed items, remediation, and next actions. | ✓ VERIFIED | Raw DAG validation precedes normalization, 54 authority items are covered, and deterministic UTF-8 ordering/value-level remediation assertions pass for graph, capability, and manifest changes. |
-| 8 | Fixed public examples are primary; approved pure properties are bounded; filesystem and I/O races use fixed integration evidence. | ✓ VERIFIED | Six Phase 3 public test modules collect 646 tests. Properties are confined to established pure seams; races, locks, filesystem swaps, getter failures, and apply behavior use fixed regression cases. No linked Phase 3 test is skipped or xfailed. |
-| 9 | Reviewers have deterministic, source-pinned, read-only evidence for every classification and approval decision. | ✓ VERIFIED | Source identity, evidence projection, read-only public gate, refresh/migration previews, and evidence exports are wired. Artifact and key-link queries passed, and exact evidence-shape tests passed. |
-| 10 | Canonical Phase 3 exit evidence is clean before Phase 4. | ✓ VERIFIED | OpenSpec validation passed; project checks passed with 970 tests; REVIEW parses as clean with four integer zero counts and zero canonical finding records; SECURITY parses as verified/ASVS 1/open 0 with 137/137 threats closed; HND-03 traceability is Complete. |
+| 1 | Complete canonical inputs classify deterministically as clean/drifted/unknown without partial green. | ✗ FAILED | Artifact getter `RuntimeError` が public classifier から漏出した。 |
+| 2 | Malformed/noncanonical/over-limit observations become unknown before comparison, sorting, identity, or remediation. | ✗ FAILED | NFD path が一度 Success し、存在しない NFC identity を永続化する。getter input は例外になる。 |
+| 3 | Plan/execute/resume/verify/finalize use the same freshly invoked public gate and declared horizons. | ✓ VERIFIED | `test_operation_matrix_uses_one_complete_gate` と stale replay regressionsを fresh runし、8 passed。 |
+| 4 | Approval/effect boundaries bind complete current evidence through the protected effect. | ✗ FAILED | Parent rebind reproduction は `Success canonical_is_candidate=False detached_is_candidate=True`。 |
+| 5 | Missing/malformed/incomplete evidence yields identity-free unknown and no remediation. | ✗ FAILED | Classifier getter case raises。migration malformed collection/operations も raw exception を漏らす。 |
+| 6 | Decision/source identity binds every accepted admission input and remains reusable. | ✗ FAILED | NFD accepted path の persisted NFC identity は filesystem 上に存在せず、次回 `source-path-unreadable`。 |
+| 7 | Complete graph/capability drift exposes deterministic changed items, remediation, and next actions. | ✓ VERIFIED | canonical-source と phase/capability remediation の named testsを fresh runし、2 passed。 |
+| 8 | Phase 3 TDD evidence keeps fixed I/O/race examples and approved bounded properties. | ✓ VERIFIED | Phase 3 の checkbox、A-P-GRAPH、B-P-PATH-ROLE properties と固定 race tests は存在する。新規 critical cases の欠落は別 truth を失敗させる。 |
+| 9 | Reviewer evidence is reliable for every classification and approval decision. | ✗ FAILED | Generic refresh は Phase 02/test fixture 固定、refresh Success は canonical target と食い違い得る。 |
+| 10 | Canonical Phase 3 exit evidence is clean before Phase 4. | ✗ FAILED | 最新 review は Critical 4 / Warning 1。SECURITY は旧 clean-review prerequisite に依存し、HND-03 Complete と旧 verification passed は現状と矛盾する。 |
 
-**Score:** 10/10 truths verified; 0 present-but-behavior-unverified.
+**Score:** 3/10 truths verified; 0 present-but-behavior-unverified.
 
 ### Roadmap Success Criteria
 
 | Roadmap contract | Status | Evidence |
 |---|---|---|
-| A single gate covers plan, execute, resume, verify, and finalize without duplicating lifecycle truth. | ✓ VERIFIED | Public gate and mapping-horizon wiring, including both mapping APIs, pass focused and full-suite tests. |
-| Complete evidence yields deterministic clean/drifted outcomes and incomplete evidence fails closed. | ✓ VERIFIED | Classifier/public-gate exact-value regressions and malformed evidence families pass. |
-| Approval is source-pinned, stale decisions are rejected, and protected writers cannot silently cross the final observation. | ✓ VERIFIED | Identity, stale-reuse, prefix-boundary, writer-lock, migration, and refresh apply regressions pass. |
-| Phase exit evidence is independently reviewable and clean. | ✓ VERIFIED | Canonical spec validation, full checks, REVIEW, SECURITY, requirements traceability, and this independent report are clean. |
+| Shared clean/drifted/unknown classification across in-scope operations | ✗ FAILED | Structured artifact getter で classifier が crash する。 |
+| Missing/unreadable/malformed/over-limit/incomplete observations stop progression | ✗ FAILED | NFD path の自己再現不能 identity と getter exception leakage。 |
+| Approval evidence is input-bound and stale result cannot silently authorize effects | ✗ FAILED | Refresh は detached candidate を検証して canonical target 未更新のまま Success。 |
+| Fixed public examples and approved property boundaries | ✓ VERIFIED | Phase 3 property familiesと固定 I/O/race tests の配置は維持される。 |
 
-## All 29 Plan Must-Have Groups
+## Plan Must-Have Regression Map
 
-Each row was checked against production source and tests, not against its SUMMARY narrative.
+旧 29/29 pass を quick regression check した結果、22 plan groups は基本成立を保つが、以下 7 groups は新規反例または exit gate の失効により未達となる。
 
-| Plan | Raw truths | Verified implementation/behavior |
-|---|---:|---|
-| 03-01 | 5 | Canonical source observation, checkbox parsing, and reconciliation fail closed. |
-| 03-02 | 6 | Five-operation gate, fresh decision identity, deterministic remediation, and lifecycle horizon wiring. |
-| 03-03 | 6 | Deterministic tracked examples and golden evidence; optional real-host smoke remains explicitly out of scope. |
-| 03-04 | 3 | Malformed structured canonical values are rejected before lifecycle comparison. |
-| 03-05 | 5 | Source limits, capabilities, and raw DAG validation are bounded and fail closed. |
-| 03-06 | 6 | Public decision fields, repository/source identity, and evidence projection are complete. |
-| 03-07 | 4 | Nested progress and source-state changes participate in admission identity. |
-| 03-08 | 4 | Commit and inventory observations are pinned and deterministic. |
-| 03-09 | 4 | UTF-8 ordering and bounded collection behavior are deterministic. |
-| 03-10 | 4 | Manifest observation is no-follow and graph/inventory inputs remain canonical. |
-| 03-11 | 5 | Shared source validator, mapping aggregate, and evidence projection are wired. |
-| 03-12 | 4 | Inconsistent expected baselines classify as wholly unknown. |
-| 03-13 | 5 | Reconciliation failures aggregate without partial evidence. |
-| 03-14 | 4 | Stale admission decisions are identity-bound and rejected. |
-| 03-15 | 4 | Root replacement and source-root identity changes cannot reuse approval. |
-| 03-16 | 4 | Malformed source containers and limits return structured failure. |
-| 03-17 | 6 | Complete graph/target validation and the 54-item authority surface are covered. |
-| 03-18 | 6 | Phase, plan, evidence, manifest, and inventory path roles are collision-safe. |
-| 03-19 | 3 | Malformed canonical phase paths become identity-free unknown. |
-| 03-20 | 3 | Malformed SourceIdentityLimits outer values and fields are totalized. |
-| 03-21 | 3 | Active-to-tombstone source changes are included in deterministic refresh evidence. |
-| 03-22 | 3 | Final observation is protected by a cooperating advisory writer lock, with its boundary stated exactly. |
-| 03-23 | 5 | Canonical exit evidence, requirement traceability, clean reports, and final checks are complete. |
-| 03-24 | 4 | Non-string refresh source commits fail before filesystem work; historical prefix evidence remains byte-identical. |
-| 03-25 | 4 | Falsey supplied migration adapters are honored rather than replaced by defaults. |
-| 03-26 | 5 | Falsey previous-state values preserve identity and cannot hide tombstone collisions. |
-| 03-27 | 6 | Valid falsey SourceIdentityState subclasses work in preview and apply without weakening canonical serialization. |
-| 03-28 | 5 | Migration getter failures return exact structured invalid evidence with zero mutation. |
-| 03-29 | 6 | Refresh serializer/apply, validator/reconciliation, source-specific codes, BaseException propagation, mapping APIs, classifier, and public gate are total and fail closed. |
-
-**Plan-group result:** 29/29 verified; 132/132 raw declared truths traced; 0 prohibitions declared.
-
-## Artifact and Wiring Verification
-
-The plan-query results were used only as an inventory check; the central seams below were also read and traced through their callers and tests.
-
-| Artifact or evidence family | Expected role | Result |
+| Plan | Status | Failed concern |
 |---|---|---|
-| `lifecycle_gate.py` | Sole public lifecycle gate, canonical validation, evidence assembly | ✓ substantive and wired |
-| `lifecycle_drift.py` | Deterministic clean/drifted/unknown classifier | ✓ substantive and wired |
-| `source_identity.py` | Source validation, reconciliation, identity, structured error totality | ✓ substantive and wired |
-| `execution_mapping.py` | Lifecycle horizon/readiness mapping for both public APIs | ✓ substantive and wired |
-| `manifest_migration.py` | Preview/apply validation, identity, writer-lock guarded migration | ✓ substantive and wired |
-| `manifest_refresh.py` | Deterministic change evidence and writer-lock guarded refresh | ✓ substantive and wired |
-| Six public Phase 3 test modules | Boundary, classifier, identity, mapping, migration, refresh behavior | ✓ 646 collected; included in passing full suite |
-| Canonical spec and evidence artifacts | Source-pinned acceptance and exit evidence | ✓ present, substantive, validated |
-| `03-REVIEW.md`, `03-SECURITY.md`, requirements traceability | Independent exit gates | ✓ exact schemas and zero-open results |
+| 03-01 | ✗ FAILED | complete/unknown classifier contract が getter exception で total でない。 |
+| 03-02 | ✗ FAILED | whole-operation incomplete evidence が必ず unknown になるという契約に反例。 |
+| 03-04 | ✗ FAILED | 「malformed canonical structured results never raise」を直接否定。 |
+| 03-17 | ✗ FAILED | 公開 refresh を 42/49/54 items、固定 IDs、Phase 02 に限定した実装が generic lifecycle goal と両立しない。 |
+| 03-22 | ✗ FAILED | protected refresh effect 後の canonical target proof が欠ける。 |
+| 03-23 | ✗ FAILED | clean review、zero-gap preflight、passed 10/10 verifier の全 exit conditions が現行状態で不成立。 |
+| 03-29 | ✗ FAILED | source-state getter の局所 totality は通るが、同じ public classifier の artifact/progress structured members は total でない。 |
 
-**Declared artifact result:** 89/89 passed existence/substance queries.
+03-03, 03-05–03-16, 03-18–03-21, 03-24–03-28 の 22 groups は existence、基本 wiring、代表 named tests の quick regression check で新規 regression を認めなかった。ただし、これらの pass は上記 Blocker を相殺しない。
 
-### Key Links and Data Flow
+## Required Artifacts
 
-| From | To | Data/guard carried across the link | Status |
+Plan query は 89/89 artifacts を「exists/substantive」と報告した。しかし semantic contract を確認すると Plan 03-23 の exit artifacts は current truth を提供していない。
+
+| Artifact | Expected role | Status | Details |
 |---|---|---|---|
-| Public lifecycle gate | Canonical source reader and validator | Complete source state or structured invalid observation | ✓ WIRED |
-| Public lifecycle gate | Mapping readiness and phase graph validation | All five horizons, canonical path roles, raw graph | ✓ WIRED |
-| Validator/reconciliation | Classifier | Complete canonical observation or wholly unknown failure | ✓ WIRED |
-| Classifier | Decision identity and remediation | Only complete valid admission inputs produce identity-bearing evidence | ✓ WIRED |
-| Refresh preview | Refresh apply | Exact preview identity, target/tree/staging evidence, final guarded observation | ✓ WIRED |
-| Migration preview | Migration apply | Exact canonical preview identity and supplied adapter/state semantics | ✓ WIRED |
-| Writer lock | Refresh/migration protected effect | Cooperating-writer exclusion through final observation and mutation | ✓ WIRED |
-| Tests and exit evidence | Review/security/requirements gates | Exact values, zero counts, and source-pinned acceptance state | ✓ WIRED |
+| `lifecycle_drift.py` | Total fail-closed classifier | ✗ DEFECTIVE | Getter exception を漏出。 |
+| `lifecycle_gate.py` | Sole five-operation admission seam | ⚠ PARTIAL | 基本 five-operation/stale tests は pass。malformed returned structured member を totalize できない。 |
+| `source_identity.py` | Stable canonical source identity | ✗ DEFECTIVE | NFD を NFC identity に暗黙変換。 |
+| `manifest_refresh.py` | Generic preview/apply and protected persistence | ✗ DEFECTIVE | Detached-parent Success と change/Phase/test-fixture hardcode。 |
+| `manifest_migration.py` | Structured migration preview/apply | ⚠ PARTIAL | Core migration flows pass。malformed collection/operations が raw exception。 |
+| `execution_mapping.py` | Mapping readiness | ✓ VERIFIED | Focused current regressionで新規 gapなし。 |
+| Six Phase 3 public test modules | Behavioral evidence | ⚠ INCOMPLETE | 646 passed は既存 evidence。Critical 4 counterexamplesを覆わない。 |
+| `03-REVIEW.md` | Fresh clean review | ✗ FAILED | `issues_found`, 4/1/0/5。 |
+| `03-SECURITY.md` | Current zero-open security evidence | ✗ STALE | `audited_head: 372f1d6`、fresh review clean を prerequisite とするが現行 review は issues_found。 |
+| `.planning/REQUIREMENTS.md` | Correct HND-03 traceability | ✗ STALE | HND-03 Complete は actual blockers と矛盾。 |
 
-**Declared key-link result:** 74/74 passed plan queries. Semantic tracing found no orphaned or hollow central link.
+## Key Link and Data-Flow Verification
 
-### Data-Flow Trace
+Static plan query は 74/74 links を pattern match したが、Plan 03-23 の 2 links は body prose/stale report による false positive である。Semantic result は 72/74 wired、2/74 broken。
 
-| Flow | Source | Consumer | Invalid-data behavior | Result |
+| From | To | Flow/guard | Status | Details |
 |---|---|---|---|---|
-| Canonical repository state | source reader/identity validator | mapping and lifecycle gate | Structured failure; no identity/evidence/remediation | ✓ FLOWING |
-| Phase/graph/capability state | canonical path and raw graph validators | lifecycle classifier | Wholly unknown before comparison | ✓ FLOWING |
-| Complete observation | classifier | decision identity/remediation | Identity only after complete validation | ✓ FLOWING |
-| Approved preview | refresh/migration apply | protected writer | Exact invalid guard and mutation count 0 on failure | ✓ FLOWING |
-| Phase exit artifacts | tests, REVIEW, SECURITY, REQUIREMENTS | final verification | Pass only when all canonical gates are clean | ✓ FLOWING |
+| Public gate | canonical classifier | malformed structured result → UNKNOWN | ✗ BROKEN | Artifact getter exception が classifier/gate を crash させ得る。 |
+| Refresh preview | refresh apply | exact approved preview → canonical target | ✗ BROKEN | Detached parent を再読し canonical path を再観測しない。 |
+| Refresh preview/apply | mapping readiness | caller-declared target phase/source | ✗ BROKEN | Phase 02 と test fixture path が production 固定。 |
+| Source reader | persisted source identity | accepted path → reusable canonical path | ✗ BROKEN | NFD input から存在しない NFC path を保存。 |
+| Plan 03-23 summary | current REVIEW | fresh clean review | ✗ NOT_WIRED | Current review is issues_found。regex pattern query は body proseを拾う。 |
+| SECURITY | current VERIFICATION | zero-open review prerequisite | ✗ NOT_WIRED | Security audit が前の clean review を前提にしている。 |
+| Gate | graph/capability remediation | complete drift → deterministic targets/actions | ✓ WIRED | Named remediation tests 2 passed。 |
+
+## Behavioral Spot-Checks
+
+| Behavior | Command / seam | Result | Status |
+|---|---|---|---|
+| Five-operation gate and stale replay | 3 named pytest nodes | 8 passed in 1.58s | ✓ PASS |
+| Canonical/phase/capability remediation | 2 named pytest nodes | 2 passed in 1.44s | ✓ PASS |
+| Artifact getter totality | Direct public `classify_canonical_source_drift` reproduction | `RAISED RuntimeError: boom` | ✗ FAIL |
+| NFD identity round trip | Direct public `read_source_inventory` reproduction | first Success; persisted path absent; second `Failure source-path-unreadable` | ✗ FAIL |
+| Refresh parent rebind | Isolated public preview/apply with injected cooperating operations adapter | `Success canonical_is_candidate=False detached_is_candidate=True` | ✗ FAIL |
+| Generic target phase | Isolated public preview with valid inventory remapped 02→07 | `Failure refresh-mapping-phase-unknown` | ✗ FAIL |
+| Full project suite | execute:post evidence supplied to verifier; not rerun here | 970 passed | ℹ DOES NOT COVER COUNTEREXAMPLES |
+| Prior-phase regression suite | execute:post evidence supplied to verifier; not rerun here | 437 passed | ℹ NO PHASE-3 GOAL PROOF |
+
+## Probe Execution
+
+Step 7c: SKIPPED。Phase plans/summaries に probe script 宣言はなく、`scripts/*/tests/probe-*.sh` も存在しない。
 
 ## Requirements Coverage
 
-The traceability table has exactly the seven expected tuples:
+| Requirement | Canonical handle | Registry state | Verification status | Evidence |
+|---|---|---|---|---|
+| HND-03 | HARD-R2 | Complete | ✗ BLOCKED | Critical 4 件が fail-closed shared decision、stable identity、protected persistence、generic reuse を否定。 |
 
-| Requirement | Canonical spec | Phase | Traceability status | Verification |
-|---|---|---:|---|---|
-| HND-01 | HARD-R1 | 1 | Complete | unchanged, expected |
-| HND-02 | HARD-R1 | 2 | Pending | unchanged, expected |
-| HND-03 | HARD-R2 | 3 | Complete | ✓ satisfied; registry checkbox remains checked |
-| HND-04 | HARD-R3 | 4 | Pending | unchanged, expected |
-| HND-05 | HARD-R4 | 5 | Pending | unchanged, expected |
-| HND-06 | HARD-R5 | 6 | Pending | unchanged, expected |
-| HND-07 | HARD-R6 | 6 | Pending | unchanged, expected |
+Phase 3 に割り当てられた orphaned requirement はない。HND-03 の registry checkbox/traceability row は、gap closure と fresh clean review/security/reverification の後にのみ Complete と再判定すべきである。
 
-No Phase 3 requirement is orphaned. The only pre-report worktree change was the intentional HND-03 traceability transition from Pending to Complete.
+## Anti-Patterns and Review Gates
 
-## Behavioral Verification
+| File | Line | Pattern | Severity | Impact |
+|---|---:|---|---|---|
+| `manifest_refresh.py` | 66-71 | Production hardcode to one change/test fixture | 🛑 BLOCKER | reusable lifecycle operation にならない。 |
+| `manifest_refresh.py` | 699-724 | Fixed source counts/IDs and Phase 02 | 🛑 BLOCKER | valid other inventoryを拒否。 |
+| `manifest_refresh.py` | 1327-1350 | Detached descriptor reread | 🛑 BLOCKER | Success と canonical filesystem state が不一致。 |
+| `source_identity.py` | 419-431 | Silent Unicode normalization | 🛑 BLOCKER | persisted identity が自己再現不能。 |
+| `lifecycle_drift.py` | 242-371 | Missing ordinary-exception boundary | 🛑 BLOCKER | fail-closed public classifier が crash。 |
+| `manifest_migration.py` | 1613-1640, 2123 | Validation after coercion/use | ⚠ WARNING | malformed public inputs が raw exception。 |
 
-| Check | Result | Status |
-|---|---|---|
-| Plan 03-23 late-regression selection covering non-string refresh input; falsey adapters/state/subclass; getter totality; exact refresh invalid evidence and zero mutation; source-specific code; ordinary exception normalization; BaseException propagation; both mapping APIs; direct classifier and public-gate wholly unknown | 16 passed in 2.64s | ✓ PASS |
-| Prior graph/path-role/source-identity/tombstone/approval/writer-lock/persistence regression selection | 91 passed in 6.87s | ✓ PASS |
-| `task openspec:validate` | 1 passed, 0 failed | ✓ PASS |
-| `task check` | Ruff format/check clean; basedpyright 0 errors, 0 warnings, 0 notes; pytest 970 passed in 93.17s | ✓ PASS |
-| Six Phase 3 public test modules collection | 646 tests collected in 1.33s; no skip/xfail markers | ✓ PASS |
-| Plan artifact queries | 89/89 passed | ✓ PASS |
-| Plan key-link queries | 74/74 passed | ✓ PASS |
-| `git diff --check` before report | exit 0 | ✓ PASS |
+Modified Phase 3 production/test filesに unreferenced `TBD` / `FIXME` / `XXX` / `TODO` / `HACK` / placeholder marker はなかった。execute:post TDD review の commit-pattern violations 3 件は `MVP_MODE=false` のため advisory であり、この判定の blocker には数えていない。
 
-### Late-Gap and Held-Out Coverage
+## Security and Exit Evidence
 
-The fresh run explicitly re-exercised every listed late regression:
-
-- Refresh rejects a non-string source commit before filesystem probes.
-- Migration respects falsey supplied operations and previous state; a falsey previous-state collision cannot bypass tombstone protection.
-- A valid supported falsey state subclass succeeds through preview and apply.
-- Migration getter failures are totalized with exact invalid evidence and zero mutation.
-- Refresh serializer/apply getter failures preserve exact `refresh-preview-invalid` evidence, target/tree/staging fields, and mutation count 0.
-- Validator and reconciliation generic getter failures normalize deterministically.
-- `_SourceInputError` preserves its specific code; `BaseException` is not suppressed.
-- Both execution-mapping public APIs fail closed.
-- Direct classifier and public gate return wholly unknown results with no identity, evidence, or remediation.
-
-Code inspection also reconfirmed the earlier graph/path-role/source-identity/tombstone/approval/writer-lock/persistence corrections. No static-query pass was allowed to substitute for these behavioral checks.
-
-## Historical Prefix and Advisory-Lock Boundary
-
-The pre-clarification `03-22-SUMMARY.md` blob from commit `c90f84c` is a strict byte prefix of the current file: historical length 6,626 bytes, historical SHA-256 `d80dda930f03f1a9c0ccd8b646bb480a9cec8bea0bff81a5bfbdb0e299c820a5`, current length 7,740 bytes. The later clarification is append-only.
-
-The verified safety claim is deliberately bounded: the advisory lock protects the final observation and mutation against cooperating bridge-owned writers and is defense in depth. Non-cooperating external writers and CAS-like guarantees remain outside the claim. This boundary is historical clarification, not an open Phase 3 threat.
-
-## Review and Security Gates
-
-| Gate | Exact parsed result | Status |
-|---|---|---|
-| REVIEW | `status: clean`; critical=0, warning=0, info=0, total=0; all counts are integers; zero canonical `CR/BL/WR/IN` records | ✓ CLEAN |
-| SECURITY | `status: verified`; `asvs_level: 1`; `threats_open: 0`; 137/137 register rows closed | ✓ VERIFIED |
-| Threat-model coverage | All 137 PLAN STRIDE rows map into the SECURITY register; all high and late 03-24 through 03-29 threats are present and closed | ✓ COMPLETE |
-
-No canonical finding is hidden as prose, and no open high-severity or late threat survives.
-
-## Test Quality and Anti-Patterns
-
-- Assertions check exact classifications, codes, identities, evidence shapes, ordering, mutation counts, and wholly-unknown projections rather than only truthiness or exit status.
-- Ordinary `Exception` normalization and `BaseException` propagation are tested separately.
-- Property tests remain on pure deterministic seams. Filesystem, locking, mutation, and I/O boundaries use fixed integration regressions.
-- No linked Phase 3 test is skipped or xfailed.
-- A scan of the six production modules, six public test modules, and exit-evidence files found no unreferenced `TBD`, `FIXME`, `XXX`, `TODO`, `HACK`, placeholder/not-implemented marker, console-only implementation, or empty implementation stub.
-- Focused inspection targeted likely false positives in static key-link checks and likely false greens in weak tests; exact-value assertions and caller-to-effect traces closed those risks.
+`03-SECURITY.md` の frontmatter は `verified`, ASVS 1, open 0 だが、audited HEAD は `372f1d6` で、本文は `03-REVIEW.md status clean; 0/0/0/0` を fresh prerequisite と明記する。現行 HEAD `3861162` の review は `issues_found; 4/1/0/5` であるため、security artifact は current exit evidence として fail-closed に受理できない。新 findings のうち canonical-target mismatch、identity normalization、exception totality は既存 high threat closure claimsにも関係するため、修正後の再監査が必要である。
 
 ## Human Verification
 
-None required. This is an infrastructure/foundation phase, and each runtime state transition, failure totality rule, ordering invariant, and protected writer behavior in the acceptance contract has automated behavioral evidence.
+なし。4 Critical は code inspection と read-only/isolated automated reproductionsで判定可能であり、visual/external-service/real-time human check を必要としない。
 
-Optional real OpenSpec/GSD/host orchestration smoke was **not run**. It remains explicitly opt-in and outside this phase's required exit evidence; this report does not claim otherwise.
+## Deferred Items
 
-## Workflow Boundary
-
-During this final report, ROADMAP Phase 3/Plan 03-23 progress, STATE advancement, Phase 4 unblocking, and OpenSpec task 3.1 intentionally remain unadvanced. The outer execute-phase workflow owns those state changes after it consumes this report. Their current blocked/unprogressed state is expected and is not a verification gap.
+なし。Phase 4–6 の goals/success criteria は repository ownership、recovery/resume、finalization receiptを扱うが、上記 gaps を Phase 3 外へ明示的に引き受けていない。いずれも現行 Phase 3 の classifier/source identity/refresh apply contract 内の欠陥である。
 
 ## Gaps Summary
 
-No gaps, deferred items, regressions, behavior-unverified truths, human checks, overrides, unresolved review findings, or open threats remain.
+4 Critical blockers と 1 Warning が残る。共通根因は、既存 tests が正常系と既知の malformed family を広く覆う一方、(1) replace 後 canonical namespace の再束縛、(2) production API の change-independent inputs、(3) Unicode canonical path の冪等性、(4) well-typed adversarial getter の totality を検証していないことである。Phase 4 へ進む前に gap plans で修正・回帰テストを追加し、clean code review、security audit、HND-03 traceability、goal verification をこの順序で再生成する必要がある。
 
 ---
 
-_Verified: 2026-08-08T11:11:14Z_
+_Verified: 2026-08-08T11:43:23Z_
 _Verifier: independent gsd-verifier_
