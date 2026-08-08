@@ -105,6 +105,10 @@ repo外解決、symlink escape、Unicode / platform case alias collisionを拒�
 を含む形でNFC / whitespace normalization前のまま保持する。identity用headingはopening markerと任意のclosing
 markerを除き、外側のhorizontal whitespaceを除去し、内部のhorizontal whitespace runをsingle ASCII spaceへ
 正規化する。horizontal whitespaceはU+0009とUnicode category `Zs`に限定し、改行を空白へfoldしない。
+ここでsource pathの「各segmentをUnicode NFCにした」はnon-NFC入力を変換して受理する意味ではない。各segmentが
+入力時点でNFCと完全一致することをfilesystem access前に検査し、NFD-only、NFC / NFD alias、non-NFC persisted
+recordを拒否する。暗黙正規化、alias探索、legacy recordの自動修復は行わない。source textとheadingのNFC正規化は、
+このpath入力契約を通過した後にだけ適用する。
 
 normalized source blockは対象ATX heading直後から、fenced code block外にある次の同level以上のATX heading直前まで
 とする。fenced code block内のheading-like textは境界にしない。blockは各line末尾のhorizontal whitespaceだけを
@@ -358,6 +362,79 @@ verifier reportが存在して`passed`かつ10/10、`behavior_unverified: 0`、`
 HND-03 / HARD-R2 traceability `Complete`、security reportが存在してopen threats 0の同時成立である。
 一つでも欠落、失敗、未実行ならPhase 3は未完了であり、Phase 4を開始しない。
 
+### Gate E. Phase 3 rebaseline は publication、total boundary、fresh proof を固定する
+
+Gate EはGate A〜Dのschema、stable identity、graph authority、path role contractを維持したまま、Phase 3のrefreshと
+public boundaryを再基準化する。Gate Dに記録した特定changeの49→54 active mappings、43→48 scenario headings、
+旧49-ID mapping、Plan A / B、fixture repinは当時のsource-pinned execution evidenceであり削除しない。ただし後続の
+rebaseline acceptanceは固定change ID、source / scenario / mapping count、`Phase 02`などのphase label、特定fixture、
+planning inventory / policy registryのdefault pathを成立条件にしない。任意の正規change入力に対する契約検証を正とする。
+
+started v2 refreshはoperation-ready判定ではなくchange-wide publicationである。全active source IDにexactly oneの
+mappingを要求し、source ID、phase ID / path、重複、unknown、cross-change、tombstone、policy referenceを含むmapping
+構造全体を検査する。一方、未実体化の将来phaseの`phase_path`、`plan_paths`、`evidence_paths`のfilesystem実在は
+refreshで要求しない。Gate Bのreadiness horizonはplan / execute / verify / finalizeの直前だけに適用し、refreshへ
+流用しない。将来path未実体化の許容は構造不正の許容ではない。
+active sourceが0件ならtombstone / empty mappingの有無にかかわらず`publication-active-source-empty`、effect 0で停止し、
+vacuous coverageまたはall-source deletionをrefresh successにしない。all-empty graphの比較契約は変更しない。
+
+planning inventoryとpolicy registryのcanonical repository-relative authority pathはpreviewの必須入力とする。
+default pathでの補完は禁止する。previewは各authorityのpath、bounded exact bytes、no-followで得たfile identity、
+registryが指すpolicy sectionのsource path、heading、canonical section bytes / hash evidenceをimmutable preview hashに
+含める。applyは同じrepository anchorから両authority fileとpolicy sectionをfreshに再観測し、path、bytes、identity、
+section evidenceの全一致を副作用前に証明する。一項目でも変化すれば旧approvalはstaleであり、新previewと別承認を
+要求する。値が同じでもfile identityが変わったauthorityは同じapprovalとして扱わない。
+inventory、registry、policy sourceのrole間はcanonical path、Unicode / case alias key、physical identityでdisjointとする。
+applyは単一anchorからregistry → policy sections → inventoryを観測・cross-validationし、inventory → registry → sections →
+anchorをfinal recheckして直後にlockを取得する。authority別anchorやdefault path fallbackは使わない。
+
+packageが公開する全`Result` APIとdecision APIはtotal boundaryを持つ。malformed root / scalar、property getter、
+adapter method、callback、hash / serialization、`Sequence` traversalからのordinary `Exception`は、`Result` APIでは
+structured `Failure`、decision APIではidentityとremediation projectionのない`UNKNOWN`へ変換する。例外前の観測を
+partial result、partial green、またはdecision identityとして返さない。`BaseException`は捕捉して結果へ変換せず、
+owned resourceのcleanupを試行した後に元の例外を再伝播する。
+inventoryは関数名ではなくsemantic operationで固定し、read / preview / apply / observation / ownership / resume / finalize /
+custom persistence unionを`Result`、canonical drift / lifecycle admissionをdecisionに分類する。failure後の新invocationはroot
+validation、freeze、mutable observationをfreshにやり直し、effect-capable failure後はfresh previewと別承認を要求する。
+
+collection入力は外部effectより前にruntime shape、canonical scalar、protocol、count、canonical aggregate bytesの上限を
+検査し、bounded immutable snapshotへ一度だけfreezeする。以後はsnapshotだけを使用し、元collectionを再走査しない。
+malformed collection、途中でordinary `Exception`を送出する`Sequence`、またはunsupported adapterはstructured invalid、
+decisionではidentityのない`UNKNOWN`とし、filesystem access、adapter method、lock、staging createを呼ばない。
+adapter supportはeffectを伴うduck-typing probeではなく明示されたsupported contractで判定する。
+public collectionはbuiltinまたはnominal subclassの`Sequence`だけ、adapterはversioned nominal contractだけを受理する。
+empty / `None`はsource paths / files / artifacts、optional auxiliary、complete-state、bootstrap previous sourceで区別し、
+authoritative duplicateは同値でも拒否する。新complete-stateは4096 records / 8 MiB、artifactは64 files / 4 MiBとし、
+nested collectionは親budgetへ算入する。新structured collectionは`gate-e-collection-v1` framingのstream全長を数える。
+`len()` / `iter()`は各一度、`next()`はN+1、encodingはB+1までで停止し、単一call永久blockは保証外とする。
+
+supported persistence adapterの全callに同じfailure taxonomyを適用する。対象はlock、create、write、reread、validate、
+replace、cleanup、release、closeである。ordinary `Exception`はcall位置を保持するprimary structured failureに変換し、
+adapter例外後に`Success`を返さない。owned stagingが作成された、または作成された可能性がある場合はcleanupを一度
+試行する。cleanup例外はprimary failureを上書きしない。target、staging、effectの現状態をfresh observationで証明
+できなければ`UNKNOWN`とする。`BaseException`でもcleanupを試行し、そのcleanup結果で元の`BaseException`を置換しない。
+各callはexact nominal outcomeを要求し、malformed returnを同じcall位置の`return-invalid`とする。primary failure後は
+cleanup → release → close → fresh observationを続け、最初のprimaryと発生順のsecondary evidenceを維持する。
+
+atomic replaceとno-opのどちらも、`Success` return直前にrepository anchorからfresh canonical proofを作る。
+proofはcanonical parentのidentityがpreview時と同じこと、targetが同じcanonical pathへ解決されること、fresh targetの
+exact bytesがcandidate bytesと一致すること、strict parseした値がcandidate objectと一致することを要求する。
+no-opも同じproofを省略しない。fresh read / parse失敗、parent rebind、target path差、bytes mismatch、parse mismatch、
+adapter例外では`Success`を禁止し、effectを証明できなければ`UNKNOWN`とする。各pathのfinal observation後に
+非協調な外部processが変更することは保証外であり、Gate Eは新しいlease / transaction契約を導入しない。
+replace直前にはparent / target / current bytes / approved old object・hash / live lockを再guardする。cleanup / release /
+close後のfinal proofはanchor、parent、target、descriptor bytes、strict object、target identity、parent / anchorの順で再確認し、
+proof resourceをcloseした後だけ`Success`を返す。
+
+rebaseline verificationはpublic API全件のmalformed root / scalar / getter / method / `Sequence` matrix、persistenceの
+lock / create / write / reread / validate / replace / cleanup / release / close fault matrix、cleanup primary-failure保持、
+`BaseException` cleanup後再伝播、fresh proofのparent rebind / bytes / parse mismatch、source pathのNFD-only / NFC-NFD
+alias / persisted reuseを対象にする。正本だけを更新する段階ではproduction code、tests、fixtures、`tasks.md`、GSD
+artifactsを変更せず、GSDの詳細taskも複製しない。`task openspec:validate`、`git diff --check`、`task check`を実行し、
+`task check`がsource-pinned count / hash / fixture不一致だけで失敗する場合は修正せずexact RED evidenceとして記録する。
+targeted spec-holesは後述の「Gate E targeted rebaseline」で、今回追加した7 behavior familiesに限定して
+既存の`H01`〜`H12`を差分適用する。
+
 ### 1. stable ID は単調増加し、曖昧一致を拒否する
 
 MVP manifest の schema migration により raw source identity と正規化 fingerprint を保存する。既存のexactな
@@ -470,6 +547,238 @@ signalはmerge済みMVPから変更しない。新たな外部仕様判断また
 | 10 | 数値 | 該当 | bound / count / length fieldの0、負数、`bool`、float、NaN、inf、上限off-by-one | 1: exact positive integerだけを許可し、node / edge 4096とaggregate 8 MiBをNまで受理、N+1とnon-integerをUNKNOWNにする。fuzzy scoreは使用しない |
 | 11 | 巨大入力・リソース枯渇 | 該当 | graph / inventoryが件数・aggregate bytes上限超過、timeout、完全projection生成不能 | 1: graphごとに4096 node / edge・8 MiB、inventory 4096件・8 MiBを切捨てず検査し、超過 / timeoutはidentityなしUNKNOWN。HypothesisへI/O stressを混ぜずfixed bounded example / integrationで検証 |
 | 12 | 状態遷移の未定義パス | 該当 | targetのexpected-only / observed-only / both / neither、targetとgraph変更の一致 / 不一致、全削除、stale decision、exit evidence欠落 | 1: target relationをmapping readiness / graph集約より先に4分類し、その他変更を別集約。removed actionとunknown actionはnext action専用。driftは再検証まで操作禁止。review / verifier / security / `task check`の欠落・失敗・未実行を未達としてPhase 4を禁止 |
+
+### Gate E targeted rebaseline（HARD-R1 / HARD-R2 差分のみ）
+
+既存のHARD-R1 / HARD-R2表は維持し、Gate Eで7 scenariosが追加した境界だけに
+`H01`〜`H12`を再適用する。結果`a`は既存scenario / Gate Eが固定するnormative behavior、
+`b`はexplicit out-of-scopeまたは当該familyに非該当な分類である。従来`c`だった19 classification rowsは
+下記の合意済み決定台帳で`a`へ確定した。`N/A`も理由と`b`を明記する。
+
+#### GE-1: public API totality matrix
+
+- `GE-TOT-H01` 空・ゼロ長・None — 該当。各APIの既存入力契約上malformedなempty / `None` root・scalarが生の例外を出す境界。結果`a`: `Result`はstructured `Failure`、decisionはidentity / remediationなし`UNKNOWN`。empty自体の有効性は各API契約を変更しない。
+- `GE-TOT-H02` 境界値 — 該当。既存のN-1 / N / N+1でvalidationやserializationが例外化する境界。結果`a`: 既存上限を維持し、ordinary `Exception`をpartial resultにせず各total resultへ変換。全API共通の新しい数値上限は導入しない。
+- `GE-TOT-H03` 重複・衝突 — `N/A`。duplicateの有効性はmapping / graph / path等の既存API契約が所有し、totalityは例外変換だけを追加する。結果`b`: family共通のduplicate semanticsは対象外。
+- `GE-TOT-H04` 順序 — `N/A`。入力順序の意味は各APIの既存契約が所有する。結果`b`: totalityから新しいsort / stability契約を導入しない。
+- `GE-TOT-H05` 型・形式不正 — 該当。malformed root / scalar / getter / method / callback / hash / serialization / `Sequence`を検査する。結果`a`: semantic operation inventoryでread / preview / apply / observation / ownership / resume / finalizeとcustom persistence unionを`Result`、canonical drift / lifecycle admissionをdecisionに分類する。root `__all__`、全non-underscore symbol、現行関数名だけからinventoryを推測しない。
+- `GE-TOT-H06` エラー・部分失敗 — 該当。ordinary `Exception`、`BaseException`、cleanup例外、例外前の部分観測。結果`a`: ordinaryはstructured non-success、`BaseException`はowned cleanup試行後に元例外を再伝播し、partial green / identityを返さない。
+- `GE-TOT-H07` 冪等性・再実行 — 該当。結果`a`: ordinary `Exception`後の新invocationはroot validation、freeze、mutable observationを全再実行し、前attemptのsnapshot、identity、remediation、partial observationを再利用しない。effect-capable failure後はfresh previewと別承認を要求する。
+- `GE-TOT-H08` 時刻・タイムゾーン — `N/A`。totality分類にmtime / TZ / DST / TTLを使わない。結果`b`: 時刻依存exception policyは対象外。
+- `GE-TOT-H09` 文字列・Unicode — 該当。invalid UTF-8 scalar、NUL、noncanonical Unicodeによるgetter / hash / serialization例外。結果`a`: 各APIの既存string契約で検査し、ordinary例外をtotal resultへ変換。path NFC固有境界は`GE-5`が所有。
+- `GE-TOT-H10` 数値 — 該当。`bool`、float、負数、NaN、inf、limit+1を数値scalarとして受けた場合。結果`a`: Gate Dのexact integer契約を維持し、検査例外もstructured non-success化。
+- `GE-TOT-H11` 巨大入力・リソース枯渇 — 該当。oversize、timeout、`MemoryError`等のordinary `Exception`。結果`a`: 切捨て / partial resultなしの`Failure` / identityなし`UNKNOWN`。プロセス終了等、Python結果境界へ戻らない障害の変換は`b`として対象外。
+- `GE-TOT-H12` 未定義状態遷移 — 該当。例外前のpartial green / reusable identityからadmitted / `Success`へ進むパス。結果`a`: 常にidentity / remediationなし`UNKNOWN`またはstructured `Failure`で停止。
+
+#### GE-2: bounded freeze / supported・unsupported adapter 境界
+
+- `GE-FRZ-H01` 空・ゼロ長・None — 該当。結果`a`: source paths / files / artifactsはempty / `None`を拒否、optional auxiliaryはemptyだけ許可、complete-stateはemptyをshape-validとするが`None`を拒否する。`previous_source_items=None`だけはbootstrap emptyとする。
+- `GE-FRZ-H02` 境界値 — 該当。結果`a`: 既存domain boundsを維持し、新complete-state documentは4096 records / 8 MiB、artifact collectionは64 files / 4 MiBとする。nested collectionは親budgetへ算入し、切捨てない。
+- `GE-FRZ-H03` 重複・衝突 — 該当。結果`a`: authoritative inputのsemantic-key duplicateは同値でも拒否し、silent dedupe / first / last winsを禁止する。multi-ownerは単一record内だけ許可し、set-like dedupeはoutput projectionだけに適用する。
+- `GE-FRZ-H04` 順序 — 該当。結果`a`: unordered inputはvalidation後canonical sortし、task / journal / effect / receipt / secondary failureは入力順を保存する。persisted authorityのnoncanonical orderは拒否し、graph identityへtopological orderを使わない。
+- `GE-FRZ-H05` 型・形式不正 — 該当。結果`a`: public collectionは`collections.abc.Sequence`だけを受理して`str` / `bytes` / `bytearray`とgeneric iterable / generator / set / mappingを拒否する。persisted / internal stateはexact tupleだけとする。`ObservationAdapterV1` / `PersistenceAdapterV1`のbuiltinまたはnominal subclassだけをsupportedとし、virtual registration、structural判定、method probeを禁止する。
+- `GE-FRZ-H06` エラー・部分失敗 — 該当。getter / traversal中のordinary `Exception`、上限計算失敗、unsupported adapter。結果`a`: structured invalid / identityなし`UNKNOWN`、effect count 0、partial snapshot非公開。
+- `GE-FRZ-H07` 冪等性・再実行 — 該当。結果`a`: 1 invocation内は一度だけfreezeする。exact immutable tupleは再投入可能だが再検証し、その他の`Sequence`はtraversal開始後attempt-scoped、いずれかのmethod callを開始したadapter instanceは新invocationには消費済みとしてretry時にfresh instanceを要求する。
+- `GE-FRZ-H08` 時刻・タイムゾーン — `N/A`。freeze / adapter supportはmtime / TZ / DST / TTLを判定に使わない。結果`b`: 時刻依存support / expiryは対象外。
+- `GE-FRZ-H09` 文字列・Unicode — 該当。結果`a`: Gate E新規structured collectionは`gate-e-collection-v1`のtype tag、field tag、8-byte big-endian length framing、固定field順でencodeしたstream全長をbound判定する。既存Gate D encoding / metricsは変更しない。
+- `GE-FRZ-H10` 数値 — 該当。結果`a`: 新public limitはexact frozen limits dataclassのexact `int`で1以上field hard maximum以下とし、callerは縮小だけできる。`bool` / subclass / float / `None`を拒否する。
+- `GE-FRZ-H11` 巨大入力・リソース枯渇 — 該当。結果`a`: `len()`一度、`iter()`一度、`next()`最大N+1、encoding最大B+1で停止する。length invalid、reported count超過、reported / observed mismatch、byte超過、traversal failure、`MemoryError`をそれぞれ`collection-length-invalid`、`collection-count-limit-exceeded`、`collection-length-mismatch`、`collection-byte-limit-exceeded`、`collection-traversal-failed`、`collection-resource-exhausted`へ分類してpartial snapshotを破棄する。単一call永久blockは保証外とする。
+- `GE-FRZ-H12` 未定義状態遷移 — 該当。freeze / support validation前にadapter / filesystem / lock / stagingへ進むパス。結果`a`: 全検査完了とimmutable snapshot確定までeffect 0。拒否後に操作を継続しない。
+
+#### GE-3: persistence fault taxonomy / cleanup優先順位
+
+- `GE-PER-H01` 空・ゼロ長・None — 該当。結果`a`: 9 callは`PersistenceAdapterV1`のexact nominal outcomeだけを返し、bare `None` / bool / string / bytes / empty tokenを成功扱いしない。`BoundedBytes(b"")`だけはtransport observationとして受理し、後続strict validationで`CandidateInvalid`とする。
+- `GE-PER-H02` 境界値 — 該当。lockからcloseまでの最初 / 最後 / 各1 callと、staging作成前 / 作成済み / 作成可能性あり。結果`a`: 9 call位置を全件fault injectionし、owned stagingがあるまたは作成可能性がある時だけcleanupを1回試行。
+- `GE-PER-H03` 重複・衝突 — 該当。結果`a`: 最初のordinary primaryを維持し、cleanup / release / closeの複数secondary failureを発生順のevidenceとして保持する。最初の`BaseException`はsecondary evidenceを付記して再伝播し、単一codeへの圧縮や`ExceptionGroup`への置換をしない。
+- `GE-PER-H04` 順序 — 該当。結果`a`: cleanup → release → close → fresh state observationの順とし、secondary failure後もownedな後続処理を継続する。
+- `GE-PER-H05` 型・形式不正 — 該当。結果`a`: wrong return type / malformed token / malformed rereadは同じcall位置の`return-invalid`とし、cleanup等ならsecondary evidenceへ記録する。
+- `GE-PER-H06` エラー・部分失敗 — 該当。ordinary `Exception`、`BaseException`、cleanup failure、effect証明不能。結果`a`: ordinaryはcall位置を保持するprimary structured failure、不明状態は`UNKNOWN`。`BaseException`はcleanup試行後に元例外を再伝播。
+- `GE-PER-H07` 冪等性・再実行 — 該当。adapter fault後の自動retry、cleanup二重実行、古いapproval再利用。結果`a`: 自動retryせず、当該attemptのcleanupは最大1回。staleは新preview / 別承認を要求。
+- `GE-PER-H08` 時刻・タイムゾーン — `N/A`。fault優先度をmtime / TZ / elapsed timeで変えない。結果`b`: TTL自動retry / rollbackは対象外。
+- `GE-PER-H09` 文字列・Unicode — `N/A`。例外messageの文字列自体をidentityや優先度に使わず、call位置のstructured codeを使う。結果`b`: exception message canonicalizationは対象外。
+- `GE-PER-H10` 数値 — 該当。cleanup call countの0 / 1 / 2。結果`a`: owned stagingなしは0回、あるまたは可能性ありは1回、2回以上は禁止。
+- `GE-PER-H11` 巨大入力・リソース枯渇 — 該当。disk full、timeout、lock exhaustion、read / write allocation failure。結果`a`: 各call位置のordinary exceptionとして同taxonomy、partial `Success`禁止。
+- `GE-PER-H12` 未定義状態遷移 — 該当。adapter exception後の`Success`、effect不明からpreserved / replacedへの飛越、cleanup failureによるprimary上書き。結果`a`: `Success`禁止、fresh observationで証明できなければ`UNKNOWN`、primary保持。
+
+#### GE-4: fresh canonical proof / TOCTOU保証境界
+
+- `GE-PRF-H01` 空・ゼロ長・None — 該当。missing / empty target bytes、parse resultなし、parent / target observationなし。結果`a`: candidateとexact一致しない限りnon-success、effect不明は`UNKNOWN`。
+- `GE-PRF-H02` 境界値 — 該当。replace / no-opの両分岐とreturn直前の最終proof。結果`a`: 両分岐で同じ4条件を証明し、no-opも省略しない。
+- `GE-PRF-H03` 重複・衝突 — 該当。parent rebind、同一表示pathの別identity、canonical target alias。結果`a`: preview parent identity / canonical target pathとの全一致を要求。
+- `GE-PRF-H04` 順序 — 該当。結果`a`: authorityはregistry → policy sections → inventoryの観測とcross-validation後にreverse final recheckしてlockへ進む。replace直前guardを行い、cleanup → release → close後のfinal proofはrepository anchor → parent → target resolution → descriptor bytes → strict parse / candidate比較 → target identity再確認 → parent / anchor再確認 → proof resource close → `Success`の順に固定する。
+- `GE-PRF-H05` 型・形式不正 — 該当。wrong target path、malformed bytes、strict parse failure、candidate object mismatch。結果`a`: structured non-success、effect不明は`UNKNOWN`。
+- `GE-PRF-H06` エラー・部分失敗 — 該当。fresh read / parse / adapter例外、replace後のproof failure。結果`a`: `Success`禁止。target / staging / effectをfresh observationで証明できなければ`UNKNOWN`。
+- `GE-PRF-H07` 冪等性・再実行 — 該当。安定したcandidateのno-op再実行、replace後の再実行。結果`a`: 各`Success` returnごとにfresh proofを新しく作り、前回proofを再利用しない。
+- `GE-PRF-H08` 時刻・タイムゾーン — `N/A`。mtime / TZ / TTLでfreshnessを決めない。結果`b`: final observation後の非協調external mutation保証は明示的に対象外。lease / transactionは導入しない。
+- `GE-PRF-H09` 文字列・Unicode — 該当。canonical pathのUnicode alias、exact bytes、strict parserのstring canonicality。結果`a`: pathはcanonical resolution、contentはexact bytes + strict object equalityの両方を要求。
+- `GE-PRF-H10` 数値 — `N/A`。freshnessにfuzzy score、mtime差、確率、retry countを使わない。結果`b`: 数値的近似判定は対象外。
+- `GE-PRF-H11` 巨大入力・リソース枯渇 — 該当。bounded fresh read不能、parse timeout、memory / descriptor exhaustion。結果`a`: 既存candidate / target上限を維持し、切捨てproofを禁止。失敗はnon-success / `UNKNOWN`。
+- `GE-PRF-H12` 未定義状態遷移 — 該当。preview→replace / no-op→`Success`、parent rebind / mismatch後の続行。結果`a`: 副作用前guardとreturn直前proofの両方を必須とし、mismatch後の`Success`を禁止。final observation後の外部変更だけは`b`の保証外。
+
+#### GE-5: NFC/NFD alias / persisted identity reuse
+
+- `GE-NFC-H01` 空・ゼロ長・None — 該当。empty path / segment、`None`、欠落persisted path。結果`a`: path入力契約の形式不正としてfilesystem access前にfail-closed。
+- `GE-NFC-H02` 境界値 — 該当。1 segment / N segments、segmentごとのNFC exact match。結果`a`: 全segmentを入力時点で検査し、1件でもnon-NFCなら全体を拒否。既定path / item / aggregate上限を維持。
+- `GE-NFC-H03` 重複・衝突 — 該当。NFC / NFD alias、current / explicit / active / tombstone間の等価path。結果`a`: alias候補をmerge / repairせず入力集合全体をfail-closed。
+- `GE-NFC-H04` 順序 — 該当。NFDを含むitemの位置で結果やfilesystem call countが変わる可能性。結果`a`: 入力集合全体のpath形式をeffect前に検査し、順序に関係なくfail-closed / effect 0。
+- `GE-NFC-H05` 型・形式不正 — 該当。non-string path、NFD-only、non-NFC persisted record、separator / traversal等の既存不正。結果`a`: 暗黙normalize / alias探索 / legacy repairなしで拒否。
+- `GE-NFC-H06` エラー・部分失敗 — 該当。currentはNFCだがpersisted tombstoneだけnon-NFC、または検査中の一部失敗。結果`a`: persisted identityを再利用せず全体fail-closed、partial inventory / mappingを返さない。
+- `GE-NFC-H07` 冪等性・再実行 — 該当。NFC入力の反復、non-NFC legacy recordの反復。結果`a`: canonical NFCは同じidentity、non-NFC persisted itemは毎回拒否。自動修復で結果を変えない。
+- `GE-NFC-H08` 時刻・タイムゾーン — `N/A`。path NFC判定はmtime / locale / TZを使わない。結果`b`: 時刻によるalias優先は対象外。
+- `GE-NFC-H09` 文字列・Unicode — 該当。NFC、NFD、combining mark、Unicode case alias、invalid scalar。結果`a`: path segmentは入力と`normalize("NFC", segment)`のexact equalityを必須とする。source text / heading normalizationはpath検査後だけに実行。
+- `GE-NFC-H10` 数値 — `N/A`。path identityにnumeric score / normalization distanceを使わない。結果`b`: fuzzy Unicode similarityは対象外。
+- `GE-NFC-H11` 巨大入力・リソース枯渇 — 該当。巨大path / item collection、normalization expansion。結果`a`: 既定count / aggregate bounds内で入力NFC exact checkを行い、超過はeffect前に拒否。NFDを変換して受理しない。
+- `GE-NFC-H12` 未定義状態遷移 — 該当。non-NFC persisted active / tombstoneからID再利用、検査前filesystem lookup、legacy auto-repair。結果`a`: すべて禁止。manual migration自体は`b`の対象外で、今回導入しない。
+
+#### GE-6: change-wide publication / operation readiness分離
+
+- `GE-PUB-H01` 空・ゼロ長・None — 該当。結果`a`: active source 0件はtombstone / empty mappingの有無にかかわらず`publication-active-source-empty`、effect 0とする。vacuous coverageやall-source deletionをrefresh成功にしない。all-empty graph契約、finalize / archive後のsource消滅は変更しない。
+- `GE-PUB-H02` 境界値 — 該当。1 active source / N active sources、0 / 1 / Nの未実体将来paths。結果`a`: 全active sourceにexactly one mappingを要求し、将来pathの実在件数はrefresh acceptanceに使わない。既定count / bytes上限は維持。
+- `GE-PUB-H03` 重複・衝突 — 該当。duplicate / missing mapping、unknown / cross-change / tombstone source、phase / path / policy reference衝突。結果`a`: mapping構造全体を検査し、partial publicationや自動mergeを禁止。
+- `GE-PUB-H04` 順序 — 該当。mapping / source / phaseの入力順でcoverageやpreview hashが変わる可能性。結果`a`: 既定のdeterministic canonical projectionとsame-set判定を維持。
+- `GE-PUB-H05` 型・形式不正 — 該当。malformed source / phase ID、noncanonical path、wrong change、tombstone参照、policy ref不整合。結果`a`: refreshをstructured non-successで停止。将来path未実体化を構造不正と同視しない。
+- `GE-PUB-H06` エラー・部分失敗 — 該当。mapping一部のvalidation / policy observation failure。結果`a`: change-wide全体をnon-successとし、検査済みsubsetをpublishしない。
+- `GE-PUB-H07` 冪等性・再実行 — 該当。same change-wide inputのpreview / apply / no-op再実行。結果`a`: 同じcanonical inputは同じcomplete preview、applyはapproval / fresh guardsを毎回再検査。
+- `GE-PUB-H08` 時刻・タイムゾーン — `N/A`。publication / readiness分離にmtime / TZ / TTLを使わない。結果`b`: 時刻による将来phase readiness推定は対象外。
+- `GE-PUB-H09` 文字列・Unicode — 該当。fixed `Phase 02`等のlabel、NFC / case path alias、default authority pathへの依存。結果`a`: 固定label / path / fixtureをacceptanceに使わず、各canonical scalar / path契約で検査。
+- `GE-PUB-H10` 数値 — `N/A`。固定source / scenario / mapping countをacceptanceに使わない。結果`b`: 49→54 / 43→48はGate D当時のevidenceだけで、後続publicationの数値前提外。既定safety boundsは別途維持。
+- `GE-PUB-H11` 巨大入力・リソース枯渇 — 該当。change-wide mapping全体のoversize / complete preview生成不能。結果`a`: 切捨てpublicationを禁止し、既定bounds超過はstructured non-success。
+- `GE-PUB-H12` 未定義状態遷移 — 該当。refreshで将来path未実体化を拒否する、またはplan / execute / verify / finalizeがreadinessなしに進むパス。結果`a`: refreshはpublicationだけ、operation固有readinessは各operation直前に必須。両者を流用しない。
+
+#### GE-7: authority preview束縛 / apply時fresh再観測
+
+- `GE-AUT-H01` 空・ゼロ長・None — 該当。planning inventory / policy registry pathの省略、empty、`None`、missing section。結果`a`: 両canonical pathを必須入力とし、default補完なしでpreviewをnon-success化。
+- `GE-AUT-H02` 境界値 — 該当。authority exact bytes / records / policy sectionのN-1 / N / N+1。結果`a`: Gate DのPlanningInventory 4096 / 8 MiBとpolicy referenceの8 MiB limit+1契約を維持し、N+1は切捨てずnon-success。
+- `GE-AUT-H03` 重複・衝突 — 該当。結果`a`: inventory、registry、policy sourceのrole間はcanonical path、Unicode / case alias key、device + inode + typeでdisjointとする。path / aliasは`authority-role-path-conflict`、physical identityは`authority-role-identity-conflict`。同一policy fileの異なるheadingだけ許可し、same normalized heading / alias pathの二重referenceを拒否する。
+- `GE-AUT-H04` 順序 — 該当。結果`a`: root / scalar / adapter validation後、単一repository anchorからregistry → referenced policy sections → inventoryを観測・cross-validationし、inventory → registry → policy sections → anchorの順でidentity / bytesをfinal recheckして直後にlockを取得する。各read前後のscan identity一致を要求し、authority別anchorを禁止する。
+- `GE-AUT-H05` 型・形式不正 — 該当。noncanonical path、wrong bytes / identity shape、malformed registry / section、default path省略。結果`a`: previewをnon-successとし、pathだけ同じ別identityも受理しない。
+- `GE-AUT-H06` エラー・部分失敗 — 該当。read / identity / section parseの一部失敗、preview後apply再観測失敗。結果`a`: partial authority evidenceを束縛 / 採用せず、applyはtarget変更前にstale non-success。ordinary exceptionは`GE-1`に従う。
+- `GE-AUT-H07` 冪等性・再実行 — 該当。same bytesだがfile identity変化、stale approvalの再apply。結果`a`: identityを含む全evidence一致がなければ新preview + 別承認。自動retryしない。
+- `GE-AUT-H08` 時刻・タイムゾーン — `N/A`。approval freshnessにmtime / TZ / TTLを使わず、exact bytes / file identity / section evidenceを使う。結果`b`: 時刻だけのapproval expiryは対象外。
+- `GE-AUT-H09` 文字列・Unicode — 該当。authority path、policy source path / heading / canonical section bytesのNFC / NFD / case / encoding alias。結果`a`: canonical repository-relative path、no-follow identity、exact bytes / canonical section evidenceの全一致を束縛。
+- `GE-AUT-H10` 数値 — `N/A`。authority同一性にfuzzy score / mtime delta / inodeだけで判定しない。結果`b`: 近似一致は対象外。safety boundsは`H02` / `H11`が所有。
+- `GE-AUT-H11` 巨大入力・リソース枯渇 — 該当。authority / policy section oversize、read timeout、descriptor exhaustion。結果`a`: bounded exact bytesを切捨てず取得できなければpreview / applyはnon-success。
+- `GE-AUT-H12` 未定義状態遷移 — 該当。preview→authority drift→apply、およびfresh proofなしのeffect開始。結果`a`: applyは同repository anchorからfresh再観測し、一項目でも差があればeffect前にstale停止。final observation後の非協調external mutationは`b`の保証外。
+
+#### Gate E 合意済み決定台帳
+
+次の15テーマが従来の19 classification rowsをすべて確定する。各項目は採用規則、採用しなかった代替、
+normative scenario、Phase 2 test oracleを一体として固定し、実装やfixtureが別のdefaultを導入することを禁止する。
+
+1. Public API inventory / Result・decision分類（`GE-TOT-H05`）
+   - Adopted rule: semantic operation単位でinventory化し、read / preview / apply / observation / ownership / resume /
+     finalizeとcustom persistence unionは`Result`、canonical drift / lifecycle admissionはdecisionとする。
+   - Rejected alternatives: root `__all__`限定、全non-underscore symbol、現行関数名固定。
+   - Spec scenario: 「public Result と decision API の ordinary exception を閉じ込める」。
+   - Test classification: `GE-E-TOTALITY`のfixed public fault-injection example。
+2. Failure後retryの観測再利用（`GE-TOT-H07`）
+   - Adopted rule: 新invocationはroot validation、freeze、mutable observationを全再実行し、前attemptのsnapshot、
+     identity、remediation、partial observationを再利用しない。caller提供immutable scalar / valueは再投入できるが再検証し、
+     prior decision identityはfresh decisionとのstale比較だけに使う。effect-capable failure後はfresh previewと別承認を要求する。
+   - Rejected alternatives: effect前cache、immutable snapshot cache、failure point別再利用。
+   - Spec scenario: 「public Result と decision API の ordinary exception を閉じ込める」と
+     「replace または no-op Success を fresh canonical proof で確定する」。
+   - Test classification: `GE-E-TOTALITY`のfixed retry / fault example。
+3. Collection別empty / `None`（`GE-FRZ-H01`）
+   - Adopted rule: source paths / files / artifactsは両方無効、`explicit_matches` / exclusions / 任意policy referencesは
+     emptyだけ有効、active / tombstones / mappings / planning declarations / graph / ownership / checkpoint / effect等の
+     complete-stateはemptyをshape-validとするが`None`無効、`previous_source_items=None`だけbootstrap emptyとする。
+   - Rejected alternatives: 全empty拒否、全empty許可、`None == ()`。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」とchange-wide publication scenario。
+   - Test classification: `GE-E-FREEZE`のfixed example。
+4. Collection別bounds（`GE-FRZ-H02`）
+   - Adopted rule: 既存domain boundsを維持し、新complete-state documentは4096 records / 8 MiB、artifactは64 files /
+     4 MiB、nested collectionは親budgetへ算入し、切捨てない。
+   - Rejected alternatives: 全collection一律化、parameterごと独立8 MiB、全operation合計8 MiB。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」。
+   - Test classification: `GE-E-FREEZE`のfixed N-1 / N / N+1 example。
+5. Duplicate semantics（`GE-FRZ-H03`）
+   - Adopted rule: authoritative inputのsemantic-key duplicateは同値でも拒否し、set-like dedupeはoutput projectionだけ、
+     multi-ownerは単一record内だけ許可する。stable-ID recordはID、path recordはcanonical pathとalias key、graph node / edgeは
+     phase ID / `(from, to)`、explicit matchはsource locatorとtarget source ID、mappingはsource IDをkeyとする。同じpayloadでも
+     異なる有効event ID / sequenceを持つevent recordはduplicateとしない。
+   - Rejected alternatives: identical duplicate dedupe、first / last wins、全collection set化。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」とchange-wide publication scenario。
+   - Test classification: `GE-P-FREEZE`のHypothesis pure invariantと`GE-E-FREEZE`のfixed negative example。
+6. Snapshot ordering（`GE-FRZ-H04`）
+   - Adopted rule: unordered inputはvalidation後canonical sortし、task / journal / effect / receipt / secondary failureは
+     入力順を保存する。persisted authorityのnoncanonical orderは拒否し、graph identityへtopological orderを使わない。
+   - Rejected alternatives: 全順序保存、全sort、persisted authorityのsilent reorder。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」。
+   - Test classification: `GE-P-FREEZE`のHypothesis ordering invariantと`GE-E-FREEZE`のfixed ordered-record example。
+7. Supported adapter contract（`GE-FRZ-H05`）
+   - Adopted rule: public collectionは`collections.abc.Sequence`だけとし、scalar bytes / stringとgeneric iterable等を拒否する。
+     persisted / internal stateはexact tupleとする。observationは`ObservationAdapterV1`、persistenceは
+     `PersistenceAdapterV1`のbuiltinまたはnominal subclassだけとし、virtual registration、structural判定、method probeを
+     禁止する。明示callback / runnerだけは`callable()`確認後にexact immutable returnを検査する。
+   - Rejected alternatives: structural runtime protocol、capability tag + duck typing、builtin exact class限定。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」とpublic totality scenario。
+   - Test classification: `GE-E-FREEZE` / `GE-E-TOTALITY`のfixed public adapter / callback fault example。
+8. Stateful input retry（`GE-FRZ-H07`）
+   - Adopted rule: exact immutable tupleは再投入可能だが再検証し、その他の`Sequence`はtraversal開始後attempt-scoped、
+     いずれかのmethod callを開始したadapter instanceは新invocationには消費済みとしてretryにfresh instanceを要求する。
+   - Rejected alternatives: 全stateful object再利用、全input fresh必須、cleanup成功時adapter再利用。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」とpersistence taxonomy scenario。
+   - Test classification: `GE-E-FREEZE` / `GE-I-PERSISTENCE`のfixed cross-invocation retry example。
+9. Aggregate byte encoding（`GE-FRZ-H09`）
+   - Adopted rule: Gate E新規structured collectionは`gate-e-collection-v1`のtype tag、field tag、8-byte big-endian
+     length framing、item count、固定field順でencodeしたstream全長をbound判定する。exact UTF-8 / bytes、canonical path、
+     ASCII decimal integer、distinct bool、明示Optional `None`を型別にencodeし、JSON / `repr()` / pickle / platform encodingを
+     使わない。既存Gate D encoding / metricsは変えない。
+   - Rejected alternatives: canonical JSON、payload長合計だけ、既存identity全面移行。
+   - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」。
+   - Test classification: `GE-P-FREEZE`のHypothesis deterministic encodingとfixed golden / boundary example。
+10. Public limit scalar範囲（`GE-FRZ-H10`）
+    - Adopted rule: exact frozen limits dataclassのexact `int`、1以上field hard maximum以下とし、callerは縮小だけできる。
+      hard maximumはartifact files 64、source / graph / planning / mapping / policy / Gate E records 4096、artifact 1 MiB/file・
+      4 MiB total、structured / source / graph / inventory / policy / manifest / preview 8 MiB、change ID 128 bytesとし、
+      `bytes_per_file <= bytes_total`とnested limit <= parent limitを要求する。`bool` / subclass / float / `None`を拒否する。
+    - Rejected alternatives: positive int上限なし、uint64範囲、custom limit廃止。
+    - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」。
+    - Test classification: `GE-E-FREEZE`のfixed scalar boundary example。
+11. Infinite / lazy / deceptive-length停止点（`GE-FRZ-H11`）
+    - Adopted rule: `len()`一度、`iter()`一度、`next()`最大N+1、encoding最大B+1で停止し、reported / observed length
+      不一致を拒否してpartial snapshotを破棄する。length invalid / count limit / mismatch / byte limit / traversal fault /
+      `MemoryError`を6個のstable collection codeへ分類し、`BaseException`は再伝播する。単一call永久block、OS kill、
+      process terminationは保証外とする。
+    - Rejected alternatives: `len()`だけ信用、`len()`無視、worker timeout。
+    - Spec scenario: 「collection と adapter を effect 前に bounded freeze する」とpublic totality scenario。
+    - Test classification: `GE-E-FREEZE`のfixed deceptive `Sequence` / resource fault example。
+12. Adapter return taxonomy（`GE-PER-H01`,`GE-PER-H05`）
+    - Adopted rule: lockは`LockAcquired` / `LockUnavailable`、createは`StagingCreated` / `StagingNotCreated`、writeは
+      `WriteCompleted`、rereadは`BoundedBytes`、validateは`CandidateValid` / `CandidateInvalid`、replaceは`Replaced` /
+      `TargetChanged` / `LockLost`、cleanup / release / closeは各exact outcomeだけを返す。bare primitiveを禁止し、malformed
+      returnは`persistence-<call>-return-invalid`、cleanup等ではsecondary evidenceとする。
+    - Rejected alternatives: primitive return維持、adapter側も全`Result[T]`、exception-only failure。
+    - Spec scenario: 「persistence adapter の全 fault を同じ taxonomy で扱う」。
+    - Test classification: `GE-I-PERSISTENCE`のintegration adapter fault test。
+13. Cleanup / release / close順序（`GE-PER-H03`,`GE-PER-H04`）
+    - Adopted rule: cleanup → release → close → fresh observationとし、secondary failure後も継続する。最初のordinary
+      primaryとcall / kind / stable codeを持つ発生順・最大3件のsecondary evidenceを保持する。usable handle欠落時は推測呼出せず
+      `<call>-not-attemptable`と`UNKNOWN`を記録する。最初の`BaseException` objectへ`add_note()`し、同じobjectを再伝播する。
+    - Rejected alternatives: secondary初回停止、release先行、`ExceptionGroup`、単一secondary code圧縮。
+    - Spec scenario: 「persistence adapter の全 fault を同じ taxonomy で扱う」。
+    - Test classification: `GE-I-PERSISTENCE`のintegration multi-fault test。
+14. Fresh observation / final recheck（`GE-PRF-H04`,`GE-AUT-H04`）
+    - Adopted rule: registry → policy sections → inventoryを観測・cross-validationし、reverse final recheck直後にlockを
+      取得する。replace直前guardを行い、cleanup / release / close後にreplace / no-op共通のfresh canonical proofを完了して
+      から`Success`を返す。
+    - Rejected alternatives: replace直後だけproof、authorityの並列順不同read、returnまでlock保持、transaction / lease追加。
+    - Spec scenario: 「refresh authority inputs を preview approval に束縛する」と
+      「replace または no-op Success を fresh canonical proof で確定する」。
+    - Test classification: `GE-I-AUTHORITY` / `GE-I-FRESH-PROOF`のfilesystem integration race / fault test。
+15a. Zero-active publication（`GE-PUB-H01`）
+    - Adopted rule: active source 0件はtombstone / empty mappingの有無にかかわらず
+      `publication-active-source-empty`、effect 0とし、all-empty graph契約は変えない。
+    - Rejected alternatives: vacuous coverage成功、tombstoneありだけ成功、operation別許可。
+    - Spec scenario: change-wide publication scenario。
+    - Test classification: `GE-E-PUBLICATION`のfixed zero-active exampleと`GE-P-PUBLICATION`のHypothesis invariant。
+15b. Authority same-file / alias（`GE-AUT-H03`）
+    - Adopted rule: inventory、registry、policy sourceのrole間はcanonical path / alias key / physical identityでdisjointとし、
+      同一policy fileの異なるheadingだけ許可する。conflict時に自動path選択、merge、default fallbackを行わない。
+    - Rejected alternatives: exact pathだけ拒否、same bytesなら共有、inventory / registryだけdisjointでpolicy sourceとの共有許可。
+    - Spec scenario: 「refresh authority inputs を preview approval に束縛する」。
+    - Test classification: `GE-I-AUTHORITY`のfilesystem integration alias / hard-link fault test。
 
 ### HARD-R3: 複数 manifests 間の artifact ownership を検査する
 
@@ -589,6 +898,16 @@ mapping / lifecycle public seamはfixture / fixed public example、filesystem / 
 | `B-P-PATH-ROLE` | Hypothesis property（Plan B） | canonical path-role invariantの入力順不変、phase / plan / evidenceのexact・NFC/NFD・case alias disjointness、valid owner / evidence sharing |
 | `B-E-PATH-ROLE` | fixed public example（Plan B） | canonical POSIX scalar、empty / wrong type / backslash / absolute / dot / NUL、4096 / 8 MiB境界、3組のrole collision、evidence共有 / 分割、PlanningInventory / direct ManifestMappingのcode差、早期拒否時filesystem call count 0 |
 | `B-I-PATH-RACE` | fixed filesystem integration（Plan B） | filesystem観測中のmissing / alias / symlink / identity changeをfail-closedし、final observation後は実operation直前に再検査する |
+| `GE-E-TOTALITY` | fixed public fault-injection matrix | semantic operation inventory全件 × malformed root / scalar / getter / method / callback / hash / serialization / `Sequence` × ordinary `Exception` / `BaseException`。partial result非公開、fresh retry、owned cleanup後再伝播を観測 |
+| `GE-P-FREEZE` | Hypothesis property | pure collection invariantだけ。count / framed aggregate bytes / duplicate / ordering契約に対する一度のimmutable freeze、元collection再走査なし、same valid inputの決定性 |
+| `GE-E-FREEZE` | fixed public fault-injection example | collection別empty / `None`、N-1 / N / N+1、exact limit scalar、deceptive `Sequence`、stateful retry、unsupported nominal adapterをeffect前に判定し、adapter / filesystem / lock / staging call count 0 |
+| `GE-I-PERSISTENCE` | fixed adapter + filesystem fault-injection | 9 callのexact nominal outcome / `return-invalid`、ordinary / `BaseException`、cleanup 0 / 1 / 2、cleanup → release → close、発生順secondary evidence、fresh observation、target / staging / effectのUNKNOWN |
+| `GE-I-FRESH-PROOF` | fixed filesystem race / fault-injection | replace直前guard、replace / no-op共通のcleanup / release / close後proof、parent rebind、target re-resolution差、bytes / strict parse / candidate object / descriptor identity mismatch、read / parse exception、final observation後の外部変更は保証外である境界 |
+| `GE-P-NFC-PATH` | Hypothesis property | pure path / collection invariantだけ。segment-wise NFC exactness、NFC / NFD alias collision、input order不変、canonical NFC入力のidentity決定性 |
+| `GE-E-NFC-REUSE` | fixed public example | current / explicit / active / tombstoneのNFD-only、NFC-NFD alias、non-NFC persisted identity reuseをfilesystem call count 0でfail-closedし、auto-repairしない |
+| `GE-P-PUBLICATION` | Hypothesis property | pure mapping graph / collection invariantだけ。active source coverage exactly-one、duplicate / unknown / cross-change / tombstone拒否、input order不変、same-set preview決定性 |
+| `GE-E-PUBLICATION` | fixed public example | zero activeを`publication-active-source-empty` / effect 0、one / many activeをcoverage検査し、未実体将来pathsとoperation readiness未達についてrefresh publicationと各readinessを別々に判定 |
+| `GE-I-AUTHORITY` | fixed filesystem race / fault-injection | 両authority path必須、N-1 / N / N+1、role間path / alias / hard-link conflict、registry → sections → inventory観測とreverse recheck、same bytes + replaced identity、read / parse / scan identity race、effect-before-validation call count 0 |
 
 ### Spec-holes Phase 1 → Phase 2 一対一対応
 
@@ -607,6 +926,27 @@ mapping readinessのconcurrency / TOCTOU境界は新しいholeを追加せず、
 | `HARD-R4` recovery | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | `I-RECOVERY` | N/A: timeout自動rollbackなし | `I-RECOVERY` | N/A: retry回数policyなし | `E-BOUNDS`,`I-RECOVERY` | `I-RECOVERY`,`E-DRIFT` |
 | `HARD-R5` finalize | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | `I-FINALIZE` | `I-FINALIZE` | `P-PREVIEW`,`I-FINALIZE` | N/A: TTL失効なし | `I-FINALIZE`,`I-OWNERSHIP` | N/A: 件数自動承認なし | `E-BOUNDS`,`P-PREVIEW` | `I-FINALIZE`,`E-DRIFT` |
 | `HARD-R6` verification | `E-MAPPING` | `E-BOUNDS` | `E-MAPPING`,`I-OWNERSHIP` | `P-ALLOC`,`P-OWNERSHIP`,`P-PREVIEW` | `P-MANIFEST-RT`,`I-RECOVERY` | `E-MIGRATION`,`I-RECOVERY`,`I-FINALIZE` | `P-ALLOC`,`P-NORMALIZER`,`P-MANIFEST-RT`,`P-OWNERSHIP`,`P-PREVIEW` | `S-TOOLS`（通常CIはclock固定） | `E-MAPPING`,`I-OWNERSHIP` | `E-BOUNDS` | `E-BOUNDS`,`I-RECOVERY` | `S-TOOLS`（明示opt-inのみ） |
+
+### Gate E targeted Phase 1 → Phase 2 対応
+
+以下は上記Gate E差分IDの対応である。従来`c`だった19 rowsを含め、expected result、exact call order、bound、
+retry、return taxonomy、alias判定のoracleは合意済み決定台帳とnormative scenariosで確定している。
+I/O、adapter fault、filesystem race、cleanup順序はすべてfixed example / fault-injectionで検証する。
+Hypothesisは`GE-P-FREEZE`、`GE-P-NFC-PATH`、`GE-P-PUBLICATION`のpure collection / path / graph invariantだけに限定する。
+
+| behavior family | fixed public / fault-injection対応 | Hypothesis対応 | N/A / scope assertion |
+| --- | --- | --- | --- |
+| `GE-1` public totality | `GE-TOT-H01,H02,H05,H06,H07,H09,H10,H11,H12` → `GE-E-TOTALITY`。semantic operation inventory、fresh retryを含む | なし | `H03,H04,H08` N/A |
+| `GE-2` bounded freeze / adapter | `GE-FRZ-H01,H02,H03,H04,H05,H06,H07,H09,H10,H11,H12` → `GE-E-FREEZE`。collection category、bounds、nominal contract、stateful retry、N+1停止を含む | `H03,H04,H09` → `GE-P-FREEZE` | `H08` N/A |
+| `GE-3` persistence taxonomy | `GE-PER-H01,H02,H03,H04,H05,H06,H07,H10,H11,H12` → `GE-I-PERSISTENCE`。exact return、ordered secondary evidence、cleanup → release → closeを含む | なし | `H08,H09` N/A |
+| `GE-4` fresh proof | `GE-PRF-H01,H02,H03,H04,H05,H06,H07,H09,H11,H12` → `GE-I-FRESH-PROOF`。replace guardとpost-close final proofを含む | なし | `H08,H10` N/A。final observation後のexternal mutationは保証外assertionを含む |
+| `GE-5` NFC path / persisted reuse | `GE-NFC-H01,H02,H03,H04,H05,H06,H07,H09,H11,H12` → `GE-E-NFC-REUSE` | `H02,H03,H04,H07,H09,H11` → `GE-P-NFC-PATH` | `H08,H10` N/A |
+| `GE-6` publication / readiness | `GE-PUB-H01,H02,H03,H05,H06,H07,H09,H11,H12` → `GE-E-PUBLICATION`。zero-active failureを含む | `H02,H03,H04,H07,H11` → `GE-P-PUBLICATION` | `H08,H10` N/A |
+| `GE-7` authority binding | `GE-AUT-H01,H02,H03,H04,H05,H06,H07,H09,H11,H12` → `GE-I-AUTHORITY`。role disjointnessとobservation / final recheck順を含む | なし | `H08,H10` N/A |
+
+今回はPhase 2のtest node / fixtureを実装しない。このrebaselineで15テーマのoracleとsemantic public API inventoryを
+固定した。後続実装時のrepinは7 scenariosのactive source / scenario / mapping count、
+source hash、handoff manifest、mapping / refresh / lifecycle fixtures、tracked evidenceを一括対象とし、Gate Dの旧evidenceを削除しない。
 
 ### HARD-R2 Phase 2検証明細とplan所有
 

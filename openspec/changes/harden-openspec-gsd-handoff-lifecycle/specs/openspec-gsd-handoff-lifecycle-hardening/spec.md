@@ -44,6 +44,13 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
   fenced code blockを考慮したbounded source blockを用い、versioned length-prefixed bytesのSHA-256 lowercase
   hexを生成し、曖昧Markdown、path / symlink escape、巨大入力を拒否する
 
+#### Scenario: source path を入力時点の NFC に限定する
+- **WHEN** current source、explicit match、またはpersisted active / tombstone itemからsource pathを受け取る
+- **THEN** bridgeは各path segmentが入力時点でUnicode NFCと完全一致することをfilesystem accessより前に要求し、
+  NFDだけのpath、同一入力集合内のNFC / NFD alias、およびnon-NFC pathを持つpersisted itemの再利用をfail-closedする
+- **AND** bridgeは入力pathを暗黙にNFCへ変換せず、alias候補をfilesystemから探索せず、legacy recordを自動修復しない。
+  source本文とheadingに対する既存のNFC-equivalent identity規則は、source pathがこの入力契約を通過した後にだけ適用する
+
 #### Scenario: heading path または親が変化する
 - **WHEN** source itemのnormalized heading、canonical source path、またはscenario parentが既存recordから変化する
 - **THEN** bridgeは自動heuristicで既存IDへ紐付けず、explicit unique matchがある場合だけIDを維持し、
@@ -107,6 +114,82 @@ GSD phases / plans / verification evidence の対応を、再実行と並び替�
 - **WHEN** approved refreshのbounded staging write、limit+1再読、strict v2 validation、またはatomic replaceが失敗する
 - **THEN** bridgeはtargetの変更前hash維持を検証して停止し、維持を証明できなければstateをunknownとして報告し、
   自動rollbackを行わない
+
+#### Scenario: started schema v2 refresh を change-wide publication として判定する
+- **WHEN** started v2のrefresh previewまたはapplyを、未実体化の将来phaseを含むchange全体に対して要求する
+- **THEN** bridgeはrefreshを特定operationやtarget phaseに属さないchange-wide publicationとして扱い、全active source IDが
+  exactly oneの構造的に整合するmappingを持つことを要求する。source ID、phase ID / path、重複、unknown、
+  cross-change、tombstone、policy referenceを含むmapping全体を検査するが、plan / execute / verify / finalize固有のreadinessを
+  refreshの成功条件にせず、将来phaseの`phase_path`、`plan_paths`、`evidence_paths`がまだ実体化していないことを許す
+- **AND** operation-specific readinessは既存のlifecycle operation直前契約として維持する。refreshのrebaseline acceptanceは
+  固定change ID、active source / scenario / mapping count、`Phase 02`などの固定phase label、特定test fixture、または
+  planning inventory / policy registryのdefault authority pathに依存しない
+- **AND** active sourceが0件なら、tombstoneまたは空mappingの有無にかかわらず
+  `publication-active-source-empty`のstructured failureとしてeffect前に停止する。bridgeはvacuousなexactly-one coverageを
+  publication成功とせず、all-source deletionをrefreshによる正常なstate transitionとして承認しない。
+  all-empty phase graphの既存比較契約とfinalize / archive後のsource消滅はこのpublication判定で変更しない
+
+#### Scenario: refresh authority inputs を preview approval に束縛する
+- **WHEN** planning inventoryとpolicy registryをauthorityとしてstarted v2 refresh previewを生成する
+- **THEN** bridgeは両authorityのcanonical repository-relative pathを必須preview入力とし、各path、bounded exact bytes、
+  no-followで得たfile identity、およびregistryから選択したpolicy sectionのpath / heading / canonical bytes / hash evidenceを
+  preview hashへ束縛する。
+  省略されたpathをdefaultで補完せず、pathだけ同じ別fileや同じ値を返す別identityを同じapprovalとして扱わない
+- **AND** applyは副作用前に同じrepository anchorから両authorityをfreshに再観測し、path、bytes、file identity、policy sectionの
+  いずれかがpreview時から変化した場合は旧approvalをstaleとしてtargetを変更せず、新しいpreviewと別の明示承認を要求する
+- **AND** planning inventory、policy registry、選択したpolicy sourceはauthority roleを跨いでcanonical path、platformの
+  Unicode / case alias key、no-followで得たdevice・inode・typeのphysical identityが互いに異なることを要求する。
+  canonical pathまたはaliasの衝突は`authority-role-path-conflict`、physical identityの衝突は
+  `authority-role-identity-conflict`としてpreview時とapply時のeffect前に拒否する。同じpolicy source file内の異なる
+  normalized headingは許すが、同じnormalized headingの重複referenceまたはalias pathによる二重参照は拒否する。
+  conflict時に自動path選択、merge、default fallbackを行わない
+- **AND** applyはcollection / scalar / adapter validation後、repository anchor、policy registry、registryが参照するpolicy
+  sections、planning inventoryの順にpath、identity、bounded exact bytes、strict parseまたはcanonical section evidenceを
+  観測してcross-validationする。その後inventory、registry、policy sections、repository anchorの逆順でidentityとbytesを
+  final recheckし、全一致直後に最初のeffectであるlock acquisitionへ進む。一つのinvocationでauthorityごとに別anchorを
+  使用せず、各readの前後でdevice・inode・type・size・mtime / ctimeを含むscan identityの一致を要求する
+
+#### Scenario: persistence adapter の全 fault を同じ taxonomy で扱う
+- **WHEN** supported persistence adapterのlock、create、write、reread、validate、replace、cleanup、release、またはclose callが
+  ordinary `Exception`を送出する
+- **THEN** bridgeはcall位置を保持したstructured persistence failureを返し、owned stagingが作成済みまたは作成された可能性が
+  ある場合はcleanupを必ず一度試行する。cleanup例外はprimary failureを上書きせず、target、staging、またはeffectの状態を
+  証明できなければ`UNKNOWN`とし、adapter例外後に`Success`を返さない
+- **AND** adapter callが`BaseException`を送出した場合もowned stagingのcleanupを試行し、cleanupの成否で元の
+  `BaseException`を置換せず再伝播する
+- **AND** `PersistenceAdapterV1`の9 callはexact nominal outcomeだけを返す。lockは
+  `LockAcquired(LockHandle)` / `LockUnavailable`、createは`StagingCreated(StagingHandle)` / `StagingNotCreated`、
+  writeは`WriteCompleted`、rereadは`BoundedBytes(exact bytes)`、validateは`CandidateValid` / `CandidateInvalid`、
+  replaceは`Replaced` / `TargetChanged` / `LockLost`、cleanupは`Removed` / `AlreadyAbsent` / `CleanupFailed` /
+  `CleanupUnknown`、releaseは`Released` / `ReleaseFailed` / `ReleaseUnknown`、closeは`Closed` / `CloseFailed` /
+  `CloseUnknown`だけを許す。`BoundedBytes(b"")`はtransport observationとして受理して後続strict validationで
+  `CandidateInvalid`にするが、bare `None`、`bool`、string、bytes、wrong type、foreign / empty token、attempt不一致、
+  unknown outcome、oversized bytesは成功として扱わない。malformed returnは同じcall位置の
+  `persistence-<call>-return-invalid` failureとし、cleanup / release / closeで生じた場合はsecondary evidenceへ記録する
+- **AND** primary failure後はcleanup、release、close、fresh state observationの順に実行し、手前のsecondary failure後も
+  所有する後続処理を続ける。usable handleがなく安全に試行できないcallは推測実行せず
+  `<call>-not-attemptable`と`UNKNOWN`を記録する。ordinary failureでは最初のprimaryを維持し、各secondaryのcall position、
+  `exception | negative-outcome | return-invalid | not-attemptable`、stable codeを発生順の最大3 semantic recordsとして保持し、
+  raw exception messageをidentityへ含めない。最初の`BaseException` objectは置換せず、earlier ordinary primaryとsecondary stable codeを
+  `add_note()`で付記し、後続cleanup / release / close後に同じobjectを再伝播する。`ExceptionGroup`へ置換しない
+
+#### Scenario: replace または no-op Success を fresh canonical proof で確定する
+- **WHEN** approved persistenceをatomic replaceまたはno-op `Success`として確定しようとする
+- **THEN** bridgeはreturn直前にrepository anchorからcanonical parentとtargetをfreshに再観測し、preview時と同じparent identity、
+  canonical target path、exact candidate bytes、およびstrict parse結果とcandidate objectの一致をすべて証明する。
+  no-opでもfresh target bytesがcandidate bytesと一致することを要求する
+- **AND** fresh proofの失敗、parent rebind、target pathの再解決差、canonical bytes mismatch、strict parse mismatch、または
+  proof中のadapter例外は`Success`にせずstructured non-successとし、effectを証明できなければ`UNKNOWN`とする。
+  final observation後の非協調な外部変更は保証せず、新しいleaseまたはtransaction契約を導入しない
+- **AND** replace直前にはcanonical parent identity、target pathの再解決、current targetのbounded exact bytes、strict parseと
+  approved old object / hashの一致、lockのlive状態、parent / target identityの順にguardし、全一致の場合だけconditional
+  atomic replaceを行う
+- **AND** cleanup、release、closeの完了後にreplace / no-op共通のfinal proofとして、fresh repository anchor、preview時と
+  同じcanonical parent identity、同じcanonical target path、target descriptorから得たbounded exact bytes、strict parse、
+  candidate bytes / objectとの一致、target pathとdescriptor / scan identityの再一致、parent / repository anchor identityの
+  再一致をこの順に検査し、proof用resourceをcloseしてからだけ`Success`を返す。replace後に状態を証明できなければ
+  `UNKNOWN`とし、ordinary exceptionはstructured non-success、`BaseException`はowned cleanup後に再伝播する
+- **AND** final proofのbounded readでもread前後のdevice、inode、type、size、mtime / ctimeを含むscan identity一致を要求する
 
 #### Scenario: policy reference のtraceabilityを検査する
 - **WHEN** source mappingまたはenforcement evidenceが`adaptive-change-execution` policyを参照する
@@ -196,6 +279,68 @@ manifest、stable mapping、phase state、capability evidence を同じ検査契
   decision identityとremediation projectionのない`UNKNOWN`として操作を停止し、完全なexpected / observed graphの
   差分を`UNKNOWN`へ縮退させない
 
+#### Scenario: public Result と decision API の ordinary exception を閉じ込める
+- **WHEN** packageが公開する任意の`Result` APIまたはdecision APIで、malformed root / scalar、property getter、adapter method、
+  callback、hash / serialization、または`Sequence` traversalがordinary `Exception`を送出する
+- **THEN** bridgeは`Result` APIではstructured `Failure`、decision APIではdecision identityとremediation projectionのない
+  `UNKNOWN`へ変換し、例外前に得た要素や観測をpartial result、partial green、または再利用可能なidentityとして返さない
+- **AND** この境界契約を全public APIのroot / scalar / getter / method / callback / hash / serialization /
+  `Sequence` matrixで検証し、
+  `BaseException`だけは必要なowned-resource cleanup後に元の例外を再伝播する
+- **AND** public inventoryはsemantic operation単位で管理し、read、preview、apply、observation、ownership、resume、finalizeと
+  custom persistence unionを`Result` API、canonical driftとlifecycle admissionをdecision APIとして分類する。
+  root `__all__`だけ、全non-underscore symbol、または現時点の関数名だけからinventoryを導出しない
+- **AND** boundary failure後の新しいinvocationはroot validation、freeze、mutable observationをすべてfreshに再実行し、
+  前attemptのsnapshot、identity、remediation、partial observationを再利用しない。effect-capable failure後のretryはfresh
+  previewと別の明示承認を要求する
+
+#### Scenario: collection と adapter を effect 前に bounded freeze する
+- **WHEN** public APIがcollection、途中で例外を送出する`Sequence`、またはpersistence / observation adapterを受け取る
+- **THEN** bridgeは外部effectより前にroot shape、scalar、collection protocol、件数、canonical aggregate bytes、adapter supportを
+  検査し、collectionをbounded immutable snapshotへ一度だけfreezeする。malformed collection、freeze途中のordinary
+  `Exception`、またはunsupported adapterはstructured invalid、decision APIではidentityのない`UNKNOWN`として停止する
+- **AND** validation後の処理はfreeze済みsnapshotだけを利用し、元collectionを再走査せず、拒否時はadapter call、filesystem
+  access、lock、staging createを含むeffectが0件であることをpublic contract matrixから観測可能にする。
+  adapter supportはeffectを伴うduck-typing probeではなく、明示されたsupported contractだけで判定する
+- **AND** public collectionは`collections.abc.Sequence`だけを受理し、`str` / `bytes` / `bytearray`、generic iterable、
+  generator、set、mappingをcollectionとして受理しない。persisted / internal immutable stateはexact tupleだけを受理する。
+  observation adapterは`ObservationAdapterV1`としてsource commit、phase graph、capability、authority observationから
+  `Success[exact immutable observation] | Failure`だけを返し、persistence adapterは`PersistenceAdapterV1`とする。
+  builtinまたはnominal subclassだけをsupportedとし、virtual registration、structural protocol判定、method probeを行わない。
+  明示callback / command runnerだけは`callable()`確認後にexact immutable returnを検査する
+- **AND** いずれかのmethod callを開始したadapter instanceは新invocationへの再投入について消費済みとする。pure validationで
+  adapter call 0のまま拒否した場合だけ同一instanceを再投入できる。exact immutable tupleは新invocationへ再投入できるが
+  毎回再検証し、それ以外の`Sequence`はtraversal開始後attempt-scoped、retry時のadapterはfresh instanceを要求する
+- **AND** source paths / files / artifacts collectionはemptyと`None`を拒否し、optional auxiliary collectionはemptyを許すが
+  `None`を拒否する。optional auxiliaryは`explicit_matches`、exclusions、任意policy referencesを含む。active、tombstones、
+  mappings、phases、assignments、plans、evidence、policy observations、graph nodes / edges、ownership references、
+  checkpoint / effect recordsを含むcomplete-state collectionはemptyをshape-validとするが`None`を拒否する。
+  `previous_source_items=None`だけはbootstrap emptyを表す。authoritative inputでsemantic keyが重複した場合は内容が同じでも
+  拒否し、silent dedupeまたはfirst / last winsを行わない。source / assignment / policy / checkpoint / effect / receiptは
+  stable ID、artifact / phase / plan / evidence / authorityはcanonical pathとalias key、graph nodeはphase ID、edgeは
+  `(from, to)`、explicit matchはsource locatorとtarget source ID、mappingはsource IDをsemantic keyとする。multi-ownerは
+  単一record内の明示だけを許し、set-like dedupeはissue codes、changed IDs、revalidation / replanning targets、next actionsの
+  output projectionだけに適用する
+- **AND** 既存domainのcount / bytes boundsを維持し、新しいcomplete-state documentは4096 records / 8 MiB、artifact
+  collectionは64 files / 4 MiBを上限とする。nested collectionは親budgetへ算入し、parameterごとに独立budgetを再付与せず、
+  超過時に切り捨てない。新しいpublic limitはexact frozen limits dataclassのexact `int` fieldとして1以上field hard maximum
+  以下だけを受理し、callerは縮小だけできる。`bool`、`int` subclass、float、`None`を拒否する
+- **AND** Gate Eで新設するstructured collectionのaggregate bytesは`gate-e-collection-v1`としてtype tag、field tag、
+  collection semantic name、8-byte big-endian length framing、8-byte item count、固定field順でencodingしたstream全長を数える。string / enumは
+  検証済みexact UTF-8、pathは入力時NFC検証済みcanonical POSIX UTF-8、bytesはexact bytes、integerはcanonical ASCII
+  decimal、boolはintegerと区別した`T` / `F`、`None`は明示Optional fieldだけの`N`としてencodeする。JSON、`repr()`、
+  pickle、delimiter-only連結、platform encodingを使わず、既存Gate D encoding / metricは変更しない。
+  unordered inputはvalidation後にcanonical sortし、task、journal、effect、receipt、secondary failureは入力順を保存する。
+  persisted authorityのnoncanonical orderは拒否し、graph identityにtopological orderを用いない
+- **AND** bridgeは`len()`を一度、`iter()`を一度だけ呼び、`next()`をcount上限N+1回まで、encodingをbytes上限B+1までで
+  停止し、各item field getterを一度だけ読む。
+  `len()`のordinary exception / non-integer / negative / overflowは`collection-length-invalid`、reported lengthが
+  N超過ならtraversal前に`collection-count-limit-exceeded`、reported lengthがN以下でもN+1番目を得た場合または終了時の
+  observed count不一致は`collection-length-mismatch`、B+1到達は`collection-byte-limit-exceeded`、`iter()` / `next()` /
+  item getter / encodingのordinary exceptionは`collection-traversal-failed`、bounded snapshot / encodingの`MemoryError`は
+  `collection-resource-exhausted`とする。partial snapshotは破棄し、`BaseException`は再伝播する。単一call自体が永久に
+  blockする場合、OS kill、process terminationの停止 / 結果化は保証しない
+
 #### Scenario: Phase 3 public contract の互換性を維持する
 - **WHEN** phase graph authority、target phase分類、またはpath role separationを実装する
 - **THEN** bridgeは`PhaseGraphObservation`へfieldを追加せず、`lifecycle-gate-decision-v1`とschema / versionを維持し、
@@ -221,6 +366,10 @@ manifest、stable mapping、phase state、capability evidence を同じ検査契
   存在して`passed`かつ10/10、`behavior_unverified: 0`、`overrides_applied: 0`、HND-03 / HARD-R2 traceability
   `Complete`、security reportが存在してopen threats 0をすべて満たすまでPhase 3を未完了としてPhase 4を開始しない。
   いずれかのevidenceの欠落、失敗、未実行も未達とする
+- **AND** 上記の固定changeに対する49→54 active mappings、43→48 scenario headings、旧49-ID mapping、Plan A / B、
+  fixture repinはGate D時点のsource-pinned execution evidenceとして保持するが、後続のPhase 3 rebaseline acceptanceは
+  固定change ID / count / `Phase 02` / test fixture / default authority pathを前提にせず、本requirementへ追加した7 scenariosの
+  public API matrix、persistence fault matrix、fresh proof、NFC fail-closed contractを任意の正規入力に対して満たすことを要求する
 
 ### Requirement: HARD-R3 複数 manifests 間の artifact ownership を検査する
 bridge は MUST repository 内で有効な全 handoff manifests を照合し、各派生 artifact の所有と参照を
