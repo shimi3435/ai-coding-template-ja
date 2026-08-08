@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: lifecycle-drift-gate
-status: executing
-stopped_at: Fresh review after Plan 03-28 found two adjacent totality blockers; gap planning is required before Plan 03-23
-last_updated: "2026-08-01T13:28:00.000Z"
-last_activity: 2026-08-01
-last_activity_desc: Fresh independent review recorded Critical 2 for refresh apply/serialization and canonical source-state validator totality
+status: verifying
+stopped_at: Plan 03-29 completed and verified; Plan 03-23 fresh independent exit workflow is next
+last_updated: "2026-08-08T10:05:23.165Z"
+last_activity: 2026-08-08
+last_activity_desc: Plan 03-29 completed; focused, static, full-suite, and public behavior checks passed
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 38
-  completed_plans: 37
+  total_plans: 39
+  completed_plans: 38
   percent: 33
 ---
 
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-07-29)
 ## Current Position
 
 Phase: 03 (lifecycle-drift-gate) — EXECUTING
-Plan: 27 of 28 (new review gap planning required before Plan 03-23)
-Status: 27 of 28 Phase 03 plans executed; fresh review is Critical 2 / Warning 0
-Last activity: 2026-08-01 — fresh review confirmed Plan 03-28 but found two adjacent structured-totality blockers
+Plan: 28 of 29 (Plan 03-23 fresh independent exit workflow is next)
+Status: 28 of 29 Phase 03 plans executed; Plan 03-29 verified complete
+Last activity: 2026-08-08 — Plan 03-29 completed; focused, static, full-suite, and public behavior checks passed
 
 Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 
@@ -86,6 +86,7 @@ Progress: [███░░░░░░░] 2 of 6 phases complete (33%)
 | Phase 03 P20 | 6 min | 1 tasks | 2 files |
 | Phase 03 P21 | 10 min | 1 tasks | 2 files |
 | Phase 03 P22 | 17min | 1 tasks | 4 files |
+| Phase 03 P29 | 9 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -161,6 +162,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 03]: Fresh review after 03-25 found that migration preview discarded a valid falsey previous SourceIdentityState; Plan 03-26 closed the reported collision seam through RED→GREEN TDD, while later review determined another supported-subclass path still needed gap closure before Plan 03-23. — Preserves the completed 03-26 collision evidence without treating it as current clean exit authority.
 - [Phase 03]: Fresh review after 03-26 found a supported-subclass preview-shape mismatch; Plan 03-27 aligned canonical admission and serialization-only base projection through RED→GREEN TDD, and Plan 03-23 was then scheduled for Wave 21. — Preserves the exact-type finding as historical evidence; the later Plan 03-28 decision supersedes that sequencing.
 - [Phase 03]: Fresh review after 03-27 found a getter-throwing malformed-subclass totality gap; Plan 03-28 closed it through RED→GREEN state-guard TDD, and Plan 03-23 now restarts in Wave 22. — Preserves valid subclass support while ordinary untrusted-input exceptions normalize to existing preview-invalid evidence and process-control BaseException remains visible.
+- [Phase 03]: Preserve specific source-state issue codes before generic ordinary-exception normalization. — Keeps precise taxonomy while making the canonical public validator total for ordinary getter failures.
+- [Phase 03]: Keep downstream lifecycle consumers on the sole canonical source-state validator. — Avoids duplicate catch authority while retaining reconciliation, mapping, classifier, and gate projections.
+- [Phase 03]: No REFACTOR commit was added because GREEN was already minimal and single-authority.
 
 ### Pending Todos
 
@@ -177,6 +181,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Plan 03-18 closed the path-role gap and all project checks passed; independent
   reverification remains pending. Phase 4 remains blocked on Phase 3, while Phases
   5–6 retain their dependency order.
+
 - The current fresh `03-REVIEW.md` is Critical 2 / Warning 0. Plan 03-28 fixed migration
   totality, but refresh apply/serialization and the canonical source-state validator still
   leak ordinary getter exceptions. Both require gap closure before Plan 03-23.
@@ -192,6 +197,6 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-08-01T13:28:00.000Z
-Stopped at: 27/28 Phase 03 plans executed; fresh review Critical 2 requires gap planning before Plan 03-23
+Last session: 2026-08-08T10:04:56.691Z
+Stopped at: Plan 03-29 completed and verified; Plan 03-23 fresh independent exit workflow is next
 Resume file: None

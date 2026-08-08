@@ -128,7 +128,7 @@ Plans:
 **Mode:** standard
 **Depends on:** Phase 2
 **Requirements:** HND-03 (opaque canonical handle: HARD-R2)
-**Plans:** 27/28 plans executed
+**Plans:** 28/29 plans executed
 **Success Criteria** (observable planning and verification outcomes):
 
 1. Reviewers can observe a shared classification for clean, drifted, and unknown inputs across the in-scope lifecycle operations.
@@ -137,6 +137,8 @@ Plans:
 4. TDD evidence uses fixed public drift and path-role examples; property testing remains limited to the approved pure seams: checkbox normalization, phase graph/remediation projection (`A-P-GRAPH`), and canonical path-role invariants (`B-P-PATH-ROLE`). Filesystem and I/O races remain fixed integration evidence.
 
 Plans:
+
+- [x] 03-29-PLAN.md
 
 - [x] 03-19-PLAN.md
 - [x] 03-20-PLAN.md
@@ -305,7 +307,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Stable Identity and Migration | 5/5 | Complete | 2026-07-18 |
 | 2. Source-to-Execution Mapping | 5/5 | Complete | 2026-07-22 |
-| 3. Lifecycle Drift Gate | 27/28 | In Progress |  |
+| 3. Lifecycle Drift Gate | 28/29 | In Progress|  |
 | 4. Repository-Wide Ownership | 0/TBD | Blocked on Phase 3 | - |
 | 5. Recovery and Resume | 0/TBD | Blocked on Phase 4 | - |
 | 6. Finalize Preview and Receipt | 0/TBD | Blocked on Phase 5 | - |
