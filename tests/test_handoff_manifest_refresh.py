@@ -68,6 +68,7 @@ from ai_coding_template_ja.openspec_gsd_handoff.progress import parse_task_progr
 from ai_coding_template_ja.openspec_gsd_handoff.source_identity import (
     ExplicitSourceMatch,
     SourceCategory,
+    SourceIdentityState,
 )
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
@@ -310,6 +311,24 @@ class MutationRecordingRefreshOperations(ManifestRefreshFileOperations):
         super().unlink_at(parent_descriptor, name)
 
 
+class _RefreshProcessControlSignal(BaseException):
+    """A process-control signal that malformed-input handling must not suppress."""
+
+
+class _ActiveGetterThrowingRefreshState(SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise RuntimeError("boom")
+        return super().__getattribute__(name)
+
+
+class _ActiveGetterSignallingRefreshState(SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise _RefreshProcessControlSignal
+        return super().__getattribute__(name)
+
+
 class RepositoryResolutionProbe:
     def __init__(self) -> None:
         self.probes = 0
@@ -541,6 +560,14 @@ def _preview(repository: Path, **overrides):
     }
     arguments.update(overrides)
     return preview_manifest_refresh(repository, Path(HANDOFF_PATH), **arguments)
+
+
+def _tree_bytes(repository: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(repository).as_posix(): path.read_bytes()
+        for path in sorted(repository.rglob("*"))
+        if path.is_file()
+    }
 
 
 def _migration_preview_for_lock_test(repository: Path, target: Path):
@@ -1311,6 +1338,88 @@ def test_apply_requires_exact_fresh_approval_before_any_mutation(
         assert applied.issue.staging_state is RefreshStagingState.ABSENT
         assert operations.mutations == []
         assert target.read_bytes() == before
+
+
+def test_refresh_preview_getter_exception_totality_at_serializer_and_apply(
+    tmp_path: Path,
+) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    malformed = replace(
+        preview,
+        previous_source_items=_ActiveGetterThrowingRefreshState(
+            next_requirement_id=1,
+            next_scenario_id=1,
+            active=(),
+            tombstones=(),
+        ),
+    )
+    target_before = target.read_bytes()
+    tree_before = _tree_bytes(repository)
+    staging_before = tuple(target.parent.glob(".handoff.*.tmp"))
+    operations = MutationRecordingRefreshOperations()
+
+    serialized = serialize_manifest_refresh_preview(malformed)
+    applied = apply_manifest_refresh(
+        malformed,
+        approved_preview_sha256=preview.preview_sha256,
+        approved=True,
+        operations=operations,
+    )
+
+    assert isinstance(serialized, Failure)
+    assert serialized.issue.category is IssueCategory.PERSISTENCE
+    assert serialized.issue.code == "refresh-preview-invalid"
+    assert serialized.issue.known_state is KnownState.UNKNOWN
+    assert not hasattr(serialized, "value")
+    assert isinstance(applied, ManifestRefreshFailure)
+    assert applied.issue.code == "refresh-preview-invalid"
+    assert applied.issue.failure_point is RefreshFailurePoint.STATE_GUARD
+    assert applied.issue.target_state is RefreshTargetState.UNKNOWN
+    assert applied.issue.staging_state is RefreshStagingState.ABSENT
+    assert applied.issue.cleanup_outcome is RefreshCleanupOutcome.NOT_NEEDED
+    assert not hasattr(applied, "value")
+    assert operations.mutations == []
+    assert target.read_bytes() == target_before
+    assert _tree_bytes(repository) == tree_before
+    assert tuple(target.parent.glob(".handoff.*.tmp")) == staging_before
+
+
+def test_refresh_preview_base_exception_is_not_suppressed(tmp_path: Path) -> None:
+    repository, target = _repository(tmp_path)
+    result = _preview(repository)
+    assert isinstance(result, Success)
+    preview = result.value
+    malformed = replace(
+        preview,
+        previous_source_items=_ActiveGetterSignallingRefreshState(
+            next_requirement_id=1,
+            next_scenario_id=1,
+            active=(),
+            tombstones=(),
+        ),
+    )
+    target_before = target.read_bytes()
+    tree_before = _tree_bytes(repository)
+    staging_before = tuple(target.parent.glob(".handoff.*.tmp"))
+    operations = MutationRecordingRefreshOperations()
+
+    with pytest.raises(_RefreshProcessControlSignal):
+        serialize_manifest_refresh_preview(malformed)
+    with pytest.raises(_RefreshProcessControlSignal):
+        apply_manifest_refresh(
+            malformed,
+            approved_preview_sha256=preview.preview_sha256,
+            approved=True,
+            operations=operations,
+        )
+
+    assert operations.mutations == []
+    assert target.read_bytes() == target_before
+    assert _tree_bytes(repository) == tree_before
+    assert tuple(target.parent.glob(".handoff.*.tmp")) == staging_before
 
 
 def test_apply_uses_falsey_supplied_operations_without_default_fallback(

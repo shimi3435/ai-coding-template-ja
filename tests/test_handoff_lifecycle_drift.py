@@ -69,6 +69,13 @@ def _empty_source_state() -> SourceIdentityState:
     )
 
 
+class _ActiveGetterThrowingDriftState(SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise RuntimeError("boom")
+        return super().__getattribute__(name)
+
+
 def _write_complete_change(
     tmp_path: Path,
     *,
@@ -295,6 +302,30 @@ def _assert_unknown(expected, observed, code: str) -> None:
     assert decision.drifted_artifact_paths == ()
     assert decision.changed_source_item_ids == ()
     assert decision.progress_update_candidate is None
+
+
+@pytest.mark.parametrize("malformed_side", ["expected", "observed"])
+def test_getter_throwing_source_state_observation_is_unknown(
+    tmp_path: Path,
+    malformed_side: str,
+) -> None:
+    repository, claims = _write_complete_change(tmp_path)
+    complete = _observe_initial(repository, claims)
+    source_items = complete.value.source_items
+    malformed_observation = replace(
+        complete.value,
+        source_items=_ActiveGetterThrowingDriftState(
+            next_requirement_id=source_items.next_requirement_id,
+            next_scenario_id=source_items.next_scenario_id,
+            active=(),
+            tombstones=source_items.tombstones,
+        ),
+    )
+    malformed = Success(malformed_observation)
+    expected = malformed if malformed_side == "expected" else complete
+    observed = malformed if malformed_side == "observed" else complete
+
+    _assert_unknown(expected, observed, "canonical-observation-incomplete")
 
 
 @pytest.mark.parametrize(

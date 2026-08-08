@@ -1000,6 +1000,67 @@ def _empty_source_state() -> identity.SourceIdentityState:
     )
 
 
+class _SourceStateProcessControlSignal(BaseException):
+    """A process-control signal that source validation must not suppress."""
+
+
+class _ActiveGetterThrowingSourceState(identity.SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise RuntimeError("boom")
+        return super().__getattribute__(name)
+
+
+class _ActiveGetterSignallingSourceState(identity.SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise _SourceStateProcessControlSignal
+        return super().__getattribute__(name)
+
+
+def test_source_state_validator_and_reconciliation_normalize_getter_exception() -> None:
+    state = _ActiveGetterThrowingSourceState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+
+    validated = identity.validate_source_identity_state(state)
+    reconciled = identity.reconcile_source_items(
+        identity.SourceInventory(items=()),
+        state,
+    )
+
+    for result in (validated, reconciled):
+        assert isinstance(result, Failure)
+        assert result.issue.category is IssueCategory.INPUT
+        assert result.issue.code == "source-state-invalid"
+        assert result.issue.known_state is KnownState.MANIFEST_ABSENT
+        assert not hasattr(result, "value")
+
+
+def test_source_state_validator_preserves_specific_code_and_base_exception() -> None:
+    invalid_counter = replace(_empty_source_state(), next_requirement_id=0)
+    signalling = _ActiveGetterSignallingSourceState(
+        next_requirement_id=1,
+        next_scenario_id=1,
+        active=(),
+        tombstones=(),
+    )
+
+    specific = identity.validate_source_identity_state(invalid_counter)
+
+    assert isinstance(specific, Failure)
+    assert specific.issue.category is IssueCategory.INPUT
+    assert specific.issue.code == "source-state-counter-invalid"
+    assert specific.issue.known_state is KnownState.MANIFEST_ABSENT
+    with pytest.raises(_SourceStateProcessControlSignal):
+        identity.validate_source_identity_state(signalling)
+    with pytest.raises(_SourceStateProcessControlSignal):
+        identity.reconcile_source_items(identity.SourceInventory(items=()), signalling)
+
+
 def _active_requirement(
     source_id: str = "REQ-000001",
 ) -> identity.ActiveSourceItem:

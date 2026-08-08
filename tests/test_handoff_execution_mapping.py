@@ -30,7 +30,12 @@ from ai_coding_template_ja.openspec_gsd_handoff.manifest_v2 import (
     ManifestMapping,
     parse_manifest_v2_bytes,
 )
-from ai_coding_template_ja.openspec_gsd_handoff.models import Failure, Success
+from ai_coding_template_ja.openspec_gsd_handoff.models import (
+    Failure,
+    IssueCategory,
+    KnownState,
+    Success,
+)
 from ai_coding_template_ja.openspec_gsd_handoff.policy_reference import (
     PolicySectionObservation,
     observe_policy_sections,
@@ -112,6 +117,41 @@ def _baseline():
     )
     assert isinstance(inventory, Success)
     return source_items, registry, inventory.value
+
+
+class _ActiveGetterThrowingMappingState(SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise RuntimeError("boom")
+        return super().__getattribute__(name)
+
+
+def test_mapping_public_apis_reject_getter_throwing_source_state() -> None:
+    source_items, registry, inventory = _baseline()
+    mappings = _mappings(source_items, registry, inventory)
+    malformed = _ActiveGetterThrowingMappingState(
+        next_requirement_id=source_items.next_requirement_id,
+        next_scenario_id=source_items.next_scenario_id,
+        active=(),
+        tombstones=source_items.tombstones,
+    )
+
+    built = build_manifest_mappings(malformed, inventory, registry)
+    readiness = validate_mapping_readiness(
+        REPOSITORY_ROOT,
+        malformed,
+        mappings,
+        inventory,
+        operation=MappingOperation.PLAN,
+        target_phase_id="03",
+    )
+
+    for result in (built, readiness):
+        assert isinstance(result, Failure)
+        assert result.issue.category is IssueCategory.INPUT
+        assert result.issue.code == "mapping-input-invalid"
+        assert result.issue.known_state is KnownState.UNKNOWN
+        assert not hasattr(result, "value")
 
 
 def _unsafe_replace(value: Any, /, **changes: object) -> Any:

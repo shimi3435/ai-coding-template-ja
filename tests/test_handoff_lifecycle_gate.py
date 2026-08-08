@@ -184,6 +184,13 @@ def _empty_source_state() -> SourceIdentityState:
     )
 
 
+class _ActiveGetterThrowingGateState(SourceIdentityState):
+    def __getattribute__(self, name: str) -> Any:
+        if name == "active":
+            raise RuntimeError("boom")
+        return super().__getattribute__(name)
+
+
 SOURCE_STATE_MALFORMED_CASES = (
     "outer-wrong-type",
     "next-requirement-non-integer",
@@ -896,6 +903,34 @@ def _assert_wholly_unknown(
     assert decision.replanning_targets == ()
     assert decision.next_action_codes == ()
     assert decision.decision_identity is None
+
+
+def test_getter_throwing_source_state_public_gate_is_wholly_unknown(
+    tmp_path: Path,
+) -> None:
+    repository, boundary = _fixture(tmp_path)
+    source_items = boundary.canonical_source.source_items
+    malformed = replace(
+        boundary.canonical_source,
+        source_items=_ActiveGetterThrowingGateState(
+            next_requirement_id=source_items.next_requirement_id,
+            next_scenario_id=source_items.next_scenario_id,
+            active=(),
+            tombstones=source_items.tombstones,
+        ),
+    )
+    boundary.canonical_source = malformed
+
+    decision = gate_lifecycle_operation(
+        repository,
+        CHANGE_ID,
+        LifecycleOperation.EXECUTE,
+        "03",
+        boundary=boundary,
+    )
+
+    _assert_wholly_unknown(decision, "canonical-observation-incomplete")
+    assert decision.manifest_sha256 is None
 
 
 def test_source_pinned_reconciliation_changes_are_wholly_unknown(
