@@ -1,152 +1,113 @@
 ---
 phase: 03-lifecycle-drift-gate
-reviewed: 2026-08-01T13:19:19Z
-depth: standard
-files_reviewed: 15
+reviewed: 2026-08-08T10:25:56Z
+depth: deep
+files_reviewed: 12
 files_reviewed_list:
-  - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
-  - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_drift.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_drift.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/execution_mapping.py
+  - src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_migration.py
   - src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py
-  - src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py
-  - tests/fixtures/openspec_gsd_handoff/lifecycle/expected-lifecycle-evidence.json
-  - tests/fixtures/openspec_gsd_handoff/manifest/expected-refresh-preview.json
-  - tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json
+  - tests/test_handoff_lifecycle_gate.py
+  - tests/test_handoff_lifecycle_drift.py
   - tests/test_handoff_execution_mapping.py
   - tests/test_handoff_identity.py
-  - tests/test_handoff_lifecycle_drift.py
-  - tests/test_handoff_lifecycle_gate.py
-  - tests/test_handoff_manifest_refresh.py
   - tests/test_handoff_migration.py
+  - tests/test_handoff_manifest_refresh.py
 findings:
-  critical: 2
+  critical: 0
   warning: 0
   info: 0
-  total: 2
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-08-01T13:19:19Z
-**Depth:** standard
-**Files Reviewed:** 15
-**Status:** issues_found
+**Reviewed:** 2026-08-08T10:25:56Z
+**HEAD:** `936091f98b0b8d8caee6b7953f478d718e937767`
+**Depth:** deep
+**Files Reviewed:** 12
+**Status:** clean
 
 ## Summary
 
-Plan 03-28 後の指定 15 ファイルを、canonical OpenSpec design/spec と Plan 03-23 Task 1 の
-behavior/action/acceptance に照らして fresh review した。repository-wide `task check` は Ruff format/check、
-BasedPyright、全 962 pytest を含め成功した。Plan 03-23 の重点回帰 14 件、graph/path-role/identity analog
-119 件も成功し、fixtures 3 件は有効な JSON である。
+Plan 03-23 Task 1 の fresh independent review として、現在の HEAD を canonical OpenSpec、Plan
+03-19〜03-22・03-24〜03-29、各 summary、Phase verification に照らして再検証した。実装担当の
+完了判断には依存せず、対象 6 production module の public/integration call chain、対象 6 test surface、
+各 remediation commit の実 diff を追跡した。
 
-03-25 の falsey operations、03-26 の falsey previous-state collision、03-27 の valid supported subclass、
-03-28 の getter-throwing migration apply はすべて修正済みと再判定した。historical refresh の保証範囲も、
-bridge-owned/cooperating writer と各 path の final observation までであり、その後の non-cooperating write を
-対象外とする canonical contract に一致するため non-finding である。
-
-ただし、同じ supported-subclass threat model を隣接公開境界へ適用すると、refresh apply と canonical
-source-state validator が ordinary getter exception を structured non-success に変換せず `RuntimeError` を
-漏らす。いずれも malformed input に対する fail-closed/totality 契約を破るため、本レビューは `clean` ではない。
+BLOCKER、WARNING、Info のいずれにも該当する narrative finding はない。指定された malformed input、
+falsey object、supported subclass、getter exception、graph/path-role/source identity、tombstone、approval、
+writer lock、atomic persistence の各境界は、fail-closed の結果、無 mutation、または明示された
+process-control signal の伝播として canonical contract を満たす。全 reviewed files は品質基準を満たし、
+新規・存続 issue は確認されなかった。
 
 ## Narrative Findings (AI reviewer)
 
-## Critical Issues
+なし。
 
-### CR-01: [BLOCKER] malformed refresh preview の getter 例外が public apply から漏れる
+## Scope and Commit Audit
 
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:571-574`
+- Plan 03-19〜03-22 の RED/GREEN commit
+  `b114d94..dd9cfd1` を実 diff から確認した。canonical phase path、source identity limits、
+  tombstone refresh evidence、cooperating writer lock と conditional replacement の変更を public seam まで
+  追跡した。
+- Plan 03-24〜03-29 の RED/GREEN commit
+  `81a0160..30199ab` を実 diff から確認した。非文字列 refresh commit、falsey migration adapter、
+  falsey previous source state、supported subclass admission、migration preview totality、refresh/source-state
+  getter totality の各修正と回帰を独立に再判定した。
+- `git diff b114d94^..30199ab -- <production scope> | git diff --check` は成功した。
 
-**Related apply guard:** `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_refresh.py:862-883`
+## Plan 03-24〜03-29 Coverage
 
-**Related test gap:** `tests/test_handoff_manifest_refresh.py:1275-1313`
-
-**Issue:** `serialize_manifest_refresh_preview` は Result を返す公開 serializer だが、machine view の属性取得から
-発生する例外を列挙した型だけで捕捉する。`_preview_identity` も同じ限定列挙である。したがって otherwise-valid
-refresh preview の `previous_source_items` を、`active` getter が `RuntimeError("boom")` を送出する
-`SourceIdentityState` subclass に置換して `apply_manifest_refresh` へ渡すと、line 1123 の state guard は
-`refresh-preview-invalid` を返さず例外を public seam から漏らす。
-
-fresh counterexample では mutation list は空、target bytes は不変だったが、呼び出し元をクラッシュさせ、
-HARD-R1/HARD-R6 の malformed input に対する structured non-success 契約を満たさない。既存 refresh apply
-malformed test は `candidate_bytes` の単純な置換だけで、supported subclass の属性例外を覆っていない。
-
-**Fix:** refresh preview の machine-view/identity validation 全体で ordinary `Exception` を
-`refresh-preview-invalid` に正規化し、`BaseException` は伝播させる。getter-throwing state を埋めた public
-serializer/apply 回帰を追加し、failure point `STATE_GUARD`、mutation なし、target/tree/staging 不変を検証する。
-
-```python
-def serialize_manifest_refresh_preview(
-    preview: ManifestRefreshPreview,
-) -> Result[bytes]:
-    try:
-        data = _compact(_machine_view(preview))
-    except Exception:
-        return _failure("refresh-preview-invalid")
-    return Success(data)
-```
-
-### CR-02: [BLOCKER] canonical source-state validator が supported subclass の属性例外を構造化しない
-
-**File:** `/home/shimi3435/workspace/python/ai-coding-template-ja/src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:1002-1011`
-
-**Related dereference:** `src/ai_coding_template_ja/openspec_gsd_handoff/source_identity.py:869-882`
-
-**Related test gap:** `tests/test_handoff_identity.py:1120-1154`
-
-**Issue:** `validate_source_identity_state` は「without unsafe member dereference」と明記し、Plan 03-27 では
-`SourceIdentityState` subclass の admission authority とされた。しかし `_validate_source_state` は
-`isinstance` で subclass を受理した直後にその属性を読み、public wrapper は内部 `_SourceInputError` しか
-捕捉しない。`active` getter が `RuntimeError("boom")` を送出する otherwise-valid subclass を直接渡すと、
-Failure ではなくその例外が漏れる。
-
-この validator を入口にする `reconcile_source_items`、mapping readiness、canonical drift completeness も同じ
-入力で structured Failure/UNKNOWN へ到達できない。既存 malformed matrices は exact-base dataclass の field を
-不正値へ置換するケースだけで、supported outer subclass の ordinary attribute failure を覆っていない。
-
-**Fix:** canonical public validator で `_SourceInputError` の詳細 code を維持しつつ、その他の ordinary
-`Exception` を汎用 `source-state-invalid` INPUT failure に正規化する。`BaseException` は捕捉しない。validator、
-reconciliation、mapping、drift classification の public analog 回帰を追加する。
-
-```python
-try:
-    state = _validate_source_state(value)
-except _SourceInputError as error:
-    return _failure(error.code, category=IssueCategory.INPUT)
-except Exception:
-    return _failure("source-state-invalid", category=IssueCategory.INPUT)
-return Success(state)
-```
-
-## Rejudgments
-
-- **03-25 operations CR:** fixed。migration preview/apply と refresh apply は `operations is None` の場合だけ
-  default adapter を選び、falsey supplied adapter を保持する。
-- **03-26 collision CR:** fixed。falsey previous state の tombstones/counters は保持され、再利用は
-  INPUT / `source-tombstone-identity-collision` / MANIFEST_ABSENT、value なし、tree 不変となる。
-- **03-27 exact-type CR:** fixed。well-behaved supported subclass は同一 object のまま preview/apply を通り、
-  exact-base control も成功する。
-- **03-28 migration totality CR:** fixed。getter-throwing malformed subclass は public migration apply で
+- **03-24:** `current_source_commit` が `None`、整数、任意 object の場合、repository resolve と filesystem
+  probe より前に INPUT / `refresh-input-invalid` となる。
+- **03-25:** migration preview/apply は `operations is None` のときだけ default adapter を選ぶ。
+  有効な falsey supplied adapter は両 public API で保持される。
+- **03-26:** falsey `previous_source_items` は empty state に置換されず、counter/tombstone evidence が保持される。
+  tombstone identity の再利用は構造化 failure となる。
+- **03-27:** canonical validator が受理する well-behaved `SourceIdentityState` subclass は preview/apply の両方で
+  有効であり、strict serialization のみ exact base projection を使う。
+- **03-28:** getter が ordinary exception を送出する migration previous state は
   `migration-preview-invalid` / `STATE_GUARD` / UNKNOWN target / ABSENT staging / NOT_NEEDED cleanup となり、
-  mutation なし、target/tree 不変である。`BaseException` を捕捉しない実装も維持される。
-- **Historical refresh boundary:** non-finding。shared writer lock 内の source/target 再観測と conditional replace は
-  canonical scope を満たす。final observation 後の non-cooperating writer に対する CAS 保証は要求されない。
-- **Graph/path-role/identity analogs:** path-role collision、anchored phase/evidence identity change、通常の malformed
-  exact-base source state、lifecycle UNKNOWN projection の既存回帰は成功した。ただし getter-throwing supported
-  subclass の identity totality は CR-02、refresh totality は CR-01 として未解決である。
+  partial evidence や mutation を残さない。
+- **03-29:** refresh serializer/apply の getter `RuntimeError` は正確に `refresh-preview-invalid` へ正規化され、
+  mutation は 0、target bytes・repository tree・staging set は不変である。source-state validator は ordinary
+  exception を `source-state-invalid` へ正規化し、内部 `_SourceInputError` の specific code を保持する。
+  refresh と source-state の双方で `BaseException` は抑止されない。
 
-## Verification Performed
+## Latest CR-01 / CR-02 Rejudgment
 
-- `task check` — Ruff format/check、BasedPyright、全 962 pytest passed
-- Plan 03-23 Task 1 指定重点回帰 — 14 passed
-- graph/path-role/identity analog 回帰 — 119 passed
-- fixtures 3 件 — `jq empty` passed
-- fresh refresh counterexample — `apply_manifest_refresh` から `RuntimeError: boom`、mutation なし、target 不変
-- fresh validator counterexample — `validate_source_identity_state` から `RuntimeError: boom`
+- **Latest CR-01 — fixed / non-finding:** `serialize_manifest_refresh_preview` と refresh
+  `_preview_identity` は machine-view/identity validation の ordinary `Exception` を捕捉する。public apply は
+  mutation 前の state guard で正確な `refresh-preview-invalid` failure fields を返す一方、`BaseException` は
+  伝播する。serializer/apply の両 public seam と filesystem preservation を再現した。
+- **Latest CR-02 — fixed / non-finding:** `validate_source_identity_state` は `_SourceInputError` を先に捕捉して
+  specific code を維持し、その後の ordinary `Exception` だけを `source-state-invalid` へ正規化する。
+  reconciliation、mapping の両 public API、direct drift classifier、public lifecycle gate まで追跡し、順に
+  structured Failure、`mapping-input-invalid`、`canonical-observation-incomplete`、identity/path/progress/remediation
+  を含まない wholly UNKNOWN projection になることを再確認した。`BaseException` は伝播する。
+
+## Historical Refresh Boundary
+
+historical refresh race は canonical non-finding と再判定した。canonical guarantee は bridge-owned / cooperating
+writer が同一 change-directory advisory lock を使用し、lock 内の final source/target observation と conditional
+replace を直列化する境界である。final observation 後に lock を無視する non-cooperating writer の write を
+CAS で防ぐ保証は canonical scope に含まれない。現実装と contention/preservation 回帰はこの境界に一致する。
+
+## Verification Evidence
+
+- Plan 03-23 Task 1 focused command: **16 passed**
+- graph/path-role/source-identity/tombstone/approval/writer-lock/atomic-persistence 追加回帰: **53 passed**
+- `task check`: Ruff format/check success、BasedPyright 0 errors、pytest **970 passed**
+- public call-chain inspection: mapping 両 API、direct classifier、lifecycle gate の failure/UNKNOWN projectionを確認
+- repository state before report write: source/test worktree changesなし
 
 ---
 
-_Reviewed: 2026-08-01T13:19:19Z_
+_Reviewed: 2026-08-08T10:25:56Z_
 _Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: deep_
