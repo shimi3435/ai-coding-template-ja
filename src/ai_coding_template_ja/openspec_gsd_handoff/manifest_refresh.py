@@ -570,7 +570,7 @@ def serialize_manifest_refresh_preview(
 
     try:
         data = _compact(_machine_view(preview))
-    except (AttributeError, TypeError, ValueError, UnicodeError):
+    except Exception:
         return _failure("refresh-preview-invalid")
     return Success(data)
 
@@ -878,7 +878,7 @@ def _preview_identity(preview: object) -> str | None:
             or re.fullmatch(r"[0-9a-f]{64}", preview.old_target_sha256) is None
         ):
             return None
-    except (AttributeError, TypeError, ValueError, UnicodeError, RecursionError):
+    except Exception:
         return None
     return _sha256(machine.value)
 

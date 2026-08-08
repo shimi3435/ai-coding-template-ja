@@ -1008,6 +1008,8 @@ def validate_source_identity_state(
         state = _validate_source_state(value)
     except _SourceInputError as error:
         return _failure(error.code, category=IssueCategory.INPUT)
+    except Exception:
+        return _failure("source-state-invalid", category=IssueCategory.INPUT)
     return Success(state)
 
 
