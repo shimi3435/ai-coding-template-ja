@@ -1,0 +1,131 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-09T06:01:00.641Z",
+  "phase": "03",
+  "phase_name": "lifecycle-drift-gate",
+  "phase_dir": ".planning/phases/03-lifecycle-drift-gate",
+  "plan": 30,
+  "task": 0,
+  "total_tasks": 2,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 29,
+      "name": "Plans 03-01 through 03-29 historical implementation and evidence",
+      "status": "done",
+      "commit": "0d8eb67",
+      "progress": "The last recorded full project gate reported 970 tests passing, but later review invalidated Phase 3 completion."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 30,
+      "name": "Plan 03-30 Task 1 and all later Gate E work",
+      "status": "not_started"
+    },
+    {
+      "id": 31,
+      "name": "Decide whether the current handoff lifecycle is superseded by the Node-based skill updater direction",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "CR-01: refresh can report Success after validating a detached parent while the canonical target remains unchanged",
+      "type": "technical",
+      "workaround": "None accepted; keep Phase 3 and all mutation paths incomplete."
+    },
+    {
+      "description": "CR-02: refresh production APIs are hard-coded to one change, Phase 02, fixed counts and package-external test fixtures",
+      "type": "technical",
+      "workaround": "None accepted; do not treat the API as generic or installed-wheel safe."
+    },
+    {
+      "description": "CR-03: an NFD source path can produce a persisted NFC identity that cannot be read again",
+      "type": "technical",
+      "workaround": "None accepted; do not rely on the current source identity for updater migration."
+    },
+    {
+      "description": "CR-04: drift classifier and lifecycle gate leak ordinary exceptions from malformed structured values",
+      "type": "technical",
+      "workaround": "None accepted; do not claim a total fail-closed public boundary."
+    },
+    {
+      "description": "CR-05: supported persistence-adapter exceptions bypass failure taxonomy and can leave staging residue",
+      "type": "technical",
+      "workaround": "None accepted; do not enable automatic mutation."
+    },
+    {
+      "description": "CR-06: accepted Sequence implementations can leak iteration exceptions from public source and preview seams",
+      "type": "technical",
+      "workaround": "None accepted; validate and freeze inputs before reuse in any new design."
+    },
+    {
+      "description": "CR-07: multiple public Result/decision APIs leak malformed root, scalar, wrapper and method exceptions",
+      "type": "technical",
+      "workaround": "None accepted; audit individual reuse candidates instead of importing the module wholesale."
+    },
+    {
+      "description": "WR-01: migration preview/apply does not normalize unsupported collection or operations inputs",
+      "type": "technical",
+      "workaround": "Keep migration entry points internal and inactive."
+    },
+    {
+      "description": "The product direction may change to a Node-dependent per-skill updater, making continued Gate E execution potentially obsolete",
+      "type": "human_action",
+      "workaround": "Specify the new route in a separate OpenSpec change and ADR before deciding the old change disposition."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Choose whether to supersede, archive, or explicitly resume the current OpenSpec-GSD handoff change after the Node/updater specification is reviewed",
+      "context": "The user explicitly paused Phase 3 because gap closure has not converged and Phase 4-6 have not started.",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Stop creating or executing additional Phase 3 gap plans now",
+      "rationale": "Repeated gap-closure cycles expanded the frozen inventory to seven blockers and one warning without converging.",
+      "phase": "03"
+    },
+    {
+      "decision": "Preserve Phase 3 as incomplete and a candidate for supersession; do not mark HND-03 or OpenSpec task 3.1 complete",
+      "rationale": "The latest review is issues_found and current verification evidence is not a valid clean exit authority.",
+      "phase": "03"
+    },
+    {
+      "decision": "Do not begin Phases 4-6 under the current roadmap",
+      "rationale": "They are unstarted and depend on Phase 3; the intended Node/updater route must be specified first.",
+      "phase": "03"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/phases/03-lifecycle-drift-gate/03-PATTERNS.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-VALIDATION.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-30-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-31-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-32-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-33-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-34-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-35-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-36-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-37-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-38-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-39-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-40-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-41-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-42-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-43-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-44-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-45-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-46-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-47-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-48-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-49-PLAN.md",
+    ".planning/phases/03-lifecycle-drift-gate/03-50-PLAN.md"
+  ],
+  "next_action": "Do not execute Plan 03-30. Start a separate OpenSpec change and ADR for the Node-dependent skill updater, then explicitly choose the old change disposition.",
+  "context_notes": "Current branch HEAD is 77a8c02. Plans 03-30 through 03-50 contain 64 unexecuted tasks and remain untracked. The latest 03-REVIEW.md freezes seven blockers and one warning; 03-VERIFICATION.md still reflects the earlier four-blocker/one-warning inventory and is stale relative to that review. No async job or relevant background process was found."
+}
