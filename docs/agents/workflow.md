@@ -94,6 +94,128 @@ shallow / historyless check、rename-smoke、offline check、実行対象 OS の
 自動 token accounting は別 change / 提案へ送り、現在 change の実装と証跡を拡張しない。同じ blocker の
 反復または実質的な拡張は追加生成の理由ではなく、停止・再計画の signal とする。
 
+## bounded review convergence
+
+OpenSpec 直接経路では change、GSD 経路では phase を convergence cycle の単位とする。
+全スコープ inventory は cycle 開始時に固定する。次の範囲を initial / final review で共通して使う。
+
+- change / phase が所有する変更ファイル。
+- canonical spec と acceptance criteria。
+- 直接依存と直接利用元、関連 tests / fixtures。
+- 変更で触れた trust boundary。
+
+無関係な repository 全体、過去 report、全 `.planning` は inventory に含めない。承認済み scope 外の
+要素を追加する必要があれば、下記 material expansion として先に soft stop する。
+
+### Review topology と iteration
+
+実行順序は次に固定する。
+
+1. self-review（cycle の先頭に1回）
+2. initial full review
+3. fix → focused validation → diff review（最大3 iterations）
+4. fresh final full review
+5. task check
+6. 同じ cycle の executor / reviewers と別の独立 verifier
+
+initial review が clean でも、initial reviewer と別の fresh agent が同じ inventory を final full review する。
+finding 修正後は finding、変更差分、直接依存だけを同じ reviewer が再確認する。final reviewer が新しい
+finding を報告した場合も、同じ reviewer が修正差分を閉じる。全スコープ review は initial と final の
+2回だけとし、差分修正後に反復しない。
+
+1 iteration は、未解決 blocker finding 一式の fix、focused validation、変更差分と直接依存の review が
+完了した組を指す。finding 件数では数えない。initial review 開始後から final review と全体 check の収束
+完了まで合計最大3 iterationsとする。self-review と full review 自体は数えない。
+correctness / contract finding は RED test または再現 probe を先に作る。純 prose の事実誤りは、
+矛盾箇所、修正前 evidence、テスト化しない理由を記録する。
+mechanical typo / format / unused import は RED を要求せず focused validation だけを行う。
+
+blocker は reviewer の severity label ではなく、次の意味で判定する。
+
+- acceptance criteria または MUST / SHALL の未達。
+- correctness、security、data loss、trust boundary の欠陥。
+- 必須 validation の失敗または必須 evidence の欠落。
+- 安全な merge または phase completion を許可できない状態。
+
+style nit、主観的 refactor、独立 hardening は blocker ではない。defer または dismiss を明示し、iteration や
+final review を追加しない。独立価値があれば別 Issue / change 候補の文面を提示できるが、外部 Issue は
+自動作成しない。
+
+### Validation cadence と reusable green evidence
+
+各 fix 中は上記3分類に従い、対象に近い focused validation を実行する。全 review 収束後、最新入力で
+`task check` を原則1回実行する。focused test で隔離できない integration finding は理由を記録して
+`task check` を早く実行でき、その後入力が変わらなければ最終の全体 check として再利用できる。
+
+reusable green evidence は command 単位で、次を現在状態と照合する。
+
+- 実行 command と exit 0。
+- source commit。
+- 検証入力を含む dirty diff digest、または検証後に input files が無変更である同等の証明。
+- source、tests、dependency environment、lockfile、build / CI 設定、対象 fixtures。
+- repository real path、worktree、source snapshot、command に影響する OS、locale、認証などの環境。
+
+入力同一性が1項目でも不明なら再実行する。別 worktree / container / toolchain は同一性を証明できる場合だけ
+例外とする。`task check` と `task openspec:validate` は入力集合が異なるため evidence を相互に代用しない。
+`.planning` の進捗や report など証跡だけの変更も、対象 command が読むならその evidence を無効にする。
+
+全体 check の source / test failure は blocker finding とし、残 iteration で fix、focused validation、
+diff review、全体 check 再実行を行う。full review は再実行しない。source 変更のない infrastructure /
+flaky failure は iteration に数えず、同一入力の自律 retry を1回だけ許す。再現した場合は blocker として
+soft stop する。source / test を変更した場合は通常の iteration と数える。
+
+verifier は同じ cycle の executor / reviewers と別の独立 agent とする。soft-stop 後の新 cycle では、
+旧 cycle の verifier が fix に関与せず、context contamination がなく、最新入力との evidence identity を
+再確認できる場合だけ再利用する。条件を満たさなければ別の独立 verifier を割り当てる。直前の green evidence の command 単位の
+入力同一性を確認できれば同じ全体 check を再実行しない。ただし acceptance evidence の独立確認と、不足する
+focused tests / 実動作 seam は省略しない。
+
+### Agent allocation
+
+一体の change / phase の material 実装は原則1 executorが継続する。executor が利用可能で working state と
+context が健全なら finding fixer に再利用する。終了、失敗、context contamination の場合だけ fixer を1名
+追加し、以後の iterations は同じ fixer が継続する。finding ごとに fresh agent を作らない。
+
+main は各 material task の成果を検証してから `tasks.md` を更新する。`STATE`、`ROADMAP`、checkbox、
+report path の機械的補正は main が処理する。追加 executor は実行予算に記録した
+独立・非重複・個別検証可能な実装単位、agent failure、context contamination に限る。並列化自体を追加理由に
+しない。独立単位だけは並列実行できるが、統合 review / fix / final review / verification は規定順序で直列に行う。
+
+成果ゼロ、無応答、採用しない部分差分は iteration を消費しない。部分差分を採用した場合、working state を
+既知に収束させ、focused validation と diff review を完了した時点で1 iteration と数える。agent 追加理由を
+review / fix report または応答へ記録する。同じ役割の連続失敗2回、または working state の安全性が不明な場合は
+soft stop する。
+
+ユーザーが vendored `code-review` skill を明示選択した場合だけ、Standards / Spec の2軸を distinct
+verification value のある例外配分として記録する。この場合は追加の標準 reviewer を重ねない。
+
+### Soft stop と新しい cycle
+
+次の場合は iteration 数に関係なく、または上限到達時に作業を停止し、blocker を成功扱いしない。
+
+- 3 iterations 後も blocker が残る。
+- blocker 修正に仕様判断が必要である。
+- 承認済み scope 外で trust boundary、公開 API、永続データ形式 / migration、runtime dependency /
+  lockfile、build / CI / 配布経路、独立出荷可能な成果、OpenSpec change、GSD phase、外部依存を追加・拡張する。
+- 同じ役割の連続 agent failure 2回、working state の安全性不明、または許可した retry 後にも
+  infrastructure failure が再現する。
+
+承認済み scope 内の変更は、それだけでは material expansion にしない。仕様判断は推測で修正せず、未解決
+finding、選択肢、影響 scope、既実行 evidence を提示する。soft stop 時は既存 phase review / fix report または
+応答に、cycle と iteration `3/3`（上限到達時）、未解決 blockers、各 iteration の追加差分、focused tests と
+最新 green evidence、使用 agent と追加理由、停止理由、継続・再計画・別 change 化・中断の選択肢を記録する。
+専用 state / report file は作らない。
+
+人間が継続を選んでも、単純に追加3回を認めない。scope、残予算、全スコープ inventory を再計画し、
+iteration 0 の新しい convergence cycle として full scope review から開始する。
+
+### pre-merge close 後の検証
+
+close 前に strict target validate、`task openspec:validate`、`task check`、verifier を完了する。retrospective と
+tasks を更新した後は、変更入力に影響する command だけを再実行する。change directory を削除した後、
+`task openspec:validate` で active change 0 / green を確認する。静的 contract tests が削除 change artifacts を
+入力にしないことを確認済みで、その後の入力同一性を証明できる場合だけ `task check` evidence を再利用する。
+
 ### 大規模 change の手動 handoff
 
 自動 bridge が無くても、実行主体は次の固定手順で GSD へ引き渡す。
@@ -213,7 +335,7 @@ CLI は実装 engine ではなく、tasks の**自動チェックマークを付
 各タスク完了時に `tasks.md` の `- [ ]` を `- [x]` へ更新するのは実行主体（能動規律）。大規模
 change では GSD が詳細 plan / phase 進捗を更新し、main 実行主体が OpenSpec の対応する境界ゲート
 だけを更新する。task をサブエージェントへ委譲した場合、サブエージェントはマークしない
-（下記「task 単位のサブエージェント委譲」）。
+（下記「material task の executor 配分」）。
 
 **(b) スラッシュコマンド `/opsx:*`（任意・別導入）** — Claude Code のスラッシュコマンド統合で、
 上記 CLI とは**別物**。CLI をインストールしただけでは `/opsx:apply` 等は存在しない（別途導入が
@@ -306,39 +428,26 @@ self-review の規約適合チェックと目視。
 - **更新規則**: 行の記入後に発見があれば（マージ前後を問わず）該当経路のカウントへ既存行を
   更新する（新行を足さない）。`merge後` の更新時は一言欄に発見場所（修正 PR / commit /
   issue 等）を追記する。原因 change を特定できない欠陥は無理に帰属させず記録対象外とする。
+- **soft stop の任意 suffix**: soft stop が発生した場合だけ、既存 Issue または上記 retrospective の
+  どちらか一方の1行へ `soft-stop: cycle=<n> iterations=<n> full-checks=<n> added-agents=<n> reason=<理由>`
+  を追記する。発生しなければ省略し、両方への重複記録や常時 accounting は行わない。
 
 この記録は、仕様時列挙（spec-holes）＋PBT 先行の**効果測定**であり、追加のバグ削減注入点
 （契約 / 敵対的仕様攻撃 / mutation testing）の採否判断材料になる（判断は人起点）。
 
-## task 単位のサブエージェント委譲
+## material task の executor 配分
 
-長い change の実行で main のコンテキストが実装詳細（diff・テスト出力・試行錯誤）で埋まり、
-序盤の spec / proposal 理解が薄れるのを防ぐための規律（予防的）。サブエージェント機構が
-使える環境でのみ適用し、機構不在時は main の直接実行で可（理由記録も不要）。機構の例:
-Claude Code のサブエージェント（Agent tool）・Codex の `multi_agent`。
+一体の change / phase では、一つの executor が canonical artifacts 一式を読み、material tasks を継続する。
+main は task ごとに diff と必要な focused validation を確認し、合格後だけ `tasks.md` を更新する。executor は
+main の検証前に checkbox を更新しない。`STATE`、`ROADMAP`、checkbox、report path の機械的補正は main が処理する。
 
-- **対象**: 成果物（コード / docs）を新規作成または大幅変更する task は、原則として新しい
-  コンテキストのサブエージェントへ委譲する（SHOULD）。見送る場合は理由を一言記録する
-  （応答内で可）。検査・進捗マーク・git 操作・確認系の task は main が直接行い、委譲対象と
-  しない。判定に迷う境界事例は main の判断でよい（見送るなら理由一言）。1 回の委譲で
-  終わらない規模の task は、委譲の前に `tasks.md` の task 分割を検討する。
-- **文脈受け渡し**: サブエージェントには change ディレクトリ一式（proposal.md / tasks.md /
-  design.md / `specs/**` など存在するファイル全部。spec delta の無い change では `specs/**`
-  が無いだけで、ディレクトリ読込自体は省略しない）を読ませる。prompt で渡すのは対象 task
-  番号と実行上の一時情報（作業パス・環境等）のみ。成果・受け入れ基準・設計判断に影響するファイル未記載の
-  決定は、委譲の前に proposal / design / spec delta へ追記する（prompt のみで渡さない・
-  main の要約で代替しない。後続の委譲・再開・レビューで決定が失われないため）。prompt で
-  渡す内容がファイル記載と食い違うと気づいたら、ファイルが単一の正であり、委譲の前に
-  ファイル側を更新して矛盾を解消する。
-- **検証と進捗マーク**: サブエージェントは成果物と完了報告を返すのみで、`tasks.md` を
-  マークしない。main が受け入れ検証（diff 確認・必要に応じ `task check`）をしてから
-  `- [x]` に更新する。サブエージェントが規約に反してマークしていた場合は、検証が済むまで
-  `- [ ]` に戻し、合格後に main が改めてマークする。失敗・無応答・空報告・成果物ゼロは
-  不合格として扱い、working tree の部分成果物を採用・修正・破棄のいずれかで明示的に処理
-  して既知の状態へ収束させてから、再委譲か main の直接修正に進む（後続のサブエージェント
-  が壊れた中間状態を正として読まないため）。
-- **直列のみ**: `tasks.md` の番号順に 1 task ずつ委譲→検証→マークする。並列委譲は行わない
-  （目的はコンテキスト劣化の防止であり高速化ではない）。
+独立・非重複・個別検証可能な実装単位がある場合だけ、実行予算へ単位と統合方法を記録して追加 executor
+へ委譲できる。依存する tasks、review / fix / final review / verification は直列にする。長大化や context
+contamination が見込まれる場合は task 分割と実行予算を再計画し、task ごとの fresh agent 生成で代用しない。
+
+agent failure、無応答、空報告、部分成果がある場合、main は採用・修正・不採用を明示し、working state を
+既知に収束させてから続行する。成果・受け入れ基準・設計判断に影響する新しい決定は prompt だけに置かず、
+proposal / design / spec delta へ戻してから executor を再開する。
 
 ## Skills（vendoring・コア候補のうち再配布可のもの）
 
@@ -359,7 +468,7 @@ vendoring しているコア skill（すべて MIT・再配布可。供給元 / 
 | `diagnosing-bugs` | bootstrap / uv sync / pre-commit / MCP 起動失敗の切り分け | mattpocock/skills |
 | `caveman` | 過度な複雑化・不要な抽象化・テンプレ肥大化を止める | JuliusBrussee/caveman |
 | `self-review` | コミット / PR 前の自己 diff 検査（明白な欠陥は修正・判断事項は報告のみ） | 自作（local） |
-| `verify-change` | 変更後の実動作確認（`task check`→個別テスト→実行・未検証は理由付き明記） | 自作（local） |
+| `verify-change` | 変更後の実動作確認（command 単位 evidence 確認→全体 check の再利用 / 実行→個別テスト→実動作） | 自作（local） |
 | `spec-holes` | 仕様の穴（未定義の振る舞い）の機械的列挙とテスト化（固定タクソノミー 12 分類） | 自作（local） |
 | `execute-openspec-change` | source-pinned OpenSpec change の preview・明示承認・GSD handoff 開始（最終完了や lifecycle は対象外） | 自作（local） |
 

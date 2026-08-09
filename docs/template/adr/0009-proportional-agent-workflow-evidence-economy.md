@@ -14,6 +14,25 @@ CI parity、停止・再計画条件を明示する。OpenSpec / GSD の経路�
 interface、security property、静的 prose contract の順に優先し、上位 seam が未検証のまま下位証跡を
 増やす場合は理由を記録する。
 
+## Bounded review convergence
+
+ADR-0009 の比例性と evidence economy を review / fix 運用へ適用する。OpenSpec 直接経路では change、
+GSD 経路では phase を一つの convergence cycle とし、self-review、initial full review、blocker 修正、
+fresh final full review、全体 check、同じ cycle の executor / reviewers と別の独立 verifier の順に収束させる。全スコープ review は initial と
+final の最大2回とし、finding 修正後は差分と直接依存だけを review する。
+
+blocker 修正は、未解決 finding 一式の fix、focused validation、diff review を1 iteration として合計
+最大3 iterationsまでとする。3回で収束しない場合、または material expansion、仕様判断、連続 agent
+failure、再現する infrastructure failure がある場合は blocker を成功扱いせず soft stop する。人間が
+継続を選んだ場合も単純に3回を追加せず、scope と実行予算を再計画した新しい cycle として開始する。
+
+green evidence は command 単位で入力同一性を確認し、同じ failure / seam / risk に対する全体 check を
+重複しない。入力範囲や source、tests、依存、lockfile、build / CI 設定、fixture、実行環境の同一性が
+不明なら再実行する。material 実装と finding 修正は原則として同じ executor が継続し、initial reviewer、
+別の fresh final reviewer、同じ cycle の executor / reviewers と別の独立 verifier を割り当てる。soft-stop 後の
+新 cycle では、旧 cycle の verifier が fix に関与せず、context contamination がなく、最新入力との evidence identity を
+再確認できる場合だけ再利用する。独立実装単位、agent failure、context contamination のいずれもない追加 agent は作らない。
+
 ## Considered Options
 
 - **固定 token・行数・phase 数を全 change に課す**: 比較しやすいが、安全性や依存関係による必要量を

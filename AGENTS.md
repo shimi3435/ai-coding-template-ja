@@ -51,6 +51,19 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - plan / evidence / test / review は、distinct failure / seam / risk の検出、セッション復帰、レビュー
   判断のいずれかへ価値を持つ場合だけ追加する。通常 CI を削除予定 artifacts や到達不能な Git 履歴へ
   依存させない。
+- review convergence は OpenSpec 直接経路では change、GSD 経路では phase を単位とする。順序は
+  self-review 1回、initial full review、finding 修正、fresh final reviewer、`task check`、
+  同じ cycle の executor / reviewers と別の独立 verifier。
+  finding 修正は fix・focused validation・diff review の組を最大3 iterationsとし、blocker を成功扱い
+  しない。green evidence は command 単位で入力同一性を確認できる場合だけ再利用し、不明なら再実行する。
+- material 実装は原則1 executorが継続し、finding ごとに fresh agent を作らない。fresh final reviewer は
+  initial reviewer と別にする。verifier は同じ cycle の executor / reviewers と別の独立 verifier とする。
+  soft-stop 後の新 cycle では、旧 cycle の verifier が fix に関与せず、context contamination がなく、最新入力との
+  evidence identity を再確認できる場合だけ再利用する。独立実装単位、agent failure、context contamination
+  がある場合だけ agent を追加する。`STATE`、`ROADMAP`、checkbox、report path の機械的補正は main が処理する。
+- 3 iterations exhaustion、仕様判断、material expansion、連続 agent failure、再現する infrastructure
+  failure では soft stop し、人間判断なしに続行しない。継続時は scope と実行予算を再計画した新しい
+  cycle とし、単純に追加3回を認めない。
 - 検証は高リスクな実動作 / safe dry-run、公開 interface、security property、静的 prose contract の順に
   優先する。環境依存を持つ最初の vertical slice で、該当する CI parity を全実装完了前に確認する。
 - 独立成果、GSD phase、外部依存、trust boundary、通常 CI、永続データ、公開 API の追加は実行予算を
@@ -59,9 +72,9 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
   段階的に close / merge する。main の `openspec/changes/` には blocked proposal を残さない。
 - change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
   チェックを `- [x]` に更新する。engine（`/opsx:apply`）不在の Markdown fallback でも同じ。
-- 成果物（コード / docs）を新規作成・大幅変更する task は、原則として新しいコンテキストの
-  サブエージェントへ委譲し、main が成果を検証してから進捗をマークする（見送る場合は理由を
-  一言記録する。詳細は workflow.md）。
+- 一体の change / phase の成果物は原則として同じ executor が継続し、main が各 task の成果を検証して
+  から進捗をマークする。独立・非重複・個別検証可能な実装単位だけ、実行予算へ記録して追加 executor
+  へ委譲できる（詳細は workflow.md）。
 - OpenSpec で仕様を確定する前に `spec-holes` で未定義の振る舞いを列挙して潰す。
 - 列挙した穴は可能なら例示テスト / Hypothesis property に落とす。
 - 可能なら `tdd` skill でテストから始める。
