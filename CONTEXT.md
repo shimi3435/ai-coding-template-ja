@@ -41,5 +41,24 @@ _Avoid_: token budget, 見積もり
 _Avoid_: coverage 数, evidence 量
 
 **実質的な拡張（material expansion）**:
-実行予算で想定していなかった独立成果、GSD phase、外部依存、trust boundary、通常 CI、永続データ、公開 API の追加・変更。検出時は続行前に実行予算を更新し、必要なら change 分割または経路を再判定する。
+実行予算で想定していなかった独立成果、GSD phase、外部依存、trust boundary、公開 API、永続データ形式 / migration、runtime dependency / lockfile、build / CI / 配布経路の追加・変更。検出時は続行前に実行予算を更新し、必要なら change 分割または経路を再判定する。
 _Avoid_: 単なる行数増加, nit
+
+**convergence cycle**:
+OpenSpec 直接経路では一つの change、GSD 経路では一つの phase を単位として、実装後の review、blocker 修正、全体 check、独立 verification を有界に収束させる一連の実行。
+_Avoid_: session, retry loop
+
+**iteration**:
+convergence cycle 内で、未解決 blocker finding 一式の修正、対象に近い focused validation、変更差分と直接依存の review がすべて完了した一組。finding 件数や review 回数そのものは数えない。
+_Avoid_: finding count, full review
+
+**reusable green evidence**:
+実行 command と exit 0、source commit、検証入力の dirty diff digest または同等の不変証明、依存・設定・fixture・実行環境について、現在状態との入力同一性を command 単位で確認できる検証証跡。
+_Avoid_: 最新らしいログ, 時刻だけの証明
+
+**soft stop**:
+blocker を成功扱いせず自律実行を止め、未解決事項と既存証跡を保持したまま、継続・再計画・別 change 化・中断の人間判断へ戻す状態。
+_Avoid_: success, hard cap
+
+この4用語に対応する review topology、validation cadence、agent allocation、soft-stop の詳細 owner は
+[docs/agents/workflow.md](docs/agents/workflow.md#bounded-review-convergence) とする。

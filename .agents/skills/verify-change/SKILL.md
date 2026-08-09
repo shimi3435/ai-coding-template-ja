@@ -1,7 +1,7 @@
 ---
 name: verify-change
 description: >
-  Verify that a change actually works, not just that tests pass: run task check,
+  Verify that a change actually works, not just that tests pass: reuse or run task check,
   run tests close to the change individually, and where possible exercise the
   changed code for real (REPL / script / task doctor). Report anything that
   could not be verified as unverified, with reasons. Use after completing a
@@ -14,9 +14,31 @@ description: >
 「テストは通るが実際には動かない」を捕捉する。変更を完了と報告する前に、テスト green
 だけでなく実挙動を確認する。
 
+## Reusable green evidence
+
+`task check` を含む各検証 command について、直前の green evidence と現在状態の入力同一性を
+command 単位で確認する。evidence は次を含む。
+
+- 実行 command と exit 0。
+- source commit。
+- 検証入力を含む dirty diff digest、または検証後に input files が無変更である同等の証明。
+- source、tests、dependency environment、lockfile、build / CI 設定、対象 fixtures。
+- repository real path、worktree、source snapshot、command に影響する OS、locale、認証などの環境。
+
+1項目でも入力同一性が不明なら再実行する。同一性を証明できる場合は同じ全体 check を再実行しない。
+別 command の evidence は代用せず、証跡だけの変更も対象 command が読む場合は evidence を無効にする。
+focused tests / 実動作 seam は再利用しない。全体 check evidence の再利用可否に関係なく毎回確認する。
+
+## Required evidence と未検証
+
+acceptance criteria、MUST / SHALL、project gate に必要な required evidence が欠落する場合、または
+required 性が不明な場合は blocker とする。未検証を non-blocker にできるのは optional seam、明示的 out-of-scope、
+研究環境制約のいずれかに限り、理由と影響を記録する。未検証を検証済みとして報告しない。
+
 ## 手順（4 段）
 
-1. **`task check`（必須ゲート）**: lint / format / typecheck / test の一式を回す。
+1. **`task check`（必須ゲート）**: 上記 identity を満たす reusable green evidence があれば結果を確認して
+   再利用し、なければ lint / format / typecheck / test の一式を回す。
 2. **変更対象に近いテストの個別実行**: 例 `uv run pytest tests/test_xxx.py -q`。
    `task check` 全体が green でも個別に実行する（変更に対応するテストが存在しない
    ことを見逃さないため。無ければその旨を報告する）。
@@ -26,8 +48,9 @@ description: >
    - 設定・環境系: `task doctor` 等の診断コマンドを回す。
 4. **未検証の明記**: 実行できなかった確認項目は**「未検証」と理由を明記**して報告する。
    - 例: GPU 必須・長時間実行・外部データ依存・認証が必要。
-   - 未検証があっても本 skill はブロッカーにしない（研究コードでは実動作不能が常態）。
-     ただし**未検証を検証済みとして報告しない**こと自体が本 skill の存在理由。
+   - 上記の required evidence 欠落 / required 性不明は blocker とする。理由と影響を伴う optional seam、
+     明示的 out-of-scope、研究環境制約だけを non-blocker にできる。
+   - **未検証を検証済みとして報告しない**こと自体が本 skill の存在理由。
 
 ## 報告形式
 
