@@ -1,12 +1,13 @@
 # Phase 03: Lifecycle Drift Gate - Pattern Map
 
 **Mapped:** 2026-07-27
-**Files analyzed:** 6 new/modified files
-**Analogs found:** 6 / 6
+**Gate E addendum:** 2026-08-09
+**Files analyzed:** historical 6 files plus every Gate E production/test/script/evidence artifact planned by 03-30〜03-50
+**Analogs found:** historical 6 / 6; Gate E files use the individually identified rows below
 
 ## Scope
 
-Gap plans 03-04〜03-06 が変更する既存ファイルだけを対象とする。新しい production module、serializer、admission seam は作らない。
+以下の既存本文はGap plans 03-04〜03-06だけを対象としたhistorical scopeである。当時の「新しい production moduleを作らない」は03-04〜03-06の制約であり、pinned Gate E差分を実装する03-30〜03-50へ適用しない。Gate Eのclosest analogは次のaddendumだけをplanning authorityとし、この文書は実装仕様を再定義しない。
 
 変更対象の主要 symbol:
 
@@ -17,16 +18,84 @@ Gap plans 03-04〜03-06 が変更する既存ファイルだけを対象とす�
 - `expected-lifecycle-evidence.json`: independent literal portable v2 golden
 - `03-LIFECYCLE-EVIDENCE.json`: generated tracked portable v2 evidence
 
+## Gate E Revision Analog Addendum (03-30〜03-50)
+
+| Row | Gate E target | Closest existing analog | Pattern consumed by PLAN action | Scope boundary |
+|---|---|---|---|---|
+| `GE-BOUNDARY` | 03-30 bounded freeze | `manifest_v2.py` exact object/tuple validation、`policy_reference.py::PolicyReferenceLimits` | exact type before field access、one-pass bounded complete read、immutable tuple、stable Failure | Gate D codec/metricsは変更しない |
+| `GE-SEM-AUTH` | semantic-operation / H01〜H12 literal authority | `tests/fixtures/openspec_gsd_handoff/mapping/hardening-phase-assignments.json` のstrict literal authority | 03-30〜43はtest-code literal/schema、03-44だけがapproved FINAL JSONをpublish。symbol、semantic operation、codec utility、lifecycle modeを別fieldにし、件数はparserが導出する | productionはtest authorityへ依存せず、tracked JSONをproduction GREEN前に作らない |
+| `GE-TOTALITY` | 03-32〜03-37 public consumers | `lifecycle_drift.py::_unknown`、`manifest.py` / `versioned_manifest.py` Result boundaries | public rootでordinary exceptionをclosed outcome化し、BaseExceptionはowned cleanup後に同一object再伝播 | `__all__` / non-underscore / current symbol countはinventory authorityにしない |
+| `GE-OBS-ADAPTER` | 03-35 `ObservationAdapterV1` | `ManifestFileOperations` / `ManifestMigrationFileOperations` nominal concrete boundary、`lifecycle_gate.py::_boundary_result` | nominal subclassをeffect前に検査、exact immutable observation result、decisionはidentity/remediationなしUNKNOWN | structural/virtual/method-probe supportを導入しない |
+| `GE-PERSISTENCE` | 03-38 `PersistenceAdapterV1` | `manifest_migration.py` anchored writer-lock/staging flow、03-22 primary/cleanup evidence | 9 calls / exact 21 nominal outcomes、cleanup→release→close→fresh observation、primary-first ordered secondary | primitive return、automatic retry、ExceptionGroupを導入しない |
+| `GE-FRESH-PROOF` | 03-39 fresh canonical proof | `policy_reference.py::_observe_file`、`execution_mapping.py::_revalidate_declared_path_observation` | single anchor、no-follow identity、bounded exact bytes、read前後identity、proof resource close後だけ成功 | final observation後の非協調external mutationは保証外 |
+| `GE-PUBLICATION` | 03-40 change-wide publication | `manifest_refresh.py::_changes` と `execution_mapping.py::_project_canonical_manifest_mappings` | full active-set validation、deterministic projection、publication/readiness分離 | fixed change/count/phase/fixture/default pathを条件にしない |
+| `GE-AUTHORITY` | 03-41 authority binding | `read_policy_reference_registry`→`observe_policy_sections`→`read_planning_inventory` anchored readers | named frozen evidence types、canonical path/alias/physical identity disjointness、ordered observationとreverse recheck | default authority pathやauthority別anchorを導入しない |
+| `GE-REGRESSION` | 03-42 pre-repin convergence | Git tree由来のtest inventoryと03-17 zero-mutation preview | Phase 1–2全14 test filesを機械抽出して個別実行し、source-pinned-only REDを独立oracleで分離 | production failureをstale fixtureとして免除しない |
+| `GE-APPROVAL` | 03-43 fresh approval | 03-17 exact preview approval | unchanged full preview hashだけをfresh承認 | prior/ambiguous/count-only approvalは無効 |
+| `GE-REPIN` | 03-42 transaction preparation / 03-44 FINAL publication | `_repository_root_lifecycle_evidence` と03-17 approved preview/apply | production GREEN後かつapproval前にdriver/fault/protected manifest、approval後にprepare/apply/post-apply-verify、journal + completion marker、explicit recovery | tracked fixture/source/golden/authority JSONのpublicationは03-44単一owner |
+| `GE-REPORT-CHAIN` | 03-45〜03-47 report chain | 03-23 review/security/verification順序（内容はstale） | repin completion first-blob commit、03-44 SUMMARY metadata implementation target、各stage artifact direct-parent generation headを別々にGit blob/graphから導出 | self-reported freshness、head同一性、ancestor-only targetをauthorityにしない |
+| `GE-CLOSEOUT` | 03-48 HND metadata / 03-49 OpenSpec transition | 03-23 exact traceability transition | 03-48標準requirements metadata commit後だけOpenSpec3.1をcloseし、sidecars、pinned bytes、task vector、PROJECT/REQUIREMENTS/ROADMAP/STATEを専用parserが一意に再導出 | task actionによるearly HND/phase completionとprose presenceをauthorityにしない |
+| `GE-POST-METADATA` | 03-50 explicit executable gate | standard execute-plan SUMMARY/state/roadmap/requirements metadata order | 03-48/49 SUMMARY metadata heads、transition commits、structured Git blobs、proof artifact direct parentを検証し、Phase3 In Progress/Phase4 BlockedだけをPASS | proof前のphase completionを拒否し、公式phase.completeだけを解放する |
+
 ## File Classification
 
-| New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
+| Row | New/Modified File | Role | Closest Analog / shared pattern | Match Quality |
 |---|---|---|---|---|
-| `src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_drift.py` | service / domain classifier | transform, request-response | `src/ai_coding_template_ja/openspec_gsd_handoff/manifest_v2.py` exact structured validation; same-file `_unknown`/classifier | role-match |
-| `tests/test_handoff_lifecycle_drift.py` | test | transform, request-response | same file `_assert_unknown` and bounded malformed-input tables | exact |
-| `src/ai_coding_template_ja/openspec_gsd_handoff/lifecycle_gate.py` | service / admission middleware | request-response, file-I/O | same file validators/projection/identity; `policy_reference.py::_valid_limits` and `_fingerprint_section` | exact |
-| `tests/test_handoff_lifecycle_gate.py` | test / evidence producer | request-response, file-I/O, batch transform | same file `FakeBoundary`, incomplete matrix, identity regressions, evidence producer | exact |
-| `tests/fixtures/openspec_gsd_handoff/lifecycle/expected-lifecycle-evidence.json` | test fixture / config | batch transform | `.planning/phases/03-lifecycle-drift-gate/03-LIFECYCLE-EVIDENCE.json` | exact |
-| `.planning/phases/03-lifecycle-drift-gate/03-LIFECYCLE-EVIDENCE.json` | generated evidence / config | batch, file-I/O | independent expected lifecycle golden plus `_repository_root_lifecycle_evidence` | exact |
+| `GE-FILE-01` | `src/.../gate_e_boundary.py` | shared validation authority | `manifest_v2.py` exact validation + `PolicyReferenceLimits` | role-match |
+| `GE-FILE-02` | `tests/gate_e_semantic_operation_authority.py` | pre-repin test-code literal/schema semantic/oracle authority | strict assignment authority shape; `GE-SEM-AUTH` | role-match |
+| `GE-FILE-02A` | `tests/fixtures/openspec_gsd_handoff/gate_e/semantic-operation-authority.json` | approved FINAL semantic/oracle authority publication | deterministic projection of `GE-FILE-02` after production GREEN + fresh approval | role-match |
+| `GE-FILE-03` | `tests/test_handoff_gate_e_oracle_authority.py` | authority schema/coverage test | mapping authority parser tests; all 7×H01〜H12 rows | role-match |
+| `GE-FILE-04` | `tests/test_handoff_gate_e_boundary.py` | freeze/property/fixed tests | source identity bounded adversaries | exact |
+| `GE-FILE-05` | `src/.../manifest.py` | v1 codec/read/persist totality | same-file Result and file-operation boundaries | exact |
+| `GE-FILE-06` | `src/.../manifest_v2.py` | v2 codec totality | same-file strict schema/parser | exact |
+| `GE-FILE-07` | `src/.../versioned_manifest.py` | version dispatcher totality | same-file exact discriminator | exact |
+| `GE-FILE-08` | `tests/test_handoff_manifest_totality.py` | manifest semantic matrix | existing manifest public tests + `GE-SEM-AUTH` | role-match |
+| `GE-FILE-09` | `src/.../reader.py` | canonical reader totality | anchored bounded reader | exact |
+| `GE-FILE-10` | `src/.../policy_reference.py` | policy authority totality | `_observe_file` and strict section parser | exact |
+| `GE-FILE-11` | `src/.../progress.py` | progress parser totality | existing Result parser | exact |
+| `GE-FILE-12` | `tests/test_handoff_gate_e_reader_policy_progress_totality.py` | reader/policy/progress matrix | existing public fixed tables + `GE-SEM-AUTH` | role-match |
+| `GE-FILE-13` | `src/.../source_identity.py` | source identity totality/NFC | same-file public validation authority | exact |
+| `GE-FILE-14` | `src/.../execution_mapping.py` | mapping totality/readiness | same-file canonical projection and anchored path observation | exact |
+| `GE-FILE-15` | `tests/test_handoff_gate_e_source_mapping_totality.py` | source/mapping matrix | identity/mapping public tests + `GE-SEM-AUTH` | role-match |
+| `GE-FILE-16` | `tests/test_handoff_identity.py` | NFC persisted-reuse evidence | same-file alias/reconciliation tests | exact |
+| `GE-FILE-17` | `src/.../lifecycle_drift.py` | canonical drift decision totality | same-file `_unknown`/classifier | exact |
+| `GE-FILE-18` | `src/.../lifecycle_gate.py` | observation/admission totality | same-file validators/projection/identity | exact |
+| `GE-FILE-19` | `tests/test_handoff_gate_e_lifecycle_totality.py` | lifecycle/mode matrix | `FakeBoundary` tests + `GE-SEM-AUTH` | role-match |
+| `GE-FILE-20` | `src/.../__init__.py` | handoff public entrypoints | existing Result orchestration | exact |
+| `GE-FILE-21` | `src/.../__main__.py` | CLI decision boundary | structured CLI payload/exit contract | exact |
+| `GE-FILE-22` | `src/.../discovery.py` | discovery Result boundary | read-only exact route parser | exact |
+| `GE-FILE-23` | `src/.../preflight.py` | probe/repository Result boundary | bounded command/result parser | exact |
+| `GE-FILE-24` | `src/.../smoke.py` | snapshot/smoke/render boundary | bounded repository snapshot | exact |
+| `GE-FILE-25` | `tests/test_handoff_gate_e_entrypoint_totality.py` | entrypoint matrix | existing CLI/discovery/preflight/smoke tests + `GE-SEM-AUTH` | role-match |
+| `GE-FILE-26` | `src/.../manifest_migration.py` | preview/apply/persistence/proof consumer | anchored migration writer | exact |
+| `GE-FILE-27` | `src/.../manifest_refresh.py` | preview/apply/publication/proof consumer | anchored refresh writer | exact |
+| `GE-FILE-28` | `tests/test_handoff_gate_e_migration_refresh_totality.py` | migration/refresh matrix | existing migration/refresh tests + `GE-SEM-AUTH` | role-match |
+| `GE-FILE-29` | `src/.../persistence_adapters.py` | 9-call nominal adapter contract | migration anchored operations; `GE-PERSISTENCE` | role-match |
+| `GE-FILE-30` | `tests/test_handoff_gate_e_persistence_adapter.py` | 21-outcome/fault matrix | fixed migration/refresh filesystem faults | role-match |
+| `GE-FILE-31` | `tests/test_handoff_gate_e_fresh_canonical_proof.py` | proof race/fault matrix | `_observe_file` + `_revalidate_declared_path_observation` | role-match |
+| `GE-FILE-32` | `tests/test_handoff_gate_e_publication.py` | publication/readiness tests | canonical mapping projection tests | role-match |
+| `GE-FILE-33` | `scripts/smoke_installed_handoff_wheel.py` | installed-wheel smoke CLI | existing explicit Taskfile smoke | role-match |
+| `GE-FILE-34` | `src/.../authority_binding.py` | frozen authority evidence/recheck authority | policy/inventory anchored readers; `GE-AUTHORITY` | role-match |
+| `GE-FILE-35` | `tests/test_handoff_gate_e_authority_binding.py` | authority race/conflict matrix | policy reference filesystem tests | role-match |
+| `GE-FILE-36` | `.planning/.../03-GATE-E-REPIN-PREVIEW.json` | immutable approval subject | 03-17 refresh preview | exact |
+| `GE-FILE-36A` | `scripts/verify_gate_e_pre_repin.py` | pinned/current test-inventory runner/classifier CLI | Git tree inventory + public behavior oracle; `GE-REGRESSION` | role-match |
+| `GE-FILE-36B` | `tests/test_verify_gate_e_pre_repin.py` | production-failure masking fault tests | fixed parser/runner fault matrix | role-match |
+| `GE-FILE-36C` | `.planning/phases/03-lifecycle-drift-gate/03-GATE-E-PRE-REPIN-REGRESSION.json` | per-file regression evidence | strict generated evidence sidecar | role-match |
+| `GE-FILE-37` | `scripts/repin_gate_e_authority.py` | transactional repin CLI prepared in 03-42 | 03-17 apply + journaled writer pattern | role-match |
+| `GE-FILE-38` | `tests/test_repin_gate_e_authority.py` | pre-approval prepare/apply/verify/rollback fault tests | migration partial-failure tests | role-match |
+| `GE-FILE-39` | `.planning/.../03-GATE-E-PROTECTED-HASHES.json` | pre-approval protected input/allowlist manifest | 03-17 protected hashes | exact |
+| `GE-FILE-40` | `.planning/.../03-GATE-E-REPIN-COMPLETION.json` | immutable repin completion artifact | approved preview + exact output hashes | role-match |
+| `GE-FILE-41` | `scripts/verify_gate_e_report_chain.py` | shared strict Git-derived report parser | exact report frontmatter parsing + Git blob evidence | role-match |
+| `GE-FILE-41A` | `tests/test_verify_gate_e_report_chain.py` | schema/hash/head/order/tamper fault tests | temporary Git-history parser adversarial matrix | role-match |
+| `GE-FILE-42` | `.planning/.../03-REVIEW.md` / `03-REVIEW-GATE.json` | generation-1 report/sidecar | 03-23 report, but fresh strict chain | role-match |
+| `GE-FILE-43` | `.planning/.../03-SECURITY.md` / `03-SECURITY-GATE.json` | generation-2 report/sidecar | 03-23 security, but fresh strict chain | role-match |
+| `GE-FILE-44` | `.planning/.../03-VERIFICATION.md` / `03-VERIFICATION-GATE.json` | generation-3 report/sidecar | goal-backward verification + strict chain | role-match |
+| `GE-FILE-45` | `scripts/verify_gate_e_closeout.py` | strict state-transition/post-metadata parser | exact traceability parser + Git-show source/metadata proof | role-match |
+| `GE-FILE-45A` | `tests/test_verify_gate_e_closeout.py` | report/hash/order/stale-state/metadata-proof fault tests | temporary Git-history parser adversarial matrix | role-match |
+| `GE-FILE-46` | `.planning/.../03-HND-03-CLOSEOUT.json` | ordered pre-HND/HND/OpenSpec closeout state | exact transition manifest | role-match |
+| `GE-FILE-47` | `.planning/PROJECT.md` / `REQUIREMENTS.md` / `ROADMAP.md` / `STATE.md` / OpenSpec `tasks.md` | authoritative project state | existing structured project metadata; parser proves uniqueness and standard hook order | exact |
+| `GE-FILE-48` | repinned handoff/assignment/refresh/lifecycle artifacts | source-pinned derived evidence | public producers + independent literal golden | exact |
+| `GE-FILE-49` | `.planning/.../03-GATE-E-POST-METADATA.json` | committed metadata-head/direct-parent proof | execute-plan standard metadata order + strict Git blob parser | role-match |
 
 ## Pattern Assignments
 

@@ -71,6 +71,11 @@
       "workaround": "Keep migration entry points internal and inactive."
     },
     {
+      "description": "Current task check is red: 115 failed and 855 passed because Gate E source changes at 77a8c02 produce 61 active source items while mapping, handoff and derived hashes remain pinned to 54 items",
+      "type": "technical",
+      "workaround": "Do not repin or execute the draft closure plans while paused; preserve the red result as current state."
+    },
+    {
       "description": "The product direction may change to a Node-dependent per-skill updater, making continued Gate E execution potentially obsolete",
       "type": "human_action",
       "workaround": "Specify the new route in a separate OpenSpec change and ADR before deciding the old change disposition."
@@ -127,5 +132,5 @@
     ".planning/phases/03-lifecycle-drift-gate/03-50-PLAN.md"
   ],
   "next_action": "Do not execute Plan 03-30. Start a separate OpenSpec change and ADR for the Node-dependent skill updater, then explicitly choose the old change disposition.",
-  "context_notes": "Current branch HEAD is 77a8c02. Plans 03-30 through 03-50 contain 64 unexecuted tasks and remain untracked. The latest 03-REVIEW.md freezes seven blockers and one warning; 03-VERIFICATION.md still reflects the earlier four-blocker/one-warning inventory and is stale relative to that review. No async job or relevant background process was found."
+  "context_notes": "Plans 03-30 through 03-50 contain 43 unexecuted tasks and remain untracked at the pause point. The latest 03-REVIEW.md freezes seven blockers and one warning; 03-VERIFICATION.md still reflects the earlier four-blocker/one-warning inventory and is stale relative to that review. A fresh task check after the pause returned 115 failed and 855 passed because Gate E source changes at 77a8c02 are not repinned to the 54-item mapping and hashes. No async job or relevant background process was found."
 }
