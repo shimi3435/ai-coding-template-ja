@@ -4,8 +4,8 @@
 
 ## 1. Dependency and test baseline
 
-- [ ] 1.1 `main` を最新化し、他の active change を branch に含めない
-- [ ] 1.2 Node 24、Python 3.14 既定 / `>=3.14` 最低境界、npm lockfile、bootstrap、Task 公開入口の spec-hole を例示 test と property test に対応付ける
+- [ ] 1.1 現 planning branch では実装せず、実装承認後に最新 `main` から新しい専用 branch を作り、canonical artifacts だけを cherry-pick する
+- [ ] 1.2 移植後の source で `spec-holes` と `task openspec:validate` を再実行し、Node 24、Python 3.14 既定 / `>=3.14` 最低境界、npm lockfile、bootstrap、Task 公開入口を例示 test と property test に対応付ける
 - [ ] 1.3 現行 `task check` と bootstrap の baseline 結果を記録する
 
 ## 2. Runtime and dependency contract

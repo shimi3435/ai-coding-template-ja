@@ -13,6 +13,7 @@ v2 では Node.js を必須の管理プレーンとして導入し、既存 Pyth
 ## Dependencies
 
 - 独立 change。`main` の `8a1d42f` を proposal の基点とする。
+- 現 branch は計画専用であり、実装を行わない。実装承認後に最新 `main` から新しい専用 branch を作り、canonical artifacts を cherry-pick して `spec-holes` と OpenSpec validation を再実行する。
 - 後続 `migrate-openspec-to-opsx` と `add-deterministic-skill-updater` は、本 change の close と merge を実装開始条件とする。
 - 全 4 changes 完了後の `TEMPLATE_VERSION=2.0.0` 更新、移行ガイド最終化、release-ready 判定は、別 change `prepare-v2-release` が所有する。
 - 現在進行中の `harden-openspec-gsd-handoff-lifecycle` と同じ PR に含めない。
