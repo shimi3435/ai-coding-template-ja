@@ -24,6 +24,10 @@
 - **WHEN** Node 24 または Python 3.14 の別 patch version を使う
 - **THEN** line が一致する限り preflight は受理し、repository は特定 patch への downgrade を要求しない
 
+#### Scenario: runtime の検出結果を解釈できない
+- **WHEN** 必須の Node、npm、Python のいずれかが見つからない、version command が失敗する、または version 出力を解釈できない
+- **THEN** runtime preflight は変更前に非ゼロ終了し、対象 runtime と検出失敗理由を示す
+
 ### Requirement: V2-RUNTIME-2 npm dependency を決定論的かつ安全に導入する
 
 テンプレートは MUST private package、exact version、package-lock v3 を依存の正本とし、通常導入時に dependency lifecycle script を実行しない。
@@ -39,6 +43,10 @@
 #### Scenario: high 以上の監査問題がある
 - **WHEN** 明示的な online audit で `npm audit --audit-level=high` が high または critical finding を返す
 - **THEN** audit task は非ゼロ終了する
+
+#### Scenario: package metadata が正本契約を満たさない
+- **WHEN** `package.json` または `package-lock.json` が存在しない、JSON として不正、または lockfileVersion が 3 ではない
+- **THEN** repository check は非ゼロ終了し、違反した file と契約を報告する
 
 ### Requirement: V2-RUNTIME-3 TypeScript 管理 CLI を追加ランナーなしで実行する
 
@@ -56,6 +64,10 @@
 - **WHEN** `repo-tools` に TypeScript 型エラーがある
 - **THEN** `tsc --noEmit` は非ゼロ終了する
 
+#### Scenario: 未知の管理 CLI command を指定する
+- **WHEN** command を省略する、または未定義の command を `repo-tools` に渡す
+- **THEN** CLI は利用可能な command を示して非ゼロ終了し、処理を暗黙選択しない
+
 ### Requirement: V2-RUNTIME-4 Task を安定した公開インターフェースにする
 
 テンプレートは MUST 利用者向け操作を Taskfile に公開し、Node と Python の内部実装を Task の背後に置く。
@@ -66,7 +78,7 @@
 
 #### Scenario: 隔離検査を実行する
 - **WHEN** 利用者が `task check:isolated` を実行する
-- **THEN** optional GSD host がなくても repository 内の決定論的検査を実行し、旧名 `check:without-gsd` を正規入口として扱わない
+- **THEN** optional GSD host がなくても repository 内の決定論的検査を実行し、旧名 `check:without-gsd` は task 一覧にも実行可能な alias にも残らない
 
 ### Requirement: V2-RUNTIME-5 Node の自動導入は明示 opt-in と検証を要求する
 
@@ -75,6 +87,10 @@ bootstrap は MUST 既定では runtime を検出するだけとし、`--install
 #### Scenario: Node がなく opt-in もない
 - **WHEN** Node 24 が見つからず `--install-node` が指定されない
 - **THEN** bootstrap は filesystem を変更せず失敗し、手動導入と opt-in の選択肢を示す
+
+#### Scenario: user-local target を安全に決定できない
+- **WHEN** `--install-node` が指定されたが user-local install root を絶対 path として決定できない
+- **THEN** bootstrap は取得前に非ゼロ終了し、install root の指定方法を示す
 
 #### Scenario: 対応 architecture へ導入する
 - **WHEN** Linux x64 または arm64 で `--install-node` が指定され、配布物の SHA-256 が公式 checksum と一致する
@@ -92,6 +108,10 @@ bootstrap は MUST 既定では runtime を検出するだけとし、`--install
 - **WHEN** Linux x64 / arm64 以外で `--install-node` が指定される
 - **THEN** bootstrap は取得前に非ゼロ終了し、対応対象を示す
 
+#### Scenario: download または展開が途中で失敗する
+- **WHEN** 配布物または checksum の取得、checksum の解釈、または archive の展開が失敗する
+- **THEN** bootstrap は非ゼロ終了し、最終 target を有効化せず、一時取得物を後続実行の runtime として残さない
+
 ### Requirement: V2-RUNTIME-6 統合検査は依存導入後 offline で完結する
 
 `task check` は MUST Node typecheck / test と既存 Python checks を実行する合成基盤を提供し、検査中にネットワークへ接続しない。後続 changes は同じ合成点へ自身が所有する検査を追加できる。
@@ -107,6 +127,10 @@ bootstrap は MUST 既定では runtime を検出するだけとし、`--install
 #### Scenario: 後続 change が検査を追加する
 - **WHEN** 後続 change が OpenSpec、skill、automation workflow の検査を登録する
 - **THEN** `task check` は同じ offline 合成点から登録済み検査を実行するが、本 change の完了は未実装の後続検査を要求しない
+
+#### Scenario: lock 済み dependency が未導入である
+- **WHEN** `task check` に必要な Node または Python dependency が local 環境に存在しない
+- **THEN** `task check` は network 取得を開始せず非ゼロ終了し、明示的な導入入口を示す
 
 ### Requirement: V2-RUNTIME-7 release version の所有権を分離する
 

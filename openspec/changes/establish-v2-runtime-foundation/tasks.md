@@ -2,11 +2,18 @@
 
 **Route: direct OpenSpec apply.** 一体の成果だが、単一 change、単一管理 CLI、独立 phase 不要であり、OpenSpec の詳細タスクから安全に実装・検証できる。GSD は使わない。
 
+## Execution Budget
+
+- **恒久成果:** Node / Python runtime 宣言、exact npm lock、TypeScript 管理 CLI、bootstrap、Task / CI 統合、test、release handoff note。
+- **一時実行証跡:** 本 change directory の spec-holes 対応表、baseline、requirement / test 対応。close 前に change directory とともに削除する。
+- **早期検証:** runtime / package parser の Node test、bootstrap の fake command / local fixture test、`task check:isolated`。
+- **停止・再計画:** 新しい外部 dependency、公開 runtime command、trust boundary、独立出荷可能成果、通常 CI job の追加が必要になった場合。
+
 ## 1. Dependency and test baseline
 
-- [ ] 1.1 現 planning branch では実装せず、実装承認後に最新 `main` から新しい専用 branch を作り、canonical artifacts だけを cherry-pick する
-- [ ] 1.2 移植後の source で `spec-holes` と `task openspec:validate` を再実行し、Node 24、Python 3.14 既定 / `>=3.14` 最低境界、npm lockfile、bootstrap、Task 公開入口を例示 test と property test に対応付ける
-- [ ] 1.3 現行 `task check` と bootstrap の baseline 結果を記録する
+- [x] 1.1 現 planning branch では実装せず、実装承認後に最新 `main` から新しい専用 branch を作り、canonical artifacts だけを cherry-pick する
+- [x] 1.2 移植後の source で `spec-holes` と `task openspec:validate` を再実行し、Node 24、Python 3.14 既定 / `>=3.14` 最低境界、npm lockfile、bootstrap、Task 公開入口を例示 test と property test に対応付ける
+- [x] 1.3 現行 `task check` と bootstrap の baseline 結果を記録する
 
 ## 2. Runtime and dependency contract
 
@@ -33,3 +40,10 @@
 - [ ] 5.2 Node 24 と Python 3.14 の clean bootstrap、Python 3.14 未満の拒否、Python 3.15 以上の preflight 受理、既存環境検出、architecture / checksum / no-overwrite failure を検証する
 - [ ] 5.3 `task check`、`task check:isolated`、`task openspec:validate` を実行する
 - [ ] 5.4 全 requirements / scenarios と test evidence を対応付け、change を close する
+
+## Implementation Evidence
+
+- `spec-holes`: [spec-holes.md](spec-holes.md)。再列挙で検出した runtime 検出不能、package metadata 不正、未知 CLI command、旧 task alias、bootstrap 部分失敗、offline dependency 不足を spec delta へ追加した。
+- OpenSpec validate baseline: OpenSpec CLI `1.3.1`、`task openspec:validate` は `1 passed, 0 failed`。
+- Project baseline: Node `v26.1.0`、npm `11.17.0`、Python `3.12.9`、uv `0.11.26`、Task `3.51.1`。`task check` は `247 passed`、ruff / basedpyright green。
+- Bootstrap baseline: Ubuntu `22.04.5 LTS`、既存 uv / Task / Node / npm / gh を検出し、`task setup` と pre-commit hook 導入を完了、exit 0。
