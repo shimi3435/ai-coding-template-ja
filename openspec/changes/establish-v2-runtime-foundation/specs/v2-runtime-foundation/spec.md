@@ -1,16 +1,24 @@
 ## ADDED Requirements
 
-### Requirement: V2-RUNTIME-1 Node と Python の runtime line を固定する
+### Requirement: V2-RUNTIME-1 Node と Python の runtime 境界を宣言する
 
-テンプレートは MUST Node.js 24 LTS と Python 3.14 をサポート対象の既定・最低 runtime line として宣言し、実行前に検証する。
+テンプレートは MUST Node.js 24 LTS を必須管理 runtime、Python 3.14 を既定かつ CI baseline、Python `>=3.14` を対応最低 version として宣言し、実行前に検証する。
 
 #### Scenario: 対応 runtime を使う
 - **WHEN** Node の major が 24 で Python の major/minor が 3.14 である
 - **THEN** runtime preflight は成功し、検出した完全 version を診断出力へ含める
 
-#### Scenario: Node または Python の line が異なる
-- **WHEN** Node の major が 24 ではない、または Python の major/minor が 3.14 ではない
-- **THEN** bootstrap と管理 CLI は変更前に非ゼロ終了し、必要 line と検出 version を示す
+#### Scenario: Node の line が異なる
+- **WHEN** Node の major が 24 ではない
+- **THEN** bootstrap と preflight は変更前に非ゼロ終了し、必要 line と検出 version を示す
+
+#### Scenario: Python が最低 version 未満である
+- **WHEN** Python version が 3.14 未満である
+- **THEN** bootstrap と preflight は変更前に非ゼロ終了し、最低 version と検出 version を示す
+
+#### Scenario: Python が既定 line より新しい
+- **WHEN** Python version が 3.15 以上である
+- **THEN** bootstrap と preflight は major/minor line 不一致だけでは拒否せず、互換性判定を通常の repository checks に委ねる
 
 #### Scenario: patch version が更新される
 - **WHEN** Node 24 または Python 3.14 の別 patch version を使う
@@ -86,24 +94,24 @@ bootstrap は MUST 既定では runtime を検出するだけとし、`--install
 
 ### Requirement: V2-RUNTIME-6 統合検査は依存導入後 offline で完結する
 
-`task check` は MUST Node typecheck / test、Python checks、skill integrity、OpenSpec generated drift、repo-local OpenSpec validate を実行し、検査中にネットワークへ接続しない。
+`task check` は MUST Node typecheck / test と既存 Python checks を実行する合成基盤を提供し、検査中にネットワークへ接続しない。後続 changes は同じ合成点へ自身が所有する検査を追加できる。
 
 #### Scenario: 全検査が成功する
-- **WHEN** lock 済み dependency が導入済みで repository に drift や test failure がない
+- **WHEN** lock 済み dependency が導入済みで Node と Python の test failure がない
 - **THEN** `task check` はネットワークアクセスなしで exit 0 を返す
 
 #### Scenario: 一つの検査が失敗する
-- **WHEN** Node、Python、skill、OpenSpec のいずれかの必須検査が失敗する
+- **WHEN** Node または Python の必須検査が失敗する
 - **THEN** `task check` は非ゼロ終了し、失敗した検査を識別できる出力を残す
 
-### Requirement: V2-RUNTIME-7 v2 の破壊的変更を release 境界で明示する
+#### Scenario: 後続 change が検査を追加する
+- **WHEN** 後続 change が OpenSpec、skill、automation workflow の検査を登録する
+- **THEN** `task check` は同じ offline 合成点から登録済み検査を実行するが、本 change の完了は未実装の後続検査を要求しない
 
-テンプレートは MUST version を `2.0.0` に更新し、Node 必須化と Python 3.14 最低化を移行ガイドに記録する。
+### Requirement: V2-RUNTIME-7 release version の所有権を分離する
 
-#### Scenario: v1 利用者が v2 へ移行する
-- **WHEN** 利用者が v2 移行ガイドを読む
-- **THEN** 前提 runtime、依存導入、変更された Task、手動移行手順、rollback 境界を確認できる
+本 change は MUST 現行 `1.0.0` の `TEMPLATE_VERSION` を変更せず、Node 必須化と Python 3.14 最低化を `prepare-v2-release` への dependency handoff note に記録する。`TEMPLATE_VERSION=2.0.0` 更新、移行ガイド最終化、release-ready 判定は `prepare-v2-release` が所有する。
 
-#### Scenario: 自動移行を要求する
-- **WHEN** v1 下流 repository に v2 を適用する
-- **THEN** テンプレートは未確認の自動 rewrite を実行せず、手動ガイドを正規経路とする
+#### Scenario: runtime foundation が完了する
+- **WHEN** 本 change の requirements と checks が完了する
+- **THEN** `TEMPLATE_VERSION` は `1.0.0` を維持し、`2.0.0` 更新、移行ガイド最終化、release-ready 判定は全 4 changes 完了後の `prepare-v2-release` に残る
