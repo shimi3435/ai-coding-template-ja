@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEGACY_TOKEN = "g" + "sd"
-ACTIVE_CHANGE = Path("openspec/changes") / (
-    "externalize-" + LEGACY_TOKEN + "-from-core"
-)
-DIRECT_WORKFLOW_SPEC = ACTIVE_CHANGE / "specs/openspec-direct-workflow/spec.md"
+EXECUTOR_SKILL = Path(".agents/skills/execute-openspec-change/SKILL.md")
 CURRENT_POLICY_PATHS = (
     Path("AGENTS.md"),
     Path("CONTEXT.md"),
@@ -77,6 +73,7 @@ def test_scope_and_change_split_use_enumerated_shipping_boundaries() -> None:
 def test_tasks_contract_is_self_contained_and_has_three_execution_constraints() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
     context = _read(Path("CONTEXT.md"))
+    executor_skill = _read(EXECUTOR_SKILL)
 
     for required_field in (
         "成果",
@@ -92,23 +89,19 @@ def test_tasks_contract_is_self_contained_and_has_three_execution_constraints() 
     assert "一時 artifact cleanup" in workflow
     assert "3項目" in workflow
     assert "最初の CI parity、停止・再計画条件、一時 artifact cleanup" in context
-
-    tasks = _read(ACTIVE_CHANGE / "tasks.md")
-    constraints_section = tasks.split("## Execution Constraints", maxsplit=1)[1].split(
-        "## Tasks", maxsplit=1
-    )[0]
-    labels = re.findall(r"^- \*\*(.+?):\*\*", constraints_section, flags=re.MULTILINE)
-    assert labels == ["最初の CI parity", "停止・再計画", "一時 artifact cleanup"]
+    assert "exactly 3 項目" in executor_skill
+    assert "最初の CI parity、停止・再計画条件、一時 artifact cleanup" in executor_skill
 
 
-def test_active_task_targets_are_exact_code_spanned_paths() -> None:
-    tasks = _read(ACTIVE_CHANGE / "tasks.md")
-    target_values = re.findall(r"^  - \*\*対象:\*\* (.+)$", tasks, flags=re.MULTILINE)
+def test_task_targets_require_exact_code_spanned_paths() -> None:
+    workflow = _read(Path("docs/agents/workflow.md"))
+    executor_skill = _read(EXECUTOR_SKILL)
 
-    assert target_values
-    for value in target_values:
-        items = value.removesuffix("。").split("、")
-        assert all(re.fullmatch(r"`[^`]+`", item) for item in items), value
+    for text in (workflow, executor_skill):
+        assert "Markdown inline code span" in text
+        assert "exact" in text
+        assert "Unicode" in text
+        assert "空白" in text
 
 
 def test_external_orchestrator_requires_named_user_opt_in_before_discovery() -> None:
@@ -138,12 +131,12 @@ def test_replanning_is_fail_closed_and_preserves_completed_tasks() -> None:
 
 
 def test_blocker_persistence_begins_after_preflight_and_dirty_ownership() -> None:
-    spec = _read(DIRECT_WORKFLOW_SPEC)
     workflow = _read(Path("docs/agents/workflow.md"))
+    executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (spec, workflow):
+    for text in (workflow, executor_skill):
         assert "preflight" in text
-        assert "dirty ownership" in text
+        assert "dirty ownership" in text or "dirty overlap" in text
         assert "report-only" in text
         assert "repositoryを変更しない" in text.replace(" ", "")
         assert "先頭の未解決 task" in text or "先頭の未解決task" in text
@@ -152,10 +145,10 @@ def test_blocker_persistence_begins_after_preflight_and_dirty_ownership() -> Non
 
 
 def test_review_blocker_reopens_its_validation_and_parent_task() -> None:
-    spec = _read(DIRECT_WORKFLOW_SPEC)
     workflow = _read(Path("docs/agents/workflow.md"))
+    executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (spec, workflow):
+    for text in (workflow, executor_skill):
         normalized = text.replace(" ", "")
         assert "initial/diffreview" in normalized
         assert "projectcheck" in normalized
@@ -166,11 +159,10 @@ def test_review_blocker_reopens_its_validation_and_parent_task() -> None:
 
 
 def test_partial_implementation_resume_is_owned_only_after_orderly_stop() -> None:
-    spec = _read(DIRECT_WORKFLOW_SPEC)
-    design = _read(ACTIVE_CHANGE / "design.md")
     workflow = _read(Path("docs/agents/workflow.md"))
+    executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (spec, design, workflow):
+    for text in (workflow, executor_skill):
         assert "orderly stop" in text
         assert "implementation-in-progress" in text
         assert "実装を継続" in text
@@ -179,18 +171,14 @@ def test_partial_implementation_resume_is_owned_only_after_orderly_stop() -> Non
         assert "fail-closed" in text
 
 
-def test_preflight_spec_holes_use_static_skill_fixture_contracts() -> None:
-    spec = _read(DIRECT_WORKFLOW_SPEC)
-    design = _read(ACTIVE_CHANGE / "design.md")
+def test_preflight_spec_holes_are_owned_by_permanent_workflow_and_skill() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
+    executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (spec, workflow):
-        assert "taskentryが0件" in text.replace(" ", "")
+    for text in (workflow, executor_skill):
+        normalized = text.replace(" ", "")
+        assert "taskentryが0件" in normalized or "taskが0件" in normalized
         assert "推移的な依存 path" in text
         assert "Markdown inline code span" in text
         assert "Unicode" in text
         assert "空白" in text
-
-    assert "static skill / instruction fixtures" in design
-    assert "実agent sessionのpreflight実行" in design
-    assert "temporary change repositories" not in design

@@ -12,7 +12,6 @@ LEGACY_TOKEN = "g" + "sd"
 TEMPLATE_SLUG = "-".join(("ai", "coding", "template", "ja"))
 TOKEN_BOUNDARY = re.compile(rf"(?i)(^|[^a-z0-9]){LEGACY_TOKEN}([^a-z0-9]|$)".encode())
 V2_NOTES = Path("docs/template/v2-release-notes.md")
-ACTIVE_CHANGE = Path("openspec/changes/externalize-" + LEGACY_TOKEN + "-from-core")
 CURRENT_TEMPLATE_DOC_SURFACES = (
     Path("README.md"),
     Path("Taskfile.yml"),
@@ -46,7 +45,7 @@ def _legacy_token_violations(paths: list[Path], root: Path = REPO_ROOT) -> list[
         absolute = root / relative
         if not absolute.exists() and not absolute.is_symlink():
             continue
-        allowed = relative in ALLOWED_PATHS or relative.is_relative_to(ACTIVE_CHANGE)
+        allowed = relative in ALLOWED_PATHS
         path_match = TOKEN_BOUNDARY.search(relative.as_posix().encode()) is not None
         if absolute.is_symlink():
             payload = os.fsencode(os.readlink(absolute))
@@ -171,6 +170,7 @@ def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
     for pull_request, defect_count in (
         ("PR #40", "逃した欠陥 1 件"),
         ("PR #41", "逃した欠陥 6 件"),
+        ("PR #53", "逃した欠陥 27 件"),
     ):
         assert pull_request in notes
         assert defect_count in notes
