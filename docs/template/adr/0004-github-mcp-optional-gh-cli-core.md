@@ -20,5 +20,5 @@
 - コア MCP は Context7 のみとなり、コア診断が Copilot / GitHub エンタイトルメント非依存で green になる。
 - `gh` が bootstrap の導入対象に加わる。doctor では未導入を WARN（GitHub ワークフロー文脈でのみ FAIL）とし作成直後 green を保てる。`gh` 認証は利用者が手動で行う（secret 自動保存はしない）。
 - GitHub MCP はオプション層（リモート / ローカルバイナリ / Docker）。Copilot 契約や構造化出力が要るプロジェクトのみ opt-in。
-- ADR-0002 の「Node 非コア」根拠は維持される（Context7 リモートのみで Node 不要。`gh` は Go バイナリで Node 不要）。
+- MCP 接続個別の Node 非依存性は維持される（Context7 リモート接続と Go バイナリの `gh` 自体は Node 不要）。これは v2 のリポジトリ管理プレーンに Node.js 24 を必須とする境界とは別である。
 - `gh` の read 用途は構造化が弱い。複雑な GitHub 解析が要るなら GitHub MCP / Serena を opt-in。

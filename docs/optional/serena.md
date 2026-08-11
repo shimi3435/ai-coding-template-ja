@@ -4,9 +4,10 @@ Serena はセマンティックなコード理解・symbol 単位編集を提供
 （<https://github.com/oraios/serena>）。**既存コードが育ってから / 大規模リファクタリング時のみ**
 opt-in する（短い修正主体の初期段階では過剰・§10.2）。
 
-実行は **uvx**（uv 同梱のツールランナー）を使う。Node / Docker 不要で ADR-0002
-（コア Node 非依存）と整合する。上流 docs には Docker 版・ローカル clone 版もあるが、
-本テンプレートでは uvx 形を既定とし代替はそちらに委ねる。
+実行は **uvx**（uv 同梱のツールランナー）を使う。Serena 自体には追加の Node / Docker を
+必要としない。これは v2 のテンプレート管理ランタイムである Node.js 24 の必須境界とは別の
+実行要件である。上流 docs には Docker 版・ローカル clone 版もあるが、本テンプレートでは
+uvx 形を既定とし代替はそちらに委ねる。
 
 コアの `.mcp.json.template` / `.codex/config.toml.template` には Serena エントリを**入れない**
 （JSON はコメント不可でコメントアウト保持ができず、実エントリを足すと Serena がコア前提化する）。

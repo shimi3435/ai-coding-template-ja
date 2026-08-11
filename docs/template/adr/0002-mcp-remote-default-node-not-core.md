@@ -1,8 +1,10 @@
 # コア MCP はリモート HTTP read-only を既定とし Node を非コア依存にする
 
-> Status: 一部 superseded（ADR-0004 による）。**GitHub MCP をコアとする部分は無効**。
-> 本 ADR で生きている責務は「**コア MCP（Context7）はリモート HTTP・コアは Node 非依存**」のみ。
-> GitHub MCP の扱いは ADR-0004 を参照（オプション降格・コアの GitHub read は gh CLI で代替）。
+> Status: v1 の historical decision。Node をコア依存から外す判断は、v2 runtime foundation の
+> **Node.js 24 必須管理ランタイム**により superseded された。MCP 個別の判断、すなわち
+> **Context7 はリモート HTTP を既定とし、その接続自体はローカル Node を必要としない**点は維持する。
+> GitHub MCP をコアとする部分も ADR-0004 により superseded 済みであり、現行の GitHub read は
+> gh CLI を使う。以下は v1 当時の判断として残す。
 
 （以下は当初記述。GitHub MCP に関する箇所は ADR-0004 で置換済）
 

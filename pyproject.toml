@@ -3,9 +3,9 @@ name = "ai-coding-template-ja"
 version = "0.1.0"
 description = "研究者が AI コーディングを安全に始める開発基盤を提供する日本語対応の研究用 Python プロジェクトテンプレート"
 readme = "README.md"
-# CI で検証しているのは 3.12 / 3.13 / 3.14（ci.yml の matrix）。3.15+ は範囲上は
-# 許容するが未検証（リリース後にローカル実測 → matrix 追加を判断する）。
-requires-python = ">=3.12"
+# CI baseline は 3.14。3.15+ は範囲上は許容するが未検証（リリース後に
+# ローカル実測 → CI 追加を判断する）。
+requires-python = ">=3.14"
 license = { file = "LICENSE" }
 dependencies = []
 
@@ -59,6 +59,7 @@ security = [
 ]
 
 [tool.ruff]
+# Python 3.14 runtime 境界とは分離し、既存sourceの保守的なlint/format契約を維持する。
 target-version = "py312"
 
 [tool.ruff.lint]
@@ -67,7 +68,7 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.basedpyright]
 # 研究コード/numpy/notebook で strict は警告過多になるため basic を既定。
 typeCheckingMode = "basic"
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 include = ["src", "tests", "scripts"]
 
 [tool.bandit]

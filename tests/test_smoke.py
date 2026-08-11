@@ -20,10 +20,17 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import NamedTuple
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+class _VersionInfo(NamedTuple):
+    major: int
+    minor: int
+    micro: int
 
 
 def test_default_package_importable() -> None:
@@ -61,19 +68,58 @@ def test_template_version_is_single_semver_line() -> None:
     assert re.fullmatch(r"\d+\.\d+\.\d+", lines[0]), "semver 形式であること"
 
 
-def test_python_version_pin_matches_running_interpreter() -> None:
-    # pin の固定値（3.12）ではなく「pin と実行系の整合」を検証する。CI の Python
-    # matrix は「その版を pin した下流」を再現するため job 側で .python-version を
-    # matrix 値に揃えており、固定値 assert だと 3.12 以外の matrix で偽陽性になる。
+def test_python_version_pin_declares_default_and_runtime_meets_minimum() -> None:
     raw = (REPO_ROOT / ".python-version").read_text(encoding="utf-8").strip()
-    assert re.fullmatch(r"3\.\d+(\.\d+)?", raw), (
-        f".python-version が version 形式であること: {raw!r}"
+    assert raw == "3.14", ".python-version は既定 runtime line を宣言すること"
+    assert sys.version_info >= (3, 14), "実行Pythonは最低version 3.14以上であること"
+
+
+@pytest.mark.parametrize(
+    ("running", "expected_fail"),
+    [
+        ((3, 13, 9), 1),
+        ((3, 14, 0), 0),
+        ((3, 15, 2), 0),
+        ((4, 0, 0), 0),
+    ],
+)
+def test_doctor_checks_python_default_declaration_separately_from_minimum_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    running: tuple[int, int, int],
+    expected_fail: int,
+) -> None:
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        doctor.sys,
+        "version_info",
+        _VersionInfo(*running),
     )
-    running = f"{sys.version_info.major}.{sys.version_info.minor}"
-    pinned_majmin = ".".join(raw.split(".")[:2])
-    assert pinned_majmin == running, (
-        f".python-version={raw} と実行系 {running} の major.minor が一致すること"
+    (tmp_path / ".python-version").write_text("3.14\n", encoding="utf-8")
+    diag = doctor.Diagnostics()
+
+    doctor.check_python(diag)
+
+    assert diag.fail == expected_fail
+
+
+def test_doctor_rejects_non_default_python_declaration(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        doctor.sys,
+        "version_info",
+        _VersionInfo(3, 15, 1),
     )
+    (tmp_path / ".python-version").write_text("3.15\n", encoding="utf-8")
+    diag = doctor.Diagnostics()
+
+    doctor.check_python(diag)
+
+    assert diag.fail == 1
 
 
 def _run_doctor() -> subprocess.CompletedProcess[str]:
@@ -87,13 +133,18 @@ def _run_doctor() -> subprocess.CompletedProcess[str]:
 
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv 未導入のためスキップ")
-def test_doctor_is_green_and_keeps_lock_unchanged() -> None:
-    """doctor が green（exit 0）であり、実行で uv.lock を変更しないこと（§20）。"""
+def test_doctor_reports_host_status_and_keeps_lock_unchanged() -> None:
+    """doctor がhost runtimeを反映し、実行でuv.lockを変更しないこと（§20）。"""
     lock_before = (REPO_ROOT / "uv.lock").read_bytes()
     result = _run_doctor()
-    assert result.returncode == 0, (
-        f"task doctor が green ではありません:\n{result.stdout}\n{result.stderr}"
+    node_version = subprocess.run(
+        ["node", "--version"], capture_output=True, text=True, check=False
     )
+    if node_version.returncode == 0 and node_version.stdout.startswith("v24."):
+        assert result.returncode == 0, result.stdout + result.stderr
+    else:
+        assert result.returncode != 0
+        assert "Node.js 24" in result.stdout + result.stderr
     lock_after = (REPO_ROOT / "uv.lock").read_bytes()
     assert lock_before == lock_after, "doctor 実行で uv.lock が変更されました"
 
@@ -157,6 +208,80 @@ def test_doctor_gh_missing_is_fail_only_with_optin(
     opted_in = doctor.Diagnostics()
     doctor.check_gh(opted_in, require_gh=True)
     assert opted_in.fail == 1, "opt-in 時は gh 不在を FAIL とすること"
+
+
+def test_doctor_node_missing_is_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """必須管理 runtime の Node.js がなければ doctor は FAIL にすること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: None)
+    diag = doctor.Diagnostics()
+
+    doctor.check_node_runtime(diag)
+
+    assert (diag.fail, diag.warn) == (1, 0)
+    assert diag.exit_code() == 1
+
+
+def test_doctor_npm_missing_is_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Node.js があっても npm がなければ doctor は FAIL にすること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(
+        doctor.shutil,
+        "which",
+        lambda name: "/usr/bin/node" if name == "node" else None,
+    )
+    diag = doctor.Diagnostics()
+
+    doctor.check_node_runtime(diag)
+
+    assert (diag.fail, diag.warn) == (1, 0)
+    assert diag.exit_code() == 1
+
+
+def test_doctor_rejects_node_outside_major_24(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Node.js 24 以外は必要 line と検出した完全 version を示して FAIL にすること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/present")
+    monkeypatch.setattr(
+        doctor,
+        "_run",
+        lambda cmd: (0, "v22.18.0" if cmd == ["node", "--version"] else "10.9.3"),
+    )
+    diag = doctor.Diagnostics()
+
+    doctor.check_node_runtime(diag)
+
+    assert (diag.fail, diag.warn) == (1, 0)
+    output = capsys.readouterr().out
+    assert "Node.js 24" in output
+    assert "v22.18.0" in output
+
+
+def test_doctor_accepts_node_24_and_npm_without_npx(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Node.js 24 と npm があれば npx 不在でも成功し、完全 version を表示すること。"""
+    doctor = _load_doctor_module()
+    monkeypatch.setattr(
+        doctor.shutil,
+        "which",
+        lambda name: f"/usr/bin/{name}" if name in {"node", "npm"} else None,
+    )
+    versions = {
+        ("node", "--version"): (0, "v24.11.1"),
+        ("npm", "--version"): (0, "11.6.2"),
+    }
+    monkeypatch.setattr(doctor, "_run", lambda cmd: versions[tuple(cmd)])
+    diag = doctor.Diagnostics()
+
+    doctor.check_node_runtime(diag)
+
+    assert (diag.fail, diag.warn) == (0, 0)
+    output = capsys.readouterr().out
+    assert "Node.js v24.11.1" in output
+    assert "npm 11.6.2" in output
 
 
 def _make_change_dir(tmp_path: Path, name: str) -> Path:

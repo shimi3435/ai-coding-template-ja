@@ -6,7 +6,7 @@ GSD（GSD Core）は、大規模な単一 OpenSpec change の詳細 plan / phase
 管理対象外）。導入は各自の環境への opt-in install で行い、installer が取得したファイルは
 ユーザ環境（`~/.claude/` 等）に置かれる。
 
-## インストール（要 Node.js・コアは Node 不要のまま）
+## インストール（コアと同じ Node.js 24 を使用）
 
 ```bash
 npx @opengsd/gsd-core@latest

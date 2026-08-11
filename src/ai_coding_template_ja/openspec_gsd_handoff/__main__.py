@@ -136,7 +136,10 @@ def _host_payload(manifest: HandoffManifest) -> dict[str, object]:
     }
 
 
-def _success_payload(operation: str, result: Success[object]) -> dict[str, object]:
+def _success_payload(
+    operation: str,
+    result: Success[HandoffManifest] | Success[HandoffInspection],
+) -> dict[str, object]:
     value = result.value
     manifest = value.manifest if isinstance(value, HandoffInspection) else value
     if not isinstance(manifest, HandoffManifest):

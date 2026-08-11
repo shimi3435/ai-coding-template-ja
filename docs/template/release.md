@@ -21,6 +21,16 @@
 - pyproject.toml の `version` は **0.1.0 のまま `TEMPLATE_VERSION` と非同期**。
   下流が自分のプロジェクトの版として所有する値のため、テンプレ側では触らない。
 
+## v2 runtime foundation の dependency handoff
+
+`establish-v2-runtime-foundation` は、管理runtimeとして Node.js 24 を必須化し、
+Python >=3.14 を最低対応versionにする破壊的変更である。ただし、このchangeでは
+`TEMPLATE_VERSION` を現行の `1.0.0` に維持し、release-readyとは判定しない。
+
+全 4 changes完了後の `prepare-v2-release` が、`TEMPLATE_VERSION=2.0.0`への更新、
+移行ガイド最終化、release-ready 判定を所有する。それまでは個別changeの完了を理由に
+v2 release tagを作成しない。
+
 ## リリース前提チェック（必須）
 
 以下を**全て満たすまでリリースしない**（1 つでも red / 不一致なら tag を打たず、

@@ -2,10 +2,11 @@
 
 作業方針の単一の正は [AGENTS.md](../../AGENTS.md)。本書は MCP の機構設定詳細（§10）。
 
-## コア MCP: Context7（リモート HTTP・Node 不要）
+## コア MCP: Context7（リモート HTTP・接続自体は Node 不要）
 
 ライブラリ / CLI / SDK の最新ドキュメント確認に Context7 MCP を使う。コア MCP はこれのみ。
-実行形態はリモート HTTP（`https://mcp.context7.com/mcp`）を既定とし Node 非依存（ADR-0002）。
+実行形態はリモート HTTP（`https://mcp.context7.com/mcp`）を既定とし、Context7 への接続自体は
+ローカル Node を必要としない（ADR-0002）。リポジトリ管理プレーンには別途 Node.js 24 が必須である。
 
 ### 設定の配布と生成
 
@@ -61,8 +62,8 @@ task mcp:setup                # .mcp.json / .codex/config.toml を生成
 コアの `.mcp.json.template` / `.codex/config.toml.template` には GitHub エントリを入れない
 （実体追記は以下の snippet を各自で）。3 形態を推奨順に:
 
-**(1) ローカル Go バイナリ `github-mcp-server`（推奨）** — Node / Docker 不要（ADR-0002 と
-最整合）。PAT が read スコープなら Copilot 契約も不要。
+**(1) ローカル Go バイナリ `github-mcp-server`（推奨）** — GitHub MCP の実行形態として
+追加の Node / Docker は不要。PAT が read スコープなら Copilot 契約も不要。
 [releases](https://github.com/github/github-mcp-server/releases)（v1.5.0 で
 `github-mcp-server_Linux_x86_64.tar.gz` を確認・2026-07-02）からバイナリを取得し PATH へ置く。
 
