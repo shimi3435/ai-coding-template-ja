@@ -46,6 +46,10 @@ code span外のpath値、一項目内の複数code spanはpreflightで拒否す�
 directory containmentで重なる場合、一方から他方への推移的な依存 pathを要求し、依存関係で順序化されない
 重複を拒否する。task entryが0件の場合もrepository変更前に拒否する。
 
+通常 CI が検証する preflight 境界は、`execute-openspec-change` の static skill / instruction fixtures と
+恒久 contract tests までとする。実 agent session の preflight は manual / out-of-scope とし、runtime parser
+または実 agent CI を追加する場合は、新しい OpenSpec change で仕様、`spec-holes`、検証、実行制約を再設計する。
+
 依存が全て完了した先頭の未完了 task を再開点とする。文書順の先頭 task の依存が未完了なら skip し、
 次の実行可能 task を選ぶ。preflight と dirty ownership 確認の失敗は report-only とし、repository を変更しない。
 両確認が成功した後に実行可能 task がなければ、文書順で先頭の未解決 task 直下へ blocker と再開条件を記録して

@@ -167,6 +167,7 @@ def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
         encoding="utf-8"
     )
     workflow = (REPO_ROOT / "docs/agents/workflow.md").read_text(encoding="utf-8")
+    closed_change_id = "externalize-" + LEGACY_TOKEN + "-from-core"
 
     for pull_request, defect_count in (
         ("PR #40", "逃した欠陥 1 件"),
@@ -175,10 +176,21 @@ def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
     ):
         assert pull_request in notes
         assert defect_count in notes
-    assert "v2 release notes" in retrospectives
-    assert "retired legacy token" in workflow
+    assert f"{closed_change_id}（PR #53）: 逃した欠陥 27 件" in notes
+    pointer_line = next(
+        line for line in retrospectives.splitlines() if "PR #53" in line
+    )
+    assert "[v2 release notes](v2-release-notes.md)" in pointer_line
+    assert closed_change_id not in retrospectives
+    assert "change ID 自体が retired legacy token を含み" in workflow
+    assert (
+        "`docs/template/retrospectives.md` に置くと最終 "
+        "residual allowlist に違反する場合だけ" in workflow
+    )
     assert "固定形式の本体を exact history allowlist" in workflow
     assert "archive pointer" in workflow
+    assert "この例外は既存 allowlist を拡張せず" in workflow
+    assert "両条件を満たさない change の保存先を変更しない" in workflow
 
 
 def test_primary_documentation_links_resolve() -> None:

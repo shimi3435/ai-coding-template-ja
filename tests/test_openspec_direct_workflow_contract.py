@@ -182,3 +182,14 @@ def test_preflight_spec_holes_are_owned_by_permanent_workflow_and_skill() -> Non
         assert "Markdown inline code span" in text
         assert "Unicode" in text
         assert "空白" in text
+
+
+def test_real_agent_preflight_stays_manual_until_a_new_openspec_change() -> None:
+    workflow = _read(Path("docs/agents/workflow.md"))
+
+    assert "通常 CI" in workflow
+    assert "static skill / instruction fixtures" in workflow
+    assert "実 agent session の preflight" in workflow
+    assert "manual / out-of-scope" in workflow
+    assert "runtime parser" in workflow
+    assert "新しい OpenSpec change" in workflow
