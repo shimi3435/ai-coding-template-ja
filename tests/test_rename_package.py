@@ -32,6 +32,10 @@ def _make_rename_fixture(tmp_path: Path) -> tuple[Path, Path]:
     (tmp_path / "pyproject.toml").write_text(
         f'[project]\nname = "{OLD_DISTRIBUTION}"\n', encoding="utf-8"
     )
+    for metadata in ("package.json", "package-lock.json"):
+        (tmp_path / metadata).write_text(
+            f'{{"name":"{OLD_DISTRIBUTION}-repo-tools"}}\n', encoding="utf-8"
+        )
     (tmp_path / "CONTEXT.md").write_text(
         f"# {OLD_DISTRIBUTION}\n\n由来: {OLD_DISTRIBUTION}\n", encoding="utf-8"
     )
@@ -70,3 +74,8 @@ def test_rename_updates_all_project_names_in_context(tmp_path: Path) -> None:
     assert (root / "scripts" / "openspec-gsd-handoff-smoke.py").read_text(
         encoding="utf-8"
     ) == ("from sample_project.openspec_gsd_handoff.smoke import main\n")
+    for metadata in ("package.json", "package-lock.json"):
+        assert OLD_DISTRIBUTION not in (root / metadata).read_text(encoding="utf-8")
+        assert "sample-project-repo-tools" in (root / metadata).read_text(
+            encoding="utf-8"
+        )

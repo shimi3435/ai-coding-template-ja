@@ -2,14 +2,15 @@
 
 合否規約（§20・Q17）:
 - FAIL (exit 1) = 機械コアが壊れている時のみ:
-  Python バージョン不一致 / uv 不在 / .venv 不在 / pyproject・uv.lock 破損 /
+  Node.js 24 / npm 不在・version 不正 / Python 3.14 未満・既定宣言不正 / uv 不在 /
+  .venv 不在 / pyproject・uv.lock 破損 /
   ruff・basedpyright・pytest が呼べない。
   ＋ GitHub ワークフロー文脈を **明示 opt-in**（--github / DOCTOR_REQUIRE_GH=1）した
   ときのみ gh コマンド不在を FAIL（ADR-0004 訂正・既定 green を壊さない）。
 - WARN (exit 0) = 未設定・オプション未導入（.env 無し / CONTEXT7_API_KEY 無し /
   key drift / gh 未認証・未導入（既定）/ OpenSpec engine 不在・validate invalid /
   既定パッケージ名のまま /
-  Node 未導入 / Task・Git 不在 / skills symlink 壊れ / lock の blocked 在席）。
+  Task・Git 不在 / skills symlink 壊れ / lock の blocked 在席）。
 - INFO (exit 0) = TEMPLATE_VERSION 表示 / caveman hook 未登録 /
   テンプレ ADR・grill 残存 / オプション層の在席・不在（codex CLI / docker /
   .mcp.json の Serena エントリ。純 opt-in は不在が正常なので WARN にしない）。
@@ -82,22 +83,31 @@ def _run(cmd: list[str], timeout: int = 60) -> tuple[int, str]:
 
 def check_python(diag: Diagnostics) -> None:
     version_file = REPO_ROOT / ".python-version"
-    running = f"{sys.version_info.major}.{sys.version_info.minor}"
     if not version_file.exists():
         diag.fail_(".python-version が存在しません")
-        return
-    pinned = version_file.read_text(encoding="utf-8").strip()
-    pinned_majmin = ".".join(pinned.split(".")[:2])
-    if running == pinned_majmin:
-        diag.ok(
-            f"Python {sys.version_info.major}.{sys.version_info.minor}"
-            f".{sys.version_info.micro}（.python-version={pinned}）"
+    else:
+        pinned = version_file.read_text(encoding="utf-8").strip()
+        if pinned == "3.14":
+            diag.ok(".python-version は既定 runtime 3.14 を宣言しています")
+        else:
+            diag.fail_(
+                ".python-version は既定 runtime 3.14 を宣言する必要があります"
+                f"（検出: {pinned or '空'}）"
+            )
+
+    running = (
+        sys.version_info.major,
+        sys.version_info.minor,
+        sys.version_info.micro,
+    )
+    if running[:2] < (3, 14):
+        diag.fail_(
+            "Python >=3.14 が必要です"
+            f"（検出: {running[0]}.{running[1]}.{running[2]}）。"
+            " uv で対応runtimeを用意してください"
         )
     else:
-        diag.fail_(
-            f"Python バージョン不一致: 実行={running} / .python-version={pinned}。"
-            f" uv で {pinned_majmin} を用意してください"
-        )
+        diag.ok(f"実行Python {running[0]}.{running[1]}.{running[2]} は >=3.14 です")
 
 
 def check_uv(diag: Diagnostics) -> bool:
@@ -183,14 +193,48 @@ def check_external_commands(diag: Diagnostics, require_gh: bool) -> None:
         else:
             diag.warn_(f"{label} が見つかりません")
 
-    if all(shutil.which(c) is not None for c in ("node", "npm", "npx")):
-        diag.ok("Node.js / npm / npx 利用可能")
-    else:
-        diag.warn_(
-            "Node.js / npm / npx が未導入です（コアはリモート MCP 前提で Node 不要）"
-        )
+    check_node_runtime(diag)
 
     check_gh(diag, require_gh)
+
+
+def check_node_runtime(diag: Diagnostics) -> None:
+    """必須の Node.js 管理 runtime を診断する。"""
+    if shutil.which("node") is None:
+        diag.fail_("Node.js 24 が見つかりません")
+        return
+    if shutil.which("npm") is None:
+        diag.fail_("npm が見つかりません。Node.js 24 に付属する npm を導入してください")
+        return
+
+    rc, node_output = _run(["node", "--version"])
+    if rc != 0:
+        diag.fail_(f"Node.js version command が失敗しました: {node_output}")
+        return
+    match = re.fullmatch(
+        r"v(?P<major>[0-9]+)\.[0-9]+\.[0-9]+(?:[+.-][0-9A-Za-z.-]+)?",
+        node_output,
+    )
+    if match is None:
+        diag.fail_(f"Node.js version 出力を解釈できません: {node_output}")
+        return
+    if int(match.group("major")) != 24:
+        diag.fail_(f"Node.js 24 が必要です（検出: {node_output}）")
+        return
+
+    rc, npm_output = _run(["npm", "--version"])
+    if rc != 0:
+        diag.fail_(f"npm version command が失敗しました: {npm_output}")
+        return
+    if (
+        re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[+.-][0-9A-Za-z.-]+)?", npm_output)
+        is None
+    ):
+        diag.fail_(f"npm version 出力を解釈できません: {npm_output}")
+        return
+
+    diag.ok(f"Node.js {node_output}")
+    diag.ok(f"npm {npm_output}")
 
 
 def check_gh(diag: Diagnostics, require_gh: bool) -> None:

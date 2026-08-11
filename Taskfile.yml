@@ -6,10 +6,18 @@ version: "3"
 
 tasks:
   setup:
-    desc: 初期・再セットアップ（導入済み extras を保持する inexact sync ＋ pre-commit hooks）
+    desc: 初期・再セットアップ（lock 済み Node deps ＋ Python inexact sync ＋ pre-commit hooks）
     cmds:
+      - node repo-tools/entrypoint.mjs runtime-preflight
+      - npm ci --ignore-scripts
       - uv sync --inexact
       - uv run pre-commit install
+
+  setup:node:
+    desc: lock 済み Node dependency を lifecycle script なしで導入
+    cmds:
+      - node repo-tools/entrypoint.mjs runtime-preflight
+      - npm ci --ignore-scripts
 
   setup:research:
     desc: research extra（numpy / scipy / matplotlib / pandas）を加算導入
@@ -32,15 +40,35 @@ tasks:
       - uv sync --all-extras
 
   check:
-    desc: 品質チェック一式（ruff format --check / ruff check / basedpyright / pytest）
+    desc: offline 品質チェック一式（Node contracts / typecheck / test ＋既存 Python checks）
     cmds:
-      - uv run ruff format --check .
-      - uv run ruff check .
-      - uv run basedpyright
-      - uv run pytest
+      - node repo-tools/entrypoint.mjs runtime-preflight
+      - |
+        set -eu
+        if [ ! -x node_modules/.bin/tsc ] || \
+          ! npm ls --all --offline --ignore-scripts \
+            --cache=node_modules/.cache/npm-check --logs-max=0 \
+            --update-notifier=false >/dev/null 2>&1; then
+          echo "[FAIL] Node dependency が未導入です: task setup:node" >&2
+          exit 1
+        fi
+        for tool in ruff basedpyright pytest; do
+          if [ ! -x ".venv/bin/$tool" ] || \
+            ! uv run --no-sync "$tool" --version >/dev/null 2>&1; then
+            echo "[FAIL] Python dependency が未導入です: task setup" >&2
+            exit 1
+          fi
+        done
+      - node repo-tools/entrypoint.mjs check-contracts
+      - node_modules/.bin/tsc --noEmit
+      - node --test repo-tools/*.test.ts
+      - uv run --no-sync ruff format --check .
+      - uv run --no-sync ruff check .
+      - uv run --no-sync basedpyright
+      - uv run --no-sync pytest
 
-  check:without-gsd:
-    desc: 通常 check が Node / OpenSpec / GSD とネットワークに依存しないことを隔離環境で検証
+  check:isolated:
+    desc: 必須 runtime だけの隔離環境で通常 check が OpenSpec / GSD / ネットワークに依存しないことを検証
     cmds:
       - |
         set -eu
@@ -64,7 +92,7 @@ tasks:
             ln -s "$(readlink -f "$target")" "$bin/$tool"
           fi
         }
-        for tool in task uv bash sh git env find ln readlink dirname rm mkdir mktemp \
+        for tool in task uv node npm bash sh git env find ln readlink dirname rm mkdir mktemp \
           uname sed grep sort head tail xargs realpath chmod cp mv tr cut awk basename \
           cat touch; do
           link_tool "$tool"
@@ -81,12 +109,14 @@ tasks:
           XDG_DATA_HOME="$xdg_data" \
           UV_CACHE_DIR="$uv_cache" \
           UV_OFFLINE=1 \
+          HTTP_PROXY="http://127.0.0.1:9" \
+          HTTPS_PROXY="http://127.0.0.1:9" \
+          ALL_PROXY="http://127.0.0.1:9" \
+          NO_PROXY="" \
           PATH="$bin" \
           REPOSITORY="$PWD" \
           sh -eu -c '
-            ! command -v node >/dev/null 2>&1
             ! command -v openspec >/dev/null 2>&1
-            ! command -v npm >/dev/null 2>&1
             ! command -v npx >/dev/null 2>&1
             ! command -v gsd >/dev/null 2>&1
             ! command -v gsd-phase >/dev/null 2>&1
@@ -98,6 +128,12 @@ tasks:
             cd "$REPOSITORY"
             exec task check
           '
+
+  audit:node:
+    desc: npm advisory database を使う明示的な online audit（high 以上をゲート）
+    cmds:
+      - node repo-tools/entrypoint.mjs runtime-preflight
+      - npm audit --audit-level=high
 
   fix:
     desc: 自動修正（ruff format ＋ ruff check --fix）
@@ -137,7 +173,7 @@ tasks:
   openspec:validate:
     desc: |
       OpenSpec change の validate ゲート（invalid で FAIL・非ゼロ終了）。opt-in であり
-      CI / task check / pre-commit には組み込まない（ADR-0002: Node 非コア依存）。
+      task check / pre-commit には組み込まず、CI は独立 job で検証する。
       engine 必須（不在は導入案内＋非ゼロ終了）。changes 空は対象ゼロで exit 0。
       preflight: proposal.md / tasks.md を欠く change は CLI の validate 対象から
       漏れる（fail-open）ため、CLI 実行前に検査して FAIL にする。

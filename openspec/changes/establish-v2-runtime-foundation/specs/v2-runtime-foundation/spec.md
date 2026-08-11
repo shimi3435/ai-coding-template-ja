@@ -48,6 +48,10 @@
 - **WHEN** `package.json` または `package-lock.json` が存在しない、JSON として不正、または lockfileVersion が 3 ではない
 - **THEN** repository check は非ゼロ終了し、違反した file と契約を報告する
 
+#### Scenario: JSON object に同名 property が重複する
+- **WHEN** npm metadata の構文上有効な JSON object に同名 property が複数ある
+- **THEN** repository check は npm と同じ JSON parse 結果である最後の property を有効値として検査し、独自 parser semantics を導入しない
+
 ### Requirement: V2-RUNTIME-3 TypeScript 管理 CLI を追加ランナーなしで実行する
 
 テンプレートは MUST TypeScript ESM の `repo-tools` を Node 24 で直接実行し、`tsc --noEmit` と Node test runner で検証する。
@@ -55,6 +59,10 @@
 #### Scenario: 管理 CLI を実行する
 - **WHEN** Task または package script が `repo-tools` を起動する
 - **THEN** repo-local entrypoint を使い、`npx`、`npm exec`、implicit package fetch を行わない
+
+#### Scenario: 非対応 Node から管理 CLI を起動する
+- **WHEN** Node 24 より古い runtime を含む Node major 24 以外で repo-local entrypoint を起動する
+- **THEN** JavaScript ESM の最小 boot guard は TypeScript source を load する前に非ゼロ終了し、必要な Node line と検出した完全 version を示す
 
 #### Scenario: Node の型除去で非対応の構文を追加する
 - **WHEN** source が Node 24 の直接実行で処理できない TypeScript 構文を含む

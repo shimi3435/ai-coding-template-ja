@@ -27,7 +27,8 @@
 
 - **コア層**: 作成直後に入っているものすべて。Python 開発基盤（uv）・品質ゲート
   （整形 / lint / 型 / テスト / secret スキャン）・エージェント統合（AGENTS.md・OpenSpec・
-  skills・Context7 MCP）。Ubuntu 上で Node.js 無しに完結する。
+  skills・Context7 MCP）・TypeScript 製のリポジトリ管理 CLI。管理ランタイムとして
+  Node.js 24 LTS と npm、アプリケーションランタイムとして Python 3.14 以上を必要とする。
 - **オプション層**: 既定では入らない。不在が正常で、要るときだけ opt-in する（§6 の決定表）。
 
 コア層を使う上でのメンタルモデルは 3 つ:
@@ -131,7 +132,7 @@ README の「研究成果物の扱い」節を参照。
 
 | 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方 | 詳細リンク |
 | --- | --- | --- | --- | --- |
-| GSD | 大規模な単一 change の詳細 plan / phase 進捗と、複数 changes の横断管理 | 複数セッション、依存 phases、有益な隔離並列単位などが必要な大規模 change のとき。**要 Node.js**。小規模 change は OpenSpec CLI、CLI 不在時は Markdown で直接実行するため不要 | installer を各自の環境で実行し、OpenSpec change を手動 handoff | [docs/optional/gsd.md](optional/gsd.md) |
+| GSD | 大規模な単一 change の詳細 plan / phase 進捗と、複数 changes の横断管理 | 複数セッション、依存 phases、有益な隔離並列単位などが必要な大規模 change のとき。installer はコアと同じ Node.js 24 を使う。小規模 change は OpenSpec CLI、CLI 不在時は Markdown で直接実行するため不要 | installer を各自の環境で実行し、OpenSpec change を手動 handoff | [docs/optional/gsd.md](optional/gsd.md) |
 | Codex クロス AI レビュー | 別 AI（Codex）によるレビューの脚を足す | 自己レビューに別視点を足したいとき。**要 Node.js ＋ ChatGPT サブスクリプション or OpenAI API key**。コードを外部（OpenAI）へ送るため、送信できないプロジェクトでは使わない。トリガは常に人起点 | Claude Code へ plugin として導入 | [docs/optional/codex-review.md](optional/codex-review.md) |
 | caveman hook 自動発火 | 簡素化モードの毎ターン自動適用 | 明示起動では足りないほど常時かけたいとき。**Claude Code 限定**（hook 機構依存）。簡素化原則自体は AGENTS.md に内包済みで、hook 無しでも方針としては効く | hook を各自の設定に登録 | [docs/optional/caveman-hook.md](optional/caveman-hook.md) |
 

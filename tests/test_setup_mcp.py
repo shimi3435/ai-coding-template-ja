@@ -42,9 +42,7 @@ def _write_executable(path: Path, content: str) -> None:
 
 def _doctor_environment(project: Path, fake_bin: Path) -> dict[str, str]:
     """doctor の機械コア診断をローカル fake command だけで通す。"""
-    (project / ".python-version").write_text(
-        f"{sys.version_info.major}.{sys.version_info.minor}\n", encoding="utf-8"
-    )
+    (project / ".python-version").write_text("3.14\n", encoding="utf-8")
     (project / "pyproject.toml").write_text(
         '[project]\nname = "doctor-cli-test"\nversion = "0.0.0"\n',
         encoding="utf-8",
@@ -52,6 +50,8 @@ def _doctor_environment(project: Path, fake_bin: Path) -> dict[str, str]:
     (project / "uv.lock").write_text("", encoding="utf-8")
     (project / ".venv").mkdir()
     _write_executable(fake_bin / "uv", "#!/bin/sh\nexit 0\n")
+    _write_executable(fake_bin / "node", "#!/bin/sh\nprintf 'v24.11.1\\n'\n")
+    _write_executable(fake_bin / "npm", "#!/bin/sh\nprintf '11.6.2\\n'\n")
     return {**os.environ, "PATH": str(fake_bin)}
 
 

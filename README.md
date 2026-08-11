@@ -4,6 +4,10 @@
 プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。作成直後に `task check` /
 `task doctor` が green になる最小実用セットに、必要なものだけ opt-in で足していく。
 
+必須ランタイムは Node.js 24 LTS、npm、Python 3.14 以上。リポジトリの既定は
+`.node-version` の `24` と `.python-version` の `3.14` で宣言する。Node は利用者アプリケーション
+ではなく、TypeScript 製 `repo-tools` を動かすテンプレート管理プレーンである。
+
 > 使い方の全体像・オプションの選び方・詰まったときの導線は、通し読みガイド
 > [docs/guide.md](docs/guide.md) にまとめてある（本 README は最短手順の quickstart）。
 
@@ -11,7 +15,10 @@
 
 1. GitHub の **"Use this template"** で新規リポジトリを作成
 2. `./scripts/bootstrap.sh`
-   （uv を確認付きで導入し `task setup` まで実行。go-task / gh は導入手順を表示）
+   （Node.js 24 / npm / Python 3.14 以上を検証し、uv を確認付きで導入して `task setup`
+   まで実行。Node.js 24 がない場合は手動導入するか、Linux x64 / arm64 で
+   `./scripts/bootstrap.sh --install-node` を明示指定する。導入時は出力される
+   `export PATH="<導入先>/bin:$PATH"` を次回 shell でも実行する。go-task / gh は導入手順を表示）
 3. パッケージを新プロジェクト名へ改名する（入力は module 名）:
 
    ```bash
@@ -25,8 +32,8 @@
 ## 2 回目以降
 
 ```bash
-task setup     # uv sync --inexact（導入済み extras を保持）＋ pre-commit install
-task check     # ruff format --check / ruff check / basedpyright / pytest
+task setup     # npm ci --ignore-scripts ＋ uv sync --inexact ＋ pre-commit install
+task check     # Node contracts / TypeScript / Node test ＋既存 Python checks
 task doctor    # 環境診断（read-only・FAIL ゼロで green）
 ```
 
@@ -34,15 +41,18 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 
 | タスク | 内容 |
 | --- | --- |
-| `task setup` | inexact sync（初回は dev group、再実行時は導入済み extras を保持）＋ pre-commit hooks |
+| `task setup` | `npm ci --ignore-scripts` ＋ Python inexact sync（導入済み extras を保持）＋ pre-commit hooks |
+| `task setup:node` | lock 済み Node dependency を `npm ci --ignore-scripts` で導入 |
 | `task setup:research` ほか | extras を加算導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
 | `task check` | 品質チェック一式 |
+| `task check:isolated` | optional GSD / OpenSpec CLI / ネットワークなしの隔離環境で `task check` を検証 |
 | `task fix` | ruff format ＋ ruff check --fix |
 | `task test` / `task lint` / `task typecheck` | 個別実行 |
 | `task doctor` | 環境診断（`-- --online` で到達性 / `-- --github` で gh 文脈 opt-in） |
 | `task rename -- <module> [--apply]` | パッケージ改名 |
 | `task skills:update` / `task skills:doctor` | skill symlink 再生成 / lock 整合検証 |
 | `task mcp:setup` | `.mcp.json` / `.codex/config.toml` を `.env` から生成 |
+| `task audit:node` | `npm audit --audit-level=high` を明示的にオンライン実行 |
 | `task security` | gitleaks（在席時）＋ pip-audit / bandit ゲート（CI audit ジョブと同一範囲） |
 | `task nb:strip` / `nb:sync` / `nb:check` | notebook 出力除去 / jupytext 同期 / nbqa lint（extra 在席時） |
 | `task prune-template-docs [-- --apply]` | テンプレ メタ文書 docs/template/ の削除 |
@@ -55,15 +65,19 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 初回の無印 `task setup` で入る最小実用セット。作成直後に green になる。再実行時は
 inexact sync により、導入済み extras を削除しない。
 
-- **Python 開発基盤**: uv / pyproject.toml / uv.lock / .python-version（3.12）。
+- **必須ランタイム**: Node.js 24 LTS / npm / Python 3.14 以上。`.node-version` は `24`、
+  `.python-version` は `3.14`。Node.js は TypeScript ESM の `repo-tools` を直接実行する管理プレーン。
+- **Python 開発基盤**: uv / pyproject.toml / uv.lock。
 - **品質チェック**: ruff（format + lint）/ basedpyright（basic）/ pytest / pytest-cov を
   `task check` に集約。軽量 pre-commit（ruff ＋ ファイル系 ＋ detect-private-key）。
-- **タスクランナー**: Taskfile で人間にも AI にも同じコマンド。bootstrap.sh（Ubuntu）/
-  doctor.py（環境診断）/ rename-package.py（改名）を同梱。
-- **CI**（GitHub Actions）: check（uv sync / ruff / basedpyright / pytest）＋ rename-smoke ＋
-  security（gitleaks）＋ audit（pip-audit / bandit）。
+- **管理 CLI とタスクランナー**: TypeScript ESM の `repo-tools` を Node.js 24 で直接実行し、
+  Taskfile を人間と AI の共通公開入口にする。bootstrap.sh（Ubuntu）/ doctor.py（環境診断）/
+  rename-package.py（改名）を同梱。
+- **CI**（GitHub Actions）: check（`npm ci --ignore-scripts` / Node contracts / TypeScript / Node test /
+  既存 Python checks）＋ rename-smoke ＋ security（gitleaks）＋ audit（pip-audit / bandit）。
 - **エージェント運用**: [AGENTS.md](AGENTS.md)（全エージェント共通の作業方針の単一の正）と
-  薄い [CLAUDE.md](CLAUDE.md)。OpenSpec 初期構成（`openspec/`・Node 不要の手書き運用）。
+  薄い [CLAUDE.md](CLAUDE.md)。OpenSpec 初期構成（`openspec/`・CLI 不在時も Markdown artifacts
+  で運用可能）。
   vendored skills（実体 `.agents/skills/`・`.claude` / `.codex` が symlink・供給元と
   license は [`.agents/skills/skills.lock.json`](.agents/skills/skills.lock.json) が正）。
   Context7 リモート MCP のテンプレート（`task mcp:setup` で生成）。

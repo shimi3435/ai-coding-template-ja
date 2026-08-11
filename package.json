@@ -1,0 +1,21 @@
+{
+  "name": "ai-coding-template-ja-repo-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  },
+  "scripts": {
+    "repo-tools": "node repo-tools/entrypoint.mjs",
+    "preflight": "node repo-tools/entrypoint.mjs runtime-preflight",
+    "check:contracts": "node repo-tools/entrypoint.mjs check-contracts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test repo-tools/*.test.ts",
+    "audit": "npm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2"
+  }
+}

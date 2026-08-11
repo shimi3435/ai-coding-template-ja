@@ -10,19 +10,22 @@ on:
 
 jobs:
   extras-smoke:
-    name: extras-smoke (uv sync --all-extras + import) (py${{ matrix.python-version }})
+    name: extras-smoke (Node 24 / Python 3.14, all extras + import)
     runs-on: ubuntu-latest
-    strategy:
-      # 片方の version の失敗でもう片方の結果が見えなくなるのを防ぐ。
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          cache: npm
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
+      - name: Runtime preflight
+        run: node repo-tools/entrypoint.mjs runtime-preflight
+      - name: Install Node dependencies (locked, no lifecycle scripts)
+        run: npm ci --ignore-scripts
       - name: Sync (all extras)
         run: uv sync --all-extras
       - name: import smoke (numpy / pandas / jupytext)

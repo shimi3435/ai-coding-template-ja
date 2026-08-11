@@ -6,7 +6,7 @@
 走査対象（ホワイトリスト固定 ＋ src/tests の *.py glob）:
 - pyproject.toml（[project].name=配布形 / hatch packages・pytest cov・
   coverage source=module 形）
-- README.md / CONTEXT.md / .github/workflows/ci.yml
+- package.json / package-lock.json / README.md / CONTEXT.md / .github/workflows/ci.yml
 - PR2 で追加されるファイル（openspec/project.md / AGENTS.md / CLAUDE.md /
   .codex/config.toml.template / .mcp.json.template）は存在時のみ処理
 - src/**/*.py と tests/**/*.py、およびpackage importを持つ固定のsmoke script
@@ -36,6 +36,8 @@ OLD_DISTRIBUTION = "ai-coding-template-ja"
 
 WHITELIST_FILES = [
     "pyproject.toml",
+    "package.json",
+    "package-lock.json",
     "README.md",
     "CONTEXT.md",
     ".github/workflows/ci.yml",

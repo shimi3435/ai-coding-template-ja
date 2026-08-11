@@ -32,6 +32,8 @@ Node は利用者アプリケーションの主言語ではなく、テンプレ
 
 管理 CLI は ESM とし、Node 24 の型除去で直接実行できる TypeScript 構文だけを使う。`tsc --noEmit` を静的検査、`node --test` を test runner とする。`tsx`、Jest、Vitest、実行用 build / `dist` は追加しない。
 
+Node 24 未満は `.ts` source を load できないため、repo-local entrypoint の JavaScript ESM boot guard が実 runtime major を先に検査する。Node 24 のときだけ TypeScript CLI を直接 import する。boot guard は transpile、build、fallback runner を担わない。
+
 ### 4. `task` を安定した公開インターフェースにする
 
 利用者は `task <name>` を使う。Taskfile は repo-local executable を直接呼び、`npx` と `npm exec` を使わない。`repo-tools` 自身も package script または直接の repo-local entrypoint から起動し、暗黙取得を発生させない。

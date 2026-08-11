@@ -27,7 +27,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | 空・ゼロ長・None | 該当・定義済み | dependency 集合が空なら exact 制約は空集合に対して成立 | 1: private package / lockfile 契約は依存件数に依存しない |
 | 2 | 境界値 | 該当・定義済み | lockfileVersion 2/3/4 | 1: version 3 以外を repository check failure と明記 |
-| 3 | 重複・衝突 | 該当 | JSON 重複 key や package/lock 不整合 | 1: 不正 metadata と `npm ci` 不整合 failure で明記 |
+| 3 | 重複・衝突 | 該当 | JSON 重複 key や package/lock 不整合 | 1: 重複 key は npm と同じ last-key parse semantics、package/lock 不整合は `npm ci` failure と明記 |
 | 4 | 順序 | 非該当 | JSON property 順序は契約外 | — |
 | 5 | 型・形式不正 | 該当 | JSON parse failure、dependency value が string 以外 | 1: 不正 metadata scenario と exact version check で明記 |
 | 6 | エラー経路 | 該当・定義済み | `npm ci` 不整合、audit high/critical | 1: 既存 scenarios で非ゼロ終了を明記 |
@@ -127,20 +127,20 @@
 
 | 穴 | 検証形態 | テスト（予定含む） | 備考 |
 | --- | --- | --- | --- |
-| H1 runtime command 不在・失敗・parse 不能 | 例示 test | Node runtime preflight test | 対象 runtime と理由を検査 |
-| H2 Node/Python 境界と任意 patch | property test | Node runtime version property test | Node 24.x と Python >=3.14 の受理不変条件 |
-| H3 package / lock 欠落・不正 JSON・lockfileVersion 不一致 | 例示 test | Node package contract test | file と契約を検査 |
-| H4 dependency exact pin | property test | Node package version property test | dependencies / devDependencies 全要素へ同じ判定 |
-| H5 `npm ci` lock 不整合 | 実 CLI test | clean install fixture | npm 自身の lock validation を利用 |
-| H6 CLI command 省略・未知 command | 例示 test | repo-tools CLI test | usage、非ゼロ、暗黙 command なし |
-| H7 Node 型除去非対応 syntax | 実行 test | Node direct execution smoke | `dist` fallback なし |
-| H8 `tsc` 型エラー | 静的 test | `tsc --noEmit` | package script / Task 入口から実行 |
-| H9 禁止 runner / fetch / dist | repository property test | Node repository contract test | tracked 公開経路全体を走査 |
-| H10 旧 `check:without-gsd` alias | 例示 test | Taskfile contract test | 一覧と実行入口から除去 |
-| H11 Node 不在、unsupported architecture、unsafe install root | 例示 test | bootstrap shell fixture test | download 前 failure を検査 |
-| H12 checksum / download / extract / no-overwrite failure | 例示 test | bootstrap shell fixture test | system boundary を local fixture command で置換 |
-| H13 空白入り user-local path | 例示 test | bootstrap shell fixture test | shell quoting を検査 |
-| H14 offline dependency 不足 | 隔離 integration test | `task check:isolated` | network 無効化、導入入口出力、非ゼロ |
-| H15 `TEMPLATE_VERSION` 所有権 | repository test | version handoff contract test | exact `1.0.0` と handoff note を検査 |
+| H1 runtime command 不在・失敗・parse 不能 | 例示 test | `repo-tools/runtime-preflight.test.ts`; `repo-tools/entrypoint.test.ts`; `tests/test_bootstrap.py` | boot guard を含め対象 runtime と理由を検査 |
+| H2 Node/Python 境界と任意 patch | property test | `repo-tools/runtime-preflight.test.ts` property tests | Node 24.x と Python >=3.14 の受理不変条件 |
+| H3 package / lock 欠落・不正 JSON・重複 key・lockfileVersion 不一致 | 例示 test | `repo-tools/repository-contracts.test.ts` | file / 契約と last-key semantics を検査 |
+| H4 dependency exact pin | property test | `repo-tools/repository-contracts.test.ts` property test | dependencies / devDependencies 全要素へ同じ判定 |
+| H5 `npm ci` lock 不整合 | 実 CLI test | `repo-tools/repository-contracts.test.ts` | npm 自身の offline lock validation を利用 |
+| H6 CLI command 省略・未知 command | 例示 test | `repo-tools/runtime-preflight.test.ts` | usage、非ゼロ、暗黙 command なし |
+| H7 Node 型除去非対応 syntax | 実行 test | `node --test repo-tools/*.test.ts` | Node 24 直接実行。`dist` fallback なし |
+| H8 `tsc` 型エラー | 静的 test | `npm run typecheck` | `tsc --noEmit` を実行 |
+| H9 禁止 runner / fetch / dist | repository property test | `repo-tools/repository-contracts.test.ts` | tracked 公開経路と repo-tools native network API を走査 |
+| H10 旧 `check:without-gsd` alias | 例示 test | `tests/test_taskfile.py`; `repo-tools/repository-contracts.test.ts` | 一覧と実行入口から除去 |
+| H11 Node 不在、unsupported architecture、unsafe install root | 例示 test | `tests/test_bootstrap.py` | download 前 failure を検査 |
+| H12 checksum / download / extract / no-overwrite failure | 例示 test | `tests/test_bootstrap.py` | local fixture、activation race を検証 |
+| H13 空白入り user-local path | 例示 test | `tests/test_bootstrap.py` | shell quoting を検査 |
+| H14 offline dependency 不足 | 隔離 integration test | `tests/test_taskfile.py`; `task check:isolated` | Node / Python 各不足、network 無効化、導入入口出力、非ゼロ |
+| H15 `TEMPLATE_VERSION` 所有権 | repository test | `tests/test_runtime_foundation_contract.py`; Node repository contracts | exact `1.0.0` と handoff note を検査 |
 
 外部 Node 公式配布サーバーの停止、実ネットワーク切断、実 disk-full は通常 test では再現しない。local fixture で HTTP/checksum/archive boundary の failure を検証し、実サービス障害は未検証として最終 evidence に残す。

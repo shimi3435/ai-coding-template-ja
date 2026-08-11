@@ -5,7 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-# コア CI（check / rename-smoke）＋ secret スキャン（security・PR2 で追加）
+# コア CI（check / rename-smoke。Node 24 / Python 3.14 baseline）
+# ＋ secret スキャン（security・PR2 で追加）
 # ＋ 依存監査 / SAST（audit・PR3b で追加）＋ OpenSpec change ゲート
 # （openspec-validate）。security（gitleaks = secret）と
 # audit（pip-audit = 依存 CVE / bandit = SAST）は役割が別なのでジョブを分離する。
@@ -13,56 +14,74 @@ on:
 
 jobs:
   check:
-    name: check (ruff / basedpyright / pytest) (py${{ matrix.python-version }})
+    name: check (Node 24 / Python 3.14)
     runs-on: ubuntu-latest
-    strategy:
-      # 片方の version の失敗でもう片方の結果が見えなくなるのを防ぐ。
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          cache: npm
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
-          python-version: ${{ matrix.python-version }}
-      # matrix は「その版を .python-version に pin した下流」を再現する。pin を
-      # 揃えないと doctor の pin / 実行系整合チェック（と対応する smoke テスト）が
-      # 意図どおり FAIL する。
-      - name: Align .python-version to matrix
-        run: echo "${{ matrix.python-version }}" > .python-version
+          python-version: "3.14"
+      - name: Runtime preflight
+        run: node repo-tools/entrypoint.mjs runtime-preflight
       - name: Sync (locked)
         run: uv sync --locked
+      - name: Install Node dependencies (locked, no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Repository contracts
+        run: node repo-tools/entrypoint.mjs check-contracts
+      - name: TypeScript typecheck
+        run: node_modules/.bin/tsc --noEmit
+      - name: Node tests
+        run: node --test repo-tools/*.test.ts
       - name: ruff format --check
-        run: uv run ruff format --check .
+        run: uv run --no-sync ruff format --check .
       - name: ruff check
-        run: uv run ruff check .
+        run: uv run --no-sync ruff check .
       - name: basedpyright
-        run: uv run basedpyright
+        run: uv run --no-sync basedpyright
       - name: pytest
-        run: uv run pytest
+        run: uv run --no-sync pytest
 
   rename-smoke:
     name: rename-smoke (改名後にフル check 相当)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          cache: npm
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
+      - name: Runtime preflight
+        run: node repo-tools/entrypoint.mjs runtime-preflight
       - name: Sync (locked)
         run: uv sync --locked
+      - name: Install Node dependencies (locked, no lifecycle scripts)
+        run: npm ci --ignore-scripts
       - name: rename (apply・使い捨て名)
         run: uv run python scripts/rename-package.py ci_rename_smoke --apply
+      - name: Repository contracts
+        run: node repo-tools/entrypoint.mjs check-contracts
+      - name: TypeScript typecheck
+        run: node_modules/.bin/tsc --noEmit
+      - name: Node tests
+        run: node --test repo-tools/*.test.ts
       - name: ruff format --check
-        run: uv run ruff format --check .
+        run: uv run --no-sync ruff format --check .
       - name: ruff check
-        run: uv run ruff check .
+        run: uv run --no-sync ruff check .
       - name: basedpyright
-        run: uv run basedpyright
+        run: uv run --no-sync basedpyright
       - name: pytest
-        run: uv run pytest
+        run: uv run --no-sync pytest
 
   security:
     name: security (gitleaks)
@@ -87,16 +106,24 @@ jobs:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   audit:
-    name: audit (pip-audit / bandit)
+    name: audit (npm / pip-audit / bandit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          cache: npm
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Sync (locked)
         run: uv sync --locked
+      - name: Install Node dependencies (locked, no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
       # 監査対象は uv export の既定セット（default groups = dev ＋ 推移依存）に固定。
       # extras（mlflow / dvc 等）は export 既定で除外＝コアゲート対象外
       # （extras 込みの任意監査は docs/optional/extras-audit.md）。
@@ -125,13 +152,14 @@ jobs:
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.14"
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
       - name: Sync (locked)
         run: uv sync --locked
-      # openspec CLI は runner 同梱の Node で導入する（新規 action を増やさない）。
+      # openspec CLI は baseline の Node 24 へ導入する。
       # exact pin でゲート挙動を固定する（bump は人起点・実機検証済み版に揃える）。
-      # コアの Node 非依存（ADR-0002）は bootstrap / 下流ローカルの話で、CI runner
-      # 内の導入はこれに反しない。
       - name: Install openspec CLI (exact pin)
         run: npm install -g @fission-ai/openspec@1.3.1
       - name: openspec validate gate
