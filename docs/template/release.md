@@ -31,6 +31,8 @@ Python >=3.14 を最低対応versionにする破壊的変更である。ただ�
 移行ガイド最終化、release-ready 判定を所有する。それまでは個別changeの完了を理由に
 v2 release tagを作成しない。
 
+v2 の breaking change と利用者移行手順は [v2 release notes](v2-release-notes.md) に集約する。
+
 ## リリース前提チェック（必須）
 
 以下を**全て満たすまでリリースしない**（1 つでも red / 不一致なら tag を打たず、

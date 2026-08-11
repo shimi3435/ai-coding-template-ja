@@ -273,23 +273,6 @@ test("check-contracts requires generated node_modules to stay untracked", () => 
   assert.match(result.stderr, /node_modules/);
 });
 
-test("check-contracts rejects the removed check:without-gsd task alias", () => {
-  const repository = writeValidRepository();
-  writeFileSync(
-    join(repository, "Taskfile.yml"),
-    'version: "3"\ntasks:\n  check:without-gsd:\n    cmds:\n      - echo old\n',
-    "utf8",
-  );
-
-  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
-    cwd: repository,
-    encoding: "utf8",
-  });
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /check:without-gsd/);
-});
-
 test("check-contracts requires deterministic install and explicit online audit routes", () => {
   const repository = writeValidRepository();
   writeFileSync(join(repository, "Taskfile.yml"), 'version: "3"\ntasks: {}\n', "utf8");

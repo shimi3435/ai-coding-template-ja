@@ -45,7 +45,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task setup:node` | lock 済み Node dependency を `npm ci --ignore-scripts` で導入 |
 | `task setup:research` ほか | extras を加算導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
 | `task check` | 品質チェック一式 |
-| `task check:isolated` | optional GSD / OpenSpec CLI / ネットワークなしの隔離環境で `task check` を検証 |
+| `task check:isolated` | OpenSpec CLI / ネットワークなしの隔離環境で `task check` を検証 |
 | `task fix` | ruff format ＋ ruff check --fix |
 | `task test` / `task lint` / `task typecheck` | 個別実行 |
 | `task doctor` | 環境診断（`-- --online` で到達性 / `-- --github` で gh 文脈 opt-in） |
@@ -76,8 +76,9 @@ inexact sync により、導入済み extras を削除しない。
 - **CI**（GitHub Actions）: check（`npm ci --ignore-scripts` / Node contracts / TypeScript / Node test /
   既存 Python checks）＋ rename-smoke ＋ security（gitleaks）＋ audit（pip-audit / bandit）。
 - **エージェント運用**: [AGENTS.md](AGENTS.md)（全エージェント共通の作業方針の単一の正）と
-  薄い [CLAUDE.md](CLAUDE.md)。OpenSpec 初期構成（`openspec/`・CLI 不在時も Markdown artifacts
-  で運用可能）。
+  薄い [CLAUDE.md](CLAUDE.md)。OpenSpec 直接実行（`openspec/`・CLI 不在時も Markdown fallback
+  で運用可能）。`execute-openspec-change` skill は change の preflight 後、`tasks.md` の依存順に
+  実装・検証・進捗更新する。
   vendored skills（実体 `.agents/skills/`・`.claude` / `.codex` が symlink・供給元と
   license は [`.agents/skills/skills.lock.json`](.agents/skills/skills.lock.json) が正）。
   Context7 リモート MCP のテンプレート（`task mcp:setup` で生成）。
@@ -93,7 +94,6 @@ inexact sync により、導入済み extras を削除しない。
 - **セキュリティ監査ゲート**: `security` dependency-group（pip-audit / bandit）。CI audit
   ジョブと `task security` が同一範囲を監査 → [docs/optional/extras-audit.md](docs/optional/extras-audit.md)。
 - **notebook 管理**（nbstripout の pre-commit overlay 等）→ [docs/optional/notebook.md](docs/optional/notebook.md)。
-- **GSD**（大規模 change の詳細 plan / phase 進捗＋横断管理）→ [docs/optional/gsd.md](docs/optional/gsd.md)。
 - **Serena MCP**（大規模リファクタ時のみ）→ [docs/optional/serena.md](docs/optional/serena.md)。
 - **GitHub MCP**（ローカル / Docker / リモート HTTP・read-only 既定）→ [docs/agents/mcp.md](docs/agents/mcp.md)。
 - **クロス AI レビュー**（Codex plugin・人起点のみ）→ [docs/optional/codex-review.md](docs/optional/codex-review.md)。
@@ -108,12 +108,12 @@ inexact sync により、導入済み extras を削除しない。
 - [docs/guide.md](docs/guide.md) … **人間の下流ユーザ向け通し読みガイド**（全体像・
   立ち上げの「なぜ」・オプションの選び方・詰まったとき）。
 - `docs/adr/` … **下流の研究 ADR 用**（出荷時は `0000-template.md` の道標 1 枚のみ）。
-- `docs/template/` … **テンプレ自身のメタ文書**（設計判断 ADR 0001-0007・grill 記録・
-  リリース手順）。下流では不要なら `task prune-template-docs -- --apply` で削除できる
+- `docs/template/` … **テンプレ固有メタ文書**（設計判断・リリース・ふりかえり）。
+  下流では不要なら `task prune-template-docs -- --apply` で一括削除できる
   （ADR-0006）。
 - `docs/agents/` … エージェント向けの workflow / safety / mcp 詳細。
 - `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査・
-  GSD・Serena MCP・クロス AI レビュー・テンプレ更新の取り込み）。
+  Serena MCP・クロス AI レビュー・テンプレ更新の取り込み）。
 
 ## 研究成果物の扱い
 

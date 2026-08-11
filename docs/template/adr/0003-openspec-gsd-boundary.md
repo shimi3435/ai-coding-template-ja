@@ -1,6 +1,6 @@
 # OpenSpec が per-change タスクを所有し GSD は横断ロードマップに限定する
 
-> Status: Superseded by [ADR-0008](0008-adaptive-openspec-gsd-execution-boundary.md). 本文は当時の判断を示す履歴として保持する。
+> Status: Superseded by [ADR-0010](0010-openspec-direct-execution.md). ADR-0008 を経た当時の判断を示す履歴として保持する。
 
 OpenSpec の change フォルダは `tasks.md`（実装チェックリスト）を標準内包し、`/opsx:apply` がそれを実装・進捗マークする。したがって**単一 change 内のタスク分解・順序・進捗は OpenSpec が所有**し、GSD（オプション）は**複数 change を横断する上位ロードマップ / フェーズ順序 / マイルストーン / セッション跨ぎ復帰**のみを担う。GSD は `openspec/changes/*/tasks.md` を二重化しない。
 

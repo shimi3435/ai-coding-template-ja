@@ -16,7 +16,8 @@ description: >
 
 ## Convergence cycle との関係
 
-bounded review convergence では cycle の先頭に1回だけ実行する。反復する full review の代わりにしない。
+全変更で実行する。bounded review convergence では cycle の先頭に1回だけ実行する。独立 review /
+verifier の要否は AGENTS.md の OSWF-5 だけから判断し、ここで発火条件を再定義しない。
 明白な欠陥を修正した場合は対象に近い focused validation を実行し、設計・scope・仕様の判断事項は
 修正せず initial reviewer へ引き継ぐ。
 

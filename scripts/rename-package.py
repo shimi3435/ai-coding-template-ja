@@ -9,8 +9,7 @@
 - package.json / package-lock.json / README.md / CONTEXT.md / .github/workflows/ci.yml
 - PR2 で追加されるファイル（openspec/project.md / AGENTS.md / CLAUDE.md /
   .codex/config.toml.template / .mcp.json.template）は存在時のみ処理
-- src/**/*.py と tests/**/*.py、およびpackage importを持つ固定のsmoke script
-  の import/from・パス文字列
+- src/**/*.py と tests/**/*.py の import/from・パス文字列
 
 上記固定ファイル以外は走査しない: scripts/（doctor.py の既定名検出センチネルを
 書き換えないため）/
@@ -47,7 +46,6 @@ WHITELIST_FILES = [
     "CLAUDE.md",
     ".codex/config.toml.template",
     ".mcp.json.template",
-    "scripts/openspec-gsd-handoff-smoke.py",
 ]
 PY_GLOBS = ["src/**/*.py", "tests/**/*.py"]
 

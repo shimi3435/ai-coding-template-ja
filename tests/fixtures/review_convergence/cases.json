@@ -1,0 +1,26 @@
+{
+  "risk": [
+    {"case": "none", "triggers": [], "independent_review": false, "independent_verifier": false},
+    {"case": "security-boundary", "triggers": ["security / trust boundary"], "independent_review": true, "independent_verifier": true},
+    {"case": "external-write", "triggers": ["external write"], "independent_review": true, "independent_verifier": true},
+    {"case": "persistent-data", "triggers": ["persistent data"], "independent_review": true, "independent_verifier": true},
+    {"case": "public-interface", "triggers": ["public interface"], "independent_review": true, "independent_verifier": true},
+    {"case": "dependency-lockfile", "triggers": ["dependency / lockfile"], "independent_review": true, "independent_verifier": true},
+    {"case": "build-ci", "triggers": ["build / CI"], "independent_review": true, "independent_verifier": true},
+    {"case": "deletion-migration", "triggers": ["deletion / migration"], "independent_review": true, "independent_verifier": true}
+  ],
+  "focused_validation": [
+    {"case": "structurally-not-applicable", "complete": true, "requires_na_reason": true},
+    {"case": "environment-unavailable", "complete": false, "requires_unverified_reason": true},
+    {"case": "failed", "complete": false, "requires_failure_summary": true}
+  ],
+  "limits": [
+    {"case": "iteration-3", "count": 3, "automatic_retry": false, "result": "soft-stop"},
+    {"case": "agent-failure-1", "count": 1, "automatic_retry": true},
+    {"case": "agent-failure-2", "count": 2, "automatic_retry": false, "result": "soft-stop"},
+    {"case": "infrastructure-failure-1", "count": 1, "automatic_retry": true},
+    {"case": "infrastructure-failure-2", "count": 2, "automatic_retry": false, "result": "soft-stop"}
+  ],
+  "verifier_blocker": {"result": "soft-stop", "fix_before_new_cycle_approval": false, "next_verifier": "different-from-previous-cycle"},
+  "external_tool_completed_with_open_checkbox": {"change_complete": false, "resume_from": "tasks.md"}
+}

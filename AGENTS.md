@@ -24,57 +24,34 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - Codex / Claude Code の両方がこのファイルを正とする。
 - Claude Code 固有の補足のみ CLAUDE.md にある。
 
-## Workflow（OpenSpec / GSD の適応型実行境界 / ADR-0008・0009）
-- 「何を・なぜ作るか」と最終完了は OpenSpec で確定する（仕様・受け入れ基準・`spec-holes`）。
-- 実装開始前に、経路、恒久成果、一時実行証跡、最初に行う CI parity、停止・再計画条件を
-  `tasks.md` の実行予算として記録する。固定 token・行数・commit・phase 数だけを品質判定に使わない。
-- 独立出荷可能な成果は先に OpenSpec changes へ分割する。一体の成果について、単一セッションかつ
-  単一コンテキストで安全に実装・検証でき、依存 phases や有益な隔離並列単位がなければ小規模、
-  それ以外は大規模の GSD 候補とし、経路と理由を `tasks.md` に記録する。
-- 小規模 change は OpenSpec `tasks.md` が詳細タスク・順序・進捗を所有し、
-  `openspec instructions apply --change <id>` または同じ Markdown artifacts から直接実行する。
-- 大規模 change は GSD（導入時のみ）が詳細 plan・phase 実行・phase 進捗を所有する。OpenSpec
-  `tasks.md` は handoff・全 phases 完了・原本検証・project checks・close の境界ゲートだけを持ち、
-  GSD の詳細タスクを複製しない。GSD も仕様・受け入れ基準を新規定義しない。
-- GSD への handoff は専用 branch の review 可能な commit から行い、change ID、canonical artifact
-  paths、source commit、完了済み境界ゲート、未解決事項を渡す。GSD の利用不能時や途中の経路変更は
-  自動 fallback せず、状態と再構成案を提示して承認を得る。
-- OpenSpec で GSD 経路を承認し、canonical artifacts を source-pinned な review 可能 commit に
-  固定した後は、任意の `execute-openspec-change` skill で handoff 開始を自動化できる。read-only preview
-  は決定論的な `input_route` の label/state（`json` / `markdown-fallback`）を表示するが fallback 原因を
-  推測しない。表示後の新たな明示承認だけが prepare と GSD dispatch を許可し、最終完了は引き続き
-  OpenSpec が所有する。
-- Phase 2 の通常 CI が確認するのは静的な SKILL / fixture instruction contract と既存 Phase 1 の動的
-  state seam までである。実 host orchestration は未検証で、Phase 3 の opt-in / manual evidence が所有する。
-- GSD phases 完了後も、OpenSpec 原本の全 requirements / scenarios / `spec-holes` と実装・検証を
-  対応付け、`task openspec:validate` と `task check` を通してから最終境界ゲートを完了にする。
-- plan / evidence / test / review は、distinct failure / seam / risk の検出、セッション復帰、レビュー
-  判断のいずれかへ価値を持つ場合だけ追加する。通常 CI を削除予定 artifacts や到達不能な Git 履歴へ
-  依存させない。
-- review convergence は OpenSpec 直接経路では change、GSD 経路では phase を単位とする。順序は
-  self-review 1回、initial full review、finding 修正、fresh final reviewer、`task check`、
-  同じ cycle の executor / reviewers と別の独立 verifier。
-  finding 修正は fix・focused validation・diff review の組を最大3 iterationsとし、blocker を成功扱い
-  しない。green evidence は command 単位で入力同一性を確認できる場合だけ再利用し、不明なら再実行する。
-- material 実装は原則1 executorが継続し、finding ごとに fresh agent を作らない。fresh final reviewer は
-  initial reviewer と別にする。verifier は同じ cycle の executor / reviewers と別の独立 verifier とする。
-  soft-stop 後の新 cycle では、旧 cycle の verifier が fix に関与せず、context contamination がなく、最新入力との
-  evidence identity を再確認できる場合だけ再利用する。独立実装単位、agent failure、context contamination
-  がある場合だけ agent を追加する。`STATE`、`ROADMAP`、checkbox、report path の機械的補正は main が処理する。
-- 3 iterations exhaustion、仕様判断、material expansion、連続 agent failure、再現する infrastructure
-  failure では soft stop し、人間判断なしに続行しない。継続時は scope と実行予算を再計画した新しい
-  cycle とし、単純に追加3回を認めない。
+## Workflow（OpenSpec 直接実行 / ADR-0010・0009）
+- 外部挙動、公開 interface、security / trust boundary、永続データ、dependency / lockfile、build / CI、
+  または複数の恒久成果を変更する場合、OpenSpec change を作り、仕様と最終完了を確定する。
+- 独立して受け入れ、review、merge できる成果は別 changes に分割する。一体の成果は task 数、行数、
+  セッション数で分割せず、同じ `tasks.md` の依存付き section とする。
+- コア経路は OpenSpec 直接実行だけとする。proposal / design / spec delta / `spec-holes` が仕様の正本、
+  `tasks.md` が詳細タスク、依存順、進捗、検証状態、セッション復帰の正本である。
+- 各 task は成果、依存、対象、実装 checkbox、検証 checkbox を持つ。実行制約は最初の CI parity、
+  停止・再計画条件、一時 artifact cleanup の3項目だけを `tasks.md` 冒頭に置く。
+- 依存が全て完了した先頭の未完了 task から実行する。実装と指定検証の成功後、対応 checkbox を順に
+  `- [x]` へ更新する。環境制約や検証失敗による未実行を完了扱いせず、change close を禁止する。
+- OpenSpec CLI は任意の discovery / validation engine とする。不在時も同じ Markdown artifacts と
+  checkbox 規律で実装・検証・再開する。
+- agent は外部 orchestrator を一般的な候補として提案できる。ただし、利用者が特定の名前を選ぶ前の
+  read-only 探索、在席確認、plugin 検索、version probe、install、起動は禁止する。明示選択後に使う
+  場合も仕様を複製せず、各 task の進捗と検証状態を `tasks.md` へ同期する。
+- plan / evidence / test / review は distinct failure / seam / risk の検出、セッション復帰、レビュー判断の
+  いずれかへ価値を持つ場合だけ追加する。通常 CI を削除予定 artifacts や到達不能な Git 履歴へ依存させない。
+- 全変更で self-review と適用可能な focused validation を行う。独立 review / verifier は下記
+  OSWF-5 の列挙条件に該当する場合だけ起動する。
+- 仕様判断または material expansion が必要なら、完了済み checkbox を保持して利用者承認まで停止する。
+  承認後に仕様、`spec-holes`、validation、tasks を更新し、新しい cycle を開始する。
 - 検証は高リスクな実動作 / safe dry-run、公開 interface、security property、静的 prose contract の順に
-  優先する。環境依存を持つ最初の vertical slice で、該当する CI parity を全実装完了前に確認する。
-- 独立成果、GSD phase、外部依存、trust boundary、通常 CI、永続データ、公開 API の追加は実行予算を
-  再計画する。受け入れと checks が green なら、blocker でない nit / hardening は別 change へ送る。
-- テンプレート自身では一つの PR に一つの active change だけを置き、依存 changes は専用 branches で
-  段階的に close / merge する。main の `openspec/changes/` には blocked proposal を残さない。
-- change を実行する主体（手動・GSD 駆動問わず）は、各タスク完了時に対応する `tasks.md` の
-  チェックを `- [x]` に更新する。engine（`/opsx:apply`）不在の Markdown fallback でも同じ。
-- 一体の change / phase の成果物は原則として同じ executor が継続し、main が各 task の成果を検証して
-  から進捗をマークする。独立・非重複・個別検証可能な実装単位だけ、実行予算へ記録して追加 executor
-  へ委譲できる（詳細は workflow.md）。
+  優先する。最初の環境依存 vertical slice で該当 CI parity を全実装完了前に確認する。
+- テンプレート自身では一つの PR に一つの active change だけを置く。依存 changes は先行 change の
+  close / merge 後を base とし、main の `openspec/changes/` に blocked proposal を残さない。
+- 一体の change は原則として同じ executor が継続する。独立・非重複・個別検証可能な実装単位だけ、
+  `tasks.md` へ統合方法を記録し、別の利用者承認後に追加 executor へ委譲できる。
 - OpenSpec で仕様を確定する前に `spec-holes` で未定義の振る舞いを列挙して潰す。
 - 列挙した穴は可能なら例示テスト / Hypothesis property に落とす。
 - 可能なら `tdd` skill でテストから始める。
@@ -82,8 +59,29 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - 複雑化しそうなら `caveman` で単純化する。
 - エラー調査では `diagnosing-bugs` skill を使う。
 - まとまった変更後は可能なら `verify-change` で実動作を確認する。
-- コミット / PR 前は可能なら `self-review` で自分の diff を検査する。
 - 詳細は [docs/agents/workflow.md](docs/agents/workflow.md)。
+
+### OSWF-5 review 発火条件
+
+次のいずれかを変更する場合だけ、独立 review / verifier を必須とする。本列挙を発火条件の単一の正とし、
+design、tasks、workflow、skills は OSWF-5 を参照して列挙を複製しない。
+
+- security / trust boundary
+- 外部 write
+- 永続データ
+- 公開 interface
+- dependency / lockfile
+- build / CI
+- 削除 / migration
+
+該当時は self-review、initial independent review、finding 修正、最新入力の `task check`、initial reviewer と
+別の独立 verifier の順に実行する。finding 修正は fix、focused validation、diff review を一組として
+最大3 iterations。verifier blocker は soft stop し、利用者承認後の新 cycle で fix、独立 review、
+project checks、前 cycle と別の verifier を実行する。同一役割・task の agent が連続2回失敗した場合、
+または固定した環境・command・入力で infrastructure failure が2回再現した場合も停止する。
+
+検証証跡は command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけを
+`tasks.md` へ記録する。生 log、一時 report、tool 固有 state を品質判定や完了判定に使わない。
 
 ## Tools
 - 実装前に Context7 でライブラリ / CLI の最新仕様を確認する。

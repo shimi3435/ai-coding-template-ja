@@ -1,6 +1,6 @@
 # OpenSpec / GSD の適応型実行境界を採用する
 
-> Status: Accepted.
+> Status: Superseded by [ADR-0010](0010-openspec-direct-execution.md). 本文は当時の判断を示す履歴として保持する。
 > Supersedes: [ADR-0003](0003-openspec-gsd-boundary.md).
 
 OpenSpec は、change の proposal、design、spec delta、受け入れ基準、`spec-holes`、最終完了判定を

@@ -12,7 +12,7 @@
   既定パッケージ名のまま /
   Task・Git 不在 / skills symlink 壊れ / lock の blocked 在席）。
 - INFO (exit 0) = TEMPLATE_VERSION 表示 / caveman hook 未登録 /
-  テンプレ ADR・grill 残存 / オプション層の在席・不在（codex CLI / docker /
+  テンプレ固有メタ文書残存 / オプション層の在席・不在（codex CLI / docker /
   .mcp.json の Serena エントリ。純 opt-in は不在が正常なので WARN にしない）。
 - green = exit 0（FAIL ゼロ・WARN/INFO 許容）。作成直後・CI・オフラインで green。
 
@@ -558,8 +558,7 @@ def check_optional(diag: Diagnostics) -> None:
 
     純 opt-in は不在が正常（WARN はコア隣接の未設定専用）。ノイズ抑制のため
     在席が確認できたものだけ個別 INFO とし、不在はまとめて 1 行 INFO にする。
-    GSD は repo ローカルに信頼できる在席シグナルが無いため probe しない
-    （docs/optional/gsd.md）。research extra のインストール状態も probe しない
+    research extra のインストール状態は probe しない
     （summary の task setup:research 案内のみ）。
     """
     absent: list[str] = []
@@ -609,10 +608,10 @@ def _mcp_has_serena_entry() -> bool:
 
 
 def check_template_docs(diag: Diagnostics) -> None:
-    """テンプレ自身のメタ文書（docs/template/）の残存を INFO 通知（任意 prune 可）。"""
+    """テンプレ固有メタ文書（docs/template/）の残存を INFO 通知（任意 prune 可）。"""
     if (REPO_ROOT / "docs" / "template").is_dir():
         diag.info(
-            "テンプレ ADR / grill が docs/template/ に残存しています"
+            "テンプレ固有メタ文書が docs/template/ に残存しています"
             "（任意・task prune-template-docs で削除可）"
         )
 

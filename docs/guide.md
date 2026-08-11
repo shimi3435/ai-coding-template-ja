@@ -86,9 +86,9 @@ README の「研究成果物の扱い」節を参照。
   分かり、直せば全エージェントに効く。
 - **仕様から始める文化**: このテンプレートは「先に何を・なぜ作るかを固めてから実装する」
   ための OpenSpec を同梱している。まとまった変更は `openspec/` の change として仕様と
-  受け入れ基準を確定する。小規模 change は OpenSpec CLI（不在時は Markdown）から直接実行し、
-  大規模 change は opt-in の GSD へ手動で引き渡す。どちらでも OpenSpec が仕様と最終完了判定の
-  正である。経路の選び方と具体的な handoff は [docs/agents/workflow.md](agents/workflow.md) が正。
+  受け入れ基準を確定する。OpenSpec 直接実行をコア経路とし、CLI 不在時も Markdown fallback で
+  同じ `tasks.md` を実装・検証・更新する。`execute-openspec-change` skill は preflight 後、依存済みの
+  先頭未完了 task から直接実行する。詳細は [docs/agents/workflow.md](agents/workflow.md) が正。
 - **skills**: 設計を詰める（grill 系）・テスト先行（tdd）・バグ調査（diagnosing-bugs）・
   簡素化（caveman）・コミット前の自己検査（self-review）などの skill を同梱済み。
   一覧と役割分担は [docs/agents/workflow.md](agents/workflow.md)。
@@ -104,7 +104,7 @@ README の「研究成果物の扱い」節を参照。
 
 - どのオプションも**既定では入らない**。不在が正常で、エラーでも設定漏れでもない。
 - 在席の一部は `task doctor` が **INFO** で報告する（WARN / FAIL にはしない）。ただし
-  doctor が全オプションを probe するわけではなく（GSD や extras の導入状態は見ない）、
+  doctor が全オプションを probe するわけではなく（extras の導入状態は見ない）、
   接続・認証の検証もしない。導入できたか・使える状態かの確認は各リンク先の手順が正。
 - 導入手順の実体は各行のリンク先が正。この表は選定のためだけにある。
 
@@ -132,7 +132,6 @@ README の「研究成果物の扱い」節を参照。
 
 | 機能 | 何を足すか | いつ要る・避ける（前提） | 入れ方 | 詳細リンク |
 | --- | --- | --- | --- | --- |
-| GSD | 大規模な単一 change の詳細 plan / phase 進捗と、複数 changes の横断管理 | 複数セッション、依存 phases、有益な隔離並列単位などが必要な大規模 change のとき。installer はコアと同じ Node.js 24 を使う。小規模 change は OpenSpec CLI、CLI 不在時は Markdown で直接実行するため不要 | installer を各自の環境で実行し、OpenSpec change を手動 handoff | [docs/optional/gsd.md](optional/gsd.md) |
 | Codex クロス AI レビュー | 別 AI（Codex）によるレビューの脚を足す | 自己レビューに別視点を足したいとき。**要 Node.js ＋ ChatGPT サブスクリプション or OpenAI API key**。コードを外部（OpenAI）へ送るため、送信できないプロジェクトでは使わない。トリガは常に人起点 | Claude Code へ plugin として導入 | [docs/optional/codex-review.md](optional/codex-review.md) |
 | caveman hook 自動発火 | 簡素化モードの毎ターン自動適用 | 明示起動では足りないほど常時かけたいとき。**Claude Code 限定**（hook 機構依存）。簡素化原則自体は AGENTS.md に内包済みで、hook 無しでも方針としては効く | hook を各自の設定に登録 | [docs/optional/caveman-hook.md](optional/caveman-hook.md) |
 

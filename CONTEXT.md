@@ -33,7 +33,7 @@ _Avoid_: product artifact, 最終ファイル
 _Avoid_: 恒久成果, 成果物
 
 **実行予算**:
-仕様と実行経路の確定後、実装開始前に定める、想定する実行経路、恒久成果、一時実行証跡、早期検証、停止・再計画条件の境界。
+OpenSpec 直接実行（ADR-0010）の実装開始前に `tasks.md` へ置く、最初の CI parity、停止・再計画条件、一時 artifact cleanup の3項目からなる実行境界。
 _Avoid_: token budget, 見積もり
 
 **検証価値**:
@@ -41,11 +41,11 @@ _Avoid_: token budget, 見積もり
 _Avoid_: coverage 数, evidence 量
 
 **実質的な拡張（material expansion）**:
-実行予算で想定していなかった独立成果、GSD phase、外部依存、trust boundary、公開 API、永続データ形式 / migration、runtime dependency / lockfile、build / CI / 配布経路の追加・変更。検出時は続行前に実行予算を更新し、必要なら change 分割または経路を再判定する。
+承認済み scope 外となる独立成果、外部挙動、外部 write、security / trust boundary、公開 interface、永続データ形式 / migration、dependency / lockfile、build / CI / 配布経路の追加・変更。検出時は完了済み `tasks.md` checkbox を保持して停止し、利用者承認後に OpenSpec の仕様、`spec-holes`、validation、tasks を更新する。
 _Avoid_: 単なる行数増加, nit
 
 **convergence cycle**:
-OpenSpec 直接経路では一つの change、GSD 経路では一つの phase を単位として、実装後の review、blocker 修正、全体 check、独立 verification を有界に収束させる一連の実行。
+一つの OpenSpec change を単位として、実装後の review、blocker 修正、全体 check、独立 verification を有界に収束させる一連の実行。
 _Avoid_: session, retry loop
 
 **iteration**:
@@ -60,5 +60,6 @@ _Avoid_: 最新らしいログ, 時刻だけの証明
 blocker を成功扱いせず自律実行を止め、未解決事項と既存証跡を保持したまま、継続・再計画・別 change 化・中断の人間判断へ戻す状態。
 _Avoid_: success, hard cap
 
-この4用語に対応する review topology、validation cadence、agent allocation、soft-stop の詳細 owner は
+独立 review / verifier のリスク発火条件は AGENTS.md の **OSWF-5** だけを単一の正とする。この4用語に
+対応する review topology、validation cadence、agent allocation、soft-stop の詳細 owner は
 [docs/agents/workflow.md](docs/agents/workflow.md#bounded-review-convergence) とする。

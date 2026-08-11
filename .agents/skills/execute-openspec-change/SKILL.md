@@ -1,261 +1,164 @@
 ---
 name: execute-openspec-change
-description: Preview and explicitly approve a source-pinned OpenSpec change before preparing its handoff manifest and dispatching the selected GSD 1.5.0 entrypoint.
+description: OpenSpec change を fail-closed で preflight し、tasks.md の依存順に直接実装・検証・進捗更新する。
 ---
 
 # Execute OpenSpec Change
 
-Use this first-party skill only to orchestrate the handoff start. OpenSpec remains
-the specification and final-completion authority. The three Phase 1 public operations own discovery,
-preflight, persistence, and state transitions; do not reimplement those rules here.
-Consume their structured values and classified codes, never display prose or exit 0
-alone.
+利用者による明示呼出自体を、OpenSpec change の実装と必要な reviewer / verifier の順次起動を承認した
+ものとして扱う。追加 preview 承認を要求しない。proposal、design、spec delta、受け入れ基準、
+`spec-holes` を仕様の正本、`tasks.md` を実装順序、進捗、検証状態、復帰位置の正本として直接実行する。
 
-Follow the stages below in order. Nothing before approval may mutate the repository,
-create a handoff brief, dispatch GSD, or change manifest state.
+以下を順番に行う。fail-closed とし、不成立条件を推測や自動修復で補わない。
 
-## Stage: capture-input
+## 1. preflight
 
-Resolve the repository and capture the invocation inputs. Freeze one immutable
-`invocation_tuple` containing:
+4条件を全て確認するまで repository を変更しない。
 
-- `repository_real_path`
-- `change_id`
-- `source_commit`
-- `gsd_home`
-- `repository_policy`
-- `host_evidence`
-- `completed_gates`
-- `unresolved_items`
+1. **active change が exactly one**
+   - repository real path を確定し、`openspec/changes/` 直下の active change directories を列挙する。
+   - 0件または複数件なら候補を列挙し、対象を推測せず停止する。
+2. **必須 OpenSpec artifacts が valid**
+   - `openspec/project.md` の repository policy を読む。
+   - `proposal.md` と `tasks.md` を必須とし、policy または proposal が要求する `design.md` と
+     `specs/<capability>/spec.md` も確認する。
+   - 必須 file の欠落、空 file、repository 外 path、壊れた Markdown 構造、requirement 先頭行の
+     MUST / SHALL 欠落を拒否する。OpenSpec CLI が利用可能なら validation を追加できるが、CLI の
+     在席を preflight 成否条件にしない。
+3. **spec-holes に未解決判断がない**
+   - canonical artifacts に spec-holes audit が存在し、repository policy が要求する分類を全て扱うことを
+     確認する。
+   - `Open Questions`、TODO、TBD、利用者確認待ち、選択未確定、仕様未反映の穴が一つでもあれば、
+     該当箇所を示して停止する。「なし」と明記された項目は解決済みとして扱う。
+4. **詳細 tasks が valid**
+   - `Execution Constraints section` は `## Execution Constraints` から次のheadingまでとする。
+     同 section は exactly 3 項目とし、最初の CI parity、停止・再計画条件、一時 artifact cleanup を
+     それぞれ1回だけ要求する。欠落、重複、余剰があれば拒否する。
+   - `## Tasks` section に task entry を1件以上要求する。task が0件なら実装対象と完了条件を確定できないため
+     拒否する。
+   - 各 task に成果、依存、対象、実装 checkbox、検証 checkbox を要求する。
+   - 対象pathの各項目は単一の Markdown inline code span として記述する。code span内の値は
+     trim または Unicode 正規化をせず exact に保持し、Unicodeと空白を許可した上でrepository-relative
+     pathとして検証する。閉じていない code span、code span外のpath値、一項目内の複数の code spanは拒否する。
+   - task ID の重複、未知の依存、自己依存、循環依存、曖昧または repository 外の対象 path、壊れた
+     checkbox を拒否する。
+   - 全taskの対象pathを解決し、異なるtask間で exact match または directory containment がある場合、
+     一方から他方へ推移的な依存 path が存在することを要求する。依存関係で順序化されない重複は拒否する。
 
-Reserve `canonical_paths` for the structured inspection result. Do not silently
-default, normalize, or replace a frozen invocation value after this point.
+失敗時は条件名、該当 path / task、未成立理由を報告し、code、tests、docs、checkbox を変更しない。
 
-## Stage: inspect-host
+## 2. dirty overlap
 
-Inspect the visible runtime `spawn_agent` schema as read-only evidence. Record the
-resolved `host_spawn_schema`, available dispatch fields, and whether a generic route
-would be a `generic_degradation`. Host evidence must come from the visible runtime;
-do not infer it from a local executable or GSD probe.
+`git status --porcelain=v1 -z` 相当で tracked / untracked dirty paths を取得する。未完了 task の対象 path
+を repository-relative path として解決し、dirty paths との exact match または directory containment を
+調べる。初回実行では対象 path と重なる既存差分を利用者所有として扱う。
 
-## Stage: inspect-bridge
+- 重複があれば、自動 stash、上書き、commit を行わず、重複 path を列挙して停止する。
+- dirty 差分が対象外だけなら、無関係 dirty 差分を保持して続行する。変更、整形、削除、復元しない。
+- ignored files は対象外とする。ただし task が ignored path を明示対象にしている場合は曖昧な ownership
+  として停止する。
 
-Call the Phase 1 public `inspect_handoff` operation exactly once with the frozen
-repository, change, source, GSD home, repository-policy, and host values. This call is
-read-only. Require a structured success value; exit 0 or human-readable output is not
-success evidence.
+開始時の対象外 dirty paths と digest を記録し、後続の self-review と検証で利用者差分を自分の差分へ
+混在させない。
 
-On structured success, take every sorted artifact path from the inspection and freeze
-`canonical_paths` exactly once. Combine it with `invocation_tuple` to create the
-immutable `preview_tuple`; this is the only tuple later replayed to prepare.
+未完了taskを残して呼出を終了する場合、全完了task、実装済み・検証未完了task、およびsafe boundary後に
+file変更済みだが実装 checkbox が未完了の実装途中 taskが変更したrepository-relative
+`executor-owned paths` を統合し、各pathを最後に変更した task と対応付けた
+`累積 executor-owned snapshot` を先頭の実行可能な未完了task直下へ記録する。各pathのfile type、mode、
+bytesまたはsymlink target、削除markerから `post-task diff digest` を算出する。`tasks.md` 自身はresume
+metadata行を除いた内容でdigestを算出し、自己参照を避ける。古いsnapshotは置換し、同じpathは最後に変更した
+taskのdigestだけを保持する。skillが制御できる `orderly stop` では、実装途中 taskを
+`implementation-in-progress` 状態として停止前に記録する。この記録はセッション復帰用ownershipであり
+review evidenceではない。
 
-On structured failure, report the classified category, code, and known state as
-`classified-gaps`, add `manual-handoff-guidance` using the canonical OpenSpec paths,
-and stop.
+再呼出では、現在のpath集合とdigest が累積executor-owned paths / post-task diff digestと全て一致する場合だけ
+executor自身の差分と判定する。実装済み・検証未完了taskは検証から再開し、完了taskの記録済みdirty pathが
+後続の未実装 task対象と重なる場合も実装を続行する。digest が一致しない、snapshot記録外pathが重なる、
+ownership記録が欠落する場合は利用者変更との区別不能として重複pathを示し、変更前に停止する。
+`implementation-in-progress` のpath集合とdigestが一致する場合は同じ実装途中 taskの実装を継続する。
+process killやhost crashなどの `abrupt termination` ではsnapshot更新を保証できない。再呼出時の未記録差分は
+executor所有と推測せず、dirty overlapとしてfail-closedで停止する。
 
-## Stage: resolve-dispatch
+preflight と dirty overlap の両方が成功した時点を `safe boundary` とする。preflight または dirty overlap の失敗は
+`report-only` とし、`tasks.md` を含むrepositoryを変更しない。safe boundary通過後の `task execution blocker` は、
+停止前に理由と再開条件を該当task直下へ記録する。選択済みtaskの実装・検証blockerはそのtask、依存循環などで
+実行可能taskがない場合は文書順で先頭の未解決 task、reviewまたはproject checkのblockerは先頭の未完了 validation task
+へ記録する。未完了validation taskがなければ、文書順で最後の taskへ記録する。
+initial / diff review、project check、verifier のblockerを記録するtaskに完了済みの検証 checkboxがある場合、
+停止前にその検証 checkbox と親 task を未完了へ戻す。blocker 解消後の新しい evidenceが成功した場合だけ、
+両checkboxを再度完了へ更新する。
 
-Resolve dispatch using the inspected host schema and the bridge-selected GSD
-entrypoint. Record `host_dispatch` and any `generic_degradation`. Unknown or
-inconsistent evidence stops before preview approval.
+## 3. task 実行
 
-For a generic host, finish this whole preflight before preview, approval, or prepare:
+依存が全て完了した先頭の未完了 task を選ぶ。文書順の先頭が実行不能なら skip し、次の実行可能 task
+を選ぶ。未完了 task があるのに実行可能 task がない場合、循環依存または blocker を文書順で先頭の未解決 task
+直下へ記録して停止する。
 
-1. Require the installed local GSD version to be exactly 1.5.0. Resolve the selected
-   entrypoint SKILL and read it completely.
-2. Resolve the SKILL's concrete workflow under the frozen arguments and configuration.
-   Follow its routing and referenced workflow files, then enumerate every reachable
-   `Task(...)` or `Agent(...)` spawn name and every isolation argument. Do not rely on
-   an available-agent summary or an unselected branch.
-3. Resolve `ACTIVE_CONFIG_ROOT` in this explicit priority order: `CODEX_HOME`,
-   `--config-dir`, `project-local-.codex`, then `default-global-config`.
-4. Map each reachable spawn name to
-   `${ACTIVE_CONFIG_ROOT}/agents/<spawn-name>.toml`, read the complete TOML, and retain
-   the complete developer instructions as the role preamble. This is
-   `complete-role-preamble-for-each-spawn`; a prefix, summary, or `.md` substitute is
-   insufficient.
-5. Verify `every-isolation-requirement` against the visible generic spawn schema before
-   authorizing the workaround.
+task ごとに次を行う。
 
-For the frozen uninitialized route, resolve these exact local files:
+1. canonical artifacts、成果、対象、受け入れ条件を読む。
+2. 適用可能なら TDD の一つの vertical slice として failing test / 再現 probe を先に作る。
+3. task の成果に必要な最小変更だけを実装する。
+4. diff と成果を確認し、実装 checkbox を完了へ更新する。
+5. 指定された focused validation を実行する。
+6. validation が成功したら検証 checkbox を完了へ更新する。task の実装 checkbox と検証 checkbox が
+   両方完了した場合だけ親 task を完了へ更新する。
 
-- `${ACTIVE_CONFIG_ROOT}/skills/gsd-new-project/SKILL.md`
-- `${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/new-project.md`
+環境制約または validation failure の場合、実装 checkbox は完了にできるが、検証 checkbox は未完了の
+まま理由を task 直下へ記録し、change close を禁止する。focused validation と代替静的検証が構造上非該当
+の場合だけ、N/A 理由を記録して検証 checkbox を完了できる。
 
-With `$gsd-new-project --auto @${HANDOFF_BRIEF}`, the resolved reachable spawn names
-are `gsd-project-researcher`, `gsd-research-synthesizer`, and `gsd-roadmapper`.
-Map and completely read the active TOML for each name.
+各 task 完了後に `tasks.md` を保存し、次の依存済み未完了 task へ進む。途中停止時も完了済み checkbox を
+保持する。別の state / roadmap / manifest を作らない。
 
-For the frozen initialized route, resolve these exact local files:
+### 再呼出
 
-- `${ACTIVE_CONFIG_ROOT}/skills/gsd-phase/SKILL.md`
-- `${ACTIVE_CONFIG_ROOT}/gsd-core/workflows/add-phase.md`
+再呼出時は preflight と dirty overlap を再実行する。完了済み task を再実行しない。実装済み・検証未完了
+の task は検証から再開する。validation 入力が実装後から変化した場合は stale evidence を再利用せず、
+最新入力で実行する。
 
-With `$gsd-phase ${INLINE_PARITY_PAYLOAD}`, the resolved add-phase branch has no
-reachable spawn. Still inspect the complete workflow for isolation or dynamically
-referenced branches; do not infer absence from the current summary.
+## 4. review と project checks
 
-Fail closed on any of: `unknown-reachability`, `unknown-toml-mapping`,
-`incomplete-role-preamble`, `unknown-isolation`, `typed-only-requirement`,
-`worktree-isolated-requirement`, or `incompatible-isolation`. Stop before approval or
-prepare and report the missing evidence. Otherwise inject each complete role preamble
-into its corresponding generic spawn and label every dispatch, result, and report
-`generic-agent workaround`. This route is **not equivalent to typed dispatch**.
+全変更で self-review と適用可能な focused validation を行う。独立 review / verifier の発火条件は
+`AGENTS.md` の OSWF-5 だけから読む。列挙条件に該当する場合、明示呼出時の承認に基づき次の順序で実行する。
 
-## Stage: preview
+1. self-review。
+2. initial independent review。
+3. blocker finding の fix → focused validation → diff review を最大3 iterations。
+4. 最新入力の `task check`。
+5. initial reviewer と別の独立 verifier。
 
-Display one complete approval preview containing these labelled fields:
+3 iterations 後の未解決 blocker、同一役割・task の agent 連続2回失敗、同じ環境・command・入力で
+再現した2回目の infrastructure failure、verifier blocker は成功扱いせず停止する。verifier blocker 後の
+fix は利用者が新 cycle を承認するまで開始しない。
 
-- `change_id`
-- `canonical_paths`, including every bridge artifact in its sorted order
-- `input_route`, shown only as its exact `json` or `markdown-fallback` label/state
-- `source_commit`
-- `manifest_path`, derived as
-  `.planning/openspec/<change_id>/handoff.json`
-- `openspec_capability`
-- `gsd_capability`
-- `gsd_project_initialized`
-- `gsd_entrypoint`
-- `repository_policy`
-- `host_spawn_schema`
-- `host_dispatch`
-- `generic_degradation`
+高リスク条件に該当しない場合、self-review、適用可能な focused validation、通常の final checks で
+完了判定し、独立 reviewer / verifier を起動しない。
 
-The Phase 1 seam exposes no reason for selection of `markdown-fallback`; do not invent
-one. Ensure displayed canonical paths and all other displayed inputs are the exact
-values held in `preview_tuple`.
+明示呼出が承認するagent起動は必要なreviewer / verifierだけである。追加 executor は独立・非重複・
+個別検証可能な実装単位でも、起動前に別の明示承認を得る。承認までは同じexecutorが継続する。
 
-## Stage: approve
+## 5. safety boundary
 
-After the whole preview is visible, request a **fresh explicit answer** from the user.
-Only an unambiguous affirmative answer to this preview authorizes later preparation.
-The following are forbidden substitutes:
+不可逆操作、外部 write、または承認済み OpenSpec を超える仕様拡張が必要になった時点で、完了済み
+checkbox を保持して利用者承認まで停止する。影響と OpenSpec 更新案を提示し、承認後にだけ仕様、
+spec-holes、validation、tasks を更新する。
 
-- `prior-approval`
-- `default-answer`
-- `automatic-mode`
-- `cli-flag`
-- `tool-presence`
+この skill は次の Git 操作を利用者の別の明示依頼まで実行しない。
 
-Treat `inspect-failure`, `refusal`, and `no-answer` as terminal outcomes with **zero mutable stages**.
-In each case stop before `prepare`, `brief-create`, `gsd-dispatch`,
-or `mark-started`; report `classified-gaps` where present and
-`manual-handoff-guidance`. Never reinterpret silence as approval.
+- `stash`
+- `commit`
+- `push`
+- `pull-request`
+- `merge`
 
-## Stage: prepare
+branch 切替、reset、clean、利用者差分の復元も自動実行しない。
 
-After fresh approval only, replay `preview_tuple` unchanged to the Phase 1 public
-`prepare_handoff` operation with `approved=True`. Require one **structured prepared success**
-with all of the following values before continuing:
+## 6. report
 
-- `ok` is exactly `true`
-- `operation` is exactly `prepare`
-- `known_state` is exactly `prepared`
+実行した focused test、review、project check、verification は command、結果、source commit、
+fresh実行 / green evidence再利用の別、未検証理由の要約だけを対応 task 直下の `tasks.md` へ記録する。
+生 log、一時 report、tool 固有 state は追跡しない。
 
-Do not branch on exit 0 or prose. Any classified or persistence failure stops with
-the returned known state. No GSD entrypoint is reachable until this entire gate
-passes.
-
-Construct exactly one immutable object named `PARITY_PAYLOAD` from the frozen and
-prepared values. It contains these fields once, without copied specification text:
-
-1. `change_id`
-2. `canonical_paths` with every sorted canonical artifact path
-3. `source_commit`
-4. `completed_boundary_gates`
-5. `unresolved_items`
-6. `one_phase_one_change`, constraining this phase to this change only
-7. `specification_nonduplication`, stating that GSD must reference the canonical
-   OpenSpec paths and source commit without copying or redefining specifications or
-   acceptance criteria
-
-## Stage: dispatch
-
-Select only the route already reported by the structured prepared value:
-
-- When GSD is uninitialized, render the complete `PARITY_PAYLOAD` deterministically
-  into one source-pinned idea document, then invoke
-  `$gsd-new-project --auto @<brief>`. The brief contains no independently authored
-  requirement or acceptance text.
-- When GSD is initialized, pass the complete `PARITY_PAYLOAD` inline to one
-  change-specific `$gsd-phase`. Do not summarize, rename, omit, or add payload fields.
-  Immediately before dispatch, capture one read-only snapshot containing
-  `maximum-integer-phase`, `phase-directories`, and `roadmap`.
-
-If the project, roadmap, and state signals show partial initialization, stop before
-either entrypoint. Do not repair initialization, choose another route, or dispatch a
-partial payload.
-
-## Stage: accept
-
-GSD is accepted only when both independent terms are true: a **structured completed-success**
-from the resolved host workflow and the complete **route-specific read-only postcondition**
-below. Exit 0 and a prose completion marker is supplemental only. Never accept a
-result by searching human-readable text.
-
-Treat each of these rows as not accepted: `marker-only`, `checkpoint`, `empty`,
-`malformed`, `partial`, `ambiguous`, `dispatch-failure`, and
-`postcondition-mismatch`. For every such row retain `prepared`, do not call the
-started transition, and perform neither automatic retry nor route switch.
-
-### Uninitialized route postcondition
-
-After structured completion, rerun this read-only probe:
-
-```text
-node ${GSD_HOME}/gsd-core/bin/gsd-tools.cjs init progress --raw
-```
-
-Require structured probe evidence with `project_exists=true`, `roadmap_exists=true`,
-`state_exists=true`, `project_root` equal to the frozen repository real path,
-`agents_installed=true`, and `missing_agents=[]`. Also require all four files:
-
-- `.planning/PROJECT.md`
-- `.planning/REQUIREMENTS.md`
-- `.planning/ROADMAP.md`
-- `.planning/STATE.md`
-
-Read those files without mutation. Their collective evidence must preserve
-`exact-change-id`, `exact-source-commit`,
-`all-canonical-paths-or-exact-brief-reference`, `completed-boundary-gates`,
-`unresolved-items`, `one-phase-one-change`, and `specification-nonduplication`.
-Missing, conflicting, or merely probable evidence fails the postcondition.
-
-### Initialized route postcondition
-
-After structured completion, take the same read-only phase and roadmap snapshot.
-Compare it to the pre-dispatch `maximum-integer-phase`, `phase-directories`, and
-`roadmap` values. Require all of these facts:
-
-- `exactly-one-new-max-plus-one-phase`
-- `matching-new-phase-directory`
-- `no-other-phase-or-directory-change`
-- `new-roadmap-section-equals-inline-parity-payload`
-
-The new roadmap section must contain the exact inline `PARITY_PAYLOAD`; selected
-keywords or a prose summary are insufficient.
-
-## Stage: mark-started
-
-Only after conservative acceptance call the Phase 1 public
-`mark_handoff_started` operation with `gsd_accepted=True`. Require its structured
-success and `known_state=started`. If the acceptance predicate is false, this stage
-is unreachable and the manifest remains prepared.
-
-## Stage: report
-
-After any prepared manifest success, always report `manifest-path` and `source-commit`
-and state `operator-makes-distinct-later-tracking-commit`. The operator creates that
-tracking commit after reviewing the manifest; this skill must never execute a Git commit.
-
-If dispatch is not accepted, also report `completed-operations`, `failure-point`,
-`prepared-state`, and `manual-continuation-evidence` sufficient to reconstruct the
-same frozen manual handoff. Do not perform or promise `retry`, `rollback`,
-`route-switch`, `finalize`, `cleanup`, `push`, `pull-request`, or `merge`.
-
-## Evidence limits
-
-Normal CI verifies static SKILL/fixture instruction consistency and existing Phase 1
-dynamic state seams only. It does not execute actual host prompts, spawn generic
-agents, mutate a real GSD project, or observe either route postcondition. Those
-opt-in/manual observations remain unverified until Phase 3.
+最終報告には完了 task、未完了 task / blocker、変更 file、実行 command と結果、未検証項目を含める。
+全実装・検証 checkbox が完了していない限り change 完了を宣言しない。
