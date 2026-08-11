@@ -236,6 +236,11 @@ close までに `docs/template/retrospectives.md` へ固定形式の1行を追�
 実装中の自己修正、style nit、主観的 refactor、回答だけで済む質問は含めない。同一欠陥は最初の発見経路
 だけに数え、0件でも記録する。後から発見した場合は新しい行を足さず既存行を更新する。
 
+例外として、change ID 自体が retired legacy token を含み、固定形式の行を
+`docs/template/retrospectives.md` に置くと最終 residual allowlist に違反する場合だけ、固定形式の本体を exact history allowlist
+として指定済みの ADR または release notes に保存し、`docs/template/retrospectives.md` には archive pointer を残す。
+この例外は既存 allowlist を拡張せず、両条件を満たさない change の保存先を変更しない。
+
 ## material task の executor 配分
 
 一体の change では一つの executor が canonical artifacts 一式を読み、material tasks を継続する。

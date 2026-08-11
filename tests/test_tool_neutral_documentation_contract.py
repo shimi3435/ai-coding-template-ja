@@ -166,6 +166,7 @@ def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
     retrospectives = (REPO_ROOT / "docs/template/retrospectives.md").read_text(
         encoding="utf-8"
     )
+    workflow = (REPO_ROOT / "docs/agents/workflow.md").read_text(encoding="utf-8")
 
     for pull_request, defect_count in (
         ("PR #40", "逃した欠陥 1 件"),
@@ -175,6 +176,9 @@ def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
         assert pull_request in notes
         assert defect_count in notes
     assert "v2 release notes" in retrospectives
+    assert "retired legacy token" in workflow
+    assert "固定形式の本体を exact history allowlist" in workflow
+    assert "archive pointer" in workflow
 
 
 def test_primary_documentation_links_resolve() -> None:
