@@ -26,6 +26,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.14"
+          activate-environment: true
       - name: Runtime preflight
         run: node repo-tools/entrypoint.mjs runtime-preflight
       - name: Sync (locked)
@@ -60,6 +61,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.14"
+          activate-environment: true
       - name: Runtime preflight
         run: node repo-tools/entrypoint.mjs runtime-preflight
       - name: Sync (locked)

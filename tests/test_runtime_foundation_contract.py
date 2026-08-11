@@ -49,6 +49,7 @@ def test_ci_uses_node_24_and_python_314_for_the_offline_check() -> None:
     for job in (check, rename_smoke):
         assert "actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903" in job
         assert 'node-version: "24"' in job
+        assert "activate-environment: true" in job
         assert "npm ci --ignore-scripts" in job
         for command in (
             "node repo-tools/entrypoint.mjs runtime-preflight",
@@ -64,6 +65,7 @@ def test_ci_uses_node_24_and_python_314_for_the_offline_check() -> None:
 
     extras_smoke = EXTRAS_WORKFLOW.read_text(encoding="utf-8")
     assert 'python-version: "3.14"' in extras_smoke
+    assert "activate-environment: true" in extras_smoke
     assert "actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903" in extras_smoke
     assert 'node-version: "24"' in extras_smoke
     assert "node repo-tools/entrypoint.mjs runtime-preflight" in extras_smoke

@@ -22,6 +22,7 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.14"
+          activate-environment: true
       - name: Runtime preflight
         run: node repo-tools/entrypoint.mjs runtime-preflight
       - name: Install Node dependencies (locked, no lifecycle scripts)
