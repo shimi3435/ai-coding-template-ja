@@ -42,7 +42,7 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 
 ### Requirement: OSWF-3 tasks.md が詳細実行と復帰を自己完結させる
 
-各OpenSpec changeの`tasks.md`は MUST 各taskの成果、依存、対象、実装checkbox、検証checkboxを持つ。冒頭には最初のCI parity、停止・再計画条件、一時artifact cleanupだけを実行制約として記録する。再開点は依存が全て完了した先頭の未完了taskとし、blockerは該当task直下へ記録する。
+各OpenSpec changeの`tasks.md`は MUST 各taskの成果、依存、対象、実装checkbox、検証checkboxを持つ。冒頭には最初のCI parity、停止・再計画条件、一時artifact cleanupだけを実行制約として記録する。再開点は依存が全て完了した先頭の未完了taskとする。preflightとdirty ownership確認が成功した後のtask実行blockerは該当task直下へ記録し、両確認のいずれかが失敗した場合はreport-onlyとしてrepositoryを変更してはならない。未commit差分から再開する場合は、呼出終了時に先頭の実行可能な未完了task直下へ記録した累積executor-owned paths、task state、post-task diff digestを使い、完了task、実装済み・検証未完了task、orderly stopした`implementation-in-progress` taskを含む前回executorの差分と後発変更を区別しなければならない。abrupt termination後の未記録差分をexecutor所有と推測してはならない。
 
 #### Scenario: taskを実装・検証する
 - **WHEN** taskの実装と指定検証が成功する
@@ -60,9 +60,37 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 - **WHEN** 一つ以上のtaskが未完了である
 - **THEN** executorは依存が全て完了した先頭の未完了taskを選び、別のSTATE / ROADMAPを必要としない
 
+#### Scenario: 実装済みtaskの未commit差分から検証を再開する
+- **WHEN** 実装checkboxが完了し検証checkboxが未完了で、現在の対象pathとdigestがtask直下のexecutor ownership記録に一致する
+- **THEN** executorは前回自身の差分として保持し、dirty overlapで停止せず検証から再開する
+
+#### Scenario: 実装途中taskをorderly stopする
+- **WHEN** safe boundary後にfileを変更し、実装checkboxを完了する前に制御可能な停止条件へ到達する
+- **THEN** executorは対象pathとdigestを`implementation-in-progress`状態で累積ownership snapshotへ記録して停止する
+
+#### Scenario: 実装途中taskの未commit差分から再開する
+- **WHEN** `implementation-in-progress`のpath集合とdigestが現在状態に一致する
+- **THEN** executorは前回自身の差分を保持して同じtaskの実装を継続する
+
+#### Scenario: abrupt termination後に未記録差分が残る
+- **WHEN** process killまたはhost crashによりownership snapshot更新前に終了する
+- **THEN** executorは未記録差分の所有者を推測せず、dirty overlapとしてfail-closedで停止する
+
+#### Scenario: 実装済みtaskの対象pathが記録後に変化する
+- **WHEN** 現在の対象path集合またはdigestがtask直下のexecutor ownership記録と一致しない
+- **THEN** executorは後発変更の所有者を推測せず、重複pathを示して変更前に停止する
+
+#### Scenario: 完了taskのdirty pathが後続taskの対象と重なる
+- **WHEN** 完了taskが変更したdirty pathが後続の未実装taskの対象でもあり、現在状態が累積executor ownership記録に一致する
+- **THEN** executorは前回自身の差分を保持したまま後続taskの実装を続行する
+
 #### Scenario: taskが依存先より先に並ぶ
 - **WHEN** 文書順の先頭未完了taskの依存が未完了である
-- **THEN** executorはそのtaskをskipし、依存完了済みの先頭未完了taskを選ぶか、実行可能taskがなければblockerを報告する
+- **THEN** executorはそのtaskをskipし、依存完了済みの先頭未完了taskを選ぶか、実行可能taskがなければ文書順で先頭の未解決task直下へblockerを記録して停止する
+
+#### Scenario: safe boundary後にtask実行blockerが発生する
+- **WHEN** preflightとdirty ownership確認が成功した後、実装、検証、review、またはproject checkを継続できない
+- **THEN** executorは理由と再開条件を選択中task、または該当する先頭の未完了validation task直下へ記録して停止し、未完了validation taskがなければ文書順で最後のtask直下へ記録する
 
 #### Scenario: taskの必須項目が欠落する
 - **WHEN** taskに成果、依存、対象、実装checkbox、検証checkboxのいずれかがない
@@ -70,7 +98,7 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 
 ### Requirement: OSWF-4 execute-openspec-change は直接実行をfail-closedで開始する
 
-`execute-openspec-change` skillは MUST 明示呼出を実装と必要なreviewer / verifier起動の承認として扱い、active changeが一つ、必須OpenSpec artifactsがvalid、spec-holesに未解決判断がない、詳細tasksが有効、という4条件を実装前にfail-closedで確認する。変更対象と重なるdirty差分だけをblockし、commit、push、PR、mergeを自動実行してはならない。
+`execute-openspec-change` skillは MUST 明示呼出を実装と必要なreviewer / verifier起動の承認として扱い、active changeが一つ、必須OpenSpec artifactsがvalid、spec-holesに未解決判断がない、詳細tasksが有効、という4条件を実装前にfail-closedで確認する。変更対象と重なる既存dirty差分だけをblockし、記録済みexecutor-owned差分の検証再開は許可し、commit、push、PR、mergeを自動実行してはならない。追加executorは別の利用者承認なしに起動してはならない。
 
 #### Scenario: preflightが成功する
 - **WHEN** 4条件が成立し、対象pathに重複dirty差分がない
@@ -86,7 +114,11 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 
 #### Scenario: 対象pathに既存dirty差分がある
 - **WHEN** taskの対象fileと利用者の未commit差分が重なる
-- **THEN** skillはstash、上書き、commitせず、重複pathを示して停止する
+- **THEN** skillはstash、上書き、commitせず、tasksを変更せずに重複pathを示して停止する
+
+#### Scenario: preflightまたはdirty ownership確認が失敗する
+- **WHEN** 実装前の4条件またはdirty ownership確認が成立しない
+- **THEN** skillは失敗をreport-onlyで示し、tasksを含むrepositoryを変更しない
 
 #### Scenario: 無関係なpathだけがdirtyである
 - **WHEN** 未commit差分がtask対象外にだけ存在する
@@ -102,7 +134,7 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 
 ### Requirement: OSWF-5 検証と再計画をリスク列挙条件で制御する
 
-executorは MUST 全変更でself-reviewと適用可能なfocused validationを行う。focused validationが構造上非該当の場合だけN/A理由で完了でき、環境制約または失敗による未実行は完了にできない。security / trust boundary、外部write、永続データ、公開interface、dependency / lockfile、build / CI、削除 / migrationのいずれかを変更する場合、self-review、独立review、finding修正、最新入力の`task check`、reviewerと別の独立verifierの順で検証する。initial reviewのfinding修正は最大3回とし、結果はcommand、成否、未検証理由の要約だけを`tasks.md`へ記録する。本段落のreview発火条件列挙を単一の正とし、designとtasksはOSWF-5を参照する。
+executorは MUST 全変更でself-reviewと適用可能なfocused validationを行う。focused validationが構造上非該当の場合だけN/A理由で完了でき、環境制約または失敗による未実行は完了にできない。security / trust boundary、外部write、永続データ、公開interface、dependency / lockfile、build / CI、削除 / migrationのいずれかを変更する場合、self-review、独立review、finding修正、最新入力の`task check`、reviewerと別の独立verifierの順で検証する。initial reviewのfinding修正は最大3回とし、結果はcommand、成否、未検証理由の要約だけを`tasks.md`へ記録する。initial / diff review、project check、verifierのblocker保存先taskで検証checkboxが完了済みなら、その検証checkboxと親taskを未完了へ戻し、blocker解消後の新しいevidenceが成功した場合だけ再完了できる。恒久的なreview発火条件列挙は`AGENTS.md`のOSWF-5を単一の正とし、design、tasks、workflow、skillsは同requirement IDを参照する。
 
 #### Scenario: review発火条件に該当しない
 - **WHEN** 変更が列挙された高リスク条件を一つも変更しない
@@ -114,7 +146,7 @@ executorは MUST 全変更でself-reviewと適用可能なfocused validationを�
 
 #### Scenario: reviewerがblockerを報告する
 - **WHEN** 独立reviewで修正可能なblockerが見つかる
-- **THEN** 同じexecutorがfix、focused validation、diff reviewを一組として最大3回反復する
+- **THEN** executorは保存先taskの検証checkboxと親taskが完了済みなら未完了へ戻し、同じexecutorがfix、focused validation、diff reviewを一組として最大3回反復する
 
 #### Scenario: 3回後もblockerが残る
 - **WHEN** 3回目の修正cycle後もblockerが解消しない
@@ -122,7 +154,7 @@ executorは MUST 全変更でself-reviewと適用可能なfocused validationを�
 
 #### Scenario: final verifierがblockerを報告する
 - **WHEN** initial reviewの修正と最新入力のproject checks後、独立verifierがblockerを報告する
-- **THEN** executorはchangeを未完了へ戻してfinding、影響、再計画案を提示し、利用者の新cycle承認後だけfix、独立review、project checks、前cycleと別のverifierを実行する
+- **THEN** executorは保存先taskの検証checkboxと親taskを未完了へ戻してfinding、影響、再計画案を提示し、利用者の新cycle承認後だけfix、独立review、project checks、前cycleと別のverifierを実行する
 
 #### Scenario: 同じagent taskが連続失敗する
 - **WHEN** 同一役割・taskのagentが利用可能な成果を返さず連続2回失敗する

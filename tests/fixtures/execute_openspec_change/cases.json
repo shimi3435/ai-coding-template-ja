@@ -1,0 +1,48 @@
+{
+  "preflight": [
+    {"case": "active-change-zero", "active_changes": [], "result": "stop-before-mutation"},
+    {"case": "active-change-one", "active_changes": ["change-a"], "result": "continue"},
+    {"case": "active-change-multiple", "active_changes": ["change-a", "change-b"], "result": "stop-before-mutation"},
+    {"case": "missing-required-artifact", "result": "stop-before-mutation"},
+    {"case": "invalid-required-artifact", "result": "stop-before-mutation"},
+    {"case": "unresolved-spec-hole", "result": "stop-before-mutation"},
+    {"case": "missing-task-field", "result": "stop-before-mutation"},
+    {"case": "exact-execution-constraints", "constraints": ["first-ci-parity", "stop-replan", "temporary-artifact-cleanup"], "result": "continue"},
+    {"case": "missing-execution-constraint", "constraints": ["first-ci-parity", "stop-replan"], "result": "stop-before-mutation"},
+    {"case": "duplicate-execution-constraint", "constraints": ["first-ci-parity", "stop-replan", "stop-replan", "temporary-artifact-cleanup"], "result": "stop-before-mutation"},
+    {"case": "extra-execution-constraint", "constraints": ["route", "first-ci-parity", "stop-replan", "temporary-artifact-cleanup"], "result": "stop-before-mutation"}
+  ],
+  "task_selection": [
+    {"case": "dependency-order", "document_order": ["2", "1"], "dependencies": {"2": ["1"], "1": []}, "selected": "1"},
+    {"case": "rerun", "document_order": ["1", "2", "3"], "completed": ["1"], "dependencies": {"1": [], "2": ["1"], "3": ["2"]}, "selected": "2"},
+    {"case": "verification-incomplete", "implementation_complete": true, "verification_complete": false, "task_complete": false, "change_close_allowed": false}
+  ],
+  "dirty_worktree": [
+    {"case": "overlapping-dirty", "target_paths": ["src/a.py"], "dirty_paths": ["src/a.py"], "result": "stop-before-mutation"},
+    {"case": "unrelated-dirty", "target_paths": ["src/a.py"], "dirty_paths": ["notes/local.txt"], "result": "continue-preserving-dirty"},
+    {"case": "resume-matching-executor-digest", "target_paths": ["src/a.py"], "dirty_paths": ["src/a.py"], "recorded_executor_paths": ["src/a.py"], "digest_matches": true, "result": "continue-validation"},
+    {"case": "completed-task-dirty-overlaps-next-task", "completed_task": "1", "next_task": "2", "target_paths": ["AGENTS.md"], "dirty_paths": ["AGENTS.md"], "cumulative_executor_paths": ["AGENTS.md"], "digest_matches": true, "result": "continue-implementation"},
+    {"case": "resume-changed-executor-path", "target_paths": ["src/a.py"], "dirty_paths": ["src/a.py"], "recorded_executor_paths": ["src/a.py"], "digest_matches": false, "result": "stop-before-mutation"}
+  ],
+  "blocker_persistence": [
+    {"case": "preflight-failure", "stage": "preflight", "tasks_mutated": false, "persistence": "report-only"},
+    {"case": "dirty-overlap", "stage": "dirty-overlap", "tasks_mutated": false, "persistence": "report-only"},
+    {"case": "dependency-blocked-after-safe-boundary", "stage": "task-selection", "first_unresolved_task": "2", "persistence": "task-2"},
+    {"case": "implementation-blocker", "stage": "implementation", "selected_task": "2", "persistence": "task-2"},
+    {"case": "validation-blocker", "stage": "validation", "selected_task": "2", "persistence": "task-2"},
+    {"case": "review-or-project-check-blocker", "stage": "review", "first_incomplete_validation_task": "4", "persistence": "task-4"},
+    {"case": "review-blocker-after-all-validations", "stage": "review", "document_order": ["1", "2", "3", "4"], "incomplete_validation_tasks": [], "persistence": "task-4"}
+  ],
+  "completion_reopen": [
+    {"case": "initial-review-blocker", "stage": "initial-review", "persistence": "task-4", "validation_before": true, "validation_after": false, "parent_after": false},
+    {"case": "diff-review-blocker", "stage": "diff-review", "persistence": "task-4", "validation_before": true, "validation_after": false, "parent_after": false},
+    {"case": "project-check-blocker", "stage": "project-check", "persistence": "task-4", "validation_before": true, "validation_after": false, "parent_after": false},
+    {"case": "verifier-blocker", "stage": "verifier", "persistence": "task-4", "validation_before": true, "validation_after": false, "parent_after": false}
+  ],
+  "partial_ownership": [
+    {"case": "orderly-stop-with-partial-diff", "task": "2", "implementation_complete": false, "changed_paths": ["src/a.py"], "snapshot_state": "implementation-in-progress", "digest_matches": true, "result": "continue-implementation"},
+    {"case": "partial-digest-changed-before-resume", "task": "2", "implementation_complete": false, "changed_paths": ["src/a.py"], "snapshot_state": "implementation-in-progress", "digest_matches": false, "result": "stop-before-mutation"},
+    {"case": "abrupt-termination-without-snapshot", "task": "2", "implementation_complete": false, "dirty_paths": ["src/a.py"], "snapshot_recorded": false, "result": "stop-before-mutation"}
+  ],
+  "forbidden_git_operations": ["stash", "commit", "push", "pull-request", "merge"]
+}

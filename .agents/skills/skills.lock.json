@@ -89,7 +89,7 @@
       "license": "MIT",
       "license_file": "LICENSE",
       "redistribution": "allowed",
-      "sha256": "99b36ac4406e758710a09d45507a274c550a87de4c27bd700adf46af7074c761"
+      "sha256": "71fcef1464a270c155d849cb219813e70e0fdcfd77fc9fd04bdda90a46984d54"
     },
     {
       "name": "verify-change",
@@ -99,7 +99,7 @@
       "license": "MIT",
       "license_file": "LICENSE",
       "redistribution": "allowed",
-      "sha256": "01eaeaf3e54e72a7c873d3d7bf2bd45c1877ee3c12b737d3cb049e9687e1329d"
+      "sha256": "512016c16b35ebcbeef2aaab94816f820463bead84887dbcecd7c6487395ebd6"
     },
     {
       "name": "spec-holes",
@@ -119,7 +119,7 @@
       "license": "MIT",
       "license_file": "LICENSE",
       "redistribution": "allowed",
-      "sha256": "f456311687c476ec807d5e28eb8e2c89a179a449e99ff69f34f482c62ef4ff51"
+      "sha256": "a30530ba02759083630b101940e73fe22ce3eba90d72a4377e358d567da8ecf8"
     }
   ]
 }

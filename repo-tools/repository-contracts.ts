@@ -188,9 +188,6 @@ export function validateRepositoryContracts(): readonly string[] {
 
   const taskfilePath = join(repositoryRoot, "Taskfile.yml");
   const taskfileText = readFileSync(taskfilePath, "utf8");
-  if (/^  check:without-gsd:\s*$/m.test(taskfileText)) {
-    throw new Error(`${taskfilePath}: check:without-gsd は廃止済みです。check:isolated を使ってください`);
-  }
   const requiredNpmRoutes = ["npm ci --ignore-scripts", "npm audit --audit-level=high"];
   const missingNpmRoutes = requiredNpmRoutes.filter((route) => !taskfileText.includes(route));
   if (missingNpmRoutes.length > 0) {
@@ -234,7 +231,6 @@ export function validateRepositoryContracts(): readonly string[] {
     "exact npm dependencies",
     "package-lock v3",
     "node_modules ignored",
-    "check:without-gsd removed",
     "deterministic npm install and audit routes",
     `TEMPLATE_VERSION ${templateVersion}`,
     "prepare-v2-release handoff",

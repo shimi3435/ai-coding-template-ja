@@ -68,7 +68,7 @@ tasks:
       - uv run --no-sync pytest
 
   check:isolated:
-    desc: 必須 runtime だけの隔離環境で通常 check が OpenSpec / GSD / ネットワークに依存しないことを検証
+    desc: 必須 runtime だけの隔離環境で通常 check が OpenSpec CLI / ネットワークに依存しないことを検証
     cmds:
       - |
         set -eu
@@ -77,12 +77,11 @@ tasks:
         bin="$isolation_root/bin"
         home="$isolation_root/home"
         codex_home="$isolation_root/codex-home"
-        gsd_home="$isolation_root/gsd-home"
         xdg_cache="$isolation_root/xdg-cache"
         xdg_config="$isolation_root/xdg-config"
         xdg_data="$isolation_root/xdg-data"
         uv_cache="$isolation_root/uv-cache"
-        mkdir -p "$bin" "$home" "$codex_home" "$gsd_home" \
+        mkdir -p "$bin" "$home" "$codex_home" \
           "$xdg_cache" "$xdg_config" "$xdg_data" "$uv_cache"
 
         link_tool() {
@@ -103,7 +102,6 @@ tasks:
         env -i \
           HOME="$home" \
           CODEX_HOME="$codex_home" \
-          GSD_HOME="$gsd_home" \
           XDG_CACHE_HOME="$xdg_cache" \
           XDG_CONFIG_HOME="$xdg_config" \
           XDG_DATA_HOME="$xdg_data" \
@@ -118,11 +116,8 @@ tasks:
           sh -eu -c '
             ! command -v openspec >/dev/null 2>&1
             ! command -v npx >/dev/null 2>&1
-            ! command -v gsd >/dev/null 2>&1
-            ! command -v gsd-phase >/dev/null 2>&1
-            ! command -v gsd-new-project >/dev/null 2>&1
-            if [ -n "$(find "$HOME" "$CODEX_HOME" "$GSD_HOME" -mindepth 1 -print -quit)" ]; then
-              echo "[FAIL] isolated HOME/CODEX_HOME/GSD_HOME is not empty" >&2
+            if [ -n "$(find "$HOME" "$CODEX_HOME" -mindepth 1 -print -quit)" ]; then
+              echo "[FAIL] isolated HOME/CODEX_HOME is not empty" >&2
               exit 1
             fi
             cd "$REPOSITORY"
@@ -179,34 +174,6 @@ tasks:
       漏れる（fail-open）ため、CLI 実行前に検査して FAIL にする。
     cmds:
       - uv run --no-sync python scripts/openspec-validate-gate.py
-
-  openspec:gsd-handoff:smoke:
-    desc: 実 OpenSpec 1.3.1 / GSD 1.5.0 の strictly read-only opt-in smoke
-    silent: true
-    requires:
-      vars:
-        - CHANGE_ID
-        - GSD_HOME
-    env:
-      HANDOFF_CHANGE_ID: "{{.CHANGE_ID}}"
-      HANDOFF_GSD_HOME: "{{.GSD_HOME}}"
-    cmds:
-      - |
-        set -eu
-        cache_root="$(mktemp -d)"
-        trap 'rm -rf "$cache_root"' EXIT
-        mkdir -p "$cache_root/pycache" "$cache_root/uv-cache" "$cache_root/xdg-cache" \
-          "$cache_root/xdg-config" "$cache_root/xdg-data"
-        : > "$cache_root/uv.toml"
-        PYTHONDONTWRITEBYTECODE=1 \
-        PYTHONPYCACHEPREFIX="$cache_root/pycache" \
-        UV_CACHE_DIR="$cache_root/uv-cache" \
-        UV_CONFIG_FILE="$cache_root/uv.toml" \
-        XDG_CACHE_HOME="$cache_root/xdg-cache" \
-        XDG_CONFIG_HOME="$cache_root/xdg-config" \
-          XDG_DATA_HOME="$cache_root/xdg-data" \
-          uv run --no-sync python scripts/openspec-gsd-handoff-smoke.py \
-            --repository . --change "$HANDOFF_CHANGE_ID" --gsd-home "$HANDOFF_GSD_HOME"
 
   rename:
     desc: |
@@ -332,7 +299,7 @@ tasks:
 
   prune-template-docs:
     desc: |
-      テンプレ自身のメタ文書 docs/template/（ADR 0001-0006・grill）を削除。
+      docs/template/ 配下のテンプレ固有メタ文書を一括削除。
       既定は dry-run。実削除は --apply（docs/adr と TEMPLATE_VERSION は不可侵）。
         task prune-template-docs              # dry-run
         task prune-template-docs -- --apply   # 実削除

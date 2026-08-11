@@ -41,19 +41,17 @@ OpenSpec artifactsを仕様と完了の正本、`tasks.md`を詳細実行と進�
 2. 停止・再計画条件。
 3. 一時artifact cleanup。
 
-本change自身は契約変更前のbootstrap入力であるため、現行規約のRoute、恒久成果、一時実行証跡、最初のCI parity、停止・再計画条件の5項目を暫定記載する。
-
 ### 4. execute-openspec-changeを直接executorへ置き換える
 
 skill呼出自体を実装と必要なreviewer / verifierの順次起動承認とする。追加preview承認は要求しない。実装前にactive change一つ、必須artifacts valid、spec-holes未解決なし、詳細tasks validを確認する。
 
-dirty worktreeは対象pathとの重複だけをblockし、無関係差分を保持する。skillはGit commit、push、PR、mergeを実行しない。不可逆操作、外部write、仕様拡張は通常の安全確認または再計画承認へ戻す。
+dirty worktreeは対象pathとの既存重複だけをblockし、無関係差分を保持する。preflightまたはdirty ownership確認の失敗はreport-onlyとしてrepositoryを変更しない。両方が成功したsafe boundary後のtask実行blockerは、選択中task、文書順で先頭の未解決task、または先頭の未完了validation taskのうち該当するtask直下へ理由と再開条件を記録する。reviewまたはproject check時に未完了validation taskがなければ文書順で最後のtaskをfallbackにする。未完了taskを残す呼出終了時に、完了task、実装済み・検証未完了task、orderly stopした`implementation-in-progress` taskを含む累積executor-owned paths、task state、各pathを最後に変更したtaskのpost-task diff digestを`tasks.md`へ記録する。一致する未commit差分は、後続taskの対象と重なっても再呼出時に保持し、partial taskは実装を継続する。不一致または記録欠落は後発変更との区別不能として停止する。abrupt termination後の未記録差分もexecutor所有と推測せずfail-closedで停止する。skillはGit commit、push、PR、mergeを実行しない。追加executorは別の利用者承認なしに起動しない。不可逆操作、外部write、仕様拡張は通常の安全確認または再計画承認へ戻す。
 
 ### 5. reviewを列挙リスクへ比例させる
 
-全変更にself-reviewと適用可能なfocused validationを要求する。独立review / verifierの発火条件はOSWF-5だけを単一の正とし、本designとtasksには重複列挙しない。
+全変更にself-reviewと適用可能なfocused validationを要求する。独立review / verifierの恒久的な発火条件列挙は`AGENTS.md`のOSWF-5だけを単一の正とし、本designとtasksには重複列挙しない。
 
-順序はself-review、initial independent review、最大3回のfix / focused validation / diff review、最新入力の`task check`、initial reviewerと別のverifierとする。fresh final reviewer専任は置かずverifierへ統合する。verifierがblockerを報告した場合はsoft-stopし、利用者承認後の新cycleでfix、review、check、前cycleと別のverifierを実行する。同一役割・taskのagentが連続2回失敗した場合、または同一環境・command・入力のinfrastructure failureが1回の再試行後にも再現した場合もsoft-stopする。生logや一時reportは追跡せず、command、結果、未検証理由だけを`tasks.md`へ残す。
+順序はself-review、initial independent review、最大3回のfix / focused validation / diff review、最新入力の`task check`、initial reviewerと別のverifierとする。fresh final reviewer専任は置かずverifierへ統合する。initial / diff review、project check、verifierのblocker保存先taskで検証checkboxが完了済みなら、その検証checkboxと親taskを未完了へ戻し、新しいevidenceが成功した場合だけ再完了する。verifierがblockerを報告した場合はsoft-stopし、利用者承認後の新cycleでfix、review、check、前cycleと別のverifierを実行する。同一役割・taskのagentが連続2回失敗した場合、または同一環境・command・入力のinfrastructure failureが1回の再試行後にも再現した場合もsoft-stopする。生logや一時reportは追跡せず、command、結果、未検証理由だけを`tasks.md`へ残す。
 
 ### 6. GSD integrationをv2 breaking changeとして削除する
 
@@ -127,13 +125,13 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 | 3 | 重複・衝突 | 該当 | 同じ対象を複数taskが変更 | 1: 依存で順序を明示 |
 | 4 | 順序 | 該当 | 文書順と依存順が異なる | 1: 依存完了を優先 |
 | 5 | 型・形式不正 | 該当 | checkboxや必須fieldが不正 | 1: preflight failure |
-| 6 | エラー経路 | 該当 | 実装成功・検証不能、または構造上N/A | 1: 環境未実行はclose禁止、構造上N/Aだけ理由付き完了 |
-| 7 | 冪等性・再実行 | 該当 | 完了taskの再実行 | 1: state確認後、不要な書換えをしない |
+| 6 | エラー経路 | 該当 | 実装成功・検証不能、構造上N/A、abrupt termination | 1: 環境未実行はclose禁止、構造上N/Aだけ理由付き完了、未記録差分はfail-closed |
+| 7 | 冪等性・再実行 | 該当 | 完了taskまたは実装途中taskの再実行 | 1: ownership state / digest一致時だけ検証再開または実装継続 |
 | 8 | 時刻・タイムゾーン | 非該当 | 時刻を復帰条件に使わない | — |
 | 9 | 文字列 | 該当 | 対象pathやcommandにUnicode・空白 | 1: Markdownのcode spanでexact値を保持 |
 | 10 | 数値 | 非該当 | 固定task上限を設けない | — |
 | 11 | 巨大入力・リソース枯渇 | 該当 | tasks肥大化 | 1: 一体成果はsection、独立成果はchange分割 |
-| 12 | 状態遷移の未定義パス | 該当 | 実行可能taskがないが未完了 | 1: blockerとして停止・報告 |
+| 12 | 状態遷移の未定義パス | 該当 | 実行可能taskがない、または実装途中でorderly stop | 1: blockerを該当taskへ記録し、partial ownershipを`implementation-in-progress`で保持 |
 
 ### OSWF-4 直接executor
 
@@ -141,11 +139,11 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 | --- | --- | --- | --- | --- |
 | 1 | 空・ゼロ長・None | 該当 | active changeが0件 | 1: 実装前停止 |
 | 2 | 境界値 | 該当 | active changeが1件 / 2件 | 1: 1件だけ受理 |
-| 3 | 重複・衝突 | 該当 | task対象とdirty差分が重なる | 1: 重複pathを示して停止 |
-| 4 | 順序 | 該当 | preflight前にcode変更 | 1: 4条件確認後だけ実行 |
+| 3 | 重複・衝突 | 該当 | task対象とdirty差分が重なる | 4: 既存重複は停止、記録済みexecutor差分だけ再開 |
+| 4 | 順序 | 該当 | preflightまたはdirty ownership確認前にrepository変更 | 1: 両確認失敗はreport-only、成功後だけtasksへblockerを記録 |
 | 5 | 型・形式不正 | 該当 | artifactsまたはtasksがinvalid | 1: fail-closed |
-| 6 | エラー経路 | 該当 | 途中失敗、破壊操作、仕様拡張 | 1: checkboxを偽装せず停止・確認 |
-| 7 | 冪等性・再実行 | 該当 | skill再呼出 | 1: 未完了taskから再開 |
+| 6 | エラー経路 | 該当 | safe boundary後の途中失敗、破壊操作、仕様拡張 | 1: 該当taskへ理由と再開条件を記録し、checkboxを偽装せず停止・確認 |
+| 7 | 冪等性・再実行 | 該当 | skill再呼出 | 4: 累積ownership digest一致時だけ未完了taskから再開 |
 | 8 | 時刻・タイムゾーン | 非該当 | 時刻依存なし | — |
 | 9 | 文字列 | 該当 | unsafe / ambiguous change IDとpath | 1: exact active directoryと対象pathを検証 |
 | 10 | 数値 | 非該当 | 量的判定なし | — |
@@ -159,7 +157,7 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 | 1 | 空・ゼロ長・None | 該当 | 高リスク条件0件 | 1: reviewer / verifierを必須にしない |
 | 2 | 境界値 | 該当 | blocker修正0 / 3 / 4回、agent失敗1 / 2回、infra失敗1 / 2回 | 1: initial fix最大3回、agent / infra同条件2回で停止 |
 | 3 | 重複・衝突 | 該当 | 複数risk条件と複数finding | 1: 一つのreview cycleへ集約 |
-| 4 | 順序 | 該当 | review、fix、check、verify、verifier後の再開順序 | 1: verifier blockerはsoft-stop後の承認済み新cycleへ移す |
+| 4 | 順序 | 該当 | review、fix、check、verify、verifier後の再開順序 | 1: blocker保存先の検証と親taskを再openし、verifier blockerはsoft-stop後の承認済み新cycleへ移す |
 | 5 | 型・形式不正 | 該当 | review reportが機械形式でない | 1: finding内容を読み、結果要約だけ記録 |
 | 6 | エラー経路 | 該当 | reviewer / verifier blocker、agent連続失敗、infra再現 | 1: 成功扱いせず定義済み閾値で停止 |
 | 7 | 冪等性・再実行 | 該当 | stale green evidence再利用 | 1: 最新入力の`task check`を再実行 |
@@ -167,7 +165,7 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 | 9 | 文字列 | 該当 | secretを含むlog | 1: 生logを追跡せず要約のみ |
 | 10 | 数値 | 該当 | initial fix最大3回、agent / infra失敗2回 | 1: 各閾値を超える自動反復を禁止 |
 | 11 | 巨大入力・リソース枯渇 | 該当 | report / log肥大化 | 1: command結果要約だけ永続化 |
-| 12 | 状態遷移の未定義パス | 該当 | 仕様判断、material expansion、verifier blocker | 1: 利用者承認まで停止し、必要なら新cycleへ移す |
+| 12 | 状態遷移の未定義パス | 該当 | 仕様判断、material expansion、review / check / verifier blocker | 1: 完了済み保存先taskを再openし、利用者承認まで停止して必要なら新cycleへ移す |
 
 ### OSWF-6 GSD固有統合の削除
 

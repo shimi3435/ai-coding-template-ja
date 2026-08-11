@@ -1,5 +1,8 @@
 # テンプレ自身のメタ文書を `docs/template/` に隔離し下流を汚さない
 
+> Status: Accepted.
+> Amended by [ADR-0010](0010-openspec-direct-execution.md).
+
 このテンプレは自分の設計判断を ADR（0001-0006）として持ち、`grill.md` / `docs/grill/` に構築記録を持つ。これらは**テンプレの作り方**の記録であり、「Use this template」で作成した下流の研究リポジトリには無関係なノイズになる。研究者は自分の研究判断（モデル選択・実験設計の理由）を ADR として積みたいのに、テンプレ ADR が `docs/adr/` を占有すると混ざる。
 
 そこでメタ文書と下流用スキャフォルドの**名前空間を分離**する。
@@ -12,6 +15,14 @@
 - ADR-0005 の `TEMPLATE_VERSION` は prune 後も残す（由来追跡のため）。
 
 > 注: 物理的な移動（`docs/adr/0001-0006` → `docs/template/adr/`、`grill.md` → `docs/template/grill/ai-coding-template-ja.md`）は PR2 で実施済み。`docs/adr/` は `0000-template.md` のみを残し下流の研究 ADR 用に空出荷する。
+
+## v2 現状
+
+名前空間分離と `docs/template/` の一括pruneは引き続き有効である。
+`docs/template/grill/ai-coding-template-ja.md` は削除済みで、現在の同directoryには設計判断、
+リリース、ふりかえりなどのテンプレ固有メタ文書だけを置く。README、`task prune-template-docs`、
+`task doctor` は個別artifact名やADR番号範囲をinventoryとして列挙せず、同じ総称で案内する。
+上記のgrill文書に関する記述はPR2時点の判断履歴であり、現在の配布treeを示すものではない。
 
 ## Considered Options
 

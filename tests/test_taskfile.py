@@ -54,25 +54,12 @@ def test_local_setup_preserves_previously_installed_extras(
     assert f"- {expected_command}" in _task_body(task_name)
 
 
-def test_handoff_smoke_is_explicit_and_isolated_from_normal_check() -> None:
-    smoke = _task_body("openspec:gsd-handoff:smoke")
+def test_normal_check_is_tool_neutral_and_legacy_handoff_task_is_absent() -> None:
+    legacy_token = "g" + "sd"
+    taskfile = TASKFILE.read_text(encoding="utf-8")
     check = _task_body("check")
 
-    assert "requires:" in smoke
-    assert "silent: true" in smoke
-    assert "CHANGE_ID" in smoke
-    assert "GSD_HOME" in smoke
-    assert "PYTHONDONTWRITEBYTECODE=1" in smoke
-    assert "PYTHONPYCACHEPREFIX" in smoke
-    assert "UV_CACHE_DIR" in smoke
-    assert "UV_CONFIG_FILE" in smoke
-    assert "uv run --no-sync python scripts/openspec-gsd-handoff-smoke.py" in smoke
-    assert '--change "$HANDOFF_CHANGE_ID"' in smoke
-    assert '--gsd-home "$HANDOFF_GSD_HOME"' in smoke
-    assert '--change "{{.CHANGE_ID}}"' not in smoke
-    assert '--gsd-home "{{.GSD_HOME}}"' not in smoke
-    assert "openspec:gsd-handoff:smoke" not in check
-    assert "GSD_HOME" not in check
+    assert "openspec:" + legacy_token + "-handoff:smoke" not in taskfile
     assert "openspec" not in check
     assert "uv run --no-sync ruff format --check ." in check
     assert "uv run --no-sync ruff check ." in check
@@ -124,7 +111,6 @@ def test_isolated_task_specifies_a_real_offline_nested_check() -> None:
     for root in (
         "HOME",
         "CODEX_HOME",
-        "GSD_HOME",
         "XDG_CACHE_HOME",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",
@@ -136,11 +122,13 @@ def test_isolated_task_specifies_a_real_offline_nested_check() -> None:
     assert "task check" in body
     assert "command -v openspec" in body
     assert "command -v npx" in body
-    assert "command -v gsd" in body
+    legacy_token = "g" + "sd"
+    assert legacy_token.upper() + "_HOME" not in body
+    assert "command -v " + legacy_token not in body
     assert "UV_OFFLINE=1" in body
     assert "HTTP_PROXY=" in body
     assert "trap '" in body and "rm -rf" in body
-    assert "check:without-gsd:" not in taskfile
+    assert "check:without-" + legacy_token + ":" not in taskfile
 
 
 @pytest.mark.parametrize(

@@ -19,11 +19,6 @@ def _make_rename_fixture(tmp_path: Path) -> tuple[Path, Path]:
         REPO_ROOT / "scripts" / "rename-package.py",
         tmp_path / "scripts" / "rename-package.py",
     )
-    (tmp_path / "scripts" / "openspec-gsd-handoff-smoke.py").write_text(
-        f"from {OLD_MODULE}.openspec_gsd_handoff.smoke import main\n",
-        encoding="utf-8",
-    )
-
     package = tmp_path / "src" / OLD_MODULE
     package.mkdir(parents=True)
     (package / "__init__.py").write_text(
@@ -71,9 +66,6 @@ def test_rename_updates_all_project_names_in_context(tmp_path: Path) -> None:
     assert (root / "CONTEXT.md").read_text(encoding="utf-8") == (
         "# sample-project\n\n由来: sample-project\n"
     )
-    assert (root / "scripts" / "openspec-gsd-handoff-smoke.py").read_text(
-        encoding="utf-8"
-    ) == ("from sample_project.openspec_gsd_handoff.smoke import main\n")
     for metadata in ("package.json", "package-lock.json"):
         assert OLD_DISTRIBUTION not in (root / metadata).read_text(encoding="utf-8")
         assert "sample-project-repo-tools" in (root / metadata).read_text(

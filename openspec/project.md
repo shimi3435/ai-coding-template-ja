@@ -1,22 +1,21 @@
 # OpenSpec プロジェクト規約
 
-このファイルは **OpenSpec 固有の運用規約**のみを書く（ADR-0008 / CONTEXT.md Q24）。
+このファイルは **OpenSpec 固有の運用規約**のみを書く（ADR-0010）。
 
 - 作業方針（意図・自然言語）の単一の正は [AGENTS.md](../AGENTS.md)。ここに重複させない。
 - 技術値（Python バージョン・依存・lint 設定）は [pyproject.toml](../pyproject.toml) を参照する。
 - 用語定義は [CONTEXT.md](../CONTEXT.md)。
 
-## OpenSpec / GSD の適応型実行境界（ADR-0008）
+## OpenSpec 直接実行（ADR-0010）
 
-- OpenSpec は全 change の proposal、design、spec delta、受け入れ基準、`spec-holes`、最終完了判定を
-  所有する。独立して出荷できる成果は先に別 changes へ分割する。
-- 小規模 change は `tasks.md` が詳細タスクと進捗を所有し、
-  `openspec instructions apply --change <id>` または同じ Markdown artifacts から直接実行する。
-- 大規模 change は opt-in の GSD が詳細 plan、phase 実行、phase 進捗を所有する。OpenSpec
-  `tasks.md` は handoff、全 phases 完了、原本検証、project checks、close の境界ゲートだけを持ち、
-  GSD の詳細タスクを複製しない。GSD も仕様と受け入れ基準を再定義しない。
-- GSD phases 完了後も OpenSpec 原本へ実装・検証を対応付け、全境界ゲート成功後にだけ完了とする。
-- 詳細とエンジン不在時の Markdown fallback 形式は [docs/agents/workflow.md](../docs/agents/workflow.md)。
+- OpenSpec 直接実行を唯一のコア経路とする。proposal、design、spec delta、受け入れ基準、
+  `spec-holes` が仕様の正本、`tasks.md` が実装順序、進捗、検証状態、復帰位置の正本である。
+- 外部挙動、公開 interface、security / trust boundary、永続データ、dependency / lockfile、build / CI、
+  または複数の恒久成果を変更する場合に change を要求する。
+- 独立して受け入れ、review、merge できる成果は別 changes に分割する。一体の成果は量では分割せず、
+  同じ `tasks.md` の依存付き section で管理する。
+- OpenSpec CLI は任意とする。不在時も同じ Markdown artifacts と checkbox 規律で直接実行する。
+- 詳細と Markdown fallback 形式は [docs/agents/workflow.md](../docs/agents/workflow.md)。
 
 ## ディレクトリ
 
@@ -47,7 +46,7 @@
 OpenSpec engine のアクセス形態は **(a) `openspec` CLI** と **(b) スラッシュコマンド `/opsx:*`**
 （別物）。CLI 動詞（`openspec instructions apply --change` / `status` / `validate` / `list`）と
 各形態の使い分けは [docs/agents/workflow.md](../docs/agents/workflow.md) が単一の正。engine は
-コアのハード依存ではなく（ADR-0002/0008）、未導入でも上記ディレクトリ規約を手書きで運用できる
+コアのハード依存ではなく（ADR-0002/0010）、未導入でも上記ディレクトリ規約を手書きで運用できる
 （Markdown fallback）。`openspec init` は新規プロジェクト用で、既存リポジトリでは
 project.md→config.yaml 移行のハザードがあるため実行しない（同 workflow.md）。生成物はこの
 テンプレートにはコミットしない。

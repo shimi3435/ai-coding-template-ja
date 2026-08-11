@@ -14,6 +14,9 @@ description: >
 「テストは通るが実際には動かない」を捕捉する。変更を完了と報告する前に、テスト green
 だけでなく実挙動を確認する。
 
+独立 verifier の要否は AGENTS.md の OSWF-5 だけから判断し、ここで発火条件を再定義しない。
+外部 tool 固有 state は検証・完了・再開の根拠にせず、canonical `tasks.md` と現在の repository 入力を使う。
+
 ## Reusable green evidence
 
 `task check` を含む各検証 command について、直前の green evidence と現在状態の入力同一性を
@@ -34,6 +37,10 @@ focused tests / 実動作 seam は再利用しない。全体 check evidence の
 acceptance criteria、MUST / SHALL、project gate に必要な required evidence が欠落する場合、または
 required 性が不明な場合は blocker とする。未検証を non-blocker にできるのは optional seam、明示的 out-of-scope、
 研究環境制約のいずれかに限り、理由と影響を記録する。未検証を検証済みとして報告しない。
+
+focused validation と代替静的検証が構造上非該当の場合だけ、N/A 理由を記録して完了にできる。
+環境制約または validation failure による未実行は完了にできない。検証 checkbox を未完了に保ち、
+理由と影響を `tasks.md` へ記録する。
 
 ## 手順（4 段）
 
@@ -57,3 +64,5 @@ required 性が不明な場合は blocker とする。未検証を non-blocker �
 - **検証済み**: 実行したコマンドと結果の要点（テスト名・出力・終了コード）。
 - **未検証**: 項目と理由（AGENTS.md Validation「実行できなかったコマンドは理由を明記」と
   同じ規律）。
+- 永続化する証跡は command、結果、未検証理由の要約だけとする。生 log、一時 report、tool 固有 state は
+  追跡しない。
