@@ -9,6 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEGACY_TOKEN = "g" + "sd"
+TEMPLATE_SLUG = "-".join(("ai", "coding", "template", "ja"))
 TOKEN_BOUNDARY = re.compile(rf"(?i)(^|[^a-z0-9]){LEGACY_TOKEN}([^a-z0-9]|$)".encode())
 V2_NOTES = Path("docs/template/v2-release-notes.md")
 ACTIVE_CHANGE = Path("openspec/changes/externalize-" + LEGACY_TOKEN + "-from-core")
@@ -69,7 +70,7 @@ def test_current_docs_explain_direct_execution_and_markdown_fallback() -> None:
 
 def test_obsolete_optional_guide_and_historical_grill_are_not_distributed() -> None:
     assert not (REPO_ROOT / "docs/optional" / (LEGACY_TOKEN + ".md")).exists()
-    assert not (REPO_ROOT / "docs/template/grill/ai-coding-template-ja.md").exists()
+    assert not (REPO_ROOT / "docs/template/grill" / f"{TEMPLATE_SLUG}.md").exists()
 
 
 def test_current_template_doc_surfaces_use_tool_neutral_meta_doc_wording() -> None:
@@ -80,7 +81,7 @@ def test_current_template_doc_surfaces_use_tool_neutral_meta_doc_wording() -> No
         "ADR・grill",
         "構築記録（grill）",
         "grill 記録",
-        "docs/template/grill/ai-coding-template-ja.md",
+        f"docs/template/grill/{TEMPLATE_SLUG}.md",
     )
 
     for path in CURRENT_TEMPLATE_DOC_SURFACES:
@@ -99,7 +100,7 @@ def test_adr_0006_preserves_history_and_records_the_v2_current_state() -> None:
     assert "> Status: Accepted." in adr
     assert "> Amended by [ADR-0010](0010-openspec-direct-execution.md)." in adr
     assert "## v2 現状" in adr
-    assert "`docs/template/grill/ai-coding-template-ja.md` は削除済み" in adr
+    assert f"`docs/template/grill/{TEMPLATE_SLUG}.md` は削除済み" in adr
     assert "テンプレ固有メタ文書" in adr
 
 

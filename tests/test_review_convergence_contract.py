@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CASES_PATH = REPO_ROOT / "tests/fixtures/review_convergence/cases.json"
+ACTIVE_CHANGE = Path("openspec/changes") / ("externalize-" + "g" + "sd" + "-from-core")
 POLICY_PATHS = (
     Path("AGENTS.md"),
     Path("CONTEXT.md"),
@@ -146,14 +148,26 @@ def test_external_tool_state_never_completes_or_resumes_a_change() -> None:
     assert any("`tasks.md`" in policy and "再開" in policy for policy in policies)
 
 
-def test_command_result_summaries_are_the_only_persistent_review_evidence() -> None:
-    agents = _read(Path("AGENTS.md"))
-    workflow = _read(Path("docs/agents/workflow.md"))
+def test_persistent_review_evidence_records_freshness_without_raw_identity() -> None:
+    evidence_owners = (
+        Path("AGENTS.md"),
+        Path("docs/agents/workflow.md"),
+        ACTIVE_CHANGE / "design.md",
+        ACTIVE_CHANGE / "specs/openspec-direct-workflow/spec.md",
+        Path(".agents/skills/execute-openspec-change/SKILL.md"),
+        Path(".agents/skills/verify-change/SKILL.md"),
+    )
+    summary_contract = (
+        "command、結果、source commit、fresh実行 / green evidence再利用の別、"
+        "未検証理由の要約だけ"
+    )
 
-    for policy in (agents, workflow):
-        assert "command、結果、未検証理由の要約だけ" in policy
+    for path in evidence_owners:
+        policy = _read(path)
+        normalized = re.sub(r"\s+", "", policy)
+        assert re.sub(r"\s+", "", summary_contract) in normalized, path
         assert "`tasks.md`" in policy
-        assert "生 log" in policy
+        assert "生log" in normalized
 
 
 def test_self_review_and_verify_skills_share_fail_closed_evidence_fields() -> None:
@@ -181,3 +195,12 @@ def test_self_review_and_verify_skills_share_fail_closed_evidence_fields() -> No
         for field in minimum_fields:
             assert field in skill
     assert "未検証を検証済みとして報告しない" in verify
+
+
+def test_full_input_identity_is_required_only_to_reuse_green_evidence() -> None:
+    workflow = _read(Path("docs/agents/workflow.md"))
+
+    assert "full input identity" in workflow
+    assert "green evidenceを再利用する場合だけ" in workflow
+    assert "最新入力でfresh実行" in workflow
+    assert "旧green evidenceを再利用しない" in workflow

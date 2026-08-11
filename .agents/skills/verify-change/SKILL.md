@@ -64,5 +64,5 @@ focused validation と代替静的検証が構造上非該当の場合だけ、N
 - **検証済み**: 実行したコマンドと結果の要点（テスト名・出力・終了コード）。
 - **未検証**: 項目と理由（AGENTS.md Validation「実行できなかったコマンドは理由を明記」と
   同じ規律）。
-- 永続化する証跡は command、結果、未検証理由の要約だけとする。生 log、一時 report、tool 固有 state は
-  追跡しない。
+- 永続化する証跡は command、結果、source commit、fresh実行 / green evidence再利用の別、
+  未検証理由の要約だけとする。生 log、一時 report、tool 固有 state は追跡しない。

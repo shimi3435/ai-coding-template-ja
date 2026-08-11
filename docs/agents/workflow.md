@@ -40,6 +40,12 @@ OpenSpec CLI や外部 tool 固有 state の有無は品質条件にしない。
 冒頭の実行制約は、最初の CI parity、停止・再計画条件、一時 artifact cleanup の3項目だけとする。
 固定 token、行数、commit、task 数、セッション数は品質判定や分割の代理にしない。
 
+`## Tasks` sectionにはtask entryを1件以上置く。各対象pathは単一の Markdown inline code span とし、
+Unicodeと空白を含むcode span内の値をtrimまたはUnicode正規化せずexactに保持する。閉じていないcode span、
+code span外のpath値、一項目内の複数code spanはpreflightで拒否する。異なるtaskの対象pathがexact matchまたは
+directory containmentで重なる場合、一方から他方への推移的な依存 pathを要求し、依存関係で順序化されない
+重複を拒否する。task entryが0件の場合もrepository変更前に拒否する。
+
 依存が全て完了した先頭の未完了 task を再開点とする。文書順の先頭 task の依存が未完了なら skip し、
 次の実行可能 task を選ぶ。preflight と dirty ownership 確認の失敗は report-only とし、repository を変更しない。
 両確認が成功した後に実行可能 task がなければ、文書順で先頭の未解決 task 直下へ blocker と再開条件を記録して
@@ -136,6 +142,10 @@ reusable green evidence は command 単位で、次を現在状態と照合す�
 - source、tests、dependency environment、lockfile、build / CI 設定、対象 fixtures。
 - repository real path、worktree、source snapshot、command に影響する OS、locale、認証などの環境。
 
+上記の full input identity は既存のgreen evidenceを再利用する場合だけ要求する。永続化するのは
+command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけとし、
+full identity bundleは永続化しない。最新入力でfresh実行する場合は旧green evidenceを再利用しない。
+
 入力同一性が1項目でも不明なら再実行する。別 command の evidence は代用しない。focused tests と
 実動作 seam は毎 cycle 実行する。source 変更のない infrastructure failure は同じ環境、command、入力を
 固定して1回だけ再試行でき、再現したら soft stop する。
@@ -169,8 +179,8 @@ main は各 material task の成果を検証してから `tasks.md` を更新す
 - 同じ環境、command、入力で infrastructure failure が2回再現する。
 - verifier が blocker を報告する。
 
-停止時は finding と影響を提示し、command、結果、未検証理由の要約だけを `tasks.md` へ記録する。生 log、
-専用 state、一時 report は追跡しない。利用者が継続を選んでも単純に追加3回を認めず、scope と実行制約を再計画した
+停止時は finding と影響を提示し、command、結果、source commit、fresh実行 / green evidence再利用の別、
+未検証理由の要約だけを `tasks.md` へ記録する。生 log、専用 state、一時 report は追跡しない。利用者が継続を選んでも単純に追加3回を認めず、scope と実行制約を再計画した
 新しい cycle として開始する。
 
 ### pre-merge close 後の検証

@@ -34,9 +34,16 @@ description: OpenSpec change を fail-closed で preflight し、tasks.md の依
    - `Execution Constraints section` は `## Execution Constraints` から次のheadingまでとする。
      同 section は exactly 3 項目とし、最初の CI parity、停止・再計画条件、一時 artifact cleanup を
      それぞれ1回だけ要求する。欠落、重複、余剰があれば拒否する。
+   - `## Tasks` section に task entry を1件以上要求する。task が0件なら実装対象と完了条件を確定できないため
+     拒否する。
    - 各 task に成果、依存、対象、実装 checkbox、検証 checkbox を要求する。
+   - 対象pathの各項目は単一の Markdown inline code span として記述する。code span内の値は
+     trim または Unicode 正規化をせず exact に保持し、Unicodeと空白を許可した上でrepository-relative
+     pathとして検証する。閉じていない code span、code span外のpath値、一項目内の複数の code spanは拒否する。
    - task ID の重複、未知の依存、自己依存、循環依存、曖昧または repository 外の対象 path、壊れた
      checkbox を拒否する。
+   - 全taskの対象pathを解決し、異なるtask間で exact match または directory containment がある場合、
+     一方から他方へ推移的な依存 path が存在することを要求する。依存関係で順序化されない重複は拒否する。
 
 失敗時は条件名、該当 path / task、未成立理由を報告し、code、tests、docs、checkbox を変更しない。
 
@@ -149,8 +156,9 @@ branch 切替、reset、clean、利用者差分の復元も自動実行しない
 
 ## 6. report
 
-実行した focused test、review、project check、verification は command、結果、未検証理由の要約だけを
-対応 task 直下の `tasks.md` へ記録する。生 log、一時 report、tool 固有 state は追跡しない。
+実行した focused test、review、project check、verification は command、結果、source commit、
+fresh実行 / green evidence再利用の別、未検証理由の要約だけを対応 task 直下の `tasks.md` へ記録する。
+生 log、一時 report、tool 固有 state は追跡しない。
 
 最終報告には完了 task、未完了 task / blocker、変更 file、実行 command と結果、未検証項目を含める。
 全実装・検証 checkbox が完了していない限り change 完了を宣言しない。

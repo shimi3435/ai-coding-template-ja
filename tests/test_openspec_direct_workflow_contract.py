@@ -101,6 +101,16 @@ def test_tasks_contract_is_self_contained_and_has_three_execution_constraints() 
     assert labels == ["最初の CI parity", "停止・再計画", "一時 artifact cleanup"]
 
 
+def test_active_task_targets_are_exact_code_spanned_paths() -> None:
+    tasks = _read(ACTIVE_CHANGE / "tasks.md")
+    target_values = re.findall(r"^  - \*\*対象:\*\* (.+)$", tasks, flags=re.MULTILINE)
+
+    assert target_values
+    for value in target_values:
+        items = value.removesuffix("。").split("、")
+        assert all(re.fullmatch(r"`[^`]+`", item) for item in items), value
+
+
 def test_external_orchestrator_requires_named_user_opt_in_before_discovery() -> None:
     for path in (Path("AGENTS.md"), Path("docs/agents/workflow.md"), ADR_PATH):
         policy = _read(path)
@@ -167,3 +177,20 @@ def test_partial_implementation_resume_is_owned_only_after_orderly_stop() -> Non
         assert "abrupt termination" in text
         assert "未記録差分" in text
         assert "fail-closed" in text
+
+
+def test_preflight_spec_holes_use_static_skill_fixture_contracts() -> None:
+    spec = _read(DIRECT_WORKFLOW_SPEC)
+    design = _read(ACTIVE_CHANGE / "design.md")
+    workflow = _read(Path("docs/agents/workflow.md"))
+
+    for text in (spec, workflow):
+        assert "taskentryが0件" in text.replace(" ", "")
+        assert "推移的な依存 path" in text
+        assert "Markdown inline code span" in text
+        assert "Unicode" in text
+        assert "空白" in text
+
+    assert "static skill / instruction fixtures" in design
+    assert "実agent sessionのpreflight実行" in design
+    assert "temporary change repositories" not in design

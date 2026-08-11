@@ -85,6 +85,16 @@ def test_preflight_requires_exactly_three_execution_constraints() -> None:
     assert "次のheadingまで" in skill
 
 
+def test_preflight_rejects_an_empty_task_list_before_mutation() -> None:
+    skill = _skill()
+    row = next(row for row in _cases()["preflight"] if row["case"] == "empty-task-list")
+
+    assert row["task_count"] == 0
+    assert row["result"] == "stop-before-mutation"
+    assert "task entry を1件以上" in skill
+    assert "task が0件" in skill
+
+
 def test_detailed_task_contract_and_dependency_selection_are_explicit() -> None:
     skill = _skill()
 
@@ -103,6 +113,40 @@ def test_detailed_task_contract_and_dependency_selection_are_explicit() -> None:
     rows = {row["case"]: row for row in _cases()["task_selection"]}
     assert rows["dependency-order"]["selected"] == "1"
     assert rows["rerun"]["selected"] == "2"
+
+
+def test_overlapping_target_paths_require_a_transitive_dependency_order() -> None:
+    skill = _skill()
+    rows = {row["case"]: row for row in _cases()["target_path_ordering"]}
+
+    ordered = rows["transitively-ordered-directory-overlap"]
+    assert ordered["target_paths"] == {"1": ["src"], "3": ["src/a.py"]}
+    assert ordered["dependencies"] == {"1": [], "2": ["1"], "3": ["2"]}
+    assert ordered["result"] == "continue"
+
+    unordered = rows["unordered-exact-overlap"]
+    assert unordered["target_paths"]["1"] == unordered["target_paths"]["2"]
+    assert unordered["dependencies"] == {"1": [], "2": []}
+    assert unordered["result"] == "stop-before-mutation"
+    assert "exact match または directory containment" in skill
+    assert "推移的な依存 path" in skill
+    assert "依存関係で順序化されない" in skill
+
+
+def test_target_paths_use_exact_markdown_code_spans() -> None:
+    skill = _skill()
+    rows = {row["case"]: row for row in _cases()["target_path_syntax"]}
+
+    accepted = rows["unicode-space-code-span"]
+    assert accepted["resolved"] == "docs/設計 資料.md"
+    assert accepted["result"] == "continue"
+    for case in ("unclosed-code-span", "plain-space-path", "multiple-code-spans"):
+        assert rows[case]["result"] == "stop-before-mutation"
+
+    assert "単一の Markdown inline code span" in skill
+    assert "trim または Unicode 正規化をせず exact に保持" in skill
+    assert "閉じていない code span" in skill
+    assert "複数の code span" in skill
 
 
 def test_verification_state_cannot_be_promoted_to_completion() -> None:
@@ -263,7 +307,9 @@ def test_review_and_stop_boundaries_reference_canonical_requirements() -> None:
 def test_report_updates_tasks_but_never_creates_tool_state() -> None:
     skill = _skill()
 
-    assert "command、結果、未検証理由の要約だけ" in skill
+    assert "command、結果、source commit" in skill
+    assert "fresh実行 / green evidence再利用の別" in skill
+    assert "未検証理由の要約だけ" in skill
     assert "生 log" in skill
     assert "tool 固有 state" in skill
     assert "`tasks.md`" in skill

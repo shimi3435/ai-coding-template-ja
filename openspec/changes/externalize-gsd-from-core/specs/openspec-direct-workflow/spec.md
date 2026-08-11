@@ -42,7 +42,7 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 
 ### Requirement: OSWF-3 tasks.md が詳細実行と復帰を自己完結させる
 
-各OpenSpec changeの`tasks.md`は MUST 各taskの成果、依存、対象、実装checkbox、検証checkboxを持つ。冒頭には最初のCI parity、停止・再計画条件、一時artifact cleanupだけを実行制約として記録する。再開点は依存が全て完了した先頭の未完了taskとする。preflightとdirty ownership確認が成功した後のtask実行blockerは該当task直下へ記録し、両確認のいずれかが失敗した場合はreport-onlyとしてrepositoryを変更してはならない。未commit差分から再開する場合は、呼出終了時に先頭の実行可能な未完了task直下へ記録した累積executor-owned paths、task state、post-task diff digestを使い、完了task、実装済み・検証未完了task、orderly stopした`implementation-in-progress` taskを含む前回executorの差分と後発変更を区別しなければならない。abrupt termination後の未記録差分をexecutor所有と推測してはならない。
+各OpenSpec changeの`tasks.md`は MUST `## Tasks` sectionにtask entryを1件以上持ち、各taskの成果、依存、対象、実装checkbox、検証checkboxを持つ。対象pathの各項目は単一のMarkdown inline code spanで記述し、Unicodeと空白を含む値をtrimまたはUnicode正規化せずexactに保持しなければならない。異なるtaskの対象pathがexact matchまたはdirectory containmentで重なる場合、一方から他方への推移的な依存 pathで順序化しなければならない。冒頭には最初のCI parity、停止・再計画条件、一時artifact cleanupだけを実行制約として記録する。再開点は依存が全て完了した先頭の未完了taskとする。preflightとdirty ownership確認が成功した後のtask実行blockerは該当task直下へ記録し、両確認のいずれかが失敗した場合はreport-onlyとしてrepositoryを変更してはならない。未commit差分から再開する場合は、呼出終了時に先頭の実行可能な未完了task直下へ記録した累積executor-owned paths、task state、post-task diff digestを使い、完了task、実装済み・検証未完了task、orderly stopした`implementation-in-progress` taskを含む前回executorの差分と後発変更を区別しなければならない。abrupt termination後の未記録差分をexecutor所有と推測してはならない。
 
 #### Scenario: taskを実装・検証する
 - **WHEN** taskの実装と指定検証が成功する
@@ -96,6 +96,18 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 - **WHEN** taskに成果、依存、対象、実装checkbox、検証checkboxのいずれかがない
 - **THEN** direct executorはpreflightを失敗させ、実装を開始しない
 
+#### Scenario: task entryが0件である
+- **WHEN** `## Tasks` sectionは存在するがtask entryがない
+- **THEN** direct executorはpreflightを失敗させ、repositoryを変更しない
+
+#### Scenario: 対象pathがtask間で重複する
+- **WHEN** 異なるtaskの対象pathがexact matchまたはdirectory containmentで重なる
+- **THEN** direct executorは一方から他方への推移的な依存 pathがある場合だけ受理し、依存関係で順序化されない場合はpreflightを失敗させる
+
+#### Scenario: Unicodeまたは空白を含む対象pathを記述する
+- **WHEN** 対象pathの各項目が単一のMarkdown inline code spanで記述される
+- **THEN** direct executorはcode span内の値をtrimまたはUnicode正規化せずexactに保持し、閉じていないcode span、code span外のpath値、一項目内の複数code spanを拒否する
+
 ### Requirement: OSWF-4 execute-openspec-change は直接実行をfail-closedで開始する
 
 `execute-openspec-change` skillは MUST 明示呼出を実装と必要なreviewer / verifier起動の承認として扱い、active changeが一つ、必須OpenSpec artifactsがvalid、spec-holesに未解決判断がない、詳細tasksが有効、という4条件を実装前にfail-closedで確認する。変更対象と重なる既存dirty差分だけをblockし、記録済みexecutor-owned差分の検証再開は許可し、commit、push、PR、mergeを自動実行してはならない。追加executorは別の利用者承認なしに起動してはならない。
@@ -134,7 +146,7 @@ repository は MUST 外部挙動、公開interface、security / trust boundary�
 
 ### Requirement: OSWF-5 検証と再計画をリスク列挙条件で制御する
 
-executorは MUST 全変更でself-reviewと適用可能なfocused validationを行う。focused validationが構造上非該当の場合だけN/A理由で完了でき、環境制約または失敗による未実行は完了にできない。security / trust boundary、外部write、永続データ、公開interface、dependency / lockfile、build / CI、削除 / migrationのいずれかを変更する場合、self-review、独立review、finding修正、最新入力の`task check`、reviewerと別の独立verifierの順で検証する。initial reviewのfinding修正は最大3回とし、結果はcommand、成否、未検証理由の要約だけを`tasks.md`へ記録する。initial / diff review、project check、verifierのblocker保存先taskで検証checkboxが完了済みなら、その検証checkboxと親taskを未完了へ戻し、blocker解消後の新しいevidenceが成功した場合だけ再完了できる。恒久的なreview発火条件列挙は`AGENTS.md`のOSWF-5を単一の正とし、design、tasks、workflow、skillsは同requirement IDを参照する。
+executorは MUST 全変更でself-reviewと適用可能なfocused validationを行う。focused validationが構造上非該当の場合だけN/A理由で完了でき、環境制約または失敗による未実行は完了にできない。security / trust boundary、外部write、永続データ、公開interface、dependency / lockfile、build / CI、削除 / migrationのいずれかを変更する場合、self-review、独立review、finding修正、最新入力の`task check`、reviewerと別の独立verifierの順で検証する。initial reviewのfinding修正は最大3回とし、command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけを`tasks.md`へ記録する。initial / diff review、project check、verifierのblocker保存先taskで検証checkboxが完了済みなら、その検証checkboxと親taskを未完了へ戻し、blocker解消後の新しいevidenceが成功した場合だけ再完了できる。恒久的なreview発火条件列挙は`AGENTS.md`のOSWF-5を単一の正とし、design、tasks、workflow、skillsは同requirement IDを参照する。
 
 #### Scenario: review発火条件に該当しない
 - **WHEN** 変更が列挙された高リスク条件を一つも変更しない
@@ -174,7 +186,7 @@ executorは MUST 全変更でself-reviewと適用可能なfocused validationを�
 
 #### Scenario: 検証証跡を記録する
 - **WHEN** focused test、review、project check、verificationを実行する
-- **THEN** repositoryにはcommand、結果、未検証理由の要約だけを残し、生log、一時report、tool固有stateを品質判定へ使わない
+- **THEN** repositoryにはcommand、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけを残し、生log、一時report、tool固有stateを品質判定へ使わない
 
 ### Requirement: OSWF-6 GSD 固有統合をコアから互換なしで削除する
 

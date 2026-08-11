@@ -51,7 +51,7 @@ dirty worktreeは対象pathとの既存重複だけをblockし、無関係差分
 
 全変更にself-reviewと適用可能なfocused validationを要求する。独立review / verifierの恒久的な発火条件列挙は`AGENTS.md`のOSWF-5だけを単一の正とし、本designとtasksには重複列挙しない。
 
-順序はself-review、initial independent review、最大3回のfix / focused validation / diff review、最新入力の`task check`、initial reviewerと別のverifierとする。fresh final reviewer専任は置かずverifierへ統合する。initial / diff review、project check、verifierのblocker保存先taskで検証checkboxが完了済みなら、その検証checkboxと親taskを未完了へ戻し、新しいevidenceが成功した場合だけ再完了する。verifierがblockerを報告した場合はsoft-stopし、利用者承認後の新cycleでfix、review、check、前cycleと別のverifierを実行する。同一役割・taskのagentが連続2回失敗した場合、または同一環境・command・入力のinfrastructure failureが1回の再試行後にも再現した場合もsoft-stopする。生logや一時reportは追跡せず、command、結果、未検証理由だけを`tasks.md`へ残す。
+恒久topologyの順序はself-review、initial independent review、最大3回のfix / focused validation / diff review、最新入力の`task check`、initial reviewerと別のverifierとする。恒久topologyにfresh final reviewer専任は置かずverifierへ統合するが、利用者がone-offの追加reviewを明示選択した場合は、必須verifierを置換せず追加できる。initial / diff review、project check、verifierのblocker保存先taskで検証checkboxが完了済みなら、その検証checkboxと親taskを未完了へ戻し、新しいevidenceが成功した場合だけ再完了する。verifierがblockerを報告した場合はsoft-stopし、利用者承認後の新cycleでfix、review、check、前cycleと別のverifierを実行する。同一役割・taskのagentが連続2回失敗した場合、または同一環境・command・入力のinfrastructure failureが1回の再試行後にも再現した場合もsoft-stopする。生logや一時reportは追跡せず、command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけを`tasks.md`へ残す。
 
 ### 6. GSD integrationをv2 breaking changeとして削除する
 
@@ -120,15 +120,15 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
-| 1 | 空・ゼロ長・None | 該当 | tasksが空または必須項目欠落 | 1: preflight failure |
+| 1 | 空・ゼロ長・None | 該当 | task entryが0件または必須項目欠落 | 1: preflight failure |
 | 2 | 境界値 | 該当 | 先頭・末尾task、最後の検証未完了 | 1: 依存済み先頭未完了を選び、検証未完了ならclose禁止 |
-| 3 | 重複・衝突 | 該当 | 同じ対象を複数taskが変更 | 1: 依存で順序を明示 |
+| 3 | 重複・衝突 | 該当 | 同じ対象を複数taskが変更 | 1: 推移的な依存 pathで順序を明示 |
 | 4 | 順序 | 該当 | 文書順と依存順が異なる | 1: 依存完了を優先 |
 | 5 | 型・形式不正 | 該当 | checkboxや必須fieldが不正 | 1: preflight failure |
 | 6 | エラー経路 | 該当 | 実装成功・検証不能、構造上N/A、abrupt termination | 1: 環境未実行はclose禁止、構造上N/Aだけ理由付き完了、未記録差分はfail-closed |
 | 7 | 冪等性・再実行 | 該当 | 完了taskまたは実装途中taskの再実行 | 1: ownership state / digest一致時だけ検証再開または実装継続 |
 | 8 | 時刻・タイムゾーン | 非該当 | 時刻を復帰条件に使わない | — |
-| 9 | 文字列 | 該当 | 対象pathやcommandにUnicode・空白 | 1: Markdownのcode spanでexact値を保持 |
+| 9 | 文字列 | 該当 | 対象pathにUnicode・空白 | 1: 単一のMarkdown inline code spanで無変換のexact値を保持 |
 | 10 | 数値 | 非該当 | 固定task上限を設けない | — |
 | 11 | 巨大入力・リソース枯渇 | 該当 | tasks肥大化 | 1: 一体成果はsection、独立成果はchange分割 |
 | 12 | 状態遷移の未定義パス | 該当 | 実行可能taskがない、または実装途中でorderly stop | 1: blockerを該当taskへ記録し、partial ownershipを`implementation-in-progress`で保持 |
@@ -164,7 +164,7 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 | 8 | 時刻・タイムゾーン | 非該当 | 時刻でevidence freshnessを決めない | — |
 | 9 | 文字列 | 該当 | secretを含むlog | 1: 生logを追跡せず要約のみ |
 | 10 | 数値 | 該当 | initial fix最大3回、agent / infra失敗2回 | 1: 各閾値を超える自動反復を禁止 |
-| 11 | 巨大入力・リソース枯渇 | 該当 | report / log肥大化 | 1: command結果要約だけ永続化 |
+| 11 | 巨大入力・リソース枯渇 | 該当 | report / log肥大化 | 1: command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけ永続化 |
 | 12 | 状態遷移の未定義パス | 該当 | 仕様判断、material expansion、review / check / verifier blocker | 1: 完了済み保存先taskを再openし、利用者承認まで停止して必要なら新cycleへ移す |
 
 ### OSWF-6 GSD固有統合の削除
@@ -208,10 +208,12 @@ handoff package、CLI、task、script、fixture、専用tests、handoff skill be
 | OSWF-1 #1/#3/#4/#5/#6/#7/#9/#12 | 例示contract test | direct workflow / external state fixtures | tasks優先と直接復帰を検証 |
 | OSWF-2 #1/#2/#3/#4/#6/#10/#11/#12 | 例示contract test | workflow policy parser tests | 列挙条件と出荷境界を検証 |
 | OSWF-3 #1/#2/#3/#4/#5/#6/#7/#9/#11/#12 | 例示contract test | execute skill task fixtures | checkbox、依存、未検証、blockerを検証 |
-| OSWF-4 #1/#2/#3/#4/#5/#6/#7/#9/#11/#12 | 例示contract test | temporary change repositories | preflightとdirty overlapを検証 |
+| OSWF-4 #1/#2/#3/#4/#5/#6/#7/#9/#11/#12 | 例示contract test | static skill / instruction fixtures | preflightとdirty overlapを検証 |
 | OSWF-5 #1/#2/#3/#4/#5/#6/#7/#9/#10/#11/#12 | 例示contract test | review convergence fixtures | risk trigger、N/A、各反復上限、verifier新cycle、最新check、要約を検証 |
 | OSWF-6 #1/#2/#3/#4/#5/#6/#7/#9/#11/#12 | 例示test / residual scan | repository contract tests | token境界、allowlist外の固有名、旧入口を拒否し、active change例外がclose後に残らないことを検証 |
 | OSWF-7 #1/#3/#4/#5/#6/#7/#9/#11/#12 | integration test | `task check:isolated` / OpenSpec gate tests | optional toolsとnetworkの不在を検証 |
+
+実agent sessionのpreflight実行は通常CIの対象外とし、manual evidenceへ残す明示的out-of-scopeとする。
 
 ## Open Questions
 

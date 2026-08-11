@@ -132,7 +132,7 @@ def test_execute_openspec_change_is_first_party_and_distributed() -> None:
             "license_file": "LICENSE",
             "redistribution": "allowed",
             "sha256": (
-                "a30530ba02759083630b101940e73fe22ce3eba90d72a4377e358d567da8ecf8"
+                "f27cead948b08fd3bcb0ac15fefe8d01daa53d9bc38b2566c5a4a21fc6dd813e"
             ),
         }
     ]

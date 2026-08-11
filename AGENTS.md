@@ -80,8 +80,8 @@ design、tasks、workflow、skills は OSWF-5 を参照して列挙を複製し�
 project checks、前 cycle と別の verifier を実行する。同一役割・task の agent が連続2回失敗した場合、
 または固定した環境・command・入力で infrastructure failure が2回再現した場合も停止する。
 
-検証証跡は command、結果、未検証理由の要約だけを `tasks.md` へ記録する。生 log、一時 report、tool 固有
-state を品質判定や完了判定に使わない。
+検証証跡は command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけを
+`tasks.md` へ記録する。生 log、一時 report、tool 固有 state を品質判定や完了判定に使わない。
 
 ## Tools
 - 実装前に Context7 でライブラリ / CLI の最新仕様を確認する。

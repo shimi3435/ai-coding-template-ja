@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_ROOT = REPO_ROOT / "src" / "ai_coding_template_ja"
 LEGACY_TOKEN = "g" + "sd"
 LEGACY_MODULE_SEGMENT = "openspec_" + LEGACY_TOKEN + "_handoff"
 LEGACY_SCRIPT = "openspec-" + LEGACY_TOKEN + "-handoff-smoke.py"
@@ -18,9 +19,7 @@ TOKEN_BOUNDARY = re.compile(rf"(?i)(^|[^a-z0-9]){LEGACY_TOKEN}([^a-z0-9]|$)")
 
 
 def test_legacy_package_script_fixture_and_tests_are_absent() -> None:
-    assert not (
-        REPO_ROOT / "src/ai_coding_template_ja" / LEGACY_MODULE_SEGMENT
-    ).exists()
+    assert not (PACKAGE_ROOT / LEGACY_MODULE_SEGMENT).exists()
     assert not (REPO_ROOT / "scripts" / LEGACY_SCRIPT).exists()
     assert not (REPO_ROOT / "tests/fixtures" / LEGACY_MODULE_SEGMENT).exists()
     assert not list((REPO_ROOT / "tests").glob("test_handoff_*.py"))
