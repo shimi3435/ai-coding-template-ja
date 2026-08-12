@@ -31,3 +31,4 @@ OpenSpec 直接実行へ移行する。
 
 - 2026-07-14 revise-openspec-gsd-execution-boundary（PR #40）: 逃した欠陥 1 件（self-review=0 / review=1 / CI=0 / merge後=0）— Claude Code review で README の GSD 説明が旧境界のまま残っていた不整合を検出
 - 2026-07-16 automate-openspec-gsd-handoff（PR #41）: 逃した欠陥 6 件（self-review=1 / review=3 / CI=2 / merge後=0）— self-review=Linux capability guard 不足、review=prefix capability sort・Markdown link誤検知・Linux smoke前提の未記載、CI=source-pinned testのshallow clone非互換・rename後のsmoke import残存
+- 2026-08-12 externalize-gsd-from-core（PR #53）: 逃した欠陥 27 件（self-review=2 / review=24 / CI=0 / merge後=1）— self-review=task対象pathの欠落・不正確な略記、review=直接実行・review収束・residual scan・証跡契約の不整合を収束、merge後=pre-merge close漏れによりactive changeがmainへ残存

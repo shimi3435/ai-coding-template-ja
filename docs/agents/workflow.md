@@ -46,6 +46,10 @@ code span外のpath値、一項目内の複数code spanはpreflightで拒否す�
 directory containmentで重なる場合、一方から他方への推移的な依存 pathを要求し、依存関係で順序化されない
 重複を拒否する。task entryが0件の場合もrepository変更前に拒否する。
 
+通常 CI が検証する preflight 境界は、`execute-openspec-change` の static skill / instruction fixtures と
+恒久 contract tests までとする。実 agent session の preflight は manual / out-of-scope とし、runtime parser
+または実 agent CI を追加する場合は、新しい OpenSpec change で仕様、`spec-holes`、検証、実行制約を再設計する。
+
 依存が全て完了した先頭の未完了 task を再開点とする。文書順の先頭 task の依存が未完了なら skip し、
 次の実行可能 task を選ぶ。preflight と dirty ownership 確認の失敗は report-only とし、repository を変更しない。
 両確認が成功した後に実行可能 task がなければ、文書順で先頭の未解決 task 直下へ blocker と再開条件を記録して
@@ -235,6 +239,11 @@ close までに `docs/template/retrospectives.md` へ固定形式の1行を追�
 「逃した欠陥」は実装 checkbox 完了後に発見され、修正を要した correctness / contract defect とする。
 実装中の自己修正、style nit、主観的 refactor、回答だけで済む質問は含めない。同一欠陥は最初の発見経路
 だけに数え、0件でも記録する。後から発見した場合は新しい行を足さず既存行を更新する。
+
+例外として、change ID 自体が retired legacy token を含み、固定形式の行を
+`docs/template/retrospectives.md` に置くと最終 residual allowlist に違反する場合だけ、固定形式の本体を exact history allowlist
+として指定済みの ADR または release notes に保存し、`docs/template/retrospectives.md` には archive pointer を残す。
+この例外は既存 allowlist を拡張せず、両条件を満たさない change の保存先を変更しない。
 
 ## material task の executor 配分
 

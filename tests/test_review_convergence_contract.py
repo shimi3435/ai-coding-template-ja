@@ -9,7 +9,6 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CASES_PATH = REPO_ROOT / "tests/fixtures/review_convergence/cases.json"
-ACTIVE_CHANGE = Path("openspec/changes") / ("externalize-" + "g" + "sd" + "-from-core")
 POLICY_PATHS = (
     Path("AGENTS.md"),
     Path("CONTEXT.md"),
@@ -152,8 +151,6 @@ def test_persistent_review_evidence_records_freshness_without_raw_identity() -> 
     evidence_owners = (
         Path("AGENTS.md"),
         Path("docs/agents/workflow.md"),
-        ACTIVE_CHANGE / "design.md",
-        ACTIVE_CHANGE / "specs/openspec-direct-workflow/spec.md",
         Path(".agents/skills/execute-openspec-change/SKILL.md"),
         Path(".agents/skills/verify-change/SKILL.md"),
     )

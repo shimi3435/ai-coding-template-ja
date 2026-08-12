@@ -12,7 +12,6 @@ LEGACY_TOKEN = "g" + "sd"
 TEMPLATE_SLUG = "-".join(("ai", "coding", "template", "ja"))
 TOKEN_BOUNDARY = re.compile(rf"(?i)(^|[^a-z0-9]){LEGACY_TOKEN}([^a-z0-9]|$)".encode())
 V2_NOTES = Path("docs/template/v2-release-notes.md")
-ACTIVE_CHANGE = Path("openspec/changes/externalize-" + LEGACY_TOKEN + "-from-core")
 CURRENT_TEMPLATE_DOC_SURFACES = (
     Path("README.md"),
     Path("Taskfile.yml"),
@@ -46,7 +45,7 @@ def _legacy_token_violations(paths: list[Path], root: Path = REPO_ROOT) -> list[
         absolute = root / relative
         if not absolute.exists() and not absolute.is_symlink():
             continue
-        allowed = relative in ALLOWED_PATHS or relative.is_relative_to(ACTIVE_CHANGE)
+        allowed = relative in ALLOWED_PATHS
         path_match = TOKEN_BOUNDARY.search(relative.as_posix().encode()) is not None
         if absolute.is_symlink():
             payload = os.fsencode(os.readlink(absolute))
@@ -167,14 +166,31 @@ def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
     retrospectives = (REPO_ROOT / "docs/template/retrospectives.md").read_text(
         encoding="utf-8"
     )
+    workflow = (REPO_ROOT / "docs/agents/workflow.md").read_text(encoding="utf-8")
+    closed_change_id = "externalize-" + LEGACY_TOKEN + "-from-core"
 
     for pull_request, defect_count in (
         ("PR #40", "逃した欠陥 1 件"),
         ("PR #41", "逃した欠陥 6 件"),
+        ("PR #53", "逃した欠陥 27 件"),
     ):
         assert pull_request in notes
         assert defect_count in notes
-    assert "v2 release notes" in retrospectives
+    assert f"{closed_change_id}（PR #53）: 逃した欠陥 27 件" in notes
+    pointer_line = next(
+        line for line in retrospectives.splitlines() if "PR #53" in line
+    )
+    assert "[v2 release notes](v2-release-notes.md)" in pointer_line
+    assert closed_change_id not in retrospectives
+    assert "change ID 自体が retired legacy token を含み" in workflow
+    assert (
+        "`docs/template/retrospectives.md` に置くと最終 "
+        "residual allowlist に違反する場合だけ" in workflow
+    )
+    assert "固定形式の本体を exact history allowlist" in workflow
+    assert "archive pointer" in workflow
+    assert "この例外は既存 allowlist を拡張せず" in workflow
+    assert "両条件を満たさない change の保存先を変更しない" in workflow
 
 
 def test_primary_documentation_links_resolve() -> None:
