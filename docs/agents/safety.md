@@ -10,7 +10,8 @@
 - bootstrap で secret を生成・保存しない。AI サービスへ自動ログインしない。
 - GitHub MCP の権限は read を既定とし toolset を最小化する。
 - MCP server の write 操作はデフォルトで慎重に扱う。
-- 外部 Skill を無制限に自動導入しない（導入元を `skills.lock.json` で固定・記録）。
+- 外部 Skill を無制限に自動導入しない（review 済み導入元を `skills.sources.json`、resolved state を
+  `skills.lock.json` で固定・記録する）。取得物を実行せず、明示 `--apply` だけで更新する。
 - `curl | sh` で外部スクリプトを実行する場合は確認 / 選択式にする。
 - sudo / 管理者権限が必要な操作は明示する。
 - コア MCP（Context7 リモート HTTP）はクエリを第三者へ送信する。機微情報を含むクエリに注意し、

@@ -11,16 +11,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "0d95a81d35a9f2d123a5e9430d1cfc43d55f1bb0",
-      "verification": "unknown",
-      "treeHash": "26e1d514a16e74853ba0c92259a4aa877a9b53b6b91a61765bf6694153f4f82e",
-      "fileCount": 3,
-      "byteCount": 8196,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/caveman"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "5eb826cd03151bcc7cce3f80d40e87733237fedfc6c36d6908aca5fd650a0bdb"
+          "expectedSha256": "5eb826cd03151bcc7cce3f80d40e87733237fedfc6c36d6908aca5fd650a0bdb"
         }
       ]
     },
@@ -34,16 +32,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
-      "verification": "unknown",
-      "treeHash": "6e6c210b1d73378924a9305b4f1ca3c1888d70dad58501253653fb0eab82b70a",
-      "fileCount": 2,
-      "byteCount": 7808,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/engineering/code-review"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -57,16 +53,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "ee8bae40062cd6b435073368ed0c540f48c35862",
-      "verification": "unknown",
-      "treeHash": "494c86bb546efe1e5eaa64531822485d5545c40537a58b0e372b6613a2dfc6e4",
-      "fileCount": 3,
-      "byteCount": 10768,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/engineering/diagnosing-bugs"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -80,16 +74,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "ee8bae40062cd6b435073368ed0c540f48c35862",
-      "verification": "unknown",
-      "treeHash": "3a2f165f64dd19c1f109e52efa86658e4e4dff8098a5b94ebdb1a3f1a385ef56",
-      "fileCount": 4,
-      "byteCount": 9560,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/engineering/domain-modeling"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -99,13 +91,10 @@
       "license": "MIT",
       "redistribution": "allowed",
       "target": ".agents/skills/execute-openspec-change",
-      "treeHash": "edd503db61be81831635f386102eb9f108c59f71bd2feafe303de6706439e06a",
-      "fileCount": 1,
-      "byteCount": 11608,
-      "legalFiles": [
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
-          "sha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
+          "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
     },
@@ -119,16 +108,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "cbf6db4233c7e4202abaf79643f7ab395c75a2df",
-      "verification": "unknown",
-      "treeHash": "9dc78a7441a512a0e7719488537224edea6737c0af7a8ac1861655c53064aabc",
-      "fileCount": 2,
-      "byteCount": 1215,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/productivity/grill-me"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -142,16 +129,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "658d53e6ded8cc0eaa26a96e0580bee9381ca0e3",
-      "verification": "unknown",
-      "treeHash": "74ce49ee2ee70fa0988e978399acb92e64bcd7e864f67790b11dd27037d327cf",
-      "fileCount": 2,
-      "byteCount": 1313,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/engineering/grill-with-docs"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -165,16 +150,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
-      "verification": "unknown",
-      "treeHash": "0ab783d160ed54cd24e93b5b47f6d34310fe215603431e7d2862d497501dc191",
-      "fileCount": 2,
-      "byteCount": 1889,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/productivity/grilling"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -184,13 +167,10 @@
       "license": "MIT",
       "redistribution": "allowed",
       "target": ".agents/skills/self-review",
-      "treeHash": "c88efd45c5baa3e08e19a31fb76ce795a7358dce0bf0c4456d3c19cb1791722c",
-      "fileCount": 1,
-      "byteCount": 5607,
-      "legalFiles": [
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
-          "sha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
+          "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
     },
@@ -200,13 +180,10 @@
       "license": "MIT",
       "redistribution": "allowed",
       "target": ".agents/skills/spec-holes",
-      "treeHash": "a0f647a78fe7b5f2b2a5399d97999fe5e1a1c6f6f09bc01ba05e97016512d423",
-      "fileCount": 1,
-      "byteCount": 5623,
-      "legalFiles": [
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
-          "sha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
+          "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
     },
@@ -220,16 +197,14 @@
       "ref": {
         "branch": "main"
       },
-      "resolvedCommit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
-      "verification": "unknown",
-      "treeHash": "9d80ba97c669af09961a1d21ab6e54a6aa0af061e957c8f0c5ff53438b4608e5",
-      "fileCount": 4,
-      "byteCount": 7976,
-      "legalFiles": [
+      "subtree": {
+        "path": "skills/engineering/tdd"
+      },
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
           "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },
@@ -239,13 +214,10 @@
       "license": "MIT",
       "redistribution": "allowed",
       "target": ".agents/skills/verify-change",
-      "treeHash": "23df93af1196f64902cbb0f18d03ce7cd7f8af24e0da70f9e240b30d662fa1e6",
-      "fileCount": 1,
-      "byteCount": 4548,
-      "legalFiles": [
+      "legalMappings": [
         {
           "sourcePath": "LICENSE",
-          "sha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
+          "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
     }

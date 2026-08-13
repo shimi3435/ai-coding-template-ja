@@ -60,6 +60,7 @@ tasks:
           fi
         done
       - node repo-tools/entrypoint.mjs check-contracts
+      - node repo-tools/entrypoint.mjs skills:verify
       - node_modules/.bin/tsc --noEmit
       - node --test repo-tools/*.test.ts
       - uv run --no-sync ruff format --check .
@@ -188,23 +189,30 @@ tasks:
     cmds:
       - bash scripts/setup-mcp.sh
 
-  skills:update:
+  skills:links:
     desc: vendored skill の symlink（.claude/skills・.codex/skills）を冪等再生成
     cmds:
-      - bash scripts/setup-skills.sh
+      - node repo-tools/entrypoint.mjs skills:links {{.CLI_ARGS}}
 
-  skills:doctor:
-    desc: skills.lock.json と vendored skill の整合を検証（孤児/sha256/symlink 解決）
+  skills:verify:
+    desc: sources / lock / installed tree / legal / symlink の整合を offline 検証
     cmds:
-      - uv run pytest tests/test_skills_lock.py -q
+      - node repo-tools/entrypoint.mjs skills:verify {{.CLI_ARGS}}
 
-  skills:upstream:
-    desc: |
-      vendored skill の上流乖離チェック（opt-in・ネットワーク使用・gh 必須・報告のみ）。
-      lock の commit と上流 HEAD を比較し OK/INFO/WARN で報告する（WARN でも exit 0・
-      更新は人起点。skill の自動更新や lock の変更はしない）。
+  skills:check:
+    desc: public GitHub の remote skill 更新有無を read-only 検査（network / gh 必須）
     cmds:
-      - uv run --no-sync python scripts/skills-upstream-check.py
+      - node repo-tools/entrypoint.mjs skills:check {{.CLI_ARGS}}
+
+  skills:update:
+    desc: remote skill 更新を preview（既定）または明示 --apply で transaction 適用
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:update {{.CLI_ARGS}}
+
+  skills:lock-local:
+    desc: first-party skill lock を preview（既定）または明示 --apply で一括更新
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:lock-local {{.CLI_ARGS}}
 
   security:
     desc: |

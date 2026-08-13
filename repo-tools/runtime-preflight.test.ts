@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -50,6 +50,36 @@ test("runtime-preflight accepts Node 24 and Python 3.14 and reports complete ver
   assert.match(result.stdout, /Node\.js v24\.11\.1/);
   assert.match(result.stdout, /npm 11\.6\.2/);
   assert.match(result.stdout, /Python 3\.14\.2/);
+});
+
+test("runtime-preflight runs before Node dependencies are installed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "repo-tools-dependency-free-"));
+  try {
+    const loader = join(root, "reject-node-packages.mjs");
+    await writeFile(loader, `
+import { isBuiltin } from "node:module";
+export async function resolve(specifier, context, nextResolve) {
+  const relativeOrAbsolute = specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("file:");
+  if (!relativeOrAbsolute && !isBuiltin(specifier)) throw new Error(\`Node package import blocked: \${specifier}\`);
+  return nextResolve(specifier, context);
+}
+`, "utf8");
+    await Promise.all([
+      writeCommand(root, "node", "v24.14.1"),
+      writeCommand(root, "npm", "11.11.0"),
+      writeCommand(root, "python3", "Python 3.14.6"),
+    ]);
+
+    const result = spawnSync(process.execPath, ["--experimental-loader", loader, new URL("./entrypoint.mjs", import.meta.url).pathname, "runtime-preflight"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${root}:${process.env.PATH ?? ""}` },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Node\.js v24\.14\.1/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 for (const versions of [

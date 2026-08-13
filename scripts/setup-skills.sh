@@ -21,17 +21,43 @@ LINK_ROOTS=(".claude/skills" ".codex/skills")
 info() { printf '[INFO] %s\n' "$*"; }
 error() { printf '[ERROR] %s\n' "$*" >&2; }
 
+skills=()
+while [ "$#" -gt 0 ]; do
+  if [ "$1" != "--skill" ] || [ "$#" -lt 2 ]; then
+    error "usage: scripts/setup-skills.sh --skill <name> [--skill <name> ...]"
+    exit 1
+  fi
+  name="$2"
+  case "$name" in
+    ""|.|..|*/*|*\\*)
+      error "不正な skill name: $name"
+      exit 1
+      ;;
+  esac
+  skills+=("$name")
+  shift 2
+done
+
+if [ "${#skills[@]}" -eq 0 ]; then
+  error "usage: scripts/setup-skills.sh --skill <name> [--skill <name> ...]"
+  exit 1
+fi
+
 if [ ! -d "$SKILLS_ROOT" ]; then
-  echo "[WARN] $SKILLS_ROOT がありません。vendored skill が未配置です。" >&2
-  exit 0
+  error "$SKILLS_ROOT がありません。宣言済み skill を処理できません。"
+  exit 1
 fi
 
 # preflight（検査パス）: 非 symlink 衝突を全件検出する。1 件でもあれば変更パス
 # （mkdir -p を含む）に入らず、全衝突パスと復旧手順を表示して非ゼロ終了する。
 conflicts=()
-for skill_path in "$SKILLS_ROOT"/*/; do
-  [ -d "$skill_path" ] || continue
-  name="$(basename "$skill_path")"
+missing=()
+for name in "${skills[@]}"; do
+  skill_path="$SKILLS_ROOT/$name"
+  if [ ! -d "$skill_path" ] || [ -L "$skill_path" ]; then
+    missing+=("$skill_path")
+    continue
+  fi
   for link_root in "${LINK_ROOTS[@]}"; do
     link="$link_root/$name"
     # symlink 以外の実体すべて（実ディレクトリ・通常ファイル・fifo 等）を衝突とする。
@@ -40,6 +66,14 @@ for skill_path in "$SKILLS_ROOT"/*/; do
     fi
   done
 done
+
+if [ "${#missing[@]}" -gt 0 ]; then
+  error "宣言済み skill directory がありません（ファイルシステムは未変更）:"
+  for path in "${missing[@]}"; do
+    error "  欠落: $path"
+  done
+  exit 1
+fi
 
 if [ "${#conflicts[@]}" -gt 0 ]; then
   error "symlink 以外の実体と名前衝突するため中断しました（ファイルシステムは未変更）:"
@@ -55,9 +89,8 @@ for link_root in "${LINK_ROOTS[@]}"; do
 done
 
 created=0
-for skill_path in "$SKILLS_ROOT"/*/; do
-  [ -d "$skill_path" ] || continue
-  name="$(basename "$skill_path")"
+for name in "${skills[@]}"; do
+  skill_path="$SKILLS_ROOT/$name"
   target="../../$SKILLS_ROOT/$name"
   for link_root in "${LINK_ROOTS[@]}"; do
     link="$link_root/$name"

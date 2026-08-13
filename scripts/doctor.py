@@ -17,7 +17,7 @@
 - green = exit 0（FAIL ゼロ・WARN/INFO 許容）。作成直後・CI・オフラインで green。
 
 到達性チェック（Context7 リモートを実際に叩く）は既定で行わず、--online 時のみ。
-skill 利用不能のハードゲートは pytest（tests/test_skills_lock.py）。doctor は助言 WARN。
+skill 利用不能のハードゲートは offline `skills:verify`。doctor は助言 WARN。
 
 read-only 方針: 実 sync を行わない。lock の検査は `uv lock --check`、ツールの
 呼び出し可否は `uv run --no-sync <tool> --version` で確認し、uv.lock を変更しない。
@@ -410,7 +410,7 @@ def check_skills(diag: Diagnostics) -> None:
             link = REPO_ROOT / root / name
             if not (link.is_symlink() and (link / "SKILL.md").is_file()):
                 diag.warn_(
-                    f"{root}/{name} の symlink が壊れています（task skills:update）"
+                    f"{root}/{name} の symlink が壊れています（task skills:links）"
                 )
                 broken += 1
     if broken == 0 and blocked_present == 0:

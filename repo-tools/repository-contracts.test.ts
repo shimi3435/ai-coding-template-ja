@@ -36,6 +36,21 @@ function writeValidRepository(): string {
       "  audit:node:",
       "    cmds:",
       "      - npm audit --audit-level=high",
+      "  skills:links:",
+      "    cmds:",
+      "      - node repo-tools/entrypoint.mjs skills:links",
+      "  skills:verify:",
+      "    cmds:",
+      "      - node repo-tools/entrypoint.mjs skills:verify",
+      "  skills:check:",
+      "    cmds:",
+      "      - node repo-tools/entrypoint.mjs skills:check",
+      "  skills:update:",
+      "    cmds:",
+      "      - node repo-tools/entrypoint.mjs skills:update",
+      "  skills:lock-local:",
+      "    cmds:",
+      "      - node repo-tools/entrypoint.mjs skills:lock-local",
       "",
     ].join("\n"),
     "utf8",
@@ -61,6 +76,8 @@ test("check-contracts accepts the tracked exact dependency and release ownership
   assert.match(result.stdout, /package-lock v3/);
   assert.match(result.stdout, /TEMPLATE_VERSION 1\.0\.0/);
   assert.match(result.stdout, /forbidden Node runners/);
+  assert.match(result.stdout, /skill updater routes/);
+  assert.match(result.stdout, /legacy skill checker: absent/);
 });
 
 test("check-contracts identifies malformed package metadata", () => {
