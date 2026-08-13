@@ -185,16 +185,21 @@ async function collectRemoteObservations(context: SkillCommandContext): Promise<
   return Object.freeze({ state, sources, locks, groups, observations, errorByKey });
 }
 
-function remoteObservationFailureReport(
+type RemoteClassificationCollection = Readonly<{
+  installedTrees: ReadonlyMap<string, ReturnType<typeof readInstalledTree>>;
+  failure?: CommandReport;
+}>;
+
+function classifyRemoteCollection(
   command: "skills:check" | "skills:update",
   context: SkillCommandContext,
   collection: RemoteObservationCollection,
-): CommandReport | undefined {
-  if (collection.errorByKey.size === 0) return undefined;
+): RemoteClassificationCollection {
   const observationByKey = new Map(collection.observations.map((observation) => [
     cohortKey(observation.repository, observation.ref),
     observation,
   ]));
+  const installedTrees = new Map<string, ReturnType<typeof readInstalledTree>>();
   const cohorts: CohortReport[] = [];
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -208,7 +213,6 @@ function remoteObservationFailureReport(
       continue;
     }
     try {
-      const installedTrees = new Map<string, ReturnType<typeof readInstalledTree>>();
       for (const source of group) {
         const lock = collection.locks.find((entry) => entry.name === source.name);
         if (lock !== undefined) installedTrees.set(source.name, readInstalledTree(context.repositoryRoot, lock.target, lock.name));
@@ -231,17 +235,15 @@ function remoteObservationFailureReport(
       errors.push(`${key}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  return report(command, "failed", cohorts, warnings, errors, 1);
+  return errors.length === 0
+    ? { installedTrees }
+    : { installedTrees, failure: report(command, "failed", cohorts, warnings, errors, 1) };
 }
 
 function buildPlanFromRemoteObservations(
-  context: SkillCommandContext,
   collection: RemoteObservationCollection,
+  installedTrees: ReadonlyMap<string, ReturnType<typeof readInstalledTree>>,
 ): RemoteUpdatePlan {
-  const installedTrees = new Map<string, ReturnType<typeof readInstalledTree>>();
-  for (const lock of collection.locks) {
-    installedTrees.set(lock.name, readInstalledTree(context.repositoryRoot, lock.target, lock.name));
-  }
   return buildRemoteUpdatePlan({
     sources: collection.state.sources,
     sourcesBytes: collection.state.sourcesBytes,
@@ -258,9 +260,9 @@ async function inspectRemote(
   failOnUpdate: boolean,
 ): Promise<CommandReport> {
   const collection = await collectRemoteObservations(context);
-  const failure = remoteObservationFailureReport(command, context, collection);
-  if (failure !== undefined) return failure;
-  const plan = buildPlanFromRemoteObservations(context, collection);
+  const classification = classifyRemoteCollection(command, context, collection);
+  if (classification.failure !== undefined) return classification.failure;
+  const plan = buildPlanFromRemoteObservations(collection, classification.installedTrees);
   const cohorts = plan.steps.map((step) => planCohort(step));
   const hasUpdate = plan.steps.some((step) => step.status === "update-available");
   const hasNoContent = plan.steps.some((step) => step.status === "no-content-change");
@@ -272,9 +274,9 @@ type RemotePlanPreparation = Readonly<{ plan?: RemoteUpdatePlan; failure?: Comma
 
 async function createRemotePlan(context: SkillCommandContext): Promise<RemotePlanPreparation> {
   const collection = await collectRemoteObservations(context);
-  const failure = remoteObservationFailureReport("skills:update", context, collection);
-  if (failure !== undefined) return { failure };
-  return { plan: buildPlanFromRemoteObservations(context, collection) };
+  const classification = classifyRemoteCollection("skills:update", context, collection);
+  if (classification.failure !== undefined) return { failure: classification.failure };
+  return { plan: buildPlanFromRemoteObservations(collection, classification.installedTrees) };
 }
 
 export async function runSkillCommand(
@@ -359,11 +361,13 @@ export async function runSkillCommand(
       const preparation = await createRemotePlan({ ...context, ghRunner: runner });
       if (preparation.failure !== undefined) return render(preparation.failure, options.json);
       const plan = preparation.plan!;
+      const refreshState: { failure?: CommandReport } = {};
       const result = await applyRemoteUpdatePlan(plan, {
         repositoryRoot: context.repositoryRoot,
         refreshAll: async () => {
           const refreshed = await createRemotePlan({ ...context, ghRunner: runner });
           if (refreshed.failure !== undefined) {
+            refreshState.failure = refreshed.failure;
             throw new RemoteRefreshFailure({
               steps: refreshed.failure.cohorts.map((cohort) => ({ key: cohort.key, status: cohort.status })),
               errors: refreshed.failure.errors,
@@ -383,9 +387,17 @@ export async function runSkillCommand(
           return observeRemoteCohort(group, historyLocksForGroup(group, locks), runner);
         },
       });
+      if (refreshState.failure !== undefined) return render(refreshState.failure, options.json);
       const resultByKey = new Map(result.steps.map((step) => [step.key, step.status]));
       const cohorts = plan.steps.map((step) => planCohort(step, resultByKey.get(step.key) ?? "not-attempted"));
-      return render(report(command, result.status, cohorts, result.warnings ?? plan.warnings, result.errors, result.status === "applied" || result.status === "unchanged" ? 0 : 1), options.json);
+      return render(report(
+        command,
+        result.status,
+        cohorts,
+        result.warnings ?? plan.warnings,
+        result.errors,
+        result.status === "applied" || result.status === "unchanged" || result.status === "no-content-change" ? 0 : 1,
+      ), options.json);
     }
     return render(await inspectRemote(command, context, options.failOnUpdate), options.json);
   } catch (error: unknown) {

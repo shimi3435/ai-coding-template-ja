@@ -110,6 +110,7 @@ test("migration tracks every H1-H11 parity case", () => {
   const behavioralTests = [
     "skill-updater-foundation.test.ts",
     "skill-updater-github.test.ts",
+    "skill-updater-remote-command.test.ts",
     "skill-updater-planner.test.ts",
     "skill-updater-cli.test.ts",
   ].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");

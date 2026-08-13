@@ -105,6 +105,11 @@
   - **対象:**
     - `.agents/skills/`
     - `repo-tools/skill-updater/`
+    - `repo-tools/skill-updater-github.test.ts`
+    - `repo-tools/skill-updater-github-test-fixture.ts`
+    - `repo-tools/skill-updater-remote-command.test.ts`
+    - `repo-tools/skill-updater-transaction.test.ts`
+    - `repo-tools/skill-updater-migration.test.ts`
     - `repo-tools/cli.ts`
     - `repo-tools/entrypoint.mjs`
     - `package.json`
@@ -145,59 +150,10 @@
   - **Cycle 3 iteration 1 review:** initial reviewerは前回blocker 2件の解消、valid zero-byte blob回帰、異常系manifest assertion後を含むtemp cleanupを確認。新blocker 0、scope creep 0、focused 63 tests / tsc / diff-check green。non-blockerの実2-cohort先行applied保持、SemVer tag-only / version-only coverage、承認済みdeferred refactorはproduction contract適合を確認済みのため追加しない。
   - **Cycle 3 latest project check evidence:** `export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && openspec validate add-deterministic-skill-updater --strict`（valid、exit 0）、`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && uv run --no-sync task openspec:validate`（1 passed、exit 0）、`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && uv run --no-sync task check`（Node 149 tests、pytest 152 tests、ruff / basedpyright / tsc / contracts / skills verify全green）。source commit `0c8ea825648cc031b03cb35718f33c33d39341ab`、iteration 1 review後の最新implementation / spec / tests入力でfresh実行。
   - **Cycle 3 final verifier:** cycle 2 verifier / cycle 3 initial reviewerと別のverifierがcurrent tracked / untracked / deleted 53 pathsをgoal-backward検証。blocker 0、新規non-blocker 0、scope creepなし、Task 7完了可。verifier fresh実行の`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && uv run --no-sync task check`（Node 149 tests、pytest 152 tests、static / contracts / skills verify全green）、strict OpenSpec（valid）、`task openspec:validate`（1 passed）、`git diff --check`（exit 0）。canonical fingerprint、global / per-step freshness、mutation前status、Git object SHA / canonical base64、legal Blob API、path境界、test責務 / cleanup、H1-H11 traceを適合確認。source commit `0c8ea825648cc031b03cb35718f33c33d39341ab`、fresh実行。
-  <!-- executor-snapshot:start -->
-  - **Resume snapshot:** Task 7 `complete`。全task / review / latest project checks / final verifier green。commit前利用者確認待ち。`tasks.md`は本snapshot blockを除外して算出。
-  - `.agents/skills/skills.lock.json` — Task 6; regular; mode `0644`; bytes `7639`; SHA-256 `7cb2a2f7dccae77d62b95e866619b3c3fc84fcecaa48705949b7a6106696243b`
-  - `.agents/skills/skills.sources.json` — Task 6; regular; mode `0644`; bytes `5965`; SHA-256 `74d2d23ab646f97c40b6c0b6b45a29ef1ac98524c89204a33eda8cc093d2b269`
-  - `.gitignore` — Task 5; regular; mode `0644`; bytes `5373`; SHA-256 `d1d8aef40cfa47ce5bf7615788421e2a80bc81eeef78b910f82d83f2af15c809`
-  - `CLAUDE.md` — Task 7; regular; mode `0644`; bytes `1181`; SHA-256 `af548ca70c7c37ebe646e4dbd13aae91c4470c37fe4e3c20af2c4d23255d4561`
-  - `README.md` — Task 6; regular; mode `0644`; bytes `9956`; SHA-256 `97a09263b95bb669b44300abc8d25263fcc22e6438b55adee5b767a3d6b319ea`
-  - `Taskfile.yml` — Task 6; regular; mode `0644`; bytes `12829`; SHA-256 `f6205a00454324895b18639c0ce42480815a79f456fb9fb860b348d378df01cf`
-  - `docs/agents/mcp.md` — Task 7; regular; mode `0644`; bytes `7287`; SHA-256 `6a3d8609cd75c0f98ed93ef46c8ab296aac1bec665e745a5c7db0dc4c02f9a63`
-  - `docs/agents/safety.md` — Task 6; regular; mode `0644`; bytes `3330`; SHA-256 `6fc5cbf22653faf3cd72d46b9c2bb0d69ae7f7c865da3f7ad35818cf1dd6e0f0`
-  - `docs/agents/workflow.md` — Task 6; regular; mode `0644`; bytes `18750`; SHA-256 `78fdcba5acdb3e166dcd5abcfd415121dfb57cf3a0477ff1e6fe61e32b93ea9b`
-  - `docs/template/adr/0001-skill-distribution-vendoring.md` — Task 7; regular; mode `0644`; bytes `6793`; SHA-256 `6ba4b96790fdc28099fce0d1da327472e24137227e661e65b9270b60fa8fc315`
-  - `docs/template/release.md` — Task 6; regular; mode `0644`; bytes `8854`; SHA-256 `0488e614bd372f82959703383e80775de5f18b40a9d2d02565d5bff037b934bc`
-  - `openspec/changes/add-deterministic-skill-updater/design.md` — Task 6; regular; mode `0644`; bytes `26754`; SHA-256 `faf5453f5d466933748c3f83502137813d1f8fa23feb95ce8de9843c8849e5a5`
-  - `openspec/changes/add-deterministic-skill-updater/proposal.md` — Task 6; regular; mode `0644`; bytes `4450`; SHA-256 `19debe71a9beba8ed93ecaf7ffcde21377fd756689fb07231aadc29a085c54e1`
-  - `openspec/changes/add-deterministic-skill-updater/spec-holes.md` — Task 6; regular; mode `0644`; bytes `29179`; SHA-256 `171913fe3f35e1eca9fbb5769ed15efef28ba8ce27c48f7e77c06ad9a484b38a`
-  - `openspec/changes/add-deterministic-skill-updater/specs/deterministic-skill-updater/spec.md` — Task 6; regular; mode `0644`; bytes `31654`; SHA-256 `4e6c61c90b95aebac9d2a952447f675a48b45839d23aa3fe0090aee69c69449c`
-  - `openspec/changes/add-deterministic-skill-updater/tasks.md` — Task 7; regular; mode `0644`; bytes `32925`; SHA-256 `15ede9b6bf0e473557600b15816e72ad511ec269c54c1a93df3f643097d0997c`
-  - `package-lock.json` — Task 2; regular; mode `0644`; bytes `14595`; SHA-256 `5c7cbc14c8bdb54b9c8f091b6f77507d8a8e453149ea3734320a1a1c066aabf3`
-  - `package.json` — Task 2; regular; mode `0644`; bytes `682`; SHA-256 `377406ec1a8e99d3a56b494c0a13ffdc500f66bd036b03ba135b5feb2b229eab`
-  - `repo-tools/cli.ts` — Task 5; regular; mode `0644`; bytes `1586`; SHA-256 `67e2957b8ebce391f099dd2afd2326838030ae5f6619abe539f821fa6025f763`
-  - `repo-tools/fixtures/skill-updater/tree-v1-golden.json` — Task 2; regular; mode `0644`; bytes `235`; SHA-256 `e322b0a0a14e5ceca1b07d4cc0428b3c5c9d79a0696958deb94a41ee005ac213`
-  - `repo-tools/fixtures/skill-updater/valid-skill.md` — Task 2; regular; mode `0644`; bytes `144`; SHA-256 `1c39f3c44821e60b20d140d8f760cb6211ebdf905316872f8fe40614b6eaa948`
-  - `repo-tools/repository-contracts.test.ts` — Task 6; regular; mode `0644`; bytes `13938`; SHA-256 `c1ad318172af313cba0ad278cc6ba00b4f91cdc316cc1767b60c7f920692fee0`
-  - `repo-tools/repository-contracts.ts` — Task 6; regular; mode `0644`; bytes `9625`; SHA-256 `3d1e42d51c0e3701af3a7aa5532f0cde24f0012098e69cc4f8b0e724c6ed93f8`
-  - `repo-tools/skill-updater-cli.test.ts` — Task 7; regular; mode `0644`; bytes `16418`; SHA-256 `a693b992542604b6e17eb0b7c24c063aa83fd496b232061d5d0928858949729e`
-  - `repo-tools/skill-updater-foundation.test.ts` — Task 7; regular; mode `0644`; bytes `12263`; SHA-256 `617a780690701df3a1d74756a91fd831203ca9c65f54cb8ce108f9170a04d550`
-  - `repo-tools/skill-updater-github.test.ts` — Task 7; regular; mode `0644`; bytes `34990`; SHA-256 `5f216d72618dc1a1649df2e3b472901f7e51541369e3410ecf282f3c016bdd82`
-  - `repo-tools/skill-updater-migration.test.ts` — Task 7; regular; mode `0644`; bytes `5239`; SHA-256 `d2b05d891b081e06e905d371175a1791d2905b30182a0446cebaa725839e885e`
-  - `repo-tools/skill-updater-planner.test.ts` — Task 7; regular; mode `0644`; bytes `8440`; SHA-256 `927621057755dd24975a15f1de886216d90788df78330bfe111daec207f686d3`
-  - `repo-tools/skill-updater-repository.test.ts` — Task 7; regular; mode `0644`; bytes `5152`; SHA-256 `905c5b7fd7377166d5d84fa4583177da0cca2cb6e5f30346f52f0fa9afbfb5a3`
-  - `repo-tools/skill-updater-test-fixture.ts` — Task 7; regular; mode `0644`; bytes `3346`; SHA-256 `22a5fe0dcdc791fa91208cce7fb26e9d35da823f96dd1eea63fca14e480afde0`
-  - `repo-tools/skill-updater-test-temp.ts` — Task 7; regular; mode `0644`; bytes `490`; SHA-256 `406b3ac16f3a15698f34d2278caa9746af3b6e21b6fd500c1d7ba325b9dcf737`
-  - `repo-tools/skill-updater-transaction.test.ts` — Task 7; regular; mode `0644`; bytes `14938`; SHA-256 `bd4ed06fa82e51ce42249b877fdf067038f9d5d89eb8dea89d2903d438719456`
-  - `repo-tools/skill-updater/canonical.ts` — Task 2; regular; mode `0644`; bytes `2684`; SHA-256 `6980348e039f76bfe8cb4c888a94ef2b63c4f2cbffbc5d4cc66d844ecd286342`
-  - `repo-tools/skill-updater/commands.ts` — Task 7; regular; mode `0644`; bytes `17348`; SHA-256 `f254bf37dc6752aaa95773a836c5a48d214115f2a54428cdb6ab8efb32144206`
-  - `repo-tools/skill-updater/git-object.ts` — Task 7; regular; mode `0644`; bytes `488`; SHA-256 `79315c94952f97a3718ec5b2f2c7601bc028cc5bca9911040b1b805752945f13`
-  - `repo-tools/skill-updater/github.ts` — Task 6; regular; mode `0644`; bytes `18359`; SHA-256 `998180f1d084cee8fcbccdce4590463ea5705aaa56d719b55bb2a2431e53f8da`
-  - `repo-tools/skill-updater/index.ts` — Task 7; regular; mode `0644`; bytes `1816`; SHA-256 `89a268983729aa181414986df0beb2bae813d6c2ba17edc073dd6916245d0e7f`
-  - `repo-tools/skill-updater/installed-path.ts` — Task 7; regular; mode `0644`; bytes `670`; SHA-256 `f34965bf8704df814d81e5e3bfcdec14e99c8e1626f613d553baaf31b2ce70d7`
-  - `repo-tools/skill-updater/legal.ts` — Task 2; regular; mode `0644`; bytes `5190`; SHA-256 `6494fd5286347cf9be0f60747377f2f65f07ae979bafea8a32e1abd6fe956348`
-  - `repo-tools/skill-updater/metadata.ts` — Task 7; regular; mode `0644`; bytes `1639`; SHA-256 `f015c1bc7d2ec150fb7e48e8e870eb038dd221d71ab41348e8b2ecf447de6df6`
-  - `repo-tools/skill-updater/observation-fingerprint.ts` — Task 7; regular; mode `0644`; bytes `1586`; SHA-256 `fcb2ffc73b1c7471718a0f134dc0e8bdab5f872612165a6c3301d7b0e7409c90`
-  - `repo-tools/skill-updater/planner.ts` — Task 7; regular; mode `0644`; bytes `12085`; SHA-256 `0d258a44f8d290796b752a852a224bf968c50c44a63b9907cc939da5e414803d`
-  - `repo-tools/skill-updater/repository.ts` — Task 7; regular; mode `0644`; bytes `13392`; SHA-256 `434e6098cc40cad3f58ce8949f353a56c2e8315a01b3ab698a50c9f2a57f45a7`
-  - `repo-tools/skill-updater/schema.ts` — Task 6; regular; mode `0644`; bytes `19989`; SHA-256 `ecccd1ce6219f641d288c662d9de6a3b09a6a8ef3758112b41afe8ae70c5ea6b`
-  - `repo-tools/skill-updater/semver-policy.ts` — Task 7; regular; mode `0644`; bytes `1987`; SHA-256 `1b489cbfcdad0ea3c71c8ae6c40321b2229dbcd9e088e4eec0d5ae6d407a4b66`
-  - `repo-tools/skill-updater/transaction.ts` — Task 7; regular; mode `0644`; bytes `20372`; SHA-256 `85fa4aabb547a25affcad16d3ebc06a41ca7f6820366dc399d8767809cb4d44b`
-  - `repo-tools/skill-updater/types.ts` — Task 6; regular; mode `0644`; bytes `3062`; SHA-256 `d9b15558edd5ccb6cbd0a80425134de2efede39f309d18f304584c4da1db53b4`
-  - `scripts/doctor.py` — Task 7; regular; mode `0755`; bytes `26532`; SHA-256 `7358ce5b7e80f0ff1e0230bac858f4329ab4b6123bfcd57abf14ce9bcd59d4d6`
-  - `scripts/setup-skills.sh` — Task 7; regular; mode `0755`; bytes `4060`; SHA-256 `4f18e1db3c36f76b31f1ba4f7c94f638cfff647903fe9c0455318ccc2a4c3f19`
-  - `scripts/skills-upstream-check.py` — Task 6; deleted
-  - `tests/test_setup_skills.py` — Task 7; regular; mode `0644`; bytes `8954`; SHA-256 `c1a5e898afec8c45090a49f8b2d9928455aeaff91079e13ca6d4dc150271282c`
-  - `tests/test_skills_lock.py` — Task 6; deleted
-  - `tests/test_skills_upstream_check.py` — Task 6; deleted
-  <!-- executor-snapshot:end -->
+  - **Remediation cycle 4:** PR #57の`origin/main...HEAD` code reviewでStandards hard 2件、Spec blocker 2件を検出。利用者が2026-08-13のgrillingで、(1) cohort observation / classificationを共通success / error resultへ統合し全成功時だけglobal planを構築、(2) partial failureではactual status / names / resolved commit / warningsだけを返して未成立plan detailを省略、(3) remote applyのmutation対象0件をtop-level `no-content-change`、各cohortをplan statusのまま保持、(4) GitHub testsをtransport / remote command / fake-gh transcriptへ責務分割、(5) stale snapshot解消を承認。fixture全面共通化とtransaction責務分割はscope外defer。
+  - **Cycle 4依存順:** (1) Task 7再openと旧snapshot削除、(2) test責務を機械分割してgreen確認、(3) public `runSkillCommand`の2-cohort classification error REDから共通cohort resultを実装、(4) public `applyRemoteUpdatePlan`とcommand JSONのno-op / partial status REDからstatus保持を実装、(5) focused validation / self-review / initial review diff review、(6) latest strict OpenSpec / project checks / initial reviewerと別verifier、(7) Task 7完了とsnapshot block削除、(8)利用者再確認後だけcommit / push。
+  - **Cycle 4 TDD seams:** public `runSkillCommand` / JSON machine reportとpublic `applyRemoteUpdatePlan` result。2-cohort classification errorでは成功cohortのactual statusと失敗cohort identityを固定し、remote no-op applyとmutation前partial failureではtop-level / step statusとno-writeを固定する。内部helper call count / private classifierは検証しない。
+  - **Cycle 4 implementation / self-review evidence:** GitHub testをtransport / remote command / shared fake transcriptへ責務分割し、全cohort classification result、remote no-op / partial failure status、2回目global refreshのfresh partial detailをpublic RED testsから修正。`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && node --test repo-tools/skill-updater-*.test.ts repo-tools/repository-contracts.test.ts`（138 tests passed）、`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && node_modules/.bin/tsc --noEmit`（exit 0）、`git diff --check`（exit 0）。review iteration 1修正後の`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && node --test repo-tools/skill-updater-remote-command.test.ts repo-tools/skill-updater-transaction.test.ts repo-tools/skill-updater-migration.test.ts`（24 tests passed）、同`tsc --noEmit`と`git diff --check`（exit 0）。source commit `4a0f3efe6960107530b7cad8f2f0460080050d51`、全てcycle 4該当最新入力のfresh実行。self-reviewはdirty / untracked、Task 7対象、scope、status vocabulary、partial detail、test責務、secret混入を照合し、明白な型union重複だけ修正。新しい判断事項なし。
+  - **Cycle 4 independent review:** PR reviewのStandards hard 2件、Spec blocker 2件を修正。iteration 1で2回目global refresh partial failureが初回planのstale commit /未成立detailを返すblockerを検出し、fresh failure report直接renderとpublic RED testで解消。StandardsのTask 7対象path誤配置をiteration 2で修正。各iterationのdiff reviewで前回finding解消、新blocker / hard 0、scope creepなしを確認。remote command fixture全面共通化とtransaction責務分割は承認済みdeferを維持。
+  - **Cycle 4 latest project check evidence:** `export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && openspec validate add-deterministic-skill-updater --strict`（valid、exit 0）、`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && uv run --no-sync task openspec:validate`（1 passed、exit 0）、`export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH && uv run --no-sync task check`（Node 153 tests、pytest 152 tests、ruff / basedpyright / tsc / contracts / skills verify全green）、`git diff --check`（exit 0）。source commit `4a0f3efe6960107530b7cad8f2f0460080050d51`、iteration 2 review後の最新implementation / tests / Task 7対象・review evidence入力でfresh実行。
+  - **Cycle 4 final verifier:** initial spec / standards reviewerと別のverifierがcurrent tracked / untracked diffをgoal-backward検証。blocker 0、non-blocker 0、scope creepなし、Task 7完了可。verifier fresh実行のfocused 24 tests、`tsc --noEmit`、strict OpenSpec、`task openspec:validate`（1 passed）、`uv run --no-sync task check`（Node 153 tests、pytest 152 tests、static / contracts / skills verify全green）、`git diff --check`（exit 0）。全cohort classification、partial detail、remote apply status、2回目global refresh、test責務分割、migration trace、Task 7対象 / evidence、transaction artifactなしを適合確認。source commit `4a0f3efe6960107530b7cad8f2f0460080050d51`、fresh実行。

@@ -15,8 +15,8 @@ import type { CanonicalTree } from "./canonical.ts";
 import type { LocalLockPlan, RemotePlanStep, RemoteUpdatePlan } from "./planner.ts";
 import { remoteObservationFingerprint } from "./observation-fingerprint.ts";
 
-export type TransactionStatus = "applied" | "unchanged" | "rolled-back" | "failed" | "unknown" | "not-attempted";
-export type TransactionStepStatus = TransactionStatus | "up-to-date" | "update-available" | "no-content-change";
+export type TransactionStatus = "applied" | "unchanged" | "no-content-change" | "rolled-back" | "failed" | "unknown" | "not-attempted";
+export type TransactionStepStatus = TransactionStatus | "up-to-date" | "update-available";
 export type TransactionHooks = Readonly<{ transition?: (point: string) => void }>;
 export type TransactionResult = Readonly<{
   status: TransactionStatus;
@@ -139,7 +139,7 @@ function writeRemoteStepManifest(
 function writeRemoteTransactionManifest(
   root: string,
   plan: RemoteUpdatePlan,
-  completed: readonly Readonly<{ key: string; status: TransactionStatus }>[],
+  completed: readonly Readonly<{ key: string; status: TransactionStepStatus }>[],
 ): void {
   const completedKeys = new Set(completed.map((step) => step.key));
   const currentLockDigest = completed.length === 0
@@ -290,7 +290,13 @@ export async function applyRemoteUpdatePlan(
 ): Promise<TransactionResult> {
   const root = transactionRoot(context.repositoryRoot);
   const applicable = plan.steps.filter((step) => step.status === "update-available");
-  if (applicable.length === 0) return { status: "unchanged", steps: plan.steps.map((step) => ({ key: step.key, status: "unchanged" })), errors: [] };
+  if (applicable.length === 0) {
+    return {
+      status: "no-content-change",
+      steps: plan.steps.map((step) => ({ key: step.key, status: step.status })),
+      errors: [],
+    };
+  }
   try {
     if (existsSync(root)) throw new Error("transaction manifestが残存しています。manifestのbefore imageとdigestでmanual recoveryが必要です");
     assertRemoteFresh(context.repositoryRoot, plan);
@@ -304,12 +310,12 @@ export async function applyRemoteUpdatePlan(
   }
 
   mkdirSync(root, { recursive: false, mode: 0o700 });
-  const results: { key: string; status: TransactionStatus }[] = [];
+  const results: { key: string; status: TransactionStepStatus }[] = [];
   writeRemoteTransactionManifest(root, plan, results);
   for (let index = 0; index < plan.steps.length; index += 1) {
     const step = plan.steps[index]!;
     if (step.status !== "update-available") {
-      results.push({ key: step.key, status: "unchanged" });
+      results.push({ key: step.key, status: step.status });
       continue;
     }
     const stepRoot = join(root, `step-${index}`);

@@ -39,7 +39,11 @@ function writeTree(root: string, name: string, body: string): ReturnType<typeof 
   return readInstalledTree(root, `.agents/skills/${name}`, name);
 }
 
-function remoteFixture(ref: SourceRef = { branch: "main" }): {
+function remoteFixture(
+  ref: SourceRef = { branch: "main" },
+  remoteBody = "new",
+  resolvedCommit = newCommit,
+): {
   root: string;
   plan: ReturnType<typeof buildRemoteUpdatePlan>;
   observation: RemoteCohortObservation;
@@ -69,11 +73,11 @@ function remoteFixture(ref: SourceRef = { branch: "main" }): {
   spawnSync("git", ["add", ".agents/skills"], { cwd: root });
   spawnSync("git", ["-c", "user.name=Skill Updater Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture"], { cwd: root });
   const newTree = canonicalizeTree([
-    { path: "SKILL.md", executable: false, content: skill("demo", "new") },
+    { path: "SKILL.md", executable: false, content: skill("demo", remoteBody) },
     { path: "LICENSE", executable: false, content: legal },
   ]);
   const observation: RemoteCohortObservation = {
-    repository: "owner/repo", ref, resolvedCommit: newCommit,
+    repository: "owner/repo", ref, resolvedCommit,
     verification: "verified", warnings: [], entries: [{
       name: "demo", metadata: { name: "demo", description: "demo skill" }, tree: newTree,
       legalFiles: [{ sourcePath: "LICENSE", targetPath: "LICENSE", sha256: legalHash }],
@@ -104,6 +108,20 @@ test("remote transaction replaces target first and lock last", async () => {
   assert.equal(readFileSync(join(fixture.root, ".agents", "skills", "skills.lock.json"), "utf8"), fixture.plan.candidateLockBytes);
   assert.equal(readInstalledTree(fixture.root, ".agents/skills/demo", "demo").treeHash, fixture.observation.entries[0]?.tree.treeHash);
   assert.equal(existsSync(join(fixture.root, ".agents", "skills", ".skill-updater-txn")), false);
+});
+
+test("remote no-op apply preserves plan statuses and reports no-content-change", async () => {
+  const fixture = remoteFixture({ branch: "main" }, "old", oldCommit);
+
+  const result = await applyRemoteUpdatePlan(fixture.plan, {
+    repositoryRoot: fixture.root,
+    refreshAll: async () => fixture.plan,
+    refreshStep: async () => fixture.observation,
+  });
+
+  assert.equal(fixture.plan.steps[0]?.status, "up-to-date");
+  assert.equal(result.status, "no-content-change");
+  assert.deepEqual(result.steps, [{ key: fixture.plan.steps[0]!.key, status: "up-to-date" }]);
 });
 
 test("remote transaction manifest records transition and recovery digests before cleanup", async () => {
@@ -267,6 +285,26 @@ test("remote transaction fails before mutation when per-step verification change
   assert.equal(readFileSync(join(fixture.root, ".agents", "skills", "skills.lock.json"), "utf8"), beforeLock);
   assert.equal(readInstalledTree(fixture.root, ".agents/skills/demo", "demo").treeHash, beforeTree);
   assert.equal(existsSync(join(fixture.root, ".agents", "skills", ".skill-updater-txn")), false);
+});
+
+test("remote partial failure preserves a preceding up-to-date cohort status", async () => {
+  const fixture = remoteFixture();
+  const noOpFixture = remoteFixture({ branch: "main" }, "old", oldCommit);
+  const first = { ...noOpFixture.plan.steps[0]!, key: "owner/repo|branch:first" };
+  const second = fixture.plan.steps[0]!;
+  const plan = { ...fixture.plan, steps: Object.freeze([first, second]) };
+
+  const result = await applyRemoteUpdatePlan(plan, {
+    repositoryRoot: fixture.root,
+    refreshAll: async () => plan,
+    refreshStep: async () => ({ ...fixture.observation, verification: "unverified" }),
+  });
+
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.steps, [
+    { key: first.key, status: "up-to-date" },
+    { key: second.key, status: "failed" },
+  ]);
 });
 
 test("remote transaction rejects a changed SemVer tag at per-step freshness", async () => {
