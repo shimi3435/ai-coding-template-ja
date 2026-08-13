@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { detectAndValidateRuntimes } from "./runtime.ts";
 import { validateRepositoryContracts } from "./repository-contracts.ts";
-import { runSkillCommand, type SkillCommandName } from "./skill-updater/index.ts";
+import type { SkillCommandName } from "./skill-updater/index.ts";
 
 function usage(): never {
   console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts|skills:links|skills:verify|skills:check|skills:update|skills:lock-local>");
@@ -27,6 +27,7 @@ try {
     command === "skills:update" ||
     command === "skills:lock-local"
   ) {
+    const { runSkillCommand } = await import("./skill-updater/index.ts");
     const result = await runSkillCommand(command as SkillCommandName, process.argv.slice(3), {
       repositoryRoot: process.cwd(),
     });
