@@ -8,8 +8,8 @@
 ## Skills
 - vendored skill の実体は `.agents/skills/<name>/`。Claude Code は `.claude/skills/`
   （`.agents/skills` への symlink）から同一 SKILL.md を参照する。
-- symlink が壊れた / 欠落したときは `task skills:update`（`scripts/setup-skills.sh`）で
-  冪等に再生成する。整合確認は `task skills:doctor`。
+- symlink が壊れた / 欠落したときは `task skills:links` で冪等に再生成する。
+  offline 整合確認は `task skills:verify`。
 
 ## caveman hook（任意）
 - `caveman` skill 本体（明示起動・簡素化原則）はコアで vendoring 済み（両エージェント対応）。

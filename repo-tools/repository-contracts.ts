@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 type PackageManifest = {
@@ -193,6 +193,19 @@ export function validateRepositoryContracts(): readonly string[] {
   if (missingNpmRoutes.length > 0) {
     throw new Error(`${taskfilePath}: npm 公開入口が不足しています: ${missingNpmRoutes.join(", ")}`);
   }
+  const requiredSkillRoutes = ["skills:links:", "skills:verify:", "skills:check:", "skills:update:", "skills:lock-local:"];
+  const missingSkillRoutes = requiredSkillRoutes.filter((route) => !taskfileText.includes(route));
+  if (missingSkillRoutes.length > 0) {
+    throw new Error(`${taskfilePath}: skill updater routesが不足しています: ${missingSkillRoutes.join(", ")}`);
+  }
+  const legacySkillPaths = [
+    join(repositoryRoot, "scripts", "skills-upstream-check.py"),
+    join(repositoryRoot, "tests", "test_skills_upstream_check.py"),
+  ];
+  const remainingLegacyPaths = legacySkillPaths.filter(existsSync);
+  if (remainingLegacyPaths.length > 0) {
+    throw new Error(`legacy skill checkerが残っています: ${remainingLegacyPaths.join(", ")}`);
+  }
 
   const taskCommands: string[] = [];
   let insideCommands = false;
@@ -236,5 +249,7 @@ export function validateRepositoryContracts(): readonly string[] {
     "prepare-v2-release handoff",
     "native network access: none",
     "forbidden Node runners: none",
+    "skill updater routes",
+    "legacy skill checker: absent",
   ];
 }

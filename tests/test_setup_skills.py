@@ -30,10 +30,13 @@ def _make_repo(tmp_path: Path, skill_names: list[str]) -> Path:
     return repo
 
 
-def _run_setup(repo: Path) -> subprocess.CompletedProcess[str]:
+def _run_setup(
+    repo: Path, skill_names: list[str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """setup-skills.sh を subprocess 実行する（ネットワーク不使用）。"""
+    skill_args = [item for name in (skill_names or []) for item in ("--skill", name)]
     return subprocess.run(
-        ["bash", str(repo / "scripts" / "setup-skills.sh")],
+        ["bash", str(repo / "scripts" / "setup-skills.sh"), *skill_args],
         capture_output=True,
         text=True,
         check=False,
@@ -52,7 +55,7 @@ def test_real_directory_collision_is_protected(tmp_path: Path) -> None:
     user_dir.mkdir(parents=True)
     (user_dir / "NOTES.md").write_text("user content\n", encoding="utf-8")
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd"])
 
     assert result.returncode != 0
     assert user_dir.is_dir() and not user_dir.is_symlink()
@@ -72,7 +75,7 @@ def test_regular_file_collision_is_protected(tmp_path: Path) -> None:
     user_file.parent.mkdir(parents=True)
     user_file.write_text("user file\n", encoding="utf-8")
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd"])
 
     assert result.returncode != 0
     assert user_file.is_file() and not user_file.is_symlink()
@@ -89,7 +92,7 @@ def test_multiple_collisions_are_all_listed(tmp_path: Path) -> None:
     file_conflict.parent.mkdir(parents=True)
     file_conflict.write_text("user file\n", encoding="utf-8")
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd", "caveman"])
 
     assert result.returncode != 0
     # 最初の 1 件で停止せず、全衝突パスが stderr に列挙されること。
@@ -106,7 +109,7 @@ def test_collision_blocks_repair_in_other_root(tmp_path: Path) -> None:
     broken_link.parent.mkdir(parents=True)
     broken_link.symlink_to("missing-target")
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd"])
 
     assert result.returncode != 0
     # 壊れた symlink は修復されず、そのまま残ること（衝突解消後の再実行で修復される）。
@@ -120,10 +123,10 @@ def test_rerun_after_evacuation_succeeds(tmp_path: Path) -> None:
     user_dir = repo / ".claude" / "skills" / "tdd"
     user_dir.mkdir(parents=True)
     (user_dir / "NOTES.md").write_text("user content\n", encoding="utf-8")
-    assert _run_setup(repo).returncode != 0
+    assert _run_setup(repo, ["tdd"]).returncode != 0
 
     user_dir.rename(repo / "tdd-backup")
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd"])
 
     assert result.returncode == 0
     for link_root in LINK_ROOTS:
@@ -144,7 +147,7 @@ def test_broken_symlink_is_repaired(tmp_path: Path) -> None:
     broken_link.parent.mkdir(parents=True)
     broken_link.symlink_to("missing-target")
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd"])
 
     assert result.returncode == 0
     assert broken_link.is_symlink()
@@ -162,7 +165,7 @@ def test_wrong_target_symlink_is_replaced_target_intact(tmp_path: Path) -> None:
     wrong_link.parent.mkdir(parents=True)
     wrong_link.symlink_to("../../user-skill")
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd"])
 
     assert result.returncode == 0
     assert wrong_link.is_symlink()
@@ -175,9 +178,9 @@ def test_wrong_target_symlink_is_replaced_target_intact(tmp_path: Path) -> None:
 def test_correct_symlinks_are_idempotent(tmp_path: Path) -> None:
     """全 symlink が正しい状態の再実行は無変更・「変更なし」報告・exit 0。"""
     repo = _make_repo(tmp_path, ["tdd", "caveman"])
-    assert _run_setup(repo).returncode == 0
+    assert _run_setup(repo, ["tdd", "caveman"]).returncode == 0
 
-    result = _run_setup(repo)
+    result = _run_setup(repo, ["tdd", "caveman"])
 
     assert result.returncode == 0
     assert "変更なし" in result.stdout
@@ -186,3 +189,28 @@ def test_correct_symlinks_are_idempotent(tmp_path: Path) -> None:
             link = repo / link_root / name
             assert link.is_symlink()
             assert link.readlink() == Path(_expected_target(name))
+
+
+def test_only_explicit_skill_arguments_are_linked(tmp_path: Path) -> None:
+    """宣言済みとして渡した skill だけを処理し、directory scanで対象を増やさない。"""
+    repo = _make_repo(tmp_path, ["tdd", "undeclared"])
+
+    result = _run_setup(repo, ["tdd"])
+
+    assert result.returncode == 0
+    for link_root in LINK_ROOTS:
+        assert (repo / link_root / "tdd").is_symlink()
+        assert not (repo / link_root / "undeclared").exists()
+
+
+def test_missing_skills_root_is_an_error_for_explicit_names(tmp_path: Path) -> None:
+    """明示対象があるのにskills root欠落なら成功扱いしない。"""
+    repo = tmp_path / "repo"
+    scripts_dir = repo / "scripts"
+    scripts_dir.mkdir(parents=True)
+    shutil.copy(SCRIPT_SOURCE, scripts_dir / "setup-skills.sh")
+
+    result = _run_setup(repo, ["tdd"])
+
+    assert result.returncode != 0
+    assert ".agents/skills" in result.stderr

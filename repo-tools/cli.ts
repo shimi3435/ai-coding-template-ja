@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { detectAndValidateRuntimes } from "./runtime.ts";
 import { validateRepositoryContracts } from "./repository-contracts.ts";
+import { runSkillCommand, type SkillCommandName } from "./skill-updater/index.ts";
 
 function usage(): never {
-  console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts>");
+  console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts|skills:links|skills:verify|skills:check|skills:update|skills:lock-local>");
   process.exit(2);
 }
 
@@ -19,6 +20,19 @@ try {
     for (const contract of validateRepositoryContracts()) {
       console.log(`[OK] ${contract}`);
     }
+  } else if (
+    command === "skills:links" ||
+    command === "skills:verify" ||
+    command === "skills:check" ||
+    command === "skills:update" ||
+    command === "skills:lock-local"
+  ) {
+    const result = await runSkillCommand(command as SkillCommandName, process.argv.slice(3), {
+      repositoryRoot: process.cwd(),
+    });
+    if (result.stdout.length > 0) process.stdout.write(result.stdout);
+    if (result.stderr.length > 0) process.stderr.write(result.stderr);
+    process.exitCode = result.exitCode;
   } else {
     usage();
   }

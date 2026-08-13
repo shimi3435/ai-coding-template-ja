@@ -2,7 +2,7 @@
 
 skill には remote-owned、first-party local、plugin manager-owned の異なる ownership がある。現行 lock は取得元と installed bytes の一部を記録するが、source declaration、resolved state、完全な subtree、cohort、transaction を表現しない。すべてを同じ updater で変更すると ownership と provenance が壊れるため、remote update、local integrity、plugin ownership を分離する。
 
-旧 branch の OpenSpec と planning artifacts は現行 workflow より前の実行経路、source commit pin、GSD handoff を含む。これらは移行せず、現行 `main` の OpenSpec 直接実行契約へ仕様と実装依存順だけを再構成する。
+旧 branch の OpenSpec と planning artifacts は現行 workflow より前の実行経路、source commit pin、廃止済みhandoffを含む。これらは移行せず、現行 `main` の OpenSpec 直接実行契約へ仕様と実装依存順だけを再構成する。
 
 ## Goals / Non-Goals
 
@@ -30,7 +30,7 @@ source declaration は `.agents/skills/skills.sources.json`、generated lock は
 
 全 entry は `name`、`ownership`、`license`、`redistribution` を持つ。`license` は trim 後に非空の string とし、既存値を exact に保持する。SPDX expression は強制しない。`redistribution` は `allowed` または `blocked` とする。
 
-- `remote`: `target`、`repository`、`ref`、`subtree`、1件以上の `legalMappings` を持つ。各mappingは`sourcePath`、`targetPath`、`expectedSha256`を持つ。
+- `remote`: `target`、`repository`、`ref`、`subtree`、1件以上の `legalMappings` を持つ。`subtree` は `{ "root": true }` または `{ "path": "canonical/non-empty/path" }` の tagged union とし、exactly one variant、unknown fieldなしを要求する。`root: false`、空path、`.`は拒否する。各mappingは`sourcePath`、`targetPath`、`expectedSha256`を持つ。
 - `local`: `target` と1件以上の `legalMappings` を持ち、installed tree の canonical hash 対象になる。各mappingはrepository-relative `sourcePath`と`expectedSha256`を持つが`targetPath`は持たない。
 - `plugin`: `manager` を持つが `target`、hash、legal mapping は持たず、remote fetch、local hash 更新、installed tree write の対象外になる。
 
@@ -46,6 +46,10 @@ sources / lock は各10 MiB以下、`skills` は500 entries以下に限定する
 
 generated lock は source entry の `name`、`ownership`、`license`、`redistribution` を exact copyする。remote / local lock はさらに `target`、`treeHash`、`fileCount`、`byteCount`、canonical order の `legalFiles` を持つ。remote `legalFiles` entryは`sourcePath`、`targetPath`、`sha256`、local `legalFiles` entryは`sourcePath`、`sha256`を持つ。hash は lowercase 64-hex、count / bytes は非負safe integerとする。remote lock は `repository`、source `ref`、`resolvedCommit`、`verification`、SemVer sourceの場合は`selectedTag`と`selectedVersion`を持つ。`verification` は `verified`、`unverified`、`unknown` のenum。plugin lockは共通fieldsと`manager`だけを保持し、target、hash、resolved commitを捏造しない。sourcesとlockの`license` / `redistribution`不一致はintegrity errorとする。
 
+全commandのrepository-state読込境界で、sources / lockのname完全bijection、ownership一致、remote / local target一致、plugin manager一致をstructural invariantとして検証する。違反はnetwork accessとmutation前に拒否し、v1ではownership、target、plugin managerを自動移行しない。remoteのrepository / ref / legal / policyとlocalのlegal / policyはreview済みsources変更として対応planだけがlock候補へ反映できるmutable declaration driftとし、`skills:verify`では適用完了までintegrity errorとして扱う。
+
+remote repository変更時は旧lockを新repositoryのhistory inputへ渡さず初回sourceとして観測する。同一repository内のbranch名変更は旧resolved commitからnew branch commitへのfast-forwardを要求する。SemVer range変更はlocked tag不変とdowngrade禁止を維持する。branch / commit / SemVer間のref variant変更はv1で自動移行せず拒否する。
+
 ### 2. canonical JSON と tree hash を固定する
 
 canonical JSON は validated model から schema 定義順に新しい object を構築し、entryとlegal mappingをUTF-8 byte orderで整列した後、`JSON.stringify(value, null, 2) + "\n"` でUTF-8 serializeする。generic key sorter、locale-dependent order、入力objectのproperty orderに依存しない。同じ意味の入力は同じbytesを生成する。
@@ -56,13 +60,13 @@ tree hash v1 は次の byte frame の SHA-256 とする。
 2. regular file 件数を unsigned 64-bit big-endian で格納。
 3. canonical relative path の UTF-8 byte order で並べた各 file について、path byte length を unsigned 64-bit big-endian、path bytes、executable flag を1 byte（`0x00` または `0x01`）、content byte length を unsigned 64-bit big-endian、content bytesの順に連結。
 
-directory は frame に含めない。空 directory は Git が保持しないため対象外とする。remote candidate installed treeはsubtreeの全regular filesをsubtree-relative pathへ配置し、mapped legal filesを`targetPath`へ配置した最終file集合とする。remote `treeHash`はlegal filesを含む最終file集合を対象にし、`legalFiles`でも各legal SHA-256を独立保持する。legal `targetPath`がsubtree fileと重なる場合、bytesが同一なら既存modeを保持して1 fileとして数え、bytesが異なればcollision errorにする。local `treeHash`はtarget配下だけを対象とし、repository-level legal fileは含めず`legalFiles`で独立検証する。content-change判定はtree hashとlegal hashesの両方を比較する。
+directory は frame に含めない。空 directory は Git が保持しないため対象外とする。remote candidate installed treeは、root selectorではrepository-relative path、path selectorでは選択path-relative pathへsubtreeの全regular filesを配置し、mapped legal filesを`targetPath`へ配置した最終file集合とする。remote `treeHash`はlegal filesを含む最終file集合を対象にし、`legalFiles`でも各legal SHA-256を独立保持する。legal `targetPath`がsubtree fileと重なる場合、bytesが同一なら既存modeを保持して1 fileとして数え、bytesが異なればcollision errorにする。local `treeHash`はtarget配下だけを対象とし、repository-level legal fileは含めず`legalFiles`で独立検証する。content-change判定はtree hashとlegal hashesの両方を比較する。
 
 ### 3. canonical path と resource limit を fail-closed にする
 
-path は UTF-8 NFC の repository-relative POSIX path に限定する。absolute、空 segment、`.`、`..`、backslash、NUL、non-NFC、exact NFC duplicate、ASCII lettersだけをlowercase化したcollisionを補正せず拒否する。非ASCII文字のcase variantは別のNFC byte sequenceとして扱う。regular fileとdirectory以外のsymlink、submodule、device、FIFO、socketは拒否する。
+path は UTF-8 NFC の repository-relative POSIX path に限定する。absolute、空 segment、`.`、`..`、backslash、NUL、non-NFC、exact NFC duplicate、ASCII lettersだけをlowercase化したcollisionを補正せず拒否する。repository root は path string の例外にせず `subtree.root` variantだけで表す。非ASCII文字のcase variantは別のNFC byte sequenceとして扱う。regular fileとdirectory以外のsymlink、submodule、device、FIFO、socketは拒否する。
 
-limit は一 skill 200 files / 20 MiB、単一 file 10 MiB、cohort 500 unique files / 50 MiB、SemVer tag candidates 500件とする。1 MiB は1,048,576 bytes。remote mapped legal blobは単一fileとcohort合計に含め、同じcommit / canonical source pathはcohort内で1回だけ数える。final installed treeでは同じtarget pathの同一bytesを1 fileとして数える。local legal fileにも単一file limitを適用し、共有repository-relative sourceは一度だけ読み取り・hashする。境界値は受理し、超過、pagination不完了、切り捨てはcohort / local plan errorにする。
+limit は一 skill 200 files / 20 MiB、単一 file 10 MiB、cohort 500 unique files / 50 MiB、SemVer tag candidates 500件とする。installed traversalはfileとdirectoryを合わせたfilesystem entries 500、target rootを0とするdirectory depth 32、target-relative pathのUTF-8 bytes 4096、各segmentのUTF-8 bytes 255を上限とする。1 MiB は1,048,576 bytes。境界値は受理し、+1を拒否する。empty directoryはfilesystem entry数へ計上するがtree hash / fileCountへ含めない。remote mapped legal blobは単一fileとcohort合計に含め、同じcommit / canonical source pathはcohort内で1回だけ数える。final installed treeでは同じtarget pathの同一bytesを1 fileとして数える。installed / local tree walkerは`opendirSync`によるiterative streaming traversalでentry、depth、path、file読込前後、file count、skill bytesを検査し、上限超過後の残りentry / file contentを読まない。local legal fileにも単一file limitを適用し、共有repository-relative sourceはtracked / regular state、bounded bytes、file identity、size、SHA-256をplan内cacheから一度だけ取得して再利用する。remote API tree metadataはblob取得前にper-skill / cohort unique countとdeclared bytesを検査し、single file / aggregate超過、size欠落、unsafe integerをblob未取得で拒否する。blob取得後もactual bytesとmetadata一致を再検査する。境界値は受理し、超過、pagination不完了、切り捨てはcohort / local plan errorにする。
 
 ### 4. SemVer と YAML parser を exact pin する
 
@@ -76,7 +80,7 @@ YAML frontmatter は UTF-8、単一 document、mapping root、duplicate key 不�
 
 remote operation は認証済み `gh api` を subprocess argument array で呼ぶ。token value や authorization header を process environment から読み取って再表示せず、human / JSON / error / debug output に含めない。repository visibility を public と確認できない場合、private、inaccessible、rate-limited、malformed response は別 URL や anonymous fetch へ fallback しない。
 
-一つの remote observation は ref resolution、repository visibility、commit verification、full subtree、mapped legal blobsをimmutable valueとして返す。不完全pagination、欠落object、型不一致を部分成功にしない。
+一つの remote observation は ref resolution、repository visibility、commit verification、full subtree、mapped legal blobsをimmutable valueとして返す。不完全pagination、欠落object、型不一致を部分成功にしない。Git tree / blob object SHAはv1でlowercase 40-hexに固定する。Git Blob API responseは`sha`を必須とし、requested tree SHA、response SHA、`SHA-1("blob " + decimal byte length + NUL + bytes)`で再計算したGit object IDの三者一致を要求する。このGit SHA-1は取得境界の整合検証だけに使いgenerated lockへ保存せず、lockはresolved commitとcanonical installed tree SHA-256を保持する。mapped remote legalもtree entry SHAからGit Blob APIで取得し、1 MiB超でJSON contentが変わるContents APIを使用しない。
 
 ### 6. repo / ref cohort と ref policy を固定する
 
@@ -94,9 +98,11 @@ remote legal mapping の欠落、取得不能、source / target path 不正、ta
 
 ### 8. preview と immutable operation plan を共有する
 
-`skills:check`、`skills:update` preview、`skills:update --apply` は同じ immutable plan factory を使う。global planはsources bytes digest、initial lock bytes / digest、canonical cohort orderを持つ。各cohort stepはmanaged target tree digest、resolved commit、remote tree / legal hashes、diff、limit、warnings、`expectedBeforeLockBytes` / digest、`candidateAfterLockBytes` / digestを持つ。先行stepのcandidate-afterは次stepのexpected-beforeとbyte-for-byteで一致するlock chainを形成する。content changeがないstepはcandidate-afterをexpected-beforeと同じbytes / digestにし、target / lockを書き換えない。
+`skills:check`、`skills:update` preview、`skills:update --apply` は同じ immutable plan factory を使う。global planはsources bytes digest、initial lock bytes / digest、canonical cohort orderを持つ。各cohort stepはmanaged target tree digest、resolved commit、remote tree / legal hashes、diff、limit、warnings、`expectedBeforeLockBytes` / digest、`candidateAfterLockBytes` / digestを持つ。さらにrepository、canonical ref、resolved commit、verification、SemVer selected tag / version、entry name順のtree hash / file count / byte count / canonical legal identityをschema順JSONへ変換し、SHA-256したobservation fingerprintを固定する。warnings、diff、表示metadataはfingerprintへ含めない。先行stepのcandidate-afterは次stepのexpected-beforeとbyte-for-byteで一致するlock chainを形成する。content changeがないstepはcandidate-afterをexpected-beforeと同じbytes / digestにし、target / lockを書き換えない。
 
-`skills:update` は dry-run 既定。`--apply` は開始前にsources、initial lock、全remote observations、全managed targetsをglobal planと照合する。各cohort開始直前にもcurrent lockがstepのexpected-before、managed targetとremote observationがstep inputsに一致することをfresh検証する。一つでも変化した場合はmutation前に停止して新しいpreviewを要求する。managed targetのtracked / untracked changeは拒否し、unrelated dirty pathは許す。force optionは提供しない。
+`skills:update` は dry-run 既定。`--apply` は開始前にsources、initial lock、全remote observations、全managed targetsをglobal planと照合する。各cohort開始直前にもcurrent lockがstepのexpected-before、managed targetとremote observation fingerprintがstep inputsに一致することをfresh検証する。一つでも変化した場合はmutation前に停止して新しいpreviewを要求する。cohort直前かつmutation開始前の不一致は先行appliedを保持し、対象failed、後続not-attemptedとしてtransaction rootをcleanupする。実変更がない対象をrolled-backと報告しない。managed targetのtracked / untracked changeは拒否し、unrelated dirty pathは許す。force optionは提供しない。
+
+dry-runとapplyはcohort別success / errorを保持する同一remote observation result modelを使う。global observationで一部cohortが失敗した場合も全宣言cohortをcanonical順で一度ずつ分類し、全observation完了前にmutationを開始しない。
 
 `skills:lock-local`は全local entriesを一つのimmutable lock-only planとして扱う。planはsources digest、initial lock bytes / digest、全local target tree digests、全local legal hashes、candidate lock bytes / digestを固定する。`--apply`直前に全inputsをfresh再検証し、一つでも異なればlockを変更せずnew previewを要求する。対象0件またはcontent changeなしではwriteしない。
 
@@ -112,19 +118,21 @@ remote legal mapping の欠落、取得不能、source / target path 不正、ta
 
 ### 10. command と machine output を安定化する
 
-- `skills:links`: 現行 symlink 再生成を冪等実行し、source / installed / ownership の対応を表示する。
+- `skills:links`: TypeScript境界でmetadataとstructural invariantをpreflightし、source declarationのremote / local entriesだけをcanonical順でshellへargvとして渡す。pluginと未宣言directoryを対象にせず、未宣言directoryはmutation前errorにする。shellはname / pathを防御検査し、non-symlink衝突の全件preflightとsymlink限定unlinkを維持して冪等置換だけを行う。
 - `skills:verify`: network と `gh` なしで installed tree、lock、metadata、symlink integrity を検証する。
 - `skills:check`: remote update を検査する。update available は既定 exit 0、`--fail-on-update` では exit 3。
 - `skills:update`: remote cohort の dry-run preview と explicit `--apply` だけを行う。
 - `skills:lock-local`: 全local-owned entriesのlock-only planをdry-runし、explicit `--apply`だけで単一transactionとしてlockを置換する。
 
-unknown option、衝突 option、schema / operation / policy error、history rewrite、downgrade、transaction failureはexit 1。errorとupdate availableが併存する場合はexit 1を優先する。machine outputは`schemaVersion`、`command`、`status`、canonical orderの`cohorts`、`warnings`、`errors`、`exitCode`を持つ。status vocabularyは`up-to-date`、`update-available`、`no-content-change`、`applied`、`unchanged`、`rolled-back`、`failed`、`unknown`、`not-attempted`に限定する。
+unknown option、衝突 option、schema / operation / policy error、history rewrite、downgrade、transaction failureはexit 1。errorとupdate availableが併存する場合はexit 1を優先する。partial remote observationでは、成功cohortをglobal planと共通のpure classifierで実際の状態へ分類し、失敗cohortを`failed`とする。全宣言cohortをcanonical順で一度ずつmachine outputへ含め、top-levelは`failed`、exit 1とする。machine outputは`schemaVersion`、`command`、`status`、canonical orderの`cohorts`、`warnings`、`errors`、`exitCode`を持つ。status vocabularyは`up-to-date`、`update-available`、`no-content-change`、`applied`、`unchanged`、`rolled-back`、`failed`、`unknown`、`not-attempted`に限定する。
+
+plugin-only declarationでは`skills:links`のmetadata / structural / undeclared directory preflightを実行後、shellを起動せずcohorts空、`unchanged`、exit 0を返す。remote installed legal検証はbounded `readInstalledTree`のcanonical tree file mapだけを使い、filesystemを再読込しない。
 
 ### 11. migration parity 後だけ cutover する
 
-現行 `.agents/skills/skills.lock.json` の全 entry をremote / local / pluginのいずれかへ一対一で分類する。name、source、target、commit、license、redistribution、installed bytesを黙示的に脱落させない。`license` / `redistribution`はsourcesへexact移植し、lockへexact copyする。remote entryはexplicit ref / subtree / legal mapping、local entryはtarget / local hash / repository-level legal mapping、plugin entryはtargetなしのmanager ownershipへ移す。現行local 4 entriesのroot `LICENSE`は共通repository-relative `sourcePath`としてexact移植し、各targetへ複製しない。`redistribution: blocked`のremote / local entryが存在した場合は移行を停止し、plugin ownershipへ推測変換しない。
+現行 `.agents/skills/skills.lock.json` の全 entry をremote / local / pluginのいずれかへ一対一で分類する。name、source、target、commit、license、redistribution、installed bytesを黙示的に脱落させない。`license` / `redistribution`はsourcesへexact移植し、lockへexact copyする。remote entryはexplicit ref / subtree / legal mapping、local entryはtarget / local hash / repository-level legal mapping、plugin entryはtargetなしのmanager ownershipへ移す。locked source treeとのbyte照合に基づき`caveman`は`subtree: { "path": "skills/caveman" }`、他のmonorepo内skillも対応する`subtree.path`としてexact移植する。repository root skillは`subtree: { "root": true }`で表現可能だが、現行migration inventoryには存在しない。現行local 4 entriesのroot `LICENSE`は共通repository-relative `sourcePath`としてexact移植し、各targetへ複製しない。`redistribution: blocked`のremote / local entryが存在した場合は移行を停止し、plugin ownershipへ推測変換しない。
 
-migration は最新 `main` の tracked tree だけを入力とする。`.planning/`、旧 GSD planning artifacts、source-pinned handoff metadata を repository diff、metadata、tests、docs へ取り込まない。ignored local cacheは入力にも削除対象にもせず、tracked / branch diffが0件であることを最初のmigration taskで再検証する。
+migration は最新 `main` の tracked tree だけを入力とする。`.planning/`、廃止済みplanning artifacts、source-pinned handoff metadata を repository diff、metadata、tests、docs へ取り込まない。ignored local cacheは入力にも削除対象にもせず、tracked / branch diffが0件であることを最初のmigration taskで再検証する。
 
 現行 H1〜H11 と rename 元 path、単一 skill repository 直下、同一 repository 複数 entry、WARN 非 gate の補助 cases を Node tests へ一対一で追跡する。新契約による結果変更は explicit ref、cohort、complete subtree、exit 0 / 3 / 1 の根拠を test 名または migration mapping に残す。
 

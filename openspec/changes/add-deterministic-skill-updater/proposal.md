@@ -10,13 +10,13 @@
 
 - 本 change は `origin/main` の `ed656b5` から作成した専用 branch だけで進める。
 - `main` の active OpenSpec change は 0 件であり、本 PR の active change は `add-deterministic-skill-updater` だけとする。
-- 旧 branch の `.planning/`、GSD planning artifacts、handoff、source commit pin は移行しない。
+- 旧 branch の `.planning/`、廃止済みplanning artifacts、handoff、source commit pin は移行しない。
 - 旧成果から引き継ぐのは、決定論的 updater の仕様意図、解決済み境界条件、local foundation → GitHub observation → read-only planning → transactional apply → migration/cutover の実装依存順だけである。
 
 ## What Changes
 
 - `.agents/skills/skills.sources.json` を human-owned source declaration、`.agents/skills/skills.lock.json` を generated resolved state として定義する。
-- public GitHub repository の explicit branch、exact commit、または opt-in SemVer tag range から subtree を取得する。
+- public GitHub repository の explicit branch、exact commit、または opt-in SemVer tag range から、明示した repository root または canonical path の subtree を取得する。
 - normalized repository / ref が同じ entries を一つの cohort とし、一つの resolved commit から観測する。
 - canonical path、content bytes、executable bit を versioned frame へ直列化し、SHA-256 tree hash を計算する。
 - `license` / `redistribution` と review 済み legal mapping を source declaration の正本として静的検証し、generated lock へ exact copyする。取得した script や hook は実行しない。

@@ -124,8 +124,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 `task doctor` は GitHub MCP の接続 probe をしない（既定 offline-green を維持）。検証は上記の
 手動コマンドで行う。
 
-## skills.lock との関係
+## skill metadata との関係
 
-vendored skill の供給元 / commit / license / sha256 は
+vendored skill のreview済み供給元 / ref / license は
+[`.agents/skills/skills.sources.json`](../../.agents/skills/skills.sources.json)、resolved commit / tree hashは
 [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する
 （第三者 skill の同梱＝再配布のため）。詳細は [docs/agents/workflow.md](workflow.md)。

@@ -204,6 +204,9 @@ tempCodeRunnerFile.py
 # Node.js dependencies
 /node_modules/
 
+# Recoverable skill updater transaction state (same-filesystem staging / before images)
+/.agents/skills/.skill-updater-txn/
+
 # PyPI configuration file
 .pypirc
 

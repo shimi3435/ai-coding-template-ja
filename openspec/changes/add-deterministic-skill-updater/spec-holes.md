@@ -10,14 +10,14 @@
 | 2 | 境界値 | 該当 | schema version、10 MiB、500 entries の境界 | 1: 対応 version 1、上限値は受理、超過は拒否と design / spec に明記 |
 | 3 | 重複・衝突 | 該当 | name、target、lock key、remote legal target の衝突 | 1: mutation 前 schema error、last-wins 禁止と spec に明記。local legal source共有は受理 |
 | 4 | 順序 | 該当 | JSON key / entry order が hash や diff を変える | 1: schema 定義順、UTF-8 byte order、canonical JSON を design に固定 |
-| 5 | 型・形式不正 | 該当 | unknown field、variant不整合、非整数count、invalid redistribution | 1: unknown / inconsistent field、unsafe number、非対応redistributionを拒否するとdesign / specに明記 |
-| 6 | エラー経路 | 該当 | sources は valid だが lock parse が失敗する部分状態 | 1: file を変更せず exit 1、全 apply 前 validation と spec に明記 |
+| 5 | 型・形式不正 | 該当 | unknown field、ownership / ref / subtree variant不整合、非整数count、invalid redistribution | 1: unknown / inconsistent field、unsafe number、非対応redistributionを拒否するとdesign / specに明記。subtreeはroot/path tagged unionだけを受理 |
+| 6 | エラー経路 | 該当 | sources は valid だが lock parseまたはstructural bijectionが失敗する部分状態 | 1: 全commandのrepository-state境界でname / ownership / target / manager invariantをnetwork / mutation前に検証し、fileを変更せずexit 1とspecに明記 |
 | 7 | 冪等性・再実行 | 該当 | 同じmodelの再serializeでbytesが変わる、legal policyがdriftする | 1: canonical serializationとlicense / redistribution exact-copyをdesign / specに固定 |
 | 8 | 時刻・タイムゾーン | 非該当 | schema に時刻 field を持たない | 2: v1 metadata に timestamp を入れず canonical state から除外 |
 | 9 | 文字列 | 該当 | Unicode name / target、空白のみ ref | 1: canonical path / NFC と non-empty explicit ref validation を design / spec に明記 |
 | 10 | 数値 | 該当 | 負数、fraction、overflow、NaN / inf | 1: JSON safe integer と非負 count / bytes だけを許可、NaN / inf は parse不能として拒否 |
 | 11 | 巨大入力・リソース枯渇 | 該当 | 巨大 metadata / entry 配列 | 1: file 10 MiB、skills 500 entries の上限を design / spec に明記 |
-| 12 | 状態遷移の未定義パス | 該当 | human-owned sourcesをupdaterが暗黙修正する | 1: sourcesは人だけが編集し、license / redistributionを含むreview値をlockへexact copyすると明記 |
+| 12 | 状態遷移の未定義パス | 該当 | human-owned sourcesをupdaterが暗黙修正する、review済みdriftと構造破損の区別 | 1: sourcesは人だけが編集し、構造driftは拒否、remote / local planだけが許可されたreview値をlockへexact copyすると明記 |
 
 ## SKUP-2 ownership variant を守る
 
@@ -44,7 +44,7 @@
 | 2 | 境界値 | 該当 | pagination 0 / 1 / 最終 page | 1: 全 page 完了証明を要求、件数上限は SKUP-7 に明記 |
 | 3 | 重複・衝突 | 該当 | API が同一 path を重複返却 | 1: canonical path collision として SKUP-6 で拒否 |
 | 4 | 順序 | 該当 | page / tree 列挙順が変化 | 1: immutable observation 後に canonical UTF-8 order へ整列 |
-| 5 | 型・形式不正 | 該当 | malformed JSON、object type 不一致 | 1: source error、fallbackなしと spec に明記 |
+| 5 | 型・形式不正 | 該当 | malformed JSON、object type不一致、tree / blob SHA欠落・非40-hex・不一致、同size別bytes | 1: tree / requested / response lowercase 40-hex SHAと取得bytesから再計算したGit blob SHA-1の一致を要求し、source error、fallbackなしとspecに明記 |
 | 6 | エラー経路 | 該当 | private、403、404、rate limit、timeout | 1: source / operation error、exit 1、別経路 fallback禁止と spec に明記 |
 | 7 | 冪等性・再実行 | 該当 | retry 中に ref が移動 | 1: observation を commit に固定し、apply 前 freshness recheck を SKUP-9 に明記 |
 | 8 | 時刻・タイムゾーン | 非該当 | commit timestamp を判断に使わない | 2: ref / ancestry / content だけを判断入力とする |
@@ -91,11 +91,11 @@
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方（1: 明記 / 2: スコープ外 / 3: ユーザ確認） |
 | --- | --- | --- | --- | --- |
-| 1 | 空・ゼロ長・None | 該当 | empty subtree、empty file、empty path | 1: empty file は valid、empty subtree / path は拒否、root SKILL.md必須と spec に明記 |
+| 1 | 空・ゼロ長・None | 該当 | empty selected tree、empty file、empty path、repository root表現 | 1: empty fileはvalid、empty selected tree / pathは拒否、repository rootは`{ "root": true }`だけで表し、selected rootのSKILL.md必須とspecに明記 |
 | 2 | 境界値 | 該当 | file count 0 / 1、length 0、u64 boundary | 1: u64-BE framing、resource limits、empty content受理を design / spec に明記 |
 | 3 | 重複・衝突 | 該当 | exact NFC / ASCII case-fold alias path、remote legal targetとsubtree fileの重複 | 1: aliasは補正せず拒否。legal overlapは同bytesなら既存modeで1 file、異bytesなら拒否とspecに明記 |
 | 4 | 順序 | 該当 | input enumeration order | 1: UTF-8 byte order と property scenarioを spec に明記 |
-| 5 | 型・形式不正 | 該当 | non-NFC、backslash、special file | 1: canonical path / regular-file-only validation と spec に明記 |
+| 5 | 型・形式不正 | 該当 | non-NFC、backslash、special file、subtree string / empty object / `root: false` / root-path併記 / unknown field | 1: canonical path / regular-file-only validationとroot/path tagged unionのstrict validationをspecに明記 |
 | 6 | エラー経路 | 該当 | hash read途中失敗 | 1: partial hashを返さず cohort error、mutationなし |
 | 7 | 冪等性・再実行 | 該当 | 同じ tree が別 order で異なる hash | 1: fixed domain / u64-BE frame と canonical sort を design に固定 |
 | 8 | 時刻・タイムゾーン | 非該当 | mtime / ctime を hash に含めない | 2: remoteはlegal配置後の最終tree、localはtarget配下についてpath、content、executable bitだけをhash対象に固定 |
@@ -118,7 +118,7 @@
 | 8 | 時刻・タイムゾーン | 非該当 | limitに時刻なし | — |
 | 9 | 文字列 | 非該当 | path byte lengthはtree hash、resource byte countはcontent bytes | — |
 | 10 | 数値 | 該当 | MiB定義、overflow、negative | 1: 1 MiB=1,048,576 bytes、safe non-negative integerを design に明記 |
-| 11 | 巨大入力・リソース枯渇 | 該当 | 本requirementの主対象 | 1: skill / file / cohort / tag / metadata limitsをdesign / specに固定 |
+| 11 | 巨大入力・リソース枯渇 | 該当 | 本requirementの主対象、installed / local treeを検査前に全読込する、大量empty directory / 深いtree / 長いpath | 1: skill / file / cohort / tag / metadata limitsに加えentries 500、depth 32、path 4096 bytes、segment 255 bytesとiterative streaming traversalをdesign / specに固定 |
 | 12 | 状態遷移の未定義パス | 該当 | limit到達後に既取得partial dataをapply | 1: candidate破棄、mutation前拒否と spec に明記 |
 
 ## SKUP-8 SKILL metadata と legal approval を静的検証する
@@ -127,7 +127,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | 空・ゼロ長・None | 該当 | SKILL.md 0件、空description / license、legal mapping 0件、local source欠落 | 1: exactly one、trim後非空、remote / localは1件以上mapping、local sourceはtracked regular fileを要求 |
 | 2 | 境界値 | 該当 | SKILL.md exactly 1、frontmatter delimiter境界 | 1: single UTF-8 YAML document / mapping rootとして parser contractを固定 |
-| 3 | 重複・衝突 | 該当 | duplicate YAML key、duplicate remote legal target、shared local legal source | 1: YAML / remote target collisionは拒否、複数local entryの同source参照は受理とspecに明記 |
+| 3 | 重複・衝突 | 該当 | duplicate YAML key、duplicate remote legal target、shared local legal source | 1: YAML / remote target collisionは拒否、複数local entryの同source参照はtracked / regular / bytes / identity / size / hashを一度だけ取得して再利用するとspecに明記 |
 | 4 | 順序 | 該当 | variant別legal mapping orderがlock bytesを変える | 1: remoteはtarget/source、localはsourceのUTF-8 orderでserialize |
 | 5 | 型・形式不正 | 該当 | YAML parse error、mapping以外、name / license非string、redistribution不正 | 1: metadata / policy validation errorとspecに明記 |
 | 6 | エラー経路 | 該当 | remote legal fetch失敗、local legalがuntracked / non-regular、hash mismatch | 1: remote cohort / local plan全体をpolicy error、no-write、exit 1とspecに明記 |
@@ -135,7 +135,7 @@
 | 8 | 時刻・タイムゾーン | 非該当 | license approvalにtimestampを使わない | 2: review済みsource diffだけを承認記録にする |
 | 9 | 文字列 | 該当 | description空白、Unicode name、invalid UTF-8 | 1: trim後非空、declaration exact match、UTF-8 parseを spec に明記 |
 | 10 | 数値 | 非該当 | metadata意味値に数値なし | — |
-| 11 | 巨大入力・リソース枯渇 | 該当 |巨大 frontmatter / remote・local legal blob | 1: single-file / cohort / metadata limitsを SKUP-7で適用し、共有sourceを重複読込しない |
+| 11 | 巨大入力・リソース枯渇 | 該当 |巨大 frontmatter / remote・local legal blob、Contents APIの1 MiB境界 | 1: single-file / cohort / metadata limitsを SKUP-7で適用し、remote legalはtree SHA由来Git Blob API、共有sourceは重複読込なしとする |
 | 12 | 状態遷移の未定義パス | 該当 | legal text / license / redistribution変更をどう承認するか | 1: 利用者確認済み推奨案どおりsources明示更新だけを承認経路にし、remote / local blockedは拒否 |
 
 ## SKUP-9 preview と apply を同じ immutable plan へ束縛する
@@ -147,9 +147,9 @@
 | 3 | 重複・衝突 | 該当 | plan内target collision | 1: global preflightでplan生成失敗、mutationなし |
 | 4 | 順序 | 該当 | diff / warning / cohort orderとlock更新順 | 1: canonical orderと連鎖するexpected-before / candidate-after lock bytesを固定 |
 | 5 | 型・形式不正 | 該当 | unknown / conflicting options | 1: usage error、exit 1、mutation前停止と SKUP-11 に明記 |
-| 6 | エラー経路 | 該当 | global / per-step freshness failure、current lock mismatch、local target / legal変化 | 1: remote stepまたは全local lock-only planのinput不一致ならnew preview要求、old planをapplyしないとspecに明記 |
+| 6 | エラー経路 | 該当 | global / per-step freshness failure、verification / selected tagだけ変化、current lock mismatch、local target / legal変化、apply global observationの一部失敗 | 1: lock影響意味値のcanonical observation fingerprintをglobal / per-stepで比較し、不一致なら対象failed / 後続not-attemptedでnew preview要求、dry-run / apply共通cohort resultを返してmutationしないとspecに明記 |
 | 7 | 冪等性・再実行 | 該当 | same apply再実行 | 1: no-content-change、target/lock bytes非書換え scenarioを spec に明記 |
-| 8 | 時刻・タイムゾーン | 非該当 | plan freshnessをwall-clock TTLで判定しない | 2: content digest / resolved commit一致だけを使用 |
+| 8 | 時刻・タイムゾーン | 非該当 | plan freshnessをwall-clock TTLで判定しない | 2: sources / lock / target digestとremote observation fingerprint一致だけを使用 |
 | 9 | 文字列 | 該当 | human output locale差、JSON Unicode | 1: machine schemaはcanonical values、human文面はsemantic判定に使わない |
 | 10 | 数値 | 該当 | counts / exit code | 1: validated counts、exit 0 / 3 / 1へ限定 |
 | 11 | 巨大入力・リソース枯渇 | 該当 |巨大 diff / cohortごとのplanned lock bytes | 1: sources / lock各10 MiB、skills / cohort各500件上限内でexpected-before / candidate-after bytesとdigestを保持 |
@@ -182,12 +182,12 @@
 | 4 | 順序 | 該当 | cohorts / warnings / errors order | 1: canonical orderと stable schema fieldsを design / spec に明記 |
 | 5 | 型・形式不正 | 該当 | unknown command / option / conflicting modes | 1: usage error、exit 1、mutation前停止と spec に明記 |
 | 6 | エラー経路 | 該当 | renderer failure、stdout partial | 1: operation error扱い。machine semanticはconstructed result modelを正本にする |
-| 7 | 冪等性・再実行 | 該当 | links / verify / dry-run / lock-local dry-run | 1: dry-run/read-onlyはwriteなし、linksは冪等、lock-localは全local同一plan再実行でno-content-change |
+| 7 | 冪等性・再実行 | 該当 | links / verify / dry-run / lock-local dry-run、未宣言directoryの暗黙link、plugin-only declaration | 1: dry-run/read-onlyはwriteなし、linksは宣言済みremote / localだけを冪等処理し未宣言directoryをmutation前拒否、対象0件はshell未起動no-op、lock-localは全local同一plan再実行でno-content-change |
 | 8 | 時刻・タイムゾーン | 非該当 | outputにtimestampを要求しない | 2: deterministic outputから時刻を除外 |
 | 9 | 文字列 | 該当 | Unicode path / error、credential-shaped text | 1: UTF-8 JSON、validated values、credential redaction boundaryを SKUP-3で要求 |
 | 10 | 数値 | 該当 | schemaVersion / exitCode / counts | 1: fixed schemaVersion 1、exitCode enum、safe integer counts |
 | 11 | 巨大入力・リソース枯渇 | 該当 | output size | 1: upstream limitsとcanonical summary。full file bytesをmachine outputへ含めない |
-| 12 | 状態遷移の未定義パス | 該当 |旧 skills:update / skills:upstream の扱い | 1: compatibility aliasなし、legacy残存test failureと spec に明記 |
+| 12 | 状態遷移の未定義パス | 該当 |旧 skills:update / skills:upstream の扱い、一部cohort失敗時の成功cohort状態 | 1: compatibility aliasなし、legacy残存test failure、全cohortをpure classifierまたはfailedで一度ずつ列挙するとspecに明記 |
 
 ## SKUP-12 parity gate 後に legacy checker を置換し offline integrity を通常 check に含める
 

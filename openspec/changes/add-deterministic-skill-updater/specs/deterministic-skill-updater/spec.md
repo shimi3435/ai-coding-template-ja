@@ -5,8 +5,20 @@
 updater は MUST `.agents/skills/skills.sources.json` を human-owned declaration、`.agents/skills/skills.lock.json` を generated resolved state として別 schema で検証し、暗黙 source や unknown field を補完しない。
 
 #### Scenario: remote skill を宣言する
-- **WHEN** remote entry が name、target、public GitHub repository、explicit ref、subtree、review 済み legal mappings を持つ
+- **WHEN** remote entry が name、target、public GitHub repository、explicit ref、exactly one の repository root または canonical path selector、review 済み legal mappings を持つ
 - **THEN** updater は entry を正規化し、resolved commit、canonical tree hash、legal hashes を lock 候補にできる
+
+#### Scenario: repository root を選択する
+- **WHEN** remote entry の `subtree` が unknown fieldなしの `{ "root": true }` である
+- **THEN** updater は repository root を選択し、repository-relative file paths を candidate target-relative paths として扱う
+
+#### Scenario: repository 内 path を選択する
+- **WHEN** remote entry の `subtree` が unknown fieldなしの `{ "path": "canonical/non-empty/path" }` である
+- **THEN** updater は選択path配下を取得し、選択path-relative file paths を candidate target-relative paths として扱う
+
+#### Scenario: subtree selector が不正である
+- **WHEN** `subtree` がstring、空object、`root: false`、rootとpathの併記、unknown field、空path、または`.`である
+- **THEN** updater はrepository rootを暗黙補完せずschema error、exit 1にする
 
 #### Scenario: ref が省略される
 - **WHEN** remote entry が branch、exact commit、SemVer range のいずれも明示しない
@@ -23,6 +35,24 @@ updater は MUST `.agents/skills/skills.sources.json` を human-owned declaratio
 #### Scenario: declaration が衝突する
 - **WHEN** skill name、normalized target、lock key、remote legal target、または ownership が重複・衝突する
 - **THEN** updater は全 apply 前に schema error とし、暗黙 merge や last-wins を行わない
+
+#### Scenario: sources と lock の構造が一致しない
+- **WHEN** name集合が一対一でない、ownershipが異なる、remote / local targetが異なる、またはplugin managerが異なる
+- **THEN** updater は全commandのnetwork accessとmutation前にstructural integrity error、exit 1とし、自動補完または自動移行を行わない
+
+#### Scenario: review済み declaration が generated state と異なる
+- **WHEN** remoteのrepository / ref / legal / policyまたはlocalのlegal / policyをsource declarationで明示変更する
+- **THEN** `skills:verify`はdriftをintegrity errorにし、対応するremote updateまたはlocal lock planだけがfresh validation後のlock候補へ変更を反映できる
+
+#### Scenario: remote repository または ref を変更する
+- **WHEN** 利用者がremote repositoryを明示変更する
+- **THEN** updaterは旧repositoryのresolved commitを新repositoryのancestry / tag検証へ渡さず初回sourceとして観測する
+- **WHEN** 同一repository内でbranch名を変更する
+- **THEN** updaterは旧resolved commitからnew branch commitへのfast-forwardを要求する
+- **WHEN** SemVer rangeを変更する
+- **THEN** updaterはlocked tag不変とdowngrade禁止を維持する
+- **WHEN** ref variantをbranch / commit / SemVer間で変更する
+- **THEN** updaterはv1で自動移行せずprovenance error、exit 1にする
 
 #### Scenario: legal policy fields を lock へ生成する
 - **WHEN** source entry の `license` がtrim後に非空で、`redistribution` が対応enumである
@@ -63,6 +93,10 @@ updater は MUST 認証済み `gh api` から public GitHub repository の conte
 #### Scenario: public repository を取得する
 - **WHEN** `gh` authentication が有効で repository と explicit ref を read できる
 - **THEN** updater は API response から visibility、commit、tree、blob metadata を完全検証する
+
+#### Scenario: Git blob response を tree entry へ束縛する
+- **WHEN** recursive tree がregular blobのlowercase 40-hex SHAを返し、updaterがそのSHAでblob responseを取得する
+- **THEN** updaterはresponse `sha`の存在・形式・requested / tree SHAとの一致、および取得bytesから計算したGit blob SHA-1との一致を全て要求し、不一致または欠落をcohort errorにする
 
 #### Scenario: private または inaccessible repository を指定する
 - **WHEN** visibility を public と確認できない、または API が access / rate-limit error を返す
@@ -161,7 +195,7 @@ updater は MUST canonical regular files を UTF-8 byte order で並べ、`skill
 - **THEN** updater は対象を無視せず cohort を拒否する
 
 #### Scenario: empty subtree である
-- **WHEN** subtree に regular file がない、または root `SKILL.md` がない
+- **WHEN** root / path selectorで選択したtreeにregular fileがない、または選択tree rootに`SKILL.md`がない
 - **THEN** updater は empty tree を install せず metadata validation error にする
 
 #### Scenario: remote candidate tree へ legal file を配置する
@@ -187,6 +221,20 @@ updater は MUST 一skill 200 files / 20 MiB、単一file 10 MiB、cohort 500 un
 #### Scenario: legal blob が重複する
 - **WHEN** cohort 内の複数 mapping が同じ commit / canonical source path を参照する
 - **THEN** updater は単一 file limit を各 blob に適用し、cohort file / byte 合計では unique blob を1回だけ数える
+
+#### Scenario: remote legal blob が1 MiBを超える
+- **WHEN** review済みremote legal blobが1 MiBを超え、単一file 10 MiB以下かつskill / cohort aggregate上限内である
+- **THEN** updaterはtree entry SHAを使うGit Blob APIで取得し、GitHub Contents APIへfallbackせず通常のblob identity / legal SHA-256検証を適用する
+
+#### Scenario: installed または local tree を読む
+- **WHEN** `skills:verify`または`skills:lock-local`がinstalled treeとrepository-level local legal fileを読む
+- **THEN** updaterは読込中に一skill 200 files / 20 MiBと単一file 10 MiBをfail-fastで適用し、共有local legal sourceをplan内で一度だけ読み取りhashする
+
+#### Scenario: installed tree traversal boundary に達する
+- **WHEN** target配下のfilesystem entries合計が500、directory depthが32、target-relative pathがUTF-8 4096 bytes、各path segmentがUTF-8 255 bytes以下である
+- **THEN** updaterは他の条件を満たすregular treeを受理し、empty directoryはfilesystem entry数だけに計上する
+- **WHEN** いずれかのtraversal boundaryを一つ超える
+- **THEN** updaterはiterative streaming traversal中に残りentry / file contentを読まずresource errorにする
 
 #### Scenario: tag pagination が上限内で完了しない
 - **WHEN** 取得済みSemVer tag candidatesが500件以下でもpagination完了を証明できない
@@ -224,13 +272,25 @@ updater は MUST 各 remote subtree root の単一 `SKILL.md` と source declara
 - **WHEN** 利用者がsource declarationの`license`または`redistribution`をreview済みchangeとして更新する
 - **THEN** updaterはnew valueとlegal mappingsをfresh previewで検証し、remote / localの`blocked`は拒否し、成功時だけlockへexact copyする
 
+#### Scenario: legal entries を canonical serialize する
+- **WHEN** remoteまたはlocalのlegal mappingsとlock legal filesをserialize、比較、または表示する
+- **THEN** remoteは`targetPath`、次に`sourcePath`、localは`sourcePath`のUTF-8 byte orderで並べる
+
+#### Scenario: shared local legal source を検証する
+- **WHEN** 複数local entriesが同じrepository-relative `sourcePath`を参照する
+- **THEN** updaterはtracked / regular state、bounded bytes、file identity、size、SHA-256を一度だけ取得してplan内で再利用し、各entryのexpected hashと比較する
+
+#### Scenario: installed remote legal file を検証する
+- **WHEN** `skills:verify`がremote lockの`legalFiles.targetPath`を検証する
+- **THEN** updaterはbounded `readInstalledTree`が返したcanonical tree bytesだけを使い、filesystemを再読込せずmissing / hash mismatchをintegrity errorにする
+
 #### Scenario: subtree に executable script がある
 - **WHEN** 取得 file が executable bit または script-like extension を持つ
 - **THEN** updater は bytes と mode を検査・コピーできるが、更新処理中に実行しない
 
 ### Requirement: SKUP-9 preview と apply を同じ immutable plan へ束縛する
 
-`skills:update` は MUST 既定で副作用なしpreviewを返し、global plan内の各cohort stepへ連鎖するexpected-before / candidate-after lock bytesとdigestを固定し、`--apply`時だけsources、current step lock、managed targets、remote observationのfresh digestがstep planと一致した場合にmutationする。
+`skills:update` は MUST 既定で副作用なしpreviewを返し、global plan内の各cohort stepへ連鎖するexpected-before / candidate-after lock bytesとdigestを固定し、`--apply`時だけsources、current step lock、managed targets、remote observationのfresh digestがstep planと一致した場合にmutationする。remote observation digestはrepository、canonical ref、resolved commit、verification、SemVer selected tag / version、entry name順のtree hash / file count / byte count / canonical legal identityを固定し、warnings、diff、表示metadataを含めない。
 
 #### Scenario: dry-run を実行する
 - **WHEN** `--apply` なしで update を実行する
@@ -245,8 +305,8 @@ updater は MUST 各 remote subtree root の単一 `SKILL.md` と source declara
 - **THEN** updater はその理由だけでは apply を拒否しない
 
 #### Scenario: preview 後に input が変化する
-- **WHEN** apply開始前または各cohort開始直前の再検査でsource commit、remote tree、sources、current expected-before lock、managed targetのいずれかがpreviewと異なる
-- **THEN** updater は新しい observation を未承認のまま apply せず、新しい preview を要求する
+- **WHEN** apply開始前または各cohort開始直前の再検査でsource commit、verification、SemVer selected tag / version、remote tree / legal identity、sources、current expected-before lock、managed targetのいずれかがpreviewと異なる
+- **THEN** updater は新しい observation を未承認のまま apply せず、新しい preview を要求する。cohort直前かつtarget / lock mutation前の不一致では先行`applied`を保持し、対象cohortを`failed`、後続を`not-attempted`、exit 1として、変更していない対象cohortを`rolled-back`と報告しない
 
 #### Scenario: 先行 cohort が lock を更新する
 - **WHEN** 先行cohortのcandidate-after lockが適用され、次cohortを開始する
@@ -298,7 +358,15 @@ repository は MUST links、verify、check、update、lock-localの責務、sche
 
 #### Scenario: skill symlink を再生成する
 - **WHEN** `skills:links` を実行する
-- **THEN** vendored skill の symlink を冪等に再生成し、source / installed / ownership の対応を表示する
+- **THEN** metadataとstructural integrityをmutation前に検証し、source declarationのremote / local entriesだけをcanonical順でsymlink対象にし、plugin entryを除外して冪等に再生成する
+
+#### Scenario: symlink 対象が0件である
+- **WHEN** valid source declarationがplugin entriesだけを持つ
+- **THEN** `skills:links`はshellを起動せずcohorts空、`unchanged`、exit 0のno-opにする
+
+#### Scenario: 未宣言の vendored directory がある
+- **WHEN** `.agents/skills/<name>` directoryが存在するがsource declarationに対応entryがない
+- **THEN** `skills:links`は暗黙sourceとしてsymlinkを生成せず、既存symlinkを変更する前にexit 1にする
 
 #### Scenario: local integrity だけを検査する
 - **WHEN** `skills:verify` を実行する
@@ -314,7 +382,11 @@ repository は MUST links、verify、check、update、lock-localの責務、sche
 
 #### Scenario: error と update available が併存する
 - **WHEN** ある cohort に valid update があり、別 cohort に schema、operation、policy、transaction error がある
-- **THEN** machine output は両方を列挙し、exit 1 を exit 3 / 0 より優先する
+- **THEN** machine output は全宣言cohortをcanonical順で一度ずつ列挙し、成功cohortを実際の`up-to-date` / `no-content-change` / `update-available`、失敗cohortを`failed`とし、top-level `failed`とexit 1をexit 3 / 0より優先する
+
+#### Scenario: apply preflight で一部 remote observation が失敗する
+- **WHEN** `skills:update --apply`のglobal observation中に一部cohortが失敗する
+- **THEN** updaterはdry-runと同じcohort別result modelを返し、全cohort observation完了までtarget / lock mutationを開始しない
 
 #### Scenario: option が unknown または衝突する
 - **WHEN** command が unknown option または両立しない mode を受け取る
@@ -334,11 +406,15 @@ repository は MUST 現行 H1〜H11、補助 fixtures、全 lock entries を新�
 
 #### Scenario: migration branch の planning 境界を検証する
 - **WHEN** 最初の migration task が tracked files と `origin/main...HEAD` の diff を検査する
-- **THEN** `.planning/`、GSD planning artifacts、source-pinned handoff metadata は0件であり、ignored local cache を移行または削除しない
+- **THEN** `.planning/`、廃止済みplanning artifacts、source-pinned handoff metadata は0件であり、ignored local cache を移行または削除しない
 
 #### Scenario: H1〜H11 を移行する
 - **WHEN** parity suite を実行する
 - **THEN** H1〜H11 と rename 元 path、単一 skill repository 直下、同一 repository 複数 entry の cases は Node tests に追跡され、結果変更の根拠が explicit ref、cohort、complete subtree、exit semantics に対応する
+
+#### Scenario: legacy caveman source を移行する
+- **WHEN** locked commitとvendored bytesを照合したlegacy `caveman` entryを移行する
+- **THEN** source declarationは実在する`subtree: { "path": "skills/caveman" }`を使い、repository rootを推測しない
 
 #### Scenario: 全既存 entry を移行する
 - **WHEN** 現行 lock から new sources / lock を生成する

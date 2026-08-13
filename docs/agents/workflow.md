@@ -272,9 +272,11 @@ vendoring しているコア skill の用途:
 - `spec-holes` — 未定義の振る舞いの列挙とテスト対応。
 - `execute-openspec-change` — OpenSpec change の preflight、直接実装、検証、進捗更新。
 
-供給元、commit、sha256 は [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する。
-外部 skill は自動更新しない。symlink 修復は `task skills:update`、整合検証は `task skills:doctor`、
-上流乖離確認は `task skills:upstream` を使う。vendored skill は各 `LICENSE` に従う。
+review 済み供給元、ref、subtree、license は [`.agents/skills/skills.sources.json`](../../.agents/skills/skills.sources.json)、
+resolved commit、tree hash、legal hash は [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する。
+symlink 修復は `task skills:links`、offline 整合検証は `task skills:verify`、上流確認は
+`task skills:check`、更新 preview / apply は `task skills:update -- [--apply]`、first-party lock 更新は
+`task skills:lock-local -- [--apply]` を使う。vendored skill は各 `LICENSE` に従う。
 
 ## クロス AI レビュー（オプション）
 

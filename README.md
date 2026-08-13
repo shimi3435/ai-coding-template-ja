@@ -50,7 +50,9 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task test` / `task lint` / `task typecheck` | 個別実行 |
 | `task doctor` | 環境診断（`-- --online` で到達性 / `-- --github` で gh 文脈 opt-in） |
 | `task rename -- <module> [--apply]` | パッケージ改名 |
-| `task skills:update` / `task skills:doctor` | skill symlink 再生成 / lock 整合検証 |
+| `task skills:links` / `task skills:verify` | skill symlink 再生成 / offline 整合検証 |
+| `task skills:check` / `task skills:update` | remote 更新確認 / preview（`-- --apply` で適用） |
+| `task skills:lock-local` | first-party skill lock preview（`-- --apply` で適用） |
 | `task mcp:setup` | `.mcp.json` / `.codex/config.toml` を `.env` から生成 |
 | `task audit:node` | `npm audit --audit-level=high` を明示的にオンライン実行 |
 | `task security` | gitleaks（在席時）＋ pip-audit / bandit ゲート（CI audit ジョブと同一範囲） |
@@ -79,8 +81,9 @@ inexact sync により、導入済み extras を削除しない。
   薄い [CLAUDE.md](CLAUDE.md)。OpenSpec 直接実行（`openspec/`・CLI 不在時も Markdown fallback
   で運用可能）。`execute-openspec-change` skill は change の preflight 後、`tasks.md` の依存順に
   実装・検証・進捗更新する。
-  vendored skills（実体 `.agents/skills/`・`.claude` / `.codex` が symlink・供給元と
-  license は [`.agents/skills/skills.lock.json`](.agents/skills/skills.lock.json) が正）。
+  vendored skills（実体 `.agents/skills/`・`.claude` / `.codex` が symlink・review 済み供給元と
+  license は [`.agents/skills/skills.sources.json`](.agents/skills/skills.sources.json)、resolved state は
+  [`.agents/skills/skills.lock.json`](.agents/skills/skills.lock.json) が正）。
   Context7 リモート MCP のテンプレート（`task mcp:setup` で生成）。
 - **secret スキャン**: CI security ジョブ（gitleaks）＋ `task security`。
 
@@ -129,8 +132,8 @@ gitignore 方針の正は `.gitignore` の `data/*` / `results/*` エントリ�
 ## ライセンス
 
 ルート [LICENSE](LICENSE) は MIT（テンプレ著者のオリジナル成果物）。`.agents/skills/` に
-vendoring した第三者 skill は**各 skill の `LICENSE` に従う**（いずれも MIT。供給元・commit・
-license は `.agents/skills/skills.lock.json` に記録）。
+vendoring した第三者 skill は**各 skill の `LICENSE` に従う**（いずれも MIT。供給元・license は
+`.agents/skills/skills.sources.json`、resolved commit は `.agents/skills/skills.lock.json` に記録）。
 
 ## 注意
 

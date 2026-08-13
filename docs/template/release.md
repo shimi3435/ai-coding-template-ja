@@ -49,14 +49,14 @@ v2 の breaking change と利用者移行手順は [v2 release notes](v2-release
    - CI の openspec CLI exact pin（ci.yml の `@fission-ai/openspec@X.Y.Z`）が
      現在検証済みの版と一致しているか。
    - Codex plugin 等の実機挙動を根拠とする docs 記述が現バージョンでも成立するか。
-   - `task skills:upstream` を実行して上流乖離を確認したか。実行できない場合
+   - `task skills:check` を実行して上流乖離を確認したか。実行できない場合
      （ネットワーク不通等）は未実施であることを認識した上で人が判断する。
 
 ```bash
 task check
 task openspec:validate
 ls -A openspec/changes/   # .gitkeep のみであること
-task skills:upstream      # 陳腐化点検（乖離の対応要否は人判断・据え置き可）
+task skills:check         # 陳腐化点検（乖離の対応要否は人判断・据え置き可）
 ```
 
 加えて、extras の導入手順検証線 `extras-smoke.yml`（workflow_dispatch 専用・
