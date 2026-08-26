@@ -191,7 +191,7 @@
 - **対象:**
   - `openspec/changes/automate-skill-update-prs/tasks.md`
 - **追跡:** SKAUTO-3、SKAUTO-5、SKAUTO-6、SKAUTO-7、SKAUTO-8、SKAUTO-9、SKAUTO-10。
-- **累積 executor-owned snapshot:** Task 11のv3 finding cycleとreal-host normal lifecycleはreview / verifier / smoke green。digest frameはUTF-8 `{"type":"regular","mode":"0644"}\n` + file bytes。tasks.mdはsnapshot block全体を除外。state=`blocked-task-12-awaiting-pre-merge-close-authority`。
+- **累積 executor-owned snapshot:** Task 11のv3 finding cycleとreal-host normal lifecycleはreview / verifier / smoke green。digest frameはUTF-8 `{"type":"regular","mode":"0644"}\n` + file bytes。tasks.mdはsnapshot block全体を除外。state=`blocked-task-12-awaiting-push-and-pr-number`。
   - `.github/workflows/skill-update-prs.yml` — Task 9; type=regular; mode=0644; bytes=19106; sha256=2b0ddebbdf4243a0bc21568db8614ca63cdbc7294f05b7bc474500e6961af86f
   - `README.md` — Task 7; type=regular; mode=0644; bytes=11071; sha256=43bc4ac20f6ac341eb7f49ac885241ad1402c5456569bbf5df5b7cfac91a6ba8
   - `Taskfile.yml` — Task 7; type=regular; mode=0644; bytes=12897; sha256=bfabdd8a30fcd27df068272e92b4b3ba8257002aac8e0fad5e8d393793a31973
@@ -202,7 +202,7 @@
   - `openspec/changes/automate-skill-update-prs/proposal.md` — Task 11; type=regular; mode=0644; bytes=9616; sha256=d1636d26ee706d419103fb6d8b569d7d8f32f9c726b43d7640e76e059fc3f27f
   - `openspec/changes/automate-skill-update-prs/spec-holes.md` — Task 11; type=regular; mode=0644; bytes=32383; sha256=39164fe91d3b08d794f3f93ff6758f32d85ea2b68ac964b31fae513384bd66e8
   - `openspec/changes/automate-skill-update-prs/specs/skill-update-pr-automation/spec.md` — Task 11; type=regular; mode=0644; bytes=41434; sha256=49c7889c80115fa7f71ded935690c86c25bfe5f0608007a23290a95055b78d81
-  - `openspec/changes/automate-skill-update-prs/tasks.md` — Task 11; type=regular; mode=0644; bytes=59781; sha256=155c8f41ef57610783e9be65e4db3818cb8042672b6027eb1833a652957f9edd
+  - `openspec/changes/automate-skill-update-prs/tasks.md` — Task 11; type=regular; mode=0644; bytes=60355; sha256=4e731b01565c38ab139f304f56d5dd1d80b3bf8a39d863df83150e88e77f2b20
   - `repo-tools/cli.ts` — Task 8; type=regular; mode=0644; bytes=2697; sha256=fd8b4766db76f004f6f58213dae3c5fcf7aa1d1f27c4c8533d05bd6eaec0fdc9
   - `repo-tools/repository-contracts.test.ts` — Task 11; type=regular; mode=0644; bytes=19783; sha256=80b3eee1af5a4f17f79d136476fa49c441bbf77bf18a8035e9c06dc41a845751
   - `repo-tools/repository-contracts.ts` — Task 11; type=regular; mode=0644; bytes=17222; sha256=e5f35ddaaa7609a8e2e75937e8c382e23f71ff9e49722428e26d66343a256af2
@@ -347,6 +347,7 @@
   - `docs/template/retrospectives.md`
 - **追跡:** SKAUTO-1〜SKAUTO-10、全 spec-holes、全 implementation / verification evidence。
 - 2026-08-26 blocker: close前のstrict target validation、`task openspec:validate`、exact Node 24 `task check`、independent verifierはgreenだが、retrospectiveの固定形式には実PR番号が必要であり、pre-merge closeはchange directory削除を最終commitへ含める契約。現行利用者指示はcommit / push / PR作成を禁止しており、6件の未追跡OpenSpec artifactsをcommitなしで削除すると復元不能になる。PR番号受領と人側の最終commit手順が確定するまでTask 12 checkboxを未完了で保持し、retrospective追記とchange directory削除を行わない。
+- 2026-08-26 commit handoff: 利用者がcommitを承認し、OpenSpec正本 `aebeaeb`、automation runtime / workflow / tests `117e354`、repository contracts / runbook `e0c1b2f`へ分割した。`117e354`単体を隔離worktreeでNode 24、root 154 tests、automation 178 tests、pytest 152 tests、typecheck / lint / contractsへ通し、最新`e0c1b2f`も`task check`（root 160、automation 178、pytest 152）、strict OpenSpec、`task openspec:validate`がgreen。push / PR作成は未承認で実PR番号がないため、Task 12は引き続き未完了とする。
 - [ ] **実装:** requirements / scenarios / evidence を再対応付けし、retrospective を追記後、マージ前最終 commit で change directory を削除する。
 - [ ] **検証:** close 前後の `task openspec:validate`、適用対象の `task check`、active change 0件、削除 artifact へ通常 CI が依存しないことを確認する。
 
