@@ -4,7 +4,7 @@ import { validateRepositoryContracts } from "./repository-contracts.ts";
 import type { SkillCommandName } from "./skill-updater/index.ts";
 
 function usage(): never {
-  console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts|skills:links|skills:verify|skills:check|skills:update|skills:lock-local>");
+  console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts|skills:links|skills:verify|skills:check|skills:update|skills:lock-local|skills:automation:candidate|skills:automation:smoke>");
   process.exit(2);
 }
 
@@ -33,6 +33,23 @@ try {
     });
     if (result.stdout.length > 0) process.stdout.write(result.stdout);
     if (result.stderr.length > 0) process.stderr.write(result.stderr);
+    process.exitCode = result.exitCode;
+  } else if (command === "skills:automation:candidate") {
+    const { runCandidateCommand } = await import("./skill-update-automation/candidate/index.ts");
+    const result = await runCandidateCommand(process.argv.slice(3), { repositoryRoot: process.cwd() });
+    if (result.stdout.length > 0) process.stdout.write(result.stdout);
+    if (result.stderr.length > 0) process.stderr.write(result.stderr);
+    process.exitCode = result.exitCode;
+  } else if (command === "skills:automation:smoke") {
+    const { runSmokeCommand } = await import("./skill-update-automation/smoke/cli-command.ts");
+    const { ProductionSmokeHost } = await import("./skill-update-automation/smoke/production-host.ts");
+    const result = await runSmokeCommand(process.argv.slice(3), {
+      createHost: (repository) => new ProductionSmokeHost({ repository }),
+      input: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      now: () => new Date(),
+    });
     process.exitCode = result.exitCode;
   } else {
     usage();
