@@ -3,11 +3,13 @@ import test from "node:test";
 
 import {
   classifyIssueBody,
+  classifyIssueRootV2,
   computeIssueEntryKey,
   decodeIssueEnvelope,
   encodeIssueEnvelope,
   managedIssueTitle,
   renderManagedIssueSection,
+  renderManagedIssueRootV2,
   selectFailureScope,
   upsertIssueEntry,
   type Scope,
@@ -145,4 +147,29 @@ test("stable issue key uses canonical HTML-sensitive escaping", () => {
     computeIssueEntryKey("updater-rejected", { kind: "cohort", cohortKey: "<&>" }),
     "sha256:1eee570981e4282c216c520f4f96b3795c158776623b45ec433234b303d113f0",
   );
+});
+
+test("immutable issue root v2 binds creator and treats v1 as a version conflict", () => {
+  const root = {
+    schemaVersion: 2,
+    kind: "managed-issue-root",
+    repositoryId: "123",
+    repository: "owner/repo",
+    creatorUserId: "456",
+    rootOperationId: digest("a"),
+    initialSnapshotDigest: digest("b"),
+  } as const;
+  assert.deepEqual(classifyIssueRootV2(managedIssueTitle, renderManagedIssueRootV2(root, "immutable root")), {
+    kind: "strict",
+    root,
+    summary: "immutable root",
+  });
+  const v1 = renderManagedIssueSection({
+    schemaVersion: 1,
+    kind: "managed-issue",
+    repositoryId: "123",
+    repository: "owner/repo",
+    entries: [],
+  }, "v1");
+  assert.equal(classifyIssueRootV2(managedIssueTitle, v1).kind, "version-conflict");
 });

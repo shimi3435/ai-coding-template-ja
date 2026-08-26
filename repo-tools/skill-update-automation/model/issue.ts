@@ -17,6 +17,78 @@ import {
 export const managedIssueTitle = "Skill update automation requires attention";
 export const issueMarkerStart = "<!-- skill-update-pr-automation:issue:v1:start -->";
 export const issueMarkerEnd = "<!-- skill-update-pr-automation:issue:v1:end -->";
+export const issueRootV2MarkerStart = "<!-- skill-update-pr-automation:issue-root:v2:start -->";
+export const issueRootV2MarkerEnd = "<!-- skill-update-pr-automation:issue-root:v2:end -->";
+
+export type IssueRootV2 = Readonly<{
+  schemaVersion: 2;
+  kind: "managed-issue-root";
+  repositoryId: string;
+  repository: string;
+  creatorUserId: string;
+  rootOperationId: string;
+  initialSnapshotDigest: string;
+}>;
+
+const issueRootV2Schema: ExactSchema<IssueRootV2> = {
+  parse(value: unknown): IssueRootV2 {
+    const object = parseObject(value, "IssueRootV2");
+    requireExactKeys(object, [
+      "schemaVersion", "kind", "repositoryId", "repository", "creatorUserId", "rootOperationId", "initialSnapshotDigest",
+    ], "IssueRootV2");
+    if (object.schemaVersion !== 2 || object.kind !== "managed-issue-root") {
+      throw new Error("IssueRootV2 discriminatorが不正です");
+    }
+    return {
+      schemaVersion: 2,
+      kind: "managed-issue-root",
+      repositoryId: parseDecimalId(object.repositoryId),
+      repository: parseRepositoryFullName(object.repository),
+      creatorUserId: parseDecimalId(object.creatorUserId),
+      rootOperationId: parseDigest(object.rootOperationId),
+      initialSnapshotDigest: parseDigest(object.initialSnapshotDigest),
+    };
+  },
+};
+
+export type IssueRootV2Classification =
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "version-conflict" }>
+  | Readonly<{ kind: "partial" }>
+  | Readonly<{ kind: "strict"; root: IssueRootV2; summary: string }>;
+
+export function renderManagedIssueRootV2(value: unknown, summary: string): string {
+  if (summary.length === 0 || summary.includes("<!-- skill-update-pr-automation:")) throw new Error("issue root summaryが不正です");
+  const canonical = encodeCanonicalJson(issueRootV2Schema, value).toString("utf8");
+  const body = `${issueRootV2MarkerStart}\n${canonical}\n\n${summary}\n${issueRootV2MarkerEnd}`;
+  if (Buffer.byteLength(body, "utf8") > 48 * 1024) throw new Error("issue root bodyが48 KiBを超えています");
+  return body;
+}
+
+export function classifyIssueRootV2(title: string, body: string | null): IssueRootV2Classification {
+  const text = body ?? "";
+  const hasV2 = text.includes(issueRootV2MarkerStart) || text.includes(issueRootV2MarkerEnd);
+  if (!hasV2) {
+    if (text.includes(issueMarkerStart) || text.includes(issueMarkerEnd)) return { kind: "version-conflict" };
+    return title === managedIssueTitle ? { kind: "partial" } : { kind: "none" };
+  }
+  if (title !== managedIssueTitle) return { kind: "partial" };
+  const prefix = `${issueRootV2MarkerStart}\n`;
+  const suffix = `\n${issueRootV2MarkerEnd}`;
+  if (!text.startsWith(prefix) || !text.endsWith(suffix) || countOccurrences(text, issueRootV2MarkerStart) !== 1 ||
+    countOccurrences(text, issueRootV2MarkerEnd) !== 1) return { kind: "partial" };
+  const content = text.slice(prefix.length, -suffix.length);
+  const separator = content.indexOf("\n\n");
+  if (separator <= 0 || content.indexOf("\n\n", separator + 2) >= 0) return { kind: "partial" };
+  const canonical = content.slice(0, separator);
+  const summary = content.slice(separator + 2);
+  if (canonical.includes("\n") || summary.length === 0) return { kind: "partial" };
+  try {
+    return { kind: "strict", root: decodeCanonicalJson(issueRootV2Schema, Buffer.from(canonical, "utf8")), summary };
+  } catch {
+    return { kind: "partial" };
+  }
+}
 
 export type FailureState =
   | "updater-rejected"

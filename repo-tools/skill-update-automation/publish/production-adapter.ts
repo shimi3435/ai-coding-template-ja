@@ -6,12 +6,14 @@ import type {
   GithubAdapter,
   GithubAdapterOperation,
   GithubBranch,
+  JournalGithubAdapter,
   GithubPage,
   GithubPermissionPostState,
 } from "../github/adapter.ts";
 import type { GithubPullRequest } from "../github/discovery.ts";
 import type { GithubIssue } from "../github/issue-discovery.ts";
 import { issueMarkerEnd, issueMarkerStart, prMarkerEnd, prMarkerStart } from "../model/index.ts";
+import type { JournalCommentV2 } from "../model/journal.ts";
 import { parsePositiveSafeInteger, parseRepositoryFullName, parseSha } from "../model/index.ts";
 import { redactCredentialText } from "../../skill-updater/index.ts";
 import type { PublishDraftGithubAdapter } from "./draft.ts";
@@ -131,6 +133,21 @@ function issueFromApi(value: unknown): GithubIssue {
   };
 }
 
+function journalCommentFromApi(value: unknown): JournalCommentV2 {
+  const item = object(value, "journal comment");
+  const user = object(item.user, "journal comment user");
+  if (typeof item.body !== "string" || typeof item.created_at !== "string" || typeof item.updated_at !== "string") {
+    throw new Error("journal comment fieldが不正です");
+  }
+  return {
+    id: String(parsePositiveSafeInteger(item.id)),
+    authorUserId: String(parsePositiveSafeInteger(user.id)),
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+    body: item.body,
+  };
+}
+
 function replaceManagedSection(body: string, replacement: string): string {
   const start = body.indexOf(prMarkerStart);
   const end = body.indexOf(prMarkerEnd, start + prMarkerStart.length);
@@ -157,7 +174,7 @@ function branchName(value: string): string {
   return value.slice(prefix.length);
 }
 
-export class ProductionPublishAdapter implements GithubAdapter, PublishDraftGithubAdapter {
+export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAdapter, PublishDraftGithubAdapter {
   readonly #repository: string;
   readonly #repositoryRoot: string;
   readonly #runner: HostCommandRunner;
@@ -221,7 +238,7 @@ export class ProductionPublishAdapter implements GithubAdapter, PublishDraftGith
   async createBranch(input: GithubBranch): Promise<void> {
     command(this.#runner, "create-branch", "git", [
       "-c", "credential.helper=!gh auth git-credential",
-      "push", this.#remoteUrl, `${parseSha(input.sha)}:${input.ref}`,
+      "push", `--force-with-lease=${input.ref}:`, this.#remoteUrl, `${parseSha(input.sha)}:${input.ref}`,
     ], { cwd: this.#repositoryRoot });
   }
 
@@ -230,7 +247,8 @@ export class ProductionPublishAdapter implements GithubAdapter, PublishDraftGith
     if (current?.sha !== parseSha(input.expectedSha)) throw new Error("remote branch expected head mismatch");
     command(this.#runner, "append-branch", "git", [
       "-c", "credential.helper=!gh auth git-credential",
-      "push", this.#remoteUrl, `${parseSha(input.candidateSha)}:${input.ref}`,
+      "push", `--force-with-lease=${input.ref}:${parseSha(input.expectedSha)}`,
+      this.#remoteUrl, `${parseSha(input.candidateSha)}:${input.ref}`,
     ], { cwd: this.#repositoryRoot });
   }
 
@@ -239,7 +257,8 @@ export class ProductionPublishAdapter implements GithubAdapter, PublishDraftGith
     if (current?.sha !== parseSha(input.expectedSha)) throw new Error("remote branch expected head mismatch");
     command(this.#runner, "delete-branch", "git", [
       "-c", "credential.helper=!gh auth git-credential",
-      "push", this.#remoteUrl, `:${input.ref}`,
+      "push", `--force-with-lease=${input.ref}:${parseSha(input.expectedSha)}`,
+      this.#remoteUrl, `:${input.ref}`,
     ], { cwd: this.#repositoryRoot });
   }
 
@@ -337,5 +356,26 @@ export class ProductionPublishAdapter implements GithubAdapter, PublishDraftGith
       "api", "--method", "PATCH", `repos/${this.#repository}/issues/${parsePositiveSafeInteger(issueNumber)}`,
       "--input", "-",
     ], { input: JSON.stringify({ state: "open" }) });
+  }
+
+  async listJournalComments(resourceNumber: number): Promise<GithubPage<JournalCommentV2>> {
+    const output = command(this.#runner, "list-journal-comments", "gh", [
+      "api", "--method", "GET", "--paginate", "--slurp",
+      `repos/${this.#repository}/issues/${parsePositiveSafeInteger(resourceNumber)}/comments?per_page=100`,
+    ]);
+    const pages = JSON.parse(output) as unknown;
+    if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) {
+      throw new Error("journal comment paginationがpage配列ではありません");
+    }
+    return { complete: true, items: pages.flat().map(journalCommentFromApi) };
+  }
+
+  async appendJournalComment(resourceNumber: number, body: string): Promise<JournalCommentV2> {
+    if (body.length === 0 || Buffer.byteLength(body, "utf8") > 64 * 1024) throw new Error("journal comment bodyが不正です");
+    const output = command(this.#runner, "append-journal-comment", "gh", [
+      "api", "--method", "POST",
+      `repos/${this.#repository}/issues/${parsePositiveSafeInteger(resourceNumber)}/comments`, "--input", "-",
+    ], { input: JSON.stringify({ body }) });
+    return journalCommentFromApi(JSON.parse(output) as unknown);
   }
 }

@@ -68,7 +68,7 @@ test("validate checks out the exact candidate and runs integration checks withou
   assert.match(validate?.run ?? "", /repo-tools\/skill-update-automation\/.*\.test\.ts/);
 });
 
-test("workflow contains no force, rebase, privileged trigger, or auto-merge operation", () => {
+test("workflow permits only explicit force-with-lease CAS and forbids history rewrites", () => {
   const sources = [
     readFileSync(workflowPath, "utf8"),
     ...globSync("repo-tools/skill-update-automation/publish/*.ts", { cwd: new URL("../../../", import.meta.url) })
@@ -77,10 +77,12 @@ test("workflow contains no force, rebase, privileged trigger, or auto-merge oper
   ];
   for (const forbidden of [
     /pull_request_target/,
-    /--force(?:-with-lease)?/,
+    /--force(?!-with-lease=)/,
+    /--force-with-lease(?:["'\s]|$)/,
     /\+refs\/heads/,
     /\bgit\s+rebase\b/,
     /--auto(?:-merge)?/,
     /gh\s+pr\s+merge/,
   ]) for (const source of sources) assert.doesNotMatch(source, forbidden);
+  assert.match(sources.join("\n"), /--force-with-lease=\$\{input\.ref\}:/);
 });

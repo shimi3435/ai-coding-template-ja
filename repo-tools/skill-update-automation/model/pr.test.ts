@@ -3,9 +3,12 @@ import test from "node:test";
 
 import {
   classifyPrBody,
+  classifyPrRootV2,
   decodePrEnvelope,
   encodePrEnvelope,
+  encodePrRootV2,
   renderManagedPrSection,
+  renderManagedPrRootV2,
 } from "./pr.ts";
 
 const sha = (character: string): string => character.repeat(40);
@@ -89,4 +92,39 @@ test("PR marker codec distinguishes exact, partial, and absent identity", () => 
   assert.equal(classifyPrBody("human only", true).kind, "none");
   assert.equal(classifyPrBody(section, false).kind, "partial");
   assert.equal(classifyPrBody(renderManagedPrSection(envelope, "first paragraph\n\nsecond paragraph"), true).kind, "strict");
+});
+
+test("immutable PR root v2 binds creator numeric ID and initial snapshot", () => {
+  const root = {
+    schemaVersion: 2,
+    kind: "managed-pr-root",
+    repositoryId: "123",
+    repository: "owner/repo",
+    creatorUserId: "456",
+    generation: 9,
+    headRef: "refs/heads/automation/skill-updates/g000009",
+    baseRef: "refs/heads/main",
+    candidateDigest: digest("c"),
+    initialSnapshotDigest: digest("d"),
+  } as const;
+  assert.deepEqual(classifyPrRootV2(renderManagedPrRootV2(root, "immutable root")), {
+    kind: "strict",
+    root,
+    summary: "immutable root",
+  });
+  assert.deepEqual(encodePrRootV2(root), encodePrRootV2(root));
+  assert.equal(classifyPrRootV2(renderManagedPrSection({
+    schemaVersion: 1,
+    kind: "managed-pr",
+    repositoryId: "123",
+    repository: "owner/repo",
+    generation: 9,
+    headRef: "refs/heads/automation/skill-updates/g000009",
+    baseRef: "refs/heads/main",
+    expectedHeadSha: sha("a"),
+    validationBaseSha: sha("b"),
+    candidateDigest: digest("c"),
+    reportDigest: digest("d"),
+    validation: { status: "pending", run: { workflowRunId: "456", workflowRunAttempt: 2 } },
+  }, "v1")).kind, "version-conflict");
 });

@@ -1,5 +1,6 @@
 import type { GithubPullRequest } from "./discovery.ts";
 import type { GithubIssue } from "./issue-discovery.ts";
+import type { JournalCommentV2 } from "../model/journal.ts";
 
 export type GithubBranch = Readonly<{ ref: string; sha: string }>;
 export type GithubPage<Value> = Readonly<{ complete: boolean; items: readonly Value[] }>;
@@ -7,6 +8,7 @@ export const githubAdapterOperations = [
   "list-pull-requests", "list-issues", "read-branch", "read-pull-request", "read-issue",
   "create-branch", "append-branch", "delete-branch", "create-draft-pull-request", "update-pull-request",
   "close-pull-request", "reopen-pull-request", "create-issue", "update-issue", "close-issue", "reopen-issue",
+  "list-journal-comments", "append-journal-comment",
 ] as const;
 export type GithubAdapterOperation = (typeof githubAdapterOperations)[number];
 export type GithubPermissionPostState = "unchanged" | "applied" | "unknown";
@@ -50,4 +52,9 @@ export interface GithubAdapter {
   updateIssue(input: Readonly<{ issueNumber: number; managedSection: string }>): Promise<void>;
   closeIssue(issueNumber: number): Promise<void>;
   reopenIssue(issueNumber: number): Promise<void>;
+}
+
+export interface JournalGithubAdapter {
+  listJournalComments(resourceNumber: number): Promise<GithubPage<JournalCommentV2>>;
+  appendJournalComment(resourceNumber: number, body: string): Promise<JournalCommentV2>;
 }

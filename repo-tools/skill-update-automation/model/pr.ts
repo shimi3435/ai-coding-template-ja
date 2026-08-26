@@ -47,6 +47,92 @@ export type PrEnvelope = Readonly<{
 export const managedPrTitle = "chore(skills): update vendored skills";
 export const prMarkerStart = "<!-- skill-update-pr-automation:pr:v1:start -->";
 export const prMarkerEnd = "<!-- skill-update-pr-automation:pr:v1:end -->";
+export const prRootV2MarkerStart = "<!-- skill-update-pr-automation:pr-root:v2:start -->";
+export const prRootV2MarkerEnd = "<!-- skill-update-pr-automation:pr-root:v2:end -->";
+
+export type PrRootV2 = Readonly<{
+  schemaVersion: 2;
+  kind: "managed-pr-root";
+  repositoryId: string;
+  repository: string;
+  creatorUserId: string;
+  generation: number;
+  headRef: string;
+  baseRef: string;
+  candidateDigest: string;
+  initialSnapshotDigest: string;
+}>;
+
+const prRootV2Schema: ExactSchema<PrRootV2> = {
+  parse(value: unknown): PrRootV2 {
+    const object = parseObject(value, "PrRootV2");
+    requireExactKeys(object, [
+      "schemaVersion", "kind", "repositoryId", "repository", "creatorUserId", "generation", "headRef", "baseRef",
+      "candidateDigest", "initialSnapshotDigest",
+    ], "PrRootV2");
+    if (object.schemaVersion !== 2 || object.kind !== "managed-pr-root") throw new Error("PrRootV2 discriminatorが不正です");
+    const generation = parseGeneration(object.generation);
+    const headRef = `refs/heads/automation/skill-updates/g${String(generation).padStart(6, "0")}`;
+    if (object.headRef !== headRef) throw new Error("PrRootV2 headRefとgenerationが一致しません");
+    return {
+      schemaVersion: 2,
+      kind: "managed-pr-root",
+      repositoryId: parseDecimalId(object.repositoryId),
+      repository: parseRepositoryFullName(object.repository),
+      creatorUserId: parseDecimalId(object.creatorUserId),
+      generation,
+      headRef,
+      baseRef: parseBaseRef(object.baseRef),
+      candidateDigest: parseDigest(object.candidateDigest),
+      initialSnapshotDigest: parseDigest(object.initialSnapshotDigest),
+    };
+  },
+};
+
+export function encodePrRootV2(value: unknown): Buffer {
+  return encodeCanonicalJson(prRootV2Schema, value);
+}
+
+export function decodePrRootV2(bytes: Uint8Array): PrRootV2 {
+  return decodeCanonicalJson(prRootV2Schema, bytes);
+}
+
+export type PrRootV2Classification =
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "version-conflict" }>
+  | Readonly<{ kind: "partial" }>
+  | Readonly<{ kind: "strict"; root: PrRootV2; summary: string }>;
+
+export function renderManagedPrRootV2(value: unknown, summary: string): string {
+  if (summary.length === 0 || summary.includes("<!-- skill-update-pr-automation:")) throw new Error("PR root summaryが不正です");
+  const canonical = encodePrRootV2(value).toString("utf8");
+  const body = `${prRootV2MarkerStart}\n${canonical}\n\n${summary}\n${prRootV2MarkerEnd}`;
+  if (Buffer.byteLength(body, "utf8") > 48 * 1024) throw new Error("PR root bodyが48 KiBを超えています");
+  return body;
+}
+
+export function classifyPrRootV2(body: string | null): PrRootV2Classification {
+  const text = body ?? "";
+  const hasV2 = text.includes(prRootV2MarkerStart) || text.includes(prRootV2MarkerEnd);
+  if (!hasV2) {
+    return text.includes(prMarkerStart) || text.includes(prMarkerEnd) ? { kind: "version-conflict" } : { kind: "none" };
+  }
+  const prefix = `${prRootV2MarkerStart}\n`;
+  const suffix = `\n${prRootV2MarkerEnd}`;
+  if (!text.startsWith(prefix) || !text.endsWith(suffix) || countOccurrences(text, prRootV2MarkerStart) !== 1 ||
+    countOccurrences(text, prRootV2MarkerEnd) !== 1) return { kind: "partial" };
+  const content = text.slice(prefix.length, -suffix.length);
+  const separator = content.indexOf("\n\n");
+  if (separator <= 0 || content.indexOf("\n\n", separator + 2) >= 0) return { kind: "partial" };
+  const canonical = content.slice(0, separator);
+  const summary = content.slice(separator + 2);
+  if (canonical.includes("\n") || summary.length === 0) return { kind: "partial" };
+  try {
+    return { kind: "strict", root: decodePrRootV2(Buffer.from(canonical, "utf8")), summary };
+  } catch {
+    return { kind: "partial" };
+  }
+}
 
 function parsePendingValidation(value: unknown): PendingValidation {
   const object = parseObject(value, "pending validation");

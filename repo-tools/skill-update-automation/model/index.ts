@@ -2,6 +2,7 @@ export * from "./artifact.ts";
 export * from "./canonical-json.ts";
 export * from "./history.ts";
 export * from "./issue.ts";
+export * from "./journal.ts";
 export * from "./pr.ts";
 export * from "./smoke.ts";
 export * from "./state.ts";
