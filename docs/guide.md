@@ -144,7 +144,75 @@ README の「研究成果物の扱い」節を参照。
 | Serena MCP | セマンティックなコード理解・symbol 単位編集 | 既存コードが育って大規模リファクタリングをするとき。初期の短い修正が主体のうちは過剰 | 設定 template へ snippet を各自追記 | [docs/optional/serena.md](optional/serena.md) |
 | GitHub MCP | 構造化された Issue / PR / Actions 参照 | コアの gh CLI で足りないとき（構造化出力が要る等）。read-only 既定・token の扱いに注意 | 3 形態から選んで設定へ各自追記 | [docs/agents/mcp.md](agents/mcp.md) |
 
-## 7. 詰まったとき
+## 7. Skill update PR automation の運用
+
+### 有効化と手動実行
+
+1. Repository Settings の Actions variables で `SKILLS_AUTO_UPDATE=true` を設定する。未設定、または
+   exact `true` 以外なら weekly schedule は checkout、network、write の前で停止する。
+2. 定期実行を待たず確認する場合は Actions の `Skill update PR automation` を選び、Run workflow を開く。
+3. `resume_closed=false` で実行する。最新 managed PR を merge せず close した後、同じ候補を再開せず
+   次 generation を作る意思がある場合だけ `resume_closed=true` を選ぶ。
+
+workflow は一つの candidate artifact を作り、draft PR を作成または fast-forward append し、read-only
+validation で `task check` と focused tests を実行する。exact branch head、PR marker、history、artifact、
+DraftReceipt が一致し、validation が成功した場合だけ ready にする。ready はレビュー可能という意味であり、
+merge、approval、merge queue、auto-merge は人が別に判断する。
+
+### 状態と復旧
+
+- `validation-failed`: candidate 自体の command failure。PR は draft のまま。PR の validation summary と
+  Actions log で失敗 command を確認し、原因を直して同じ workflow を再実行する。
+- `recovery-required`: checkout、artifact、runner、cancel など infrastructure failure、完了済み旧 run の
+  pending、または remote post-state を証明できない状態。推測修復しない。GitHub 状態が安定してから再実行し、
+  同じ exact head が再検証されるまで ready にしない。
+- `cleanup-failed`: merged PR の exact managed branch を guarded cleanup できなかった状態。ready / merged を
+  巻き戻さない。次 run で branch name、generation、marker、head を再検証して再試行する。
+- `issue-identity-conflict` / `issue-cardinality-conflict`: tracking issue だけ更新しない。安全な PR finalize は
+  継続する。partial marker や複数 open managed issue を人が解消してから再実行する。
+- branch tip、PR marker、history が一致しない場合は human intervention として write を停止する。automation
+  branch や marker を手で推測修復しない。
+
+tracking issue は未解決 entry を stable key で重複排除する。解消した entry は managed section から除くが、
+issue 自体は自動 close しない。marker 外の人の本文と close 判断を保持する。
+
+### real-host smoke
+
+real GitHub write smoke は通常運用ではなく、Task 11 の完了確認専用。production automationを無効にした専用 test
+repositoryを使う。Task 8で追加される human-operated CLI を次の interface で起動する。
+
+```bash
+node repo-tools/entrypoint.mjs skills:automation:smoke \
+  --repository OWNER/REPOSITORY \
+  --run-id WORKFLOW_RUN_ID \
+  --run-attempt WORKFLOW_RUN_ATTEMPT \
+  --source-commit FULL_40_CHARACTER_SHA
+```
+
+1. 先に `gh auth status` で対象 test repository の existing operator session を確認する。新しい token は作らない。
+2. normal smokeでは、workflow runのsource commitをdefault branchから2 commits以上aheadのtest branchへ置く。
+   CLIはdefault branch tipからsource commitのfirst parentが`ahead_by >= 1`かつ`behind_by == 0`でない場合、
+   approval前に拒否する。
+3. CLI が表示する canonical `SmokePreview` v3全文、normal / recovery mode、repository、run ID / attempt、base commit、
+   source first parent / commit、全step、各stepのmulti-resource before / after、semantic checkpoint、terminal cleanup と
+   exact digest を読む。この段階は read-only。
+4. 内容すべてを承認する場合だけ、同じ process、同じ TTY / stdin に表示された exact digest を入力する。
+   EOF、空入力、不一致なら write なしで終了する。
+5. write応答がexactでも直後のafter state / numberだけが一時的に不一致なら、CLIは500 ms間隔で最大10回read-only再取得する。
+   write、before / identity、API errorはretryせず、各stepの試行回数をevidenceへ残す。
+6. 途中失敗時は残存 resource を記録し、同じ preview を再利用しない。次processはlive residual stateからrecovery modeを
+   生成する。recovery modeは必要なPR draft、PR / issue close、branch deleteだけをterminal方向へ許可する。branch deleteには
+   同run / sourceへ本文で束縛されたstrict smoke PRまたはissueが必要である。branch-only residualはcanonical recovery対象外とし、
+   live repository / ref / SHAとexact delete commandを示す別のmanual previewと人のfresh approvalへ送る。別のread-only
+   previewとfresh approvalを得るまでwrite / cleanupを再開しない。
+
+CLIは`gh` child processへambient `GH_TOKEN` / `GITHUB_TOKEN` / enterprise tokenを転送せず、既存operator `gh auth`
+sessionの発見に必要な非credential環境だけを明示的に渡す。
+
+preview を別 process へ保存して承認 artifact にしない。approval を test、script、AI で自動入力しない。
+Task 11 到達前、またはpreview確認後の人の fresh approval 前には実行しない。
+
+## 8. 詰まったとき
 
 1. **まず `task doctor`**: 読み取り専用の環境診断。FAIL ゼロが green。ツール不在・設定の
    ずれなど環境系の不調は、ここで大半が名指しされる。ただしオプションの導入失敗は

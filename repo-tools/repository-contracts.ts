@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 type PackageManifest = {
   private?: boolean;
@@ -53,6 +54,140 @@ function readJson<T>(path: string): T {
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(`${path}: JSON metadata を読めません: ${reason}`);
+  }
+}
+
+function indentation(line: string): number {
+  return line.length - line.trimStart().length;
+}
+
+function yamlBlock(lines: readonly string[], header: string, indent: number): readonly string[] {
+  const exact = `${" ".repeat(indent)}${header}:`;
+  const index = lines.findIndex((line) => line === exact);
+  if (index < 0) throw new Error(`YAML field がありません: ${header}`);
+  let end = index + 1;
+  while (end < lines.length && (lines[end]!.trim().length === 0 || indentation(lines[end]!) > indent)) end += 1;
+  return lines.slice(index + 1, end);
+}
+
+function directYamlKeys(lines: readonly string[], indent: number): readonly string[] {
+  return lines.flatMap((line) => {
+    if (indentation(line) !== indent) return [];
+    const match = line.trim().match(/^([A-Za-z0-9_-]+):/);
+    return match === null ? [] : [match[1]!];
+  });
+}
+
+function yamlPermissions(jobBlock: readonly string[]): Record<string, string> {
+  const permissions = yamlBlock(jobBlock, "permissions", 4);
+  const entries = permissions.flatMap((line) => {
+    const match = line.match(/^ {6}([A-Za-z-]+): (read|write|none)$/);
+    return match === null ? [] : [[match[1]!, match[2]!]] as const;
+  });
+  if (entries.length !== permissions.filter((line) => line.trim().length > 0).length) {
+    throw new Error("workflow job permissions が不正です");
+  }
+  if (new Set(entries.map(([name]) => name)).size !== entries.length) {
+    throw new Error("workflow job permissions が重複しています");
+  }
+  return Object.fromEntries(entries);
+}
+
+function validateSkillUpdateWorkflow(repositoryRoot: string): void {
+  const path = join(repositoryRoot, ".github", "workflows", "skill-update-prs.yml");
+  const source = readFileSync(path, "utf8");
+  if (source.includes("\t")) throw new Error(`${path}: tab indentation は許可されません`);
+  const lines = source.split("\n");
+  const triggers = yamlBlock(lines, "on", 0);
+  if (!isDeepStrictEqual([...directYamlKeys(triggers, 2)].sort(), ["schedule", "workflow_dispatch"])) {
+    throw new Error(`${path}: trigger は weekly schedule と workflow_dispatch だけが必要です`);
+  }
+  const schedule = yamlBlock(triggers, "schedule", 2).filter((line) => line.trim().length > 0);
+  if (!isDeepStrictEqual(schedule, ["    - cron: \"17 3 * * 1\""]) &&
+    !isDeepStrictEqual(schedule, ["    - cron: '17 3 * * 1'"])) {
+    throw new Error(`${path}: weekly schedule が不正です`);
+  }
+  const dispatch = yamlBlock(triggers, "workflow_dispatch", 2);
+  const inputs = yamlBlock(dispatch, "inputs", 4);
+  if (!isDeepStrictEqual(directYamlKeys(inputs, 6), ["resume_closed"])) throw new Error(`${path}: resume_closed だけが許可されます`);
+  const resume = yamlBlock(inputs, "resume_closed", 6);
+  if (!resume.includes("        required: true") || !resume.includes("        default: false") ||
+    !resume.includes("        type: boolean")) {
+    throw new Error(`${path}: resume_closed は required boolean / default false が必要です`);
+  }
+  if (lines.filter((line) => line === "permissions: {}").length !== 1) {
+    throw new Error(`${path}: top-level permissions は空が必要です`);
+  }
+
+  const jobs = yamlBlock(lines, "jobs", 0);
+  if (!isDeepStrictEqual([...directYamlKeys(jobs, 2)].sort(), ["detect", "publish-draft", "publish-finalize", "validate"])) {
+    throw new Error(`${path}: production workflow job集合が不正です。real-host smokeはworkflow外が必要です`);
+  }
+  const expectedPermissions: Record<string, Record<string, string>> = {
+    detect: { contents: "read", "pull-requests": "read", issues: "read" },
+    "publish-draft": { contents: "write", "pull-requests": "write" },
+    validate: { contents: "read" },
+    "publish-finalize": { contents: "read", "pull-requests": "write", issues: "write" },
+  };
+  for (const [jobName, expected] of Object.entries(expectedPermissions)) {
+    const job = yamlBlock(jobs, jobName, 2);
+    if (!isDeepStrictEqual(yamlPermissions(job), expected)) throw new Error(`${path}: ${jobName} permissions が不正です`);
+  }
+  const writeJobs = directYamlKeys(jobs, 2).filter((jobName) =>
+    Object.values(yamlPermissions(yamlBlock(jobs, jobName, 2))).includes("write"),
+  ).sort();
+  if (!isDeepStrictEqual(writeJobs, ["publish-draft", "publish-finalize"])) {
+    throw new Error(`${path}: write permission は publish-draft / publish-finalize だけが必要です`);
+  }
+
+  const prohibited = [
+    /pull_request_target/,
+    /--force(?:-with-lease)?/,
+    /\+refs\/heads/,
+    /\bgit\s+rebase\b/,
+    /gh\s+pr\s+merge/,
+    /--auto(?:-merge)?/,
+    /\bsecrets\./,
+    /SKILL_UPDATE_TOKEN|SKILLS_UPDATE_TOKEN|PERSONAL_ACCESS_TOKEN/,
+  ];
+  if (prohibited.some((pattern) => pattern.test(source))) {
+    throw new Error(`${path}: prohibited trigger / history operation / token が含まれます`);
+  }
+}
+
+function validateSmokeCliBoundary(repositoryRoot: string): void {
+  const cliPath = join(repositoryRoot, "repo-tools", "cli.ts");
+  const cliSource = readFileSync(cliPath, "utf8");
+  const commandMarkers = [
+    "skills:automation:smoke",
+    "runSmokeCommand",
+    "ProductionSmokeHost",
+    "process.stdin",
+    "process.stdout",
+    "process.stderr",
+  ];
+  if (commandMarkers.some((marker) => !cliSource.includes(marker))) throw new Error(`${cliPath}: human smoke CLI routeが必要です`);
+  const smokeDirectory = join(repositoryRoot, "repo-tools", "skill-update-automation", "smoke");
+  if (!existsSync(smokeDirectory)) throw new Error(`${smokeDirectory}: human smoke CLI implementationが必要です`);
+  const smokeSource = readRepoToolsSources(smokeDirectory).join("\n");
+  const credentialOrArtifact = /\b(?:GH_TOKEN|GITHUB_TOKEN|PERSONAL_ACCESS_TOKEN|SKILL_UPDATE_TOKEN|SKILLS_UPDATE_TOKEN)\b|\b(?:writeFile|writeFileSync|appendFile|appendFileSync)\b/;
+  if (credentialOrArtifact.test(smokeSource)) {
+    throw new Error(`${smokeDirectory}: smoke credentialまたはapproval artifact保存経路は許可されません`);
+  }
+}
+
+function requireDocumentMarkers(repositoryRoot: string): void {
+  const requirements = new Map<string, readonly string[]>([
+    ["README.md", ["SKILLS_AUTO_UPDATE", "resume_closed", "skill-update-prs.yml", "task check"]],
+    ["docs/guide.md", ["validation-failed", "recovery-required", "cleanup-failed", "fresh approval", "exact digest",
+      "SmokePreview` v3", "recovery mode", "ahead_by >= 1"]],
+    ["docs/agents/safety.md", ["publish-draft", "publish-finalize", "existing operator", "gh auth", "real GitHub write"]],
+  ]);
+  for (const [relativePath, markers] of requirements) {
+    const path = join(repositoryRoot, relativePath);
+    const text = readFileSync(path, "utf8");
+    const missing = markers.filter((marker) => !text.includes(marker));
+    if (missing.length > 0) throw new Error(`${relativePath}: ${missing.join(", ")} が不足しています`);
   }
 }
 
@@ -198,6 +333,19 @@ export function validateRepositoryContracts(): readonly string[] {
   if (missingSkillRoutes.length > 0) {
     throw new Error(`${taskfilePath}: skill updater routesが不足しています: ${missingSkillRoutes.join(", ")}`);
   }
+  const automationCheckRoute = "node --test repo-tools/skill-update-automation/**/*.test.ts";
+  let checkTask = "";
+  try {
+    checkTask = yamlBlock(taskfileText.split("\n"), "check", 2).join("\n");
+  } catch {
+    throw new Error(`${taskfilePath}: task check が必要です`);
+  }
+  if (!checkTask.includes(automationCheckRoute)) {
+    throw new Error(`${taskfilePath}: skill-update-automation tests を task check に追加してください`);
+  }
+  validateSkillUpdateWorkflow(repositoryRoot);
+  validateSmokeCliBoundary(repositoryRoot);
+  requireDocumentMarkers(repositoryRoot);
   const legacySkillPaths = [
     join(repositoryRoot, "scripts", "skills-upstream-check.py"),
     join(repositoryRoot, "tests", "test_skills_upstream_check.py"),
@@ -251,5 +399,8 @@ export function validateRepositoryContracts(): readonly string[] {
     "forbidden Node runners: none",
     "skill updater routes",
     "legacy skill checker: absent",
+    "skill update automation workflow",
+    "skill update automation runbook",
+    "human smoke CLI credential boundary",
   ];
 }
