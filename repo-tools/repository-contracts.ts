@@ -120,12 +120,15 @@ function validateSkillUpdateWorkflow(repositoryRoot: string): void {
   }
 
   const jobs = yamlBlock(lines, "jobs", 0);
-  if (!isDeepStrictEqual([...directYamlKeys(jobs, 2)].sort(), ["detect", "publish-draft", "publish-finalize", "validate"])) {
+  if (!isDeepStrictEqual([...directYamlKeys(jobs, 2)].sort(), [
+    "cleanup-merged", "detect", "publish-draft", "publish-finalize", "validate",
+  ])) {
     throw new Error(`${path}: production workflow job集合が不正です。real-host smokeはworkflow外が必要です`);
   }
   const expectedPermissions: Record<string, Record<string, string>> = {
     detect: { contents: "read", "pull-requests": "read", issues: "read" },
     "publish-draft": { contents: "write", "pull-requests": "write" },
+    "cleanup-merged": { contents: "write", "pull-requests": "read" },
     validate: { contents: "read" },
     "publish-finalize": { contents: "read", "pull-requests": "write", issues: "write" },
   };
@@ -136,8 +139,8 @@ function validateSkillUpdateWorkflow(repositoryRoot: string): void {
   const writeJobs = directYamlKeys(jobs, 2).filter((jobName) =>
     Object.values(yamlPermissions(yamlBlock(jobs, jobName, 2))).includes("write"),
   ).sort();
-  if (!isDeepStrictEqual(writeJobs, ["publish-draft", "publish-finalize"])) {
-    throw new Error(`${path}: write permission は publish-draft / publish-finalize だけが必要です`);
+  if (!isDeepStrictEqual(writeJobs, ["cleanup-merged", "publish-draft", "publish-finalize"])) {
+    throw new Error(`${path}: write permission job集合が不正です`);
   }
 
   const prohibited = [
@@ -160,7 +163,8 @@ function validateSmokeCliBoundary(repositoryRoot: string): void {
   const cliSource = readFileSync(cliPath, "utf8");
   const commandMarkers = [
     "skills:automation:smoke",
-    "runSmokeCommand",
+    "runFreshSmokeCli",
+    "ProductionPublishAdapter",
     "ProductionSmokeHost",
     "process.stdin",
     "process.stdout",
@@ -174,14 +178,22 @@ function validateSmokeCliBoundary(repositoryRoot: string): void {
   if (credentialOrArtifact.test(smokeSource)) {
     throw new Error(`${smokeDirectory}: smoke credentialまたはapproval artifact保存経路は許可されません`);
   }
+
+  const automationDirectory = join(repositoryRoot, "repo-tools", "skill-update-automation");
+  const automationSource = readRepoToolsSources(automationDirectory).join("\n");
+  const prohibitedMutableRootSurface = /\bmanagedSection\b|\bupdateIssue\s*\(|\breopenIssue\s*\(|\breopenPullRequest\s*\(|["'](?:update-issue|reopen-issue|reopen-pull-request)["']/;
+  if (prohibitedMutableRootSurface.test(automationSource)) {
+    throw new Error(`${automationDirectory}: immutable rootまたはclosed issueを変更するpublic write surfaceは許可されません`);
+  }
 }
 
 function requireDocumentMarkers(repositoryRoot: string): void {
   const requirements = new Map<string, readonly string[]>([
     ["README.md", ["SKILLS_AUTO_UPDATE", "resume_closed", "skill-update-prs.yml", "task check"]],
     ["docs/guide.md", ["validation-failed", "recovery-required", "cleanup-failed", "fresh approval", "exact digest",
-      "SmokePreview` v3", "recovery mode", "ahead_by >= 1"]],
-    ["docs/agents/safety.md", ["publish-draft", "publish-finalize", "existing operator", "gh auth", "real GitHub write"]],
+      "journal v2", "fresh repository", "creator numeric user ID", "force-with-lease"]],
+    ["docs/agents/safety.md", ["publish-draft", "cleanup-merged", "publish-finalize", "immutable root",
+      "gh auth", "real GitHub write"]],
   ]);
   for (const [relativePath, markers] of requirements) {
     const path = join(repositoryRoot, relativePath);

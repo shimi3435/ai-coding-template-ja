@@ -40,18 +40,18 @@
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
-| 1 | 空・ゼロ長・None | 該当 |comment 0件、null body | 1:valid v2 root＋0entryはinitial snapshot、null root拒否 |
+| 1 | 空・ゼロ長・None | 該当 |comment 0件、null body、create応答消失後のcommentless root | 1:rootへcanonical full initial snapshotを埋め込み、author一致・`lastEditedAt === null`・fresh live exact一致時だけinitial commentを回復。null root拒否 |
 | 2 | 境界値 | 該当 |sequence 1、MAX_SAFE_INTEGER | 1:positive safe integer範囲、初回previousDigest null |
 | 3 | 重複・衝突 | 該当 |duplicate sequence / operation / marker | 1:resource write fail closed |
 | 4 | 順序 | 該当 |API order、out-of-order IDs | 1:全pagination後comment ID昇順、sequence chain照合 |
 | 5 | 型・形式不正 | 該当 |unknown field、noncanonical JSON、v1 | 1:exact codec拒否、v1 migrationなし |
-| 6 | エラー経路 | 該当 |partial comment response / parse failure | 1:resource write 0件 |
+| 6 | エラー経路 | 該当 |partial comment response / parse failure / initial append応答消失 | 1:append再送禁止。fresh complete readにexpected entryがexact 1件だけなら回復、それ以外はwrite 0件 |
 | 7 | 冪等性・再実行 | 該当 |同じsnapshotの再append | 1:stable operation IDとsequenceでduplicate拒否 |
-| 8 | 時刻・タイムゾーン | 該当 |edited comment detection | 1:`created_at === updated_at` exact UTC文字列を要求 |
+| 8 | 時刻・タイムゾーン | 該当 |edited comment / body detection | 1:commentは`created_at === updated_at` exact UTC文字列、commentless rootはresource `lastEditedAt === null`を要求 |
 | 9 | 文字列 | 該当 |Unicode、HTML marker injection、空白 | 1:schema-order canonical escapingとsingle markerを要求 |
 | 10 | 数値 | 該当 |numeric user ID / comment ID overflow | 1:IDはpositive ASCII decimal string、sequenceはsafe integer |
 | 11 | 巨大入力・リソース枯渇 | 該当 |大量comments / oversized snapshot | 1:full paginationと既存response上限、上限超過はfail closed |
-| 12 | 状態遷移の未定義パス | 該当 |中間missing / fork / foreign author / edit / terminal truncation | 1:検出可能な不整合は全resource mutation禁止。証拠が全消失したstate-only末尾suffixは検出保証外と明記 |
+| 12 | 状態遷移の未定義パス | 該当 |中間missing / fork / foreign author / body edit / initial snapshot不一致 / terminal truncation | 1:root snapshot digest、resource author、body edit証拠、fresh live stateを照合。検出可能な不整合は全resource mutation禁止。証拠が全消失したstate-only末尾suffixは検出保証外と明記 |
 
 ## Requirement 4: prepared / mutation / committed
 
@@ -62,13 +62,13 @@
 | 3 | 重複・衝突 | 該当 |同operation IDのprepared重複 | 1:fail closed、追加mutationなし |
 | 4 | 順序 | 該当 |committed先行、別operation割込み | 1:prepared→mutation→committed以外拒否 |
 | 5 | 型・形式不正 | 該当 |operationとsnapshot kind不一致 | 1:tagged union exact codecで拒否 |
-| 6 | エラー経路 | 該当 |mutation成功後committed append失敗 | 1:after snapshot一致時committed-only recovery |
-| 7 | 冪等性・再実行 | 該当 |before状態で再開、after状態で再開 | 1:beforeはexact retry、afterはcommitのみ |
-| 8 | 時刻・タイムゾーン | 非該当 |recoveryはelapsed time非依存 | 2:timeout推測修復を禁止 |
+| 6 | エラー経路 | 該当 |mutation成功後committed append失敗、またはPR head projectionだけbeforeを返す | 1:exact mixed projectionは有界read-only再取得し、after snapshot一致時だけcommitted-only recovery |
+| 7 | 冪等性・再実行 | 該当 |before状態、after状態、branch after / PR beforeの一時状態で再開 | 1:beforeはexact retry、afterはcommitのみ、mixed projectionでは追加mutationせず再取得 |
+| 8 | 時刻・タイムゾーン | 該当 |host projection収束時間が不定 | 1:経過時間から成功を推測せず、有界read終了時のexact stateだけで判定 |
 | 9 | 文字列 | 該当 |operation ID表現差 | 1:canonical digestだけ許可 |
 | 10 | 数値 | 該当 |sequence overflow | 1:safe integer上限到達時stop |
 | 11 | 巨大入力・リソース枯渇 | 該当 |full snapshot肥大 | 1:canonical codec / response上限超過でwrite禁止 |
-| 12 | 状態遷移の未定義パス | 該当 |live stateがbefore / after以外 | 1:recovery-required、mutation 0件 |
+| 12 | 状態遷移の未定義パス | 該当 |live stateがbefore / after以外、複数projectionが一時的にbefore / afterへ分裂、または前phaseでbranch after観測後に後phaseでbefore / missingへ回帰 | 1:exact mixed projectionだけread-only再取得。branch after観測証拠を同一recovery実行の全phaseで保持し、回帰・未収束・別stateはrecovery-required、追加mutation 0件 |
 
 ## Requirement 5: closed issue terminal
 
@@ -77,10 +77,10 @@
 | 1 | 空・ゼロ長・None | 該当 |managed issue 0件 | 1:new failure時new root作成 |
 | 2 | 境界値 | 該当 |0 / 1 / 複数open roots | 1:0=create、1=append、複数=conflict |
 | 3 | 重複・衝突 | 該当 |同failure重複 | 1:stable entry keyでopen root内dedupe |
-| 4 | 順序 | 該当 |closeとfailure detection競合 | 1:fresh state closedならnew issue、reopen禁止 |
+| 4 | 順序 | 該当 |closeとfailure detection競合 | 1:append直前fresh state closedならnew issue、reopen禁止。read後closeはconditional comment API不在により検出保証外 |
 | 5 | 型・形式不正 | 該当 |partial root / journal | 1:issue writeだけfail closed |
-| 6 | エラー経路 | 該当 |new issue create後initial journal失敗 | 1:immutable rootからrecovery-requiredを検出、body更新禁止 |
-| 7 | 冪等性・再実行 | 該当 |create response消失後retry | 1:fresh discoveryでstrict open rootを再利用 |
+| 6 | エラー経路 | 該当 |new issue create後initial journal失敗または応答消失 | 1:immutable rootから回復条件を検証し、append再送せずfresh journal exact 1件だけを受理。body更新禁止 |
+| 7 | 冪等性・再実行 | 該当 |create response消失後retry | 1:fresh discoveryでstrict open rootを再利用。ただしauthor一致、`lastEditedAt === null`、embedded initial snapshotとlive exact一致を必須化 |
 | 8 | 時刻・タイムゾーン | 非該当 |issue選択は更新時刻非依存 | 2:latest-by-time推測を禁止 |
 | 9 | 文字列 | 該当 |title collision / marker mimic | 1:root marker exact identity必須 |
 | 10 | 数値 | 該当 |issue number / creator ID境界 | 1:positive numeric validation |
@@ -96,13 +96,13 @@
 | 3 | 重複・衝突 | 該当 |既存v1 / v2 resource | 1:fresh precondition違反でpreview停止 |
 | 4 | 順序 | 該当 |preview / approval / write順 | 1:同process exact順以外write seam未到達 |
 | 5 | 型・形式不正 | 該当 |digest / repository ID / creator ID不正 | 1:preview decoderで拒否 |
-| 6 | エラー経路 | 該当 |途中write failure | 1:new read-only recovery previewとfresh approvalを要求 |
+| 6 | エラー経路 | 該当 |途中write failure、PR close後にterminal prepared journalがaggregate cleanup discoveryと衝突 | 1:residual identity / journal digest / exact SHAを束縛したterminal-only recovery previewとfresh approvalを要求。terminal pathはaggregate discoveryを使わず単一branchをexact lease delete |
 | 7 | 冪等性・再実行 | 該当 |承認済みplan replay | 1:process-scoped single-use approval、live state不一致拒否 |
 | 8 | 時刻・タイムゾーン | 該当 |stale preview | 1:source/run/live digest一致を要求、時刻だけでvalid化しない |
 | 9 | 文字列 | 該当 |approval whitespace / Unicode | 1:exact ASCII digest入力だけ許可 |
 | 10 | 数値 | 該当 |run attempt / ID境界 | 1:positive safe integer / decimal parser適用 |
 | 11 | 巨大入力・リソース枯渇 | 該当 |preview plan肥大 / API timeout | 1:closed step set、timeout時write停止 |
-| 12 | 状態遷移の未定義パス | 該当 |terminal cleanup未達、residual | 1:change未完了、別recovery preview＋fresh approval |
+| 12 | 状態遷移の未定義パス | 該当 |merge checkpoint未完了、merge後再開、auto-delete、terminal cleanup未達、closed terminal-prepared PRとresidual branch | 1:人手mergeをfresh検証。merge後はsource relationを束縛。auto-deleteはfail closed。別recovery preview＋fresh approval。各terminal write前にbody / journal / state / SHAを再検証 |
 
 ## Phase 2: validation mapping
 
@@ -113,8 +113,12 @@
 | journal canonical / tamper / detectable missing / fork / foreign author | 例示＋roundtrip | `model/journal.test.ts` | pure codec / reducer。state-only terminal truncationは検出保証外 |
 | journal ID / sequence boundaries | 例示 boundary test | `model/journal.test.ts` | safe integer / decimal ID |
 | prepared before / after / divergent recovery | 例示 state-machine test | `publish/draft.test.ts`, `finalize/finalize.test.ts` | mutation adapter seam |
+| post-mutation GitHub projection lag | 例示 integration test | `smoke/fresh-v2.test.ts`, `publish/draft.test.ts` | public transition seam。fake adapterがPR headだけを有界回数stale返却 |
+| cross-phase branch regression | 例示 integration test | `publish/draft.test.ts` | public `publishDraft` recovery seam。`C/C → B/B → C/C`、mutation 0、committed 0 |
+| commentless PR / Issue root | security matrix integration test | `publish/draft.test.ts`, `finalize/finalize.test.ts`, `publish/production-adapter.test.ts` | author / `lastEditedAt` / embedded snapshot / live state / append response loss |
 | closed issue / duplicate failure / cardinality | 例示 reducer test | `github/issue-reducer.test.ts` | no reopen assertion |
 | fresh smoke / stale approval / replay / terminal cleanup | 例示 integration test | `smoke/command.test.ts`, `smoke/production-host.test.ts` | fake host |
+| closed terminal-prepared residual cleanup | 例示 integration test | `smoke/fresh-v2.test.ts` | public smoke recovery seam。preview-bound exact deleteだけ実行 |
 | real GitHub CAS / comment / cleanup behavior | real-host smoke | fresh smoke repository | fresh approval前は未検証 blocker |
 | 時刻非依存契約 | 静的 contract test | focused model / workflow tests | age-based推測がないことを検査 |
 | resource exhaustion / host timeout | 未検証 | — |外部host依存。上限超過fail-closedをoffline例示testで代替 |

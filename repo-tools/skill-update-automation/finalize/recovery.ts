@@ -3,13 +3,15 @@ import { isDeepStrictEqual } from "node:util";
 import { redactCredentialText, type GhRunner } from "../../skill-updater/index.ts";
 import type { GithubAdapter } from "../github/adapter.ts";
 import type { GithubPullRequest } from "../github/discovery.ts";
-import { discoverManagedPullRequests } from "../github/discovery.ts";
+import { discoverManagedPullRequests, hasManagedPrEvidence } from "../github/discovery.ts";
 import {
-  classifyPrBody,
+  classifyPrRootV2,
   parseDecimalId,
   parseObject,
   parsePositiveSafeInteger,
   parseRepositoryFullName,
+  reduceJournalCommentsV2,
+  validatePrJournalV2,
   type RunRef,
   type ValidationState,
 } from "../model/index.ts";
@@ -62,16 +64,31 @@ export function classifyPendingValidation(
 export async function cleanupMergedBranch(input: Readonly<{
   adapter: Pick<GithubAdapter, "readBranch" | "deleteBranch">;
   pullRequest: GithubPullRequest;
+  creatorUserId: string;
 }>): Promise<"deleted" | "already-clean" | "not-eligible" | "intervention-required" | "cleanup-failed"> {
   if (input.pullRequest.state !== "closed" || !input.pullRequest.merged) return "not-eligible";
-  const classification = classifyPrBody(input.pullRequest.body, input.pullRequest.draft);
-  if (classification.kind !== "strict" || classification.envelope.expectedHeadSha !== input.pullRequest.headSha ||
-    classification.envelope.headRef !== input.pullRequest.headRef) {
+  const classification = classifyPrRootV2(input.pullRequest.body);
+  if (classification.kind !== "strict" || classification.root.creatorUserId !== input.creatorUserId) {
+    return "intervention-required";
+  }
+  let state;
+  try {
+    const journal = reduceJournalCommentsV2(
+      input.pullRequest.journalComments ?? [],
+      classification.root.creatorUserId,
+    );
+    if (journal.pending !== null) return "intervention-required";
+    state = validatePrJournalV2(classification.root, journal).at(-1);
+  } catch {
+    return "intervention-required";
+  }
+  if (state === undefined || state.expectedHeadSha !== input.pullRequest.headSha ||
+    state.headRef !== input.pullRequest.headRef || state.draft !== input.pullRequest.draft) {
     return "intervention-required";
   }
   const branch = await input.adapter.readBranch(input.pullRequest.headRef);
   if (branch === null) return "already-clean";
-  if (branch.sha !== classification.envelope.expectedHeadSha) return "intervention-required";
+  if (branch.sha !== state.expectedHeadSha) return "intervention-required";
   try {
     await input.adapter.deleteBranch({ ref: branch.ref, expectedSha: branch.sha });
   } catch {
@@ -85,6 +102,7 @@ export async function cleanupMergedBranches(input: Readonly<{
   repositoryId: string;
   repository: string;
   defaultBranchRef: string;
+  creatorUserId: string;
 }>): Promise<Readonly<{ kind: "complete" | "stopped"; failedRefs: readonly string[] }>> {
   const page = await input.adapter.listPullRequests();
   const discovery = discoverManagedPullRequests({
@@ -104,6 +122,7 @@ export async function cleanupMergedBranches(input: Readonly<{
   }
   const failedRefs: string[] = [];
   for (const pullRequest of page.items) {
+    if (!hasManagedPrEvidence(pullRequest)) continue;
     if (
       pullRequest.state !== "closed" || !pullRequest.merged ||
       pullRequest.headRepositoryId !== input.repositoryId || pullRequest.baseRepositoryId !== input.repositoryId ||
@@ -112,7 +131,12 @@ export async function cleanupMergedBranches(input: Readonly<{
     if (page.items.some((candidate) => candidate.state === "open" && candidate.headRef === pullRequest.headRef)) {
       return { kind: "stopped", failedRefs: [] };
     }
-    const result = await cleanupMergedBranch({ adapter: input.adapter, pullRequest });
+    const result = await cleanupMergedBranch({
+      adapter: input.adapter,
+      pullRequest,
+      creatorUserId: input.creatorUserId,
+    });
+    if (result === "intervention-required") return { kind: "stopped", failedRefs: [] };
     if (result === "cleanup-failed") failedRefs.push(pullRequest.headRef);
   }
   return { kind: "complete", failedRefs: failedRefs.sort() };

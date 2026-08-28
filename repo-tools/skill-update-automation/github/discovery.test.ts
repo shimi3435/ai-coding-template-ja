@@ -1,15 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { managedPrTitle, renderManagedPrSection } from "../model/index.ts";
+import {
+  appendJournalEntryDigest,
+  journalCommentBody,
+  managedPrTitle,
+  prStateSnapshotV2,
+  renderManagedPrRootV2,
+} from "../model/index.ts";
 import { discoverManagedPullRequests } from "./discovery.ts";
 
 const sha = (digit: string): string => digit.repeat(40);
 
-function managedBody(expectedHeadSha: string, status: "pending" | "passed" = "pending"): string {
-  return renderManagedPrSection({
-    schemaVersion: 1,
-    kind: "managed-pr",
+function managedFields(
+  expectedHeadSha: string,
+  status: "pending" | "passed" = "pending",
+  prNumber = 1,
+): Readonly<{ body: string; journalComments: readonly ReturnType<typeof comment>[] }> {
+  const snapshot = prStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-pr-state",
     repositoryId: "123",
     repository: "owner/repository",
     generation: 1,
@@ -19,23 +29,64 @@ function managedBody(expectedHeadSha: string, status: "pending" | "passed" = "pe
     validationBaseSha: sha("0"),
     candidateDigest: `sha256:${"1".repeat(64)}`,
     reportDigest: `sha256:${"2".repeat(64)}`,
+    draft: status !== "passed",
     validation: { status, run: { workflowRunId: "10", workflowRunAttempt: 1 } },
-  }, "fixture");
+  });
+  const root = {
+    schemaVersion: 2 as const,
+    kind: "managed-pr-root" as const,
+    repositoryId: "123",
+    repository: "owner/repository",
+    creatorUserId: "456",
+    generation: 1,
+    headRef: "refs/heads/automation/skill-updates/g000001",
+    baseRef: "refs/heads/main",
+    candidateDigest: `sha256:${"1".repeat(64)}`,
+    initialSnapshot: snapshot,
+    initialSnapshotDigest: snapshot.stateDigest,
+  };
+  const entry = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: prNumber,
+    creatorUserId: root.creatorUserId,
+    sequence: 1,
+    previousDigest: null,
+    phase: "committed",
+    operation: "root",
+    operationId: `sha256:${"a".repeat(64)}`,
+    snapshot,
+  });
+  return { body: renderManagedPrRootV2(root, "fixture"), journalComments: [comment(entry)] };
+}
+
+function comment(entry: ReturnType<typeof appendJournalEntryDigest>) {
+  return {
+    id: "1",
+    authorUserId: "456",
+    createdAt: "2026-08-27T00:00:00Z",
+    updatedAt: "2026-08-27T00:00:00Z",
+    body: journalCommentBody(entry),
+  };
 }
 
 function pull(overrides: Record<string, unknown> = {}) {
+  const headSha = typeof overrides.headSha === "string" ? overrides.headSha : sha("3");
+  const draft = typeof overrides.draft === "boolean" ? overrides.draft : true;
   return {
     prNumber: 1,
     state: "open" as const,
     merged: false,
-    draft: true,
+    draft,
     headRepositoryId: "123",
     headRef: "refs/heads/automation/skill-updates/g000001",
-    headSha: sha("3"),
+    headSha,
     baseRepositoryId: "123",
     baseRef: "refs/heads/main",
     title: managedPrTitle,
-    body: managedBody(sha("3")),
+    authorUserId: "456",
+    lastEditedAt: null,
+    ...managedFields(headSha, draft ? "pending" : "passed", Number(overrides.prNumber ?? 1)),
     ...overrides,
   };
 }
@@ -93,7 +144,7 @@ test("strict managed human head mismatch permits issue write only", () => {
     defaultBaseRef: "refs/heads/main",
     resumeClosed: false,
     paginationComplete: true,
-    pullRequests: [pull({ headSha: sha("4") })],
+    pullRequests: [pull({ headSha: sha("4"), ...managedFields(sha("3")) })],
   });
   assert.deepEqual(result.decision, {
     kind: "intervention-required",
@@ -110,9 +161,37 @@ test("ready managed PR remains a strict open lifecycle state", () => {
     defaultBaseRef: "refs/heads/main",
     resumeClosed: false,
     paginationComplete: true,
-    pullRequests: [pull({ draft: false, body: managedBody(sha("3"), "passed") })],
+    pullRequests: [pull({ draft: false, ...managedFields(sha("3"), "passed") })],
   });
   assert.equal(result.decision.kind, "open");
+});
+
+test("commentless PR root is recoverable only with matching author, unedited body, and exact initial live state", () => {
+  const exact = discoverManagedPullRequests({
+    repositoryId: "123",
+    repository: "owner/repository",
+    defaultBaseRef: "refs/heads/main",
+    resumeClosed: false,
+    paginationComplete: true,
+    pullRequests: [pull({ journalComments: [] })],
+  });
+  assert.equal(exact.decision.kind, "open");
+
+  for (const override of [
+    { authorUserId: "999" },
+    { lastEditedAt: "2026-08-28T00:00:00Z" },
+    { headSha: sha("9") },
+  ]) {
+    const rejected = discoverManagedPullRequests({
+      repositoryId: "123",
+      repository: "owner/repository",
+      defaultBaseRef: "refs/heads/main",
+      resumeClosed: false,
+      paginationComplete: true,
+      pullRequests: [{ ...pull({ journalComments: [] }), ...override }],
+    });
+    assert.equal(rejected.decision.kind, "pr-identity-conflict");
+  }
 });
 
 test("generation conflict takes precedence over one member human-head mismatch", () => {
@@ -123,7 +202,7 @@ test("generation conflict takes precedence over one member human-head mismatch",
     resumeClosed: false,
     paginationComplete: true,
     pullRequests: [
-      pull({ prNumber: 8, headSha: sha("4") }),
+      pull({ prNumber: 8, headSha: sha("4"), ...managedFields(sha("3"), "pending", 8) }),
       pull({ prNumber: 3 }),
     ],
   });

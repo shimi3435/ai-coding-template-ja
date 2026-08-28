@@ -36,6 +36,20 @@ The automation MUST keep PR and Issue creation bodies immutable and store later 
 - **WHEN** managed state is reconstructed
 - **THEN** every v2 marker comment is authored by the root creator numeric user ID
 - **AND** every entry is canonical, unedited, sequential, linked by digest, and contains a full snapshot
+- **AND** the immutable root contains the canonical full initial snapshot whose computed digest equals the root initial snapshot digest
+
+#### Scenario: Recover a commentless immutable root
+
+- **GIVEN** a PR or Issue create may have succeeded but its response was lost and the strict root has no journal comments
+- **WHEN** the resource author numeric ID equals the root creator, `lastEditedAt` is null, and fresh resource state exactly equals the canonical initial snapshot embedded in the root
+- **THEN** an existing writer path may append the exact initial journal entry once
+- **AND** author mismatch, edit metadata absence or non-null value, snapshot mismatch, or live-state mismatch fails closed
+
+#### Scenario: Initial journal append response is lost
+
+- **WHEN** the initial comment append response is lost
+- **THEN** the automation does not retry the append
+- **AND** accepts recovery only when a fresh complete journal read contains exactly one canonical expected entry
 
 #### Scenario: Detectable invalid journal evidence
 
@@ -69,9 +83,26 @@ The automation MUST journal branch append and PR draft or ready transitions as p
 - **WHEN** live state matches neither snapshot
 - **THEN** recovery fails closed
 
+#### Scenario: Host projections lag after an exact mutation
+
+- **GIVEN** an exact prepared mutation has succeeded but GitHub temporarily exposes a mix of the before and after projections
+- **WHEN** the automation verifies the mutation result or resumes the prepared entry
+- **THEN** it performs only a bounded number of read-only reacquisitions without repeating a mutation already proven by the exact branch state
+- **AND** appends committed only after every required live projection equals the exact after snapshot
+- **AND** fails closed without committed if the projections do not converge or expose any state outside the exact before and after snapshots
+
+#### Scenario: Branch projection regresses across recovery phases
+
+- **GIVEN** one stabilization phase has observed the exact branch after SHA
+- **WHEN** a later stabilization phase in the same recovery execution observes the branch before SHA or a missing branch
+- **THEN** recovery fails closed even if a subsequent observation returns to the after SHA
+- **AND** it performs no mutation and appends no committed entry
+
 ### Requirement: Closed tracking issues are terminal roots
 
 The automation MUST NOT reopen or update a closed tracking issue and MUST create a new issue for a later failure.
+
+The guarantee applies to the final fresh Issue read immediately before comment append because GitHub does not provide a conditional Issue-comment write. If that read observes closed, the automation MUST NOT append and MUST perform at most one rediscovery before creating a new issue.
 
 #### Scenario: Failure after issue closure
 
@@ -93,3 +124,15 @@ The real-host smoke MUST target a fresh repository with no v1 managed resources 
 
 - **WHEN** the operator approves the exact preview digest in the same process
 - **THEN** smoke exercises explicit leases, journal v2, prepared/committed recovery, independent cleanup, and terminal cleanup
+- **AND** the operator merges the ready smoke PR at an explicit checkpoint without automation merge permission
+- **AND** the CLI freshly verifies the merged PR before invoking the independent cleanup seam
+- **AND** the fresh repository keeps the exact head branch until the cleanup seam deletes it
+
+#### Scenario: Interrupted approved smoke
+
+- **WHEN** an approved smoke stops with exact residual resources
+- **THEN** a later process emits a terminal-only recovery preview bound to their identities and lease SHA
+- **AND** a post-merge recovery binds the read-only merged source relation to the preview
+- **AND** performs no recovery write before a new exact approval
+- **AND** after approval revalidates the preview-bound immutable resource identity, journal digest, and exact branch SHA before each terminal write
+- **AND** deletes only that exact residual branch without depending on aggregate merged-PR discovery

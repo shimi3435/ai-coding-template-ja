@@ -13,7 +13,7 @@ function workflow(): Record<string, any> {
 
 test("publish-finalize runs after validation with only exact final permissions", () => {
   const job = workflow().jobs["publish-finalize"];
-  assert.deepEqual(job.needs, ["detect", "publish-draft", "validate"]);
+  assert.deepEqual(job.needs, ["detect", "publish-draft", "validate", "cleanup-merged"]);
   assert.deepEqual(job.permissions, {
     contents: "read",
     "pull-requests": "write",
@@ -53,17 +53,18 @@ test("finalize downloads exact same-run inputs, uses scoped token, and always cl
 
 test("guarded cleanup failure remains observable to the finalizer", () => {
   const jobs = workflow().jobs;
-  const publish = jobs["publish-draft"];
-  const cleanup = (publish.steps as Array<Record<string, any>>).find((step) => step.id === "cleanup-merged");
-  const finalize = (jobs["publish-finalize"].steps as Array<Record<string, any>>)
-    .find((step) => step.id === "publish-finalize");
-  assert.equal(cleanup?.["continue-on-error"], true);
-  assert.equal(publish.outputs["cleanup-status"], "${{ steps.cleanup-merged.outputs.cleanup-status }}");
-  assert.equal(publish.outputs["cleanup-outcome"], "${{ steps.cleanup-merged.outcome }}");
-  assert.equal(publish.outputs["cleanup-failed-refs"], "${{ steps.cleanup-merged.outputs.cleanup-failed-refs }}");
-  assert.equal(finalize?.env.CLEANUP_STATUS, "${{ needs.publish-draft.outputs.cleanup-status }}");
-  assert.equal(finalize?.env.CLEANUP_OUTCOME, "${{ needs.publish-draft.outputs.cleanup-outcome }}");
-  assert.equal(finalize?.env.CLEANUP_FAILED_REFS, "${{ needs.publish-draft.outputs.cleanup-failed-refs }}");
+  const cleanupJob = jobs["cleanup-merged"];
+  const cleanup = (cleanupJob.steps as Array<Record<string, any>>).find((step) => step.id === "cleanup-merged");
+  const finalizeSteps = jobs["publish-finalize"].steps as Array<Record<string, any>>;
+  const detection = finalizeSteps.find((step) => step.id === "publish-detection-outcome");
+  const finalize = finalizeSteps.find((step) => step.id === "publish-finalize");
+  assert.equal(cleanup?.["continue-on-error"], undefined);
+  assert.equal(cleanupJob.outputs["cleanup-status"], "${{ steps.cleanup-merged.outputs.cleanup-status }}");
+  assert.equal(cleanupJob.outputs["cleanup-failed-refs"], "${{ steps.cleanup-merged.outputs.cleanup-failed-refs }}");
+  assert.equal(detection?.env.CLEANUP_STATUS, "${{ needs.cleanup-merged.outputs.cleanup-status }}");
+  assert.equal(detection?.env.CLEANUP_OUTCOME, "${{ needs.cleanup-merged.result }}");
+  assert.equal(detection?.env.CLEANUP_FAILED_REFS, "${{ needs.cleanup-merged.outputs.cleanup-failed-refs }}");
+  assert.equal(finalize?.env.CLEANUP_STATUS, undefined);
 });
 
 test("finalize always routes detection and draft failures before candidate-specific finalize", () => {

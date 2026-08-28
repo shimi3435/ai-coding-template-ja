@@ -9,7 +9,10 @@ import {
   encodePrRootV2,
   renderManagedPrSection,
   renderManagedPrRootV2,
+  prStateSnapshotV2,
+  validatePrJournalV2,
 } from "./pr.ts";
+import { appendJournalEntryDigest } from "./journal.ts";
 
 const sha = (character: string): string => character.repeat(40);
 const digest = (character: string): string => `sha256:${character.repeat(64)}`;
@@ -95,6 +98,21 @@ test("PR marker codec distinguishes exact, partial, and absent identity", () => 
 });
 
 test("immutable PR root v2 binds creator numeric ID and initial snapshot", () => {
+  const initialSnapshot = prStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-pr-state",
+    repositoryId: "123",
+    repository: "owner/repo",
+    generation: 9,
+    headRef: "refs/heads/automation/skill-updates/g000009",
+    baseRef: "refs/heads/main",
+    expectedHeadSha: sha("a"),
+    validationBaseSha: sha("b"),
+    candidateDigest: digest("c"),
+    reportDigest: digest("d"),
+    draft: true,
+    validation: { status: "pending", run: { workflowRunId: "456", workflowRunAttempt: 2 } },
+  });
   const root = {
     schemaVersion: 2,
     kind: "managed-pr-root",
@@ -105,7 +123,8 @@ test("immutable PR root v2 binds creator numeric ID and initial snapshot", () =>
     headRef: "refs/heads/automation/skill-updates/g000009",
     baseRef: "refs/heads/main",
     candidateDigest: digest("c"),
-    initialSnapshotDigest: digest("d"),
+    initialSnapshot,
+    initialSnapshotDigest: initialSnapshot.stateDigest,
   } as const;
   assert.deepEqual(classifyPrRootV2(renderManagedPrRootV2(root, "immutable root")), {
     kind: "strict",
@@ -113,6 +132,10 @@ test("immutable PR root v2 binds creator numeric ID and initial snapshot", () =>
     summary: "immutable root",
   });
   assert.deepEqual(encodePrRootV2(root), encodePrRootV2(root));
+  assert.throws(() => renderManagedPrRootV2({
+    ...root,
+    initialSnapshotDigest: digest("f"),
+  }, "digest mismatch"), /snapshot|digest/);
   assert.equal(classifyPrRootV2(renderManagedPrSection({
     schemaVersion: 1,
     kind: "managed-pr",
@@ -127,4 +150,65 @@ test("immutable PR root v2 binds creator numeric ID and initial snapshot", () =>
     reportDigest: digest("d"),
     validation: { status: "pending", run: { workflowRunId: "456", workflowRunAttempt: 2 } },
   }, "v1")).kind, "version-conflict");
+});
+
+test("PR journal semantic validation rejects stable identity changes in any snapshot", () => {
+  const state = {
+    schemaVersion: 2,
+    kind: "managed-pr-state",
+    repositoryId: "123",
+    repository: "owner/repo",
+    generation: 9,
+    headRef: "refs/heads/automation/skill-updates/g000009",
+    baseRef: "refs/heads/main",
+    expectedHeadSha: sha("a"),
+    validationBaseSha: sha("b"),
+    candidateDigest: digest("c"),
+    reportDigest: digest("d"),
+    draft: true,
+    validation: { status: "pending", run: { workflowRunId: "456", workflowRunAttempt: 2 } },
+  } as const;
+  const snapshot = prStateSnapshotV2(state);
+  const root = {
+    schemaVersion: 2,
+    kind: "managed-pr-root",
+    repositoryId: "123",
+    repository: "owner/repo",
+    creatorUserId: "456",
+    generation: 9,
+    headRef: state.headRef,
+    baseRef: state.baseRef,
+    candidateDigest: state.candidateDigest,
+    initialSnapshot: snapshot,
+    initialSnapshotDigest: snapshot.stateDigest,
+  } as const;
+  const first = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: 7,
+    creatorUserId: root.creatorUserId,
+    sequence: 1,
+    previousDigest: null,
+    phase: "committed",
+    operation: "root",
+    operationId: digest("e"),
+    snapshot,
+  });
+  const changed = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: 7,
+    creatorUserId: root.creatorUserId,
+    sequence: 2,
+    previousDigest: first.digest,
+    phase: "committed",
+    operation: "validation",
+    operationId: digest("f"),
+    snapshot: prStateSnapshotV2({ ...state, repository: "other/repo" }),
+  });
+  assert.throws(() => validatePrJournalV2(root, {
+    entries: [first, changed],
+    pending: null,
+    snapshot: changed.snapshot,
+  }), /identity/);
 });

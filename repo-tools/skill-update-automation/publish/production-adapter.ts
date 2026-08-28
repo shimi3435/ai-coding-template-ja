@@ -12,9 +12,14 @@ import type {
 } from "../github/adapter.ts";
 import type { GithubPullRequest } from "../github/discovery.ts";
 import type { GithubIssue } from "../github/issue-discovery.ts";
-import { issueMarkerEnd, issueMarkerStart, prMarkerEnd, prMarkerStart } from "../model/index.ts";
 import type { JournalCommentV2 } from "../model/journal.ts";
-import { parsePositiveSafeInteger, parseRepositoryFullName, parseSha } from "../model/index.ts";
+import {
+  classifyIssueRootV2,
+  parsePositiveSafeInteger,
+  parseRepositoryFullName,
+  parseSha,
+  reduceJournalCommentsV2,
+} from "../model/index.ts";
 import { redactCredentialText } from "../../skill-updater/index.ts";
 import type { PublishDraftGithubAdapter } from "./draft.ts";
 
@@ -95,10 +100,11 @@ function ref(value: unknown): string {
   return `refs/heads/${value}`;
 }
 
-function pullRequestFromApi(value: unknown): GithubPullRequest {
+function pullRequestFromApi(value: unknown): Omit<GithubPullRequest, "lastEditedAt"> {
   const item = object(value, "pull request");
   const head = object(item.head, "pull request head");
   const base = object(item.base, "pull request base");
+  const user = object(item.user, "pull request user");
   if (item.state !== "open" && item.state !== "closed") throw new Error("pull request stateが不正です");
   if (typeof item.draft !== "boolean" || typeof item.title !== "string") throw new Error("pull request fieldが不正です");
   if (item.body !== null && typeof item.body !== "string") throw new Error("pull request bodyが不正です");
@@ -115,11 +121,13 @@ function pullRequestFromApi(value: unknown): GithubPullRequest {
     baseRef: ref(base.ref),
     title: item.title,
     body: item.body,
+    authorUserId: String(parsePositiveSafeInteger(user.id)),
   };
 }
 
-function issueFromApi(value: unknown): GithubIssue {
+function issueFromApi(value: unknown): Omit<GithubIssue, "lastEditedAt"> {
   const item = object(value, "issue");
+  const user = object(item.user, "issue user");
   if (item.state !== "open" && item.state !== "closed") throw new Error("issue stateが不正です");
   if (typeof item.title !== "string" || (item.body !== null && typeof item.body !== "string")) {
     throw new Error("issue fieldが不正です");
@@ -130,6 +138,7 @@ function issueFromApi(value: unknown): GithubIssue {
     title: item.title,
     body: item.body,
     isPullRequest: Object.hasOwn(item, "pull_request"),
+    authorUserId: String(parsePositiveSafeInteger(user.id)),
   };
 }
 
@@ -146,26 +155,6 @@ function journalCommentFromApi(value: unknown): JournalCommentV2 {
     updatedAt: item.updated_at,
     body: item.body,
   };
-}
-
-function replaceManagedSection(body: string, replacement: string): string {
-  const start = body.indexOf(prMarkerStart);
-  const end = body.indexOf(prMarkerEnd, start + prMarkerStart.length);
-  if (start < 0 || end < 0 || body.indexOf(prMarkerStart, start + prMarkerStart.length) >= 0 ||
-    body.indexOf(prMarkerEnd, end + prMarkerEnd.length) >= 0) {
-    throw new Error("managed PR section identityが不正です");
-  }
-  return body.slice(0, start) + replacement + body.slice(end + prMarkerEnd.length);
-}
-
-function replaceIssueManagedSection(body: string, replacement: string): string {
-  const start = body.indexOf(issueMarkerStart);
-  const end = body.indexOf(issueMarkerEnd, start + issueMarkerStart.length);
-  if (start < 0 || end < 0 || body.indexOf(issueMarkerStart, start + issueMarkerStart.length) >= 0 ||
-    body.indexOf(issueMarkerEnd, end + issueMarkerEnd.length) >= 0) {
-    throw new Error("managed issue section identityが不正です");
-  }
-  return body.slice(0, start) + replacement + body.slice(end + issueMarkerEnd.length);
 }
 
 function branchName(value: string): string {
@@ -189,7 +178,17 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
 
   async listPullRequests(): Promise<GithubPage<GithubPullRequest>> {
     const history = await readCandidateHistory(this.#repository, async (args) => this.#runner("gh", args));
-    return { complete: history.complete, items: history.pages.flat() };
+    const items: GithubPullRequest[] = [];
+    for (const historical of history.pages.flat()) {
+      const fresh = await this.readPullRequest(historical.prNumber);
+      if (fresh === null) throw new Error("PR history取得後にpull requestが消失しました");
+      const comments = (fresh.body ?? "").includes("<!-- skill-update-pr-automation:pr-root:v2:")
+        ? await this.listJournalComments(fresh.prNumber)
+        : { complete: true, items: [] };
+      if (!comments.complete) throw new Error("PR journal paginationがcompleteではありません");
+      items.push({ ...fresh, journalComments: comments.items });
+    }
+    return { complete: history.complete, items };
   }
 
   async listIssues(): Promise<GithubPage<GithubIssue>> {
@@ -201,7 +200,33 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
     if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) {
       throw new Error("issue paginationがpage配列ではありません");
     }
-    return { complete: true, items: pages.flat().map(issueFromApi) };
+    const items: GithubIssue[] = [];
+    for (const issue of pages.flat().map(issueFromApi)) {
+      if (issue.isPullRequest) {
+        items.push({ ...issue, lastEditedAt: "metadata-unavailable" });
+        continue;
+      }
+      const classification = classifyIssueRootV2(issue.title, issue.body);
+      if (classification.kind !== "none") {
+        const comments = await this.listJournalComments(issue.issueNumber);
+        if (!comments.complete) throw new Error("issue journal paginationがcompleteではありません");
+        let semanticCommentless = false;
+        if (classification.kind === "strict") {
+          try {
+            semanticCommentless = reduceJournalCommentsV2(comments.items, classification.root.creatorUserId).entries.length === 0;
+          } catch {
+            semanticCommentless = false;
+          }
+        }
+        const lastEditedAt = semanticCommentless
+          ? this.#readLastEditedAt("issue", issue.issueNumber, "read-issue")
+          : "metadata-unavailable";
+        items.push({ ...issue, lastEditedAt, journalComments: comments.items });
+      } else {
+        items.push({ ...issue, lastEditedAt: "metadata-unavailable" });
+      }
+    }
+    return { complete: true, items };
   }
 
   async readBranch(branchRef: string): Promise<GithubBranch | null> {
@@ -223,7 +248,8 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
       if (/HTTP 404|Not Found/i.test(result.stderr)) return null;
       throw hostError(result.stderr.trim() || "pull request read failed", "read-pull-request");
     }
-    return pullRequestFromApi(JSON.parse(result.stdout) as unknown);
+    const pullRequest = pullRequestFromApi(JSON.parse(result.stdout) as unknown);
+    return { ...pullRequest, lastEditedAt: this.#readLastEditedAt("pullRequest", prNumber, "read-pull-request") };
   }
 
   async readIssue(issueNumber: number): Promise<GithubIssue | null> {
@@ -232,38 +258,74 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
       if (/HTTP 404|Not Found/i.test(result.stderr)) return null;
       throw hostError(result.stderr.trim() || "issue read failed", "read-issue");
     }
-    return issueFromApi(JSON.parse(result.stdout) as unknown);
+    const issue = issueFromApi(JSON.parse(result.stdout) as unknown);
+    return { ...issue, lastEditedAt: this.#readLastEditedAt("issue", issueNumber, "read-issue") };
+  }
+
+  #readLastEditedAt(
+    field: "pullRequest" | "issue",
+    number: number,
+    operation: Extract<GithubAdapterOperation, "read-pull-request" | "read-issue">,
+  ): string | null {
+    const [owner, name] = this.#repository.split("/") as [string, string];
+    const query = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){${field}(number:$number){lastEditedAt}}}`;
+    const output = command(this.#runner, operation, "gh", [
+      "api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `number=${number}`,
+    ]);
+    const decoded = object(JSON.parse(output) as unknown, "GraphQL response");
+    const data = object(decoded.data, "GraphQL data");
+    const repository = object(data.repository, "GraphQL repository");
+    const resource = object(repository[field], `GraphQL ${field}`);
+    if (resource.lastEditedAt !== null && typeof resource.lastEditedAt !== "string") {
+      throw new Error(`${field} lastEditedAtが不正です`);
+    }
+    return resource.lastEditedAt;
   }
 
   async createBranch(input: GithubBranch): Promise<void> {
-    command(this.#runner, "create-branch", "git", [
-      "-c", "credential.helper=!gh auth git-credential",
-      "push", `--force-with-lease=${input.ref}:`, this.#remoteUrl, `${parseSha(input.sha)}:${input.ref}`,
-    ], { cwd: this.#repositoryRoot });
+    try {
+      command(this.#runner, "create-branch", "git", [
+        "-c", "credential.helper=!gh auth git-credential",
+        "push", `--force-with-lease=${input.ref}:`, this.#remoteUrl, `${parseSha(input.sha)}:${input.ref}`,
+      ], { cwd: this.#repositoryRoot });
+    } catch (error: unknown) {
+      try { await this.readBranch(input.ref); } catch { /* preserve the mutation error */ }
+      throw error;
+    }
   }
 
   async appendBranch(input: Readonly<{ ref: string; expectedSha: string; candidateSha: string }>): Promise<void> {
     const current = await this.readBranch(input.ref);
     if (current?.sha !== parseSha(input.expectedSha)) throw new Error("remote branch expected head mismatch");
-    command(this.#runner, "append-branch", "git", [
-      "-c", "credential.helper=!gh auth git-credential",
-      "push", `--force-with-lease=${input.ref}:${parseSha(input.expectedSha)}`,
-      this.#remoteUrl, `${parseSha(input.candidateSha)}:${input.ref}`,
-    ], { cwd: this.#repositoryRoot });
+    try {
+      command(this.#runner, "append-branch", "git", [
+        "-c", "credential.helper=!gh auth git-credential",
+        "push", `--force-with-lease=${input.ref}:${parseSha(input.expectedSha)}`,
+        this.#remoteUrl, `${parseSha(input.candidateSha)}:${input.ref}`,
+      ], { cwd: this.#repositoryRoot });
+    } catch (error: unknown) {
+      try { await this.readBranch(input.ref); } catch { /* preserve the mutation error */ }
+      throw error;
+    }
   }
 
   async deleteBranch(input: Readonly<{ ref: string; expectedSha: string }>): Promise<void> {
     const current = await this.readBranch(input.ref);
     if (current?.sha !== parseSha(input.expectedSha)) throw new Error("remote branch expected head mismatch");
-    command(this.#runner, "delete-branch", "git", [
-      "-c", "credential.helper=!gh auth git-credential",
-      "push", `--force-with-lease=${input.ref}:${parseSha(input.expectedSha)}`,
-      this.#remoteUrl, `:${input.ref}`,
-    ], { cwd: this.#repositoryRoot });
+    try {
+      command(this.#runner, "delete-branch", "git", [
+        "-c", "credential.helper=!gh auth git-credential",
+        "push", `--force-with-lease=${input.ref}:${parseSha(input.expectedSha)}`,
+        this.#remoteUrl, `:${input.ref}`,
+      ], { cwd: this.#repositoryRoot });
+    } catch (error: unknown) {
+      try { await this.readBranch(input.ref); } catch { /* preserve the mutation error */ }
+      throw error;
+    }
   }
 
   async createDraftPullRequest(
-    input: Omit<GithubPullRequest, "prNumber" | "state" | "merged" | "draft">,
+    input: Omit<GithubPullRequest, "prNumber" | "state" | "merged" | "draft" | "authorUserId" | "lastEditedAt">,
   ): Promise<GithubPullRequest> {
     const body = JSON.stringify({
       title: input.title,
@@ -275,27 +337,17 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
     const output = command(this.#runner, "create-draft-pull-request", "gh", [
       "api", "--method", "POST", `repos/${this.#repository}/pulls`, "--input", "-",
     ], { input: body });
-    return pullRequestFromApi(JSON.parse(output) as unknown);
+    const created = pullRequestFromApi(JSON.parse(output) as unknown);
+    return { ...created, lastEditedAt: this.#readLastEditedAt("pullRequest", created.prNumber, "read-pull-request") };
   }
 
-  async updatePullRequest(input: Readonly<{ prNumber: number; draft?: boolean; managedSection?: string }>): Promise<void> {
+  async updatePullRequest(input: Readonly<{ prNumber: number; draft: boolean }>): Promise<void> {
     const current = await this.readPullRequest(input.prNumber);
     if (current === null || current.state !== "open") throw new Error("open PRが必要です");
-    const desired = {
-      ...current,
-      draft: input.draft ?? current.draft,
-      body: input.managedSection === undefined
-        ? current.body
-        : replaceManagedSection(current.body ?? "", input.managedSection),
-    };
+    const desired = { ...current, draft: input.draft };
     try {
       if (input.draft === true && !current.draft) {
         command(this.#runner, "update-pull-request", "gh", ["pr", "ready", String(input.prNumber), "--undo", "--repo", this.#repository]);
-      }
-      if (input.managedSection !== undefined) {
-        command(this.#runner, "update-pull-request", "gh", [
-          "api", "--method", "PATCH", `repos/${this.#repository}/pulls/${input.prNumber}`, "--input", "-",
-        ], { input: JSON.stringify({ body: desired.body }) });
       }
       if (input.draft === false && current.draft) {
         command(this.#runner, "update-pull-request", "gh", ["pr", "ready", String(input.prNumber), "--repo", this.#repository]);
@@ -321,27 +373,12 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
     ], { input: JSON.stringify({ state: "closed" }) });
   }
 
-  async reopenPullRequest(prNumber: number): Promise<void> {
-    command(this.#runner, "reopen-pull-request", "gh", [
-      "api", "--method", "PATCH", `repos/${this.#repository}/pulls/${parsePositiveSafeInteger(prNumber)}`,
-      "--input", "-",
-    ], { input: JSON.stringify({ state: "open" }) });
-  }
-
   async createIssue(input: Readonly<{ title: string; body: string }>): Promise<GithubIssue> {
     const output = command(this.#runner, "create-issue", "gh", [
       "api", "--method", "POST", `repos/${this.#repository}/issues`, "--input", "-",
     ], { input: JSON.stringify(input) });
-    return issueFromApi(JSON.parse(output) as unknown);
-  }
-
-  async updateIssue(input: Readonly<{ issueNumber: number; managedSection: string }>): Promise<void> {
-    const current = await this.readIssue(input.issueNumber);
-    if (current === null || current.state !== "open" || current.isPullRequest) throw new Error("open issueが必要です");
-    const body = replaceIssueManagedSection(current.body ?? "", input.managedSection);
-    command(this.#runner, "update-issue", "gh", [
-      "api", "--method", "PATCH", `repos/${this.#repository}/issues/${input.issueNumber}`, "--input", "-",
-    ], { input: JSON.stringify({ body }) });
+    const created = issueFromApi(JSON.parse(output) as unknown);
+    return { ...created, lastEditedAt: this.#readLastEditedAt("issue", created.issueNumber, "read-issue") };
   }
 
   async closeIssue(issueNumber: number): Promise<void> {
@@ -349,13 +386,6 @@ export class ProductionPublishAdapter implements GithubAdapter, JournalGithubAda
       "api", "--method", "PATCH", `repos/${this.#repository}/issues/${parsePositiveSafeInteger(issueNumber)}`,
       "--input", "-",
     ], { input: JSON.stringify({ state: "closed" }) });
-  }
-
-  async reopenIssue(issueNumber: number): Promise<void> {
-    command(this.#runner, "reopen-issue", "gh", [
-      "api", "--method", "PATCH", `repos/${this.#repository}/issues/${parsePositiveSafeInteger(issueNumber)}`,
-      "--input", "-",
-    ], { input: JSON.stringify({ state: "open" }) });
   }
 
   async listJournalComments(resourceNumber: number): Promise<GithubPage<JournalCommentV2>> {

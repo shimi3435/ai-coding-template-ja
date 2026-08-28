@@ -30,6 +30,7 @@ test("publish-draft downloads the exact run artifact and uploads a one-day recei
   const job = workflow().jobs["publish-draft"];
   const steps = job.steps as Array<Record<string, any>>;
   const download = steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/download-artifact@"));
+  const creator = steps.find((step) => step.id === "journal-creator");
   const publish = steps.find((step) => step.id === "publish-draft");
   const upload = steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/upload-artifact@"));
   assert.match(download?.uses ?? "", /^actions\/download-artifact@[0-9a-f]{40}$/);
@@ -40,6 +41,9 @@ test("publish-draft downloads the exact run artifact and uploads a one-day recei
   assert.doesNotMatch(publish?.run ?? "", /\$\{\{/);
   assert.equal(publish?.env.GH_TOKEN, "${{ github.token }}");
   assert.equal(publish?.env.RESUME_CLOSED, "${{ needs.detect.outputs.resume-closed }}");
+  assert.match(creator?.run ?? "", /users\/github-actions%5Bbot%5D/);
+  assert.match(creator?.run ?? "", /GITHUB_OUTPUT/);
+  assert.equal(publish?.env.CREATOR_USER_ID, "${{ steps.journal-creator.outputs.id }}");
   assert.match(publish?.run ?? "", /publish\/command\.ts/);
   assert.equal(job.outputs["permission-operation"], "${{ steps.publish-draft.outputs.permission-operation }}");
   assert.equal(job.outputs["permission-post-state"], "${{ steps.publish-draft.outputs.permission-post-state }}");

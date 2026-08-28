@@ -24,6 +24,7 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     repositoryId: requiredEnvironment("REPOSITORY_ID"),
     repository,
     defaultBranchRef: defaultBranchRef(requiredEnvironment("DEFAULT_BRANCH")),
+    creatorUserId: requiredEnvironment("CREATOR_USER_ID"),
   });
   process.stdout.write(`cleanup-status=${result.kind === "complete" && result.failedRefs.length === 0 ? "passed" : "failed"}\n`);
   process.stdout.write(`cleanup-failed-refs=${JSON.stringify(result.failedRefs)}\n`);

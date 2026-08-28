@@ -183,7 +183,7 @@ export function journalCommentBody(value: unknown): string {
   return `${journalMarkerStart}\n${canonical}\n${journalMarkerEnd}`;
 }
 
-function parseMarker(body: string): JournalEntryV2 | null {
+export function decodeJournalCommentBodyV2(body: string): JournalEntryV2 | null {
   const hasStart = body.includes(journalMarkerStart);
   const hasEnd = body.includes(journalMarkerEnd);
   if (!hasStart && !hasEnd) return null;
@@ -219,7 +219,7 @@ export function reduceJournalCommentsV2(comments: readonly JournalCommentV2[], c
     const id = parseDecimalId(comment.id);
     if (commentIds.has(id)) throw new Error("journal comment IDが重複しています");
     commentIds.add(id);
-    const entry = parseMarker(comment.body);
+    const entry = decodeJournalCommentBodyV2(comment.body);
     if (entry === null) continue;
     if (parseDecimalId(comment.authorUserId) !== creatorUserId || entry.creatorUserId !== creatorUserId) {
       throw new Error("journal marker authorがroot creatorと一致しません");
@@ -239,6 +239,9 @@ export function reduceJournalCommentsV2(comments: readonly JournalCommentV2[], c
     if (pending !== null) {
       if (entry.phase !== "committed" || entry.operation !== pending.operation || entry.operationId !== pending.operationId) {
         throw new Error("journal prepared entryに対応するcommitted entryがありません");
+      }
+      if (entry.snapshot.stateDigest !== pending.snapshot.stateDigest || entry.snapshot.state !== pending.snapshot.state) {
+        throw new Error("journal prepared / committed snapshotが一致しません");
       }
       pending = null;
     } else if (entry.phase === "prepared") {

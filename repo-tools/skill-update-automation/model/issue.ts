@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { decodeCanonicalJson, encodeCanonicalJson, type ExactSchema } from "./canonical-json.ts";
+import type { FullSnapshotV2, ReducedJournalV2 } from "./journal.ts";
 import {
   parseDecimalId,
   parseDigest,
@@ -27,6 +28,7 @@ export type IssueRootV2 = Readonly<{
   repository: string;
   creatorUserId: string;
   rootOperationId: string;
+  initialSnapshot: FullSnapshotV2;
   initialSnapshotDigest: string;
 }>;
 
@@ -34,22 +36,41 @@ const issueRootV2Schema: ExactSchema<IssueRootV2> = {
   parse(value: unknown): IssueRootV2 {
     const object = parseObject(value, "IssueRootV2");
     requireExactKeys(object, [
-      "schemaVersion", "kind", "repositoryId", "repository", "creatorUserId", "rootOperationId", "initialSnapshotDigest",
+      "schemaVersion", "kind", "repositoryId", "repository", "creatorUserId", "rootOperationId", "initialSnapshot",
+      "initialSnapshotDigest",
     ], "IssueRootV2");
     if (object.schemaVersion !== 2 || object.kind !== "managed-issue-root") {
       throw new Error("IssueRootV2 discriminatorが不正です");
     }
-    return {
+    const root: IssueRootV2 = {
       schemaVersion: 2,
       kind: "managed-issue-root",
       repositoryId: parseDecimalId(object.repositoryId),
       repository: parseRepositoryFullName(object.repository),
       creatorUserId: parseDecimalId(object.creatorUserId),
       rootOperationId: parseDigest(object.rootOperationId),
+      initialSnapshot: parseFullSnapshot(object.initialSnapshot, "IssueRootV2 initialSnapshot"),
       initialSnapshotDigest: parseDigest(object.initialSnapshotDigest),
     };
+    if (root.initialSnapshot.stateDigest !== root.initialSnapshotDigest) {
+      throw new Error("IssueRootV2 initial snapshot digestが一致しません");
+    }
+    const initialState = decodeIssueStateSnapshotV2(root.initialSnapshot);
+    if (initialState.repositoryId !== root.repositoryId || initialState.repository !== root.repository) {
+      throw new Error("IssueRootV2 initial snapshot identityが一致しません");
+    }
+    return root;
   },
 };
+
+function parseFullSnapshot(value: unknown, label: string): FullSnapshotV2 {
+  const object = parseObject(value, label);
+  requireExactKeys(object, ["kind", "state", "stateDigest"], label);
+  if (object.kind !== "full-snapshot" || typeof object.state !== "string") {
+    throw new Error(`${label}が不正です`);
+  }
+  return { kind: "full-snapshot", state: object.state, stateDigest: parseDigest(object.stateDigest) };
+}
 
 export type IssueRootV2Classification =
   | Readonly<{ kind: "none" }>
@@ -131,6 +152,14 @@ export type IssueEntry = Readonly<{
 export type IssueEnvelope = Readonly<{
   schemaVersion: 1;
   kind: "managed-issue";
+  repositoryId: string;
+  repository: string;
+  entries: readonly IssueEntry[];
+}>;
+
+export type IssueStateV2 = Readonly<{
+  schemaVersion: 2;
+  kind: "managed-issue-state";
   repositoryId: string;
   repository: string;
   entries: readonly IssueEntry[];
@@ -278,12 +307,76 @@ const issueEnvelopeSchema: ExactSchema<IssueEnvelope> = {
   },
 };
 
+const issueStateV2Schema: ExactSchema<IssueStateV2> = {
+  parse(value: unknown): IssueStateV2 {
+    const object = parseObject(value, "IssueStateV2");
+    requireExactKeys(object, ["schemaVersion", "kind", "repositoryId", "repository", "entries"], "IssueStateV2");
+    if (object.schemaVersion !== 2 || object.kind !== "managed-issue-state") {
+      throw new Error("IssueStateV2 discriminatorが不正です");
+    }
+    const envelope = issueEnvelopeSchema.parse({
+      schemaVersion: 1,
+      kind: "managed-issue",
+      repositoryId: object.repositoryId,
+      repository: object.repository,
+      entries: object.entries,
+    });
+    return {
+      schemaVersion: 2,
+      kind: "managed-issue-state",
+      repositoryId: envelope.repositoryId,
+      repository: envelope.repository,
+      entries: envelope.entries,
+    };
+  },
+};
+
 export function encodeIssueEnvelope(value: unknown): Buffer {
   return encodeCanonicalJson(issueEnvelopeSchema, value);
 }
 
 export function decodeIssueEnvelope(bytes: Uint8Array): IssueEnvelope {
   return decodeCanonicalJson(issueEnvelopeSchema, bytes);
+}
+
+export function encodeIssueStateV2(value: unknown): Buffer {
+  return encodeCanonicalJson(issueStateV2Schema, value);
+}
+
+export function decodeIssueStateV2(bytes: Uint8Array): IssueStateV2 {
+  return decodeCanonicalJson(issueStateV2Schema, bytes);
+}
+
+export function issueStateSnapshotV2(value: unknown): FullSnapshotV2 {
+  const state = encodeIssueStateV2(value).toString("utf8");
+  return {
+    kind: "full-snapshot",
+    state,
+    stateDigest: `sha256:${createHash("sha256").update(state, "utf8").digest("hex")}`,
+  };
+}
+
+export function decodeIssueStateSnapshotV2(snapshot: FullSnapshotV2): IssueStateV2 {
+  const expected = `sha256:${createHash("sha256").update(snapshot.state, "utf8").digest("hex")}`;
+  if (expected !== snapshot.stateDigest) throw new Error("IssueStateV2 snapshot digestが不正です");
+  return decodeIssueStateV2(Buffer.from(snapshot.state, "utf8"));
+}
+
+export function validateIssueJournalV2(root: IssueRootV2, journal: ReducedJournalV2): readonly IssueStateV2[] {
+  if (journal.entries.length === 0 || journal.entries[0]!.snapshot.stateDigest !== root.initialSnapshotDigest ||
+    journal.entries[0]!.operationId !== root.rootOperationId) {
+    throw new Error("issue journal rootがimmutable rootと一致しません");
+  }
+  return journal.entries.map((entry) => {
+    if (entry.resourceKind !== "issue" || entry.creatorUserId !== root.creatorUserId) {
+      throw new Error("issue journal resource identityが不正です");
+    }
+    const state = decodeIssueStateSnapshotV2(entry.snapshot);
+    if (state.repositoryId !== root.repositoryId || state.repository !== root.repository) {
+      throw new Error("issue journal stable identityがrootと一致しません");
+    }
+    return state;
+  });
 }
 
 export type IssueBodyClassification =

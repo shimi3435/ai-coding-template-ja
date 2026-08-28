@@ -29,26 +29,31 @@
 
 ## Skill update PR automation
 
-production workflow は top-level `permissions: {}` を維持し、write permission を次の二 job だけへ与える。
+production workflow は top-level `permissions: {}` を維持し、write permission を次の三jobだけへ与える。
 
-- `publish-draft`: `contents: write`、`pull-requests: write`。normal push と draft PR 作成・更新だけを行う。
-- `publish-finalize`: `contents: read`、`pull-requests: write`、`issues: write`。branch tip 再検証、ready / draft、
-  managed tracking issue 更新だけを行う。
+- `publish-draft`: `contents: write`、`pull-requests: write`。explicit lease branch create / append、immutable root PR作成、
+  journal comment append、draft mutationだけを行う。
+- `cleanup-merged`: `contents: write`、`pull-requests: read`。candidate publish完了後、成功可否に依存せずfresh historyを読み、
+  merged strict branchだけをexact leaseで削除する。
+- `publish-finalize`: `contents: read`、`pull-requests: write`、`issues: write`。journal検証、ready / draft、
+  immutable root tracking issue作成、comment appendだけを行う。
 
 `detect` は `contents: read`、`pull-requests: read`、`issues: read`、`validate` は
 `contents: read` だけを持つ。workflow は default `github.token` だけを使い、repository secret、PAT、
-credential fallback、force push、rebase、auto-mergeを追加しない。
+credential fallback、bare force push、rebase、auto-mergeを追加しない。PR / Issue本文は作成時のimmutable rootであり、
+作成後のbody update、comment update / delete、closed issue reopenは禁止する。
+immutable rootはcanonicalなfull initial snapshotとdigestを保持する。commentless root回復はnumeric author一致、
+GitHub body edit証拠`lastEditedAt === null`、fresh live stateのexact一致を必須とし、initial commentの推測再送を禁止する。
 
-real GitHub write smoke は production workflow 外の別 trust boundary。production automation を無効にした専用 test
-repository と existing operator `gh auth` session だけを使う。新しいPAT / GitHub App、repository保管credential、
-approval artifactを作らない。CLIのread-only `SmokePreview` v3 normal / recovery mode全文と exact digestを確認し、同じprocessのTTY / stdinへ
-人がfresh approvalとしてdigestを入力した後だけwriteを許可する。previewはmulti-resource stepとsemantic checkpointへ
-branch / PRの同時遷移を束縛する。EOF、空入力、不一致、process終了、operation失敗でapprovalは失効する。失敗後は
-別のrecovery previewとfresh approvalまでcleanupを含むwriteを再開しない。normal modeはbaseからsource first parentがaheadでない
-runをapproval前に拒否し、recovery modeは観測済みresidual resourceのterminal方向cleanupだけを許可する。branch deleteは
-同run / sourceへ本文で束縛されたstrict smoke PRまたはissueとの相関を必要とし、branch-only residualは別のmanual delete
-previewと人のfresh approvalへ送る。write後のstate / number mismatchだけは500 ms間隔で最大10回read-only再取得するが、
-write、before / identity、API errorをretryしない。`gh` child processへambient tokenを転送せず、非credential環境だけを明示的に渡す。
+real GitHub write smoke はproduction workflow外の別trust boundary。production automationを無効にしたfresh repositoryと
+existing operator `gh auth` sessionだけを使う。新しいPAT / GitHub App、repository保管credential、approval artifactを作らない。
+ambient `GH_TOKEN` / `GITHUB_TOKEN` / enterprise token設定時は開始前に拒否する。read-only previewはrepository / run / source / creator、
+managed resource 0件、immutable root、journal v2 comment template、explicit lease、prepared recovery、terminal cleanupを束縛する。
+同じprocessのTTY / stdinへ人がfresh approvalとしてexact digestを入力した後だけwriteを許可する。EOF、空入力、不一致、process終了、
+operation失敗でapprovalは失効する。PR ready後のmergeは人がcheckpoint digest確認後に行い、automationへmerge permissionを与えない。
+fresh repositoryのmerged branch自動削除は事前に無効化し、cleanup seam前のbranch不在をfail closedとする。
+失敗後はresidual identity / journal digest / exact branch SHAを束縛したterminal-only recovery previewと別のfresh approvalまで
+cleanupを含むwriteを再開しない。
 
 ## 承認 / サンドボックス対応表（Codex `config.toml`）
 

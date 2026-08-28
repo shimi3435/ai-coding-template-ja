@@ -35,16 +35,47 @@ function defaultBranchRef(value: string): string {
   return `refs/heads/${value}`;
 }
 
+export function parseCleanupEvidence(
+  status: string | undefined,
+  outcome: string | undefined,
+  failedRefs: string | undefined,
+): Readonly<{ status: "passed" | "failed"; failedRefs: readonly string[] }> | undefined {
+  if ((status ?? "") !== "" && status !== "passed" && status !== "failed") {
+    throw new Error("cleanup status is invalid");
+  }
+  const resolvedStatus = status === "passed" || status === "failed"
+    ? status
+    : outcome === "failure" || outcome === "cancelled"
+      ? "failed"
+      : undefined;
+  if (resolvedStatus === undefined) {
+    if (outcome === "success" || ![undefined, "", "skipped"].includes(outcome)) {
+      throw new Error("cleanup status is invalid");
+    }
+    return undefined;
+  }
+  const parsed: unknown = JSON.parse(failedRefs === undefined || failedRefs === "" ? "[]" : failedRefs);
+  if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string") ||
+    parsed.some((value) => !/^refs\/heads\/automation\/skill-updates\/g[0-9]{6}$/.test(value)) ||
+    new Set(parsed).size !== parsed.length || !parsed.every((value, index) => index === 0 || parsed[index - 1]! < value)) {
+    throw new Error("cleanup failed refs are invalid");
+  }
+  if (resolvedStatus === "passed" && parsed.length > 0) throw new Error("cleanup evidence is inconsistent");
+  return { status: resolvedStatus, failedRefs: parsed };
+}
+
 export async function runDetectionFailureCommand(input: Readonly<{
   reportFile: string;
   repositoryId: string;
   repository: string;
+  creatorUserId: string;
   workflowRunId: string;
   workflowRunAttempt: number;
   defaultBranchRef: string;
   at: string;
   publishDraftResult: PublishDraftResult;
   publishDraftPermission?: ReturnType<typeof parseGithubPermissionEvidence>;
+  cleanup?: Readonly<{ status: "passed" | "failed"; failedRefs: readonly string[] }>;
   tokenPresent: boolean;
 }>): Promise<string> {
   if (!input.tokenPresent) throw new Error("GH_TOKEN is required");
@@ -53,6 +84,7 @@ export async function runDetectionFailureCommand(input: Readonly<{
     adapter: new ProductionPublishAdapter({ repository: input.repository, repositoryRoot: process.cwd() }),
     repositoryId: parseDecimalId(input.repositoryId),
     repository: parseRepositoryFullName(input.repository),
+    creatorUserId: parseDecimalId(input.creatorUserId),
     defaultBranchRef: input.defaultBranchRef,
     run: {
       workflowRunId: parseDecimalId(input.workflowRunId),
@@ -62,6 +94,7 @@ export async function runDetectionFailureCommand(input: Readonly<{
     report,
     publishDraftResult: input.publishDraftResult,
     publishDraftPermission: input.publishDraftPermission,
+    cleanup: input.cleanup,
   });
   return [
     "### Skill update automation detection",
@@ -78,6 +111,7 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     reportFile: requiredEnvironment("CANDIDATE_REPORT_FILE"),
     repositoryId: requiredEnvironment("REPOSITORY_ID"),
     repository: requiredEnvironment("REPOSITORY"),
+    creatorUserId: requiredEnvironment("CREATOR_USER_ID"),
     workflowRunId: requiredEnvironment("WORKFLOW_RUN_ID"),
     workflowRunAttempt: canonicalAttempt(requiredEnvironment("WORKFLOW_RUN_ATTEMPT")),
     defaultBranchRef: defaultBranchRef(requiredEnvironment("DEFAULT_BRANCH")),
@@ -86,6 +120,11 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     publishDraftPermission: parseGithubPermissionEvidence(
       process.env.PUBLISH_DRAFT_PERMISSION_OPERATION,
       process.env.PUBLISH_DRAFT_PERMISSION_POST_STATE,
+    ),
+    cleanup: parseCleanupEvidence(
+      process.env.CLEANUP_STATUS,
+      process.env.CLEANUP_OUTCOME,
+      process.env.CLEANUP_FAILED_REFS,
     ),
     tokenPresent: requiredEnvironment("GH_TOKEN").length > 0,
   }));

@@ -6,14 +6,23 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
-  classifyPrBody,
+  appendJournalEntryDigest,
+  classifyPrRootV2,
   computeCandidateDigest,
   computePrHistoryDigest,
+  decodeArtifactManifest,
+  decodeJournalCommentBodyV2,
+  decodePrStateSnapshotV2,
   decodeDraftReceipt,
   encodeArtifactManifest,
+  journalCommentBody,
   managedPrTitle,
-  renderManagedPrSection,
+  prStateSnapshotV2,
+  reduceJournalCommentsV2,
+  renderManagedPrRootV2,
   type CandidateUpdateManifest,
+  type JournalOperation,
+  type PrStateV2,
 } from "../model/index.ts";
 import { createFakeGithubAdapter } from "../github/fake-adapter.ts";
 import type { GithubPullRequest } from "../github/discovery.ts";
@@ -30,30 +39,150 @@ const context = {
   defaultBranchSha: sha("0"),
   defaultBranchRef: "refs/heads/main",
   resumeClosed: false,
+  creatorUserId: "789",
 };
 
-function prBody(headSha: string, status: "pending" | "passed" = "pending"): string {
-  return renderManagedPrSection({
-    schemaVersion: 1,
-    kind: "managed-pr",
+function withDelayedPullRequestHeadAfterAppend(
+  adapter: ReturnType<typeof createFakeGithubAdapter>,
+  staleReads: number,
+) {
+  let stalePullRequest: Awaited<ReturnType<typeof adapter.readPullRequest>> = null;
+  let remainingStaleReads = 0;
+  return new Proxy(adapter, {
+    get(target, property) {
+      if (property === "appendBranch") {
+        return async (append: Parameters<typeof target.appendBranch>[0]) => {
+          const pulls = await target.listPullRequests();
+          stalePullRequest = pulls.items.find((pullRequest) => pullRequest.headRef === append.ref) ?? null;
+          await target.appendBranch(append);
+          remainingStaleReads = staleReads;
+        };
+      }
+      if (property === "readPullRequest") {
+        return async (prNumber: number) => {
+          if (remainingStaleReads > 0 && stalePullRequest?.prNumber === prNumber) {
+            remainingStaleReads -= 1;
+            return structuredClone(stalePullRequest);
+          }
+          return await target.readPullRequest(prNumber);
+        };
+      }
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function withCrossPhaseBranchRegression(
+  adapter: ReturnType<typeof createFakeGithubAdapter>,
+  beforePullRequest: GithubPullRequest,
+) {
+  let journalReads = 0;
+  let projectedPullRequest = false;
+  let projectedBranch = false;
+  return new Proxy(adapter, {
+    get(target, property) {
+      if (property === "listJournalComments") {
+        return async (resourceNumber: number) => {
+          journalReads += 1;
+          return await target.listJournalComments(resourceNumber);
+        };
+      }
+      if (property === "readPullRequest") {
+        return async (prNumber: number) => {
+          if (journalReads >= 2 && !projectedPullRequest && prNumber === beforePullRequest.prNumber) {
+            projectedPullRequest = true;
+            return structuredClone(beforePullRequest);
+          }
+          return await target.readPullRequest(prNumber);
+        };
+      }
+      if (property === "readBranch") {
+        return async (ref: string) => {
+          if (journalReads >= 2 && !projectedBranch && ref === beforePullRequest.headRef) {
+            projectedBranch = true;
+            return { ref, sha: beforePullRequest.headSha };
+          }
+          return await target.readBranch(ref);
+        };
+      }
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function managedFields(input: Readonly<{
+  headSha: string;
+  draft: boolean;
+  prNumber: number;
+  generation: number;
+  creatorUserId?: string;
+}>): Pick<GithubPullRequest, "body" | "journalComments"> {
+  const creatorUserId = input.creatorUserId ?? context.creatorUserId;
+  const headRef = `refs/heads/automation/skill-updates/g${String(input.generation).padStart(6, "0")}`;
+  const snapshot = prStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-pr-state",
     repositoryId: context.repositoryId,
     repository: context.repository,
-    generation: 1,
-    headRef: "refs/heads/automation/skill-updates/g000001",
+    generation: input.generation,
+    headRef,
     baseRef: context.defaultBranchRef,
-    expectedHeadSha: headSha,
+    expectedHeadSha: input.headSha,
     validationBaseSha: context.triggerSha,
     candidateDigest: `sha256:${"1".repeat(64)}`,
     reportDigest: `sha256:${"2".repeat(64)}`,
-    validation: { status, run: { workflowRunId: context.workflowRunId, workflowRunAttempt: 1 } },
-  }, "fixture summary");
+    draft: input.draft,
+    validation: input.draft
+      ? { status: "pending", run: { workflowRunId: context.workflowRunId, workflowRunAttempt: 1 } }
+      : { status: "passed", run: { workflowRunId: context.workflowRunId, workflowRunAttempt: 1 } },
+  });
+  const root = {
+    schemaVersion: 2 as const,
+    kind: "managed-pr-root" as const,
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    creatorUserId,
+    generation: input.generation,
+    headRef,
+    baseRef: context.defaultBranchRef,
+    candidateDigest: `sha256:${"1".repeat(64)}`,
+    initialSnapshot: snapshot,
+    initialSnapshotDigest: snapshot.stateDigest,
+  };
+  const entry = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: input.prNumber,
+    creatorUserId,
+    sequence: 1,
+    previousDigest: null,
+    phase: "committed",
+    operation: "root",
+    operationId: `sha256:${"a".repeat(64)}`,
+    snapshot,
+  });
+  return {
+    body: renderManagedPrRootV2(root, "fixture summary"),
+    journalComments: [{
+      id: "1",
+      authorUserId: creatorUserId,
+      createdAt: "2026-08-27T00:00:00Z",
+      updatedAt: "2026-08-27T00:00:00Z",
+      body: journalCommentBody(entry),
+    }],
+  };
 }
 
 function pull(overrides: Partial<GithubPullRequest> = {}): GithubPullRequest {
   const headSha = overrides.headSha ?? sha("3");
   const draft = overrides.draft ?? true;
+  const prNumber = overrides.prNumber ?? 1;
+  const generationMatch = (overrides.headRef ?? "refs/heads/automation/skill-updates/g000001").match(/g([0-9]{6})$/);
+  const generation = generationMatch === null ? 1 : Number(generationMatch[1]);
   return {
-    prNumber: 1,
+    prNumber,
     state: "open",
     merged: false,
     draft,
@@ -63,8 +192,75 @@ function pull(overrides: Partial<GithubPullRequest> = {}): GithubPullRequest {
     baseRepositoryId: context.repositoryId,
     baseRef: context.defaultBranchRef,
     title: managedPrTitle,
-    body: prBody(headSha, draft ? "pending" : "passed"),
+    authorUserId: context.creatorUserId,
+    lastEditedAt: null,
+    ...managedFields({ headSha, draft, prNumber, generation }),
     ...overrides,
+  };
+}
+
+function latestDigest(pullRequest: GithubPullRequest): string {
+  const body = pullRequest.journalComments?.at(-1)?.body;
+  const entry = body === undefined ? null : decodeJournalCommentBodyV2(body);
+  if (entry === null) throw new Error("fixture journal missing");
+  return entry.digest;
+}
+
+function desiredState(directory: string): PrStateV2 {
+  const manifest = decodeArtifactManifest(readFileSync(join(directory, "manifest.json")));
+  if (manifest.kind !== "candidate-update") throw new Error("candidate fixture required");
+  return {
+    schemaVersion: 2,
+    kind: "managed-pr-state",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    generation: manifest.target.generation,
+    headRef: manifest.target.headRef,
+    baseRef: context.defaultBranchRef,
+    expectedHeadSha: manifest.candidateSha,
+    validationBaseSha: manifest.triggerSha,
+    candidateDigest: manifest.candidateDigest,
+    reportDigest: manifest.files[0].digest,
+    draft: true,
+    validation: { status: "pending", run: { workflowRunId: context.workflowRunId, workflowRunAttempt: 1 } },
+  };
+}
+
+function withPrepared(
+  pullRequest: GithubPullRequest,
+  operation: Extract<JournalOperation, "branch-append" | "pr-draft">,
+  after: PrStateV2,
+): GithubPullRequest {
+  const comments = pullRequest.journalComments ?? [];
+  const current = decodeJournalCommentBodyV2(comments.at(-1)?.body ?? "");
+  if (current === null) throw new Error("fixture journal missing");
+  const before = decodePrStateSnapshotV2(current.snapshot);
+  const afterSnapshot = prStateSnapshotV2(after);
+  const transitionDigest = digest(Buffer.from([
+    "transition-v2", String(pullRequest.prNumber), operation,
+    prStateSnapshotV2(before).stateDigest, afterSnapshot.stateDigest,
+  ].join("\0"), "utf8"));
+  const prepared = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: pullRequest.prNumber,
+    creatorUserId: context.creatorUserId,
+    sequence: current.sequence + 1,
+    previousDigest: current.digest,
+    phase: "prepared",
+    operation,
+    operationId: transitionDigest,
+    snapshot: afterSnapshot,
+  });
+  return {
+    ...pullRequest,
+    journalComments: [...comments, {
+      id: "2",
+      authorUserId: context.creatorUserId,
+      createdAt: "2026-08-27T00:00:01Z",
+      updatedAt: "2026-08-27T00:00:01Z",
+      body: journalCommentBody(prepared),
+    }],
   };
 }
 
@@ -121,7 +317,49 @@ function artifact(pullRequests: readonly GithubPullRequest[], target: CandidateU
   return root;
 }
 
-test("create publishes a normal branch before one draft PR and emits an exact receipt", async () => {
+async function commentlessCreateFixture() {
+  const target = {
+    mode: "create" as const,
+    generation: 1,
+    headRef: "refs/heads/automation/skill-updates/g000001",
+    expectedBranch: { state: "absent" as const },
+    historyDigest: historyDigest([]),
+  };
+  const directory = artifact([], target);
+  const source = createFakeGithubAdapter();
+  const interrupted = new Proxy(source, {
+    get(adapter, property) {
+      if (property === "appendJournalComment") {
+        return async () => {
+          throw new Error("simulated initial journal interruption");
+        };
+      }
+      const value = Reflect.get(adapter, property, adapter) as unknown;
+      return typeof value === "function" ? value.bind(adapter) : value;
+    },
+  });
+  await assert.rejects(publishDraft({ adapter: interrupted, artifactDirectory: directory, context }), /interruption/);
+  const created = (await source.listPullRequests()).items[0]!;
+  assert.equal((await source.listJournalComments(created.prNumber)).items.length, 0);
+  const branch = await source.readBranch(created.headRef);
+  if (branch === null) throw new Error("fixture branch expected");
+  const recoverySource = createFakeGithubAdapter({
+    branches: [branch],
+    pullRequests: [{
+      ...created,
+      journalComments: [{
+        id: "99",
+        authorUserId: "999",
+        createdAt: "2026-08-28T00:00:00Z",
+        updatedAt: "2026-08-28T00:00:00Z",
+        body: "human comment",
+      }],
+    }],
+  });
+  return { directory, source: recoverySource, created, target };
+}
+
+test("create publishes an immutable v2 root and one committed root journal entry", async () => {
   const target = {
     mode: "create" as const,
     generation: 1,
@@ -134,7 +372,17 @@ test("create publishes a normal branch before one draft PR and emits an exact re
   try {
     const result = await publishDraft({ adapter, artifactDirectory: directory, context, now: () => new Date("2026-08-20T01:00:00.000Z") });
     assert.equal(result.kind, "published");
-    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), ["create-branch", "create-draft-pull-request"]);
+    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), [
+      "create-branch",
+      "create-draft-pull-request",
+      "append-journal-comment",
+    ]);
+    const created = await adapter.readPullRequest(1);
+    const root = classifyPrRootV2(created?.body ?? null);
+    assert.equal(root.kind, "strict");
+    if (root.kind === "strict") assert.equal(root.root.creatorUserId, context.creatorUserId);
+    const comments = await adapter.listJournalComments(1);
+    assert.equal(comments.items.length, 1);
     const receipt = decodeDraftReceipt(result.receipt);
     assert.equal(receipt.prNumber, 1);
     assert.equal(receipt.headSha, sha("4"));
@@ -144,18 +392,78 @@ test("create publishes a normal branch before one draft PR and emits an exact re
   }
 });
 
+test("publish-draft recovers an exact unedited commentless PR root", async () => {
+  const fixture = await commentlessCreateFixture();
+  try {
+    fixture.source.transcript.length = 0;
+    const result = await publishDraft({ adapter: fixture.source, artifactDirectory: fixture.directory, context });
+    assert.equal(result.kind, "published");
+    assert.deepEqual(fixture.source.transcript.map((entry) => entry.operation), ["append-journal-comment"]);
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("commentless PR root recovery rejects foreign author, edited body evidence, and live mismatch", async () => {
+  for (const override of [
+    { authorUserId: "999" },
+    { lastEditedAt: "2026-08-28T00:00:00Z" },
+    { draft: false },
+  ] satisfies readonly Partial<GithubPullRequest>[]) {
+    const fixture = await commentlessCreateFixture();
+    try {
+      const adapter = createFakeGithubAdapter({
+        branches: [{ ref: fixture.target.headRef, sha: sha("4") }],
+        pullRequests: [{ ...fixture.created, ...override }],
+      });
+      await assert.rejects(
+        publishDraft({ adapter, artifactDirectory: fixture.directory, context }),
+        /publish-target-changed/,
+      );
+      assert.deepEqual(adapter.transcript, []);
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  }
+});
+
+test("commentless PR initial append response loss is accepted only by fresh exact reread", async () => {
+  const fixture = await commentlessCreateFixture();
+  let appendCalls = 0;
+  const responseLoss = new Proxy(fixture.source, {
+    get(adapter, property) {
+      if (property === "appendJournalComment") {
+        return async (...args: Parameters<typeof adapter.appendJournalComment>) => {
+          appendCalls += 1;
+          await adapter.appendJournalComment(...args);
+          throw new Error("simulated append response loss");
+        };
+      }
+      const value = Reflect.get(adapter, property, adapter) as unknown;
+      return typeof value === "function" ? value.bind(adapter) : value;
+    },
+  });
+  try {
+    const result = await publishDraft({ adapter: responseLoss, artifactDirectory: fixture.directory, context });
+    assert.equal(result.kind, "published");
+    assert.equal(appendCalls, 1);
+    const comments = await fixture.source.listJournalComments(fixture.created.prNumber);
+    assert.equal(comments.items.length, 2);
+    assert.equal(reduceJournalCommentsV2(comments.items, context.creatorUserId).entries.length, 1);
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
 test("ready update becomes draft before normal fast-forward append", async () => {
   const existing = pull({ draft: false });
-  const classified = classifyPrBody(existing.body, existing.draft);
-  assert.equal(classified.kind, "strict");
-  if (classified.kind !== "strict") return;
   const target = {
     mode: "update" as const,
     generation: 1,
     prNumber: 1,
     headRef: existing.headRef,
     expectedBranch: { state: "present" as const, sha: existing.headSha },
-    markerDigest: classified.markerDigest,
+    markerDigest: latestDigest(existing),
     historyDigest: historyDigest([existing]),
   };
   const directory = artifact([existing], target);
@@ -163,19 +471,53 @@ test("ready update becomes draft before normal fast-forward append", async () =>
   try {
     await publishDraft({ adapter, artifactDirectory: directory, context, now: () => new Date("2026-08-20T01:00:00.000Z") });
     assert.deepEqual(adapter.transcript.map((entry) => entry.operation), [
+      "append-journal-comment",
       "update-pull-request",
+      "append-journal-comment",
+      "append-journal-comment",
       "append-branch",
-      "update-pull-request",
+      "append-journal-comment",
     ]);
     assert.equal((await adapter.readBranch(existing.headRef))?.sha, sha("4"));
     const updated = await adapter.readPullRequest(1);
     assert.equal(updated?.draft, true);
-    const body = classifyPrBody(updated?.body ?? null, true);
-    assert.equal(body.kind, "strict");
-    if (body.kind === "strict") {
-      assert.equal(body.envelope.expectedHeadSha, sha("4"));
-      assert.equal(body.envelope.validation.status, "pending");
-    }
+    assert.equal(updated?.body, existing.body);
+    const comments = await adapter.listJournalComments(1);
+    const journal = reduceJournalCommentsV2(comments.items, context.creatorUserId);
+    assert.deepEqual(journal.entries.map((entry) => [entry.operation, entry.phase]), [
+      ["root", "committed"],
+      ["pr-draft", "prepared"],
+      ["pr-draft", "committed"],
+      ["branch-append", "prepared"],
+      ["branch-append", "committed"],
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("draft update waits for a delayed pull request head projection after branch append", async () => {
+  const existing = pull({ draft: true });
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const source = createFakeGithubAdapter({
+    branches: [{ ref: existing.headRef, sha: existing.headSha }], pullRequests: [existing],
+  });
+  const adapter = withDelayedPullRequestHeadAfterAppend(source, 3);
+  try {
+    await publishDraft({ adapter, artifactDirectory: directory, context });
+    assert.equal(source.transcript.filter((entry) => entry.operation === "append-branch").length, 1);
+    const comments = await source.listJournalComments(existing.prNumber);
+    assert.equal(comments.items.map((comment) => decodeJournalCommentBodyV2(comment.body)).filter((entry) =>
+      entry?.operation === "branch-append" && entry.phase === "committed").length, 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -183,23 +525,45 @@ test("ready update becomes draft before normal fast-forward append", async () =>
 
 test("human head mismatch stops before every write", async () => {
   const expected = pull();
-  const classified = classifyPrBody(expected.body, expected.draft);
-  assert.equal(classified.kind, "strict");
-  if (classified.kind !== "strict") return;
   const target = {
     mode: "update" as const,
     generation: 1,
     prNumber: 1,
     headRef: expected.headRef,
     expectedBranch: { state: "present" as const, sha: expected.headSha },
-    markerDigest: classified.markerDigest,
+    markerDigest: latestDigest(expected),
     historyDigest: historyDigest([expected]),
   };
   const directory = artifact([expected], target);
   const changed = { ...expected, headSha: sha("9") };
   const adapter = createFakeGithubAdapter({ branches: [{ ref: expected.headRef, sha: sha("9") }], pullRequests: [changed] });
   try {
-    await assert.rejects(publishDraft({ adapter, artifactDirectory: directory, context }), /intervention-required/);
+    await assert.rejects(publishDraft({ adapter, artifactDirectory: directory, context }), /identity/);
+    assert.deepEqual(adapter.transcript, []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("self-consistent journal from another creator stops before every write", async () => {
+  const existing = pull({ ...managedFields({
+    headSha: sha("3"), draft: true, prNumber: 1, generation: 1, creatorUserId: "999",
+  }) });
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: existing.headRef, sha: existing.headSha }], pullRequests: [existing],
+  });
+  try {
+    await assert.rejects(publishDraft({ adapter, artifactDirectory: directory, context }), /publish-target-changed/);
     assert.deepEqual(adapter.transcript, []);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -211,20 +575,6 @@ test("multiple strict open PRs stop before every write", async () => {
   const second = pull({
     prNumber: 2,
     headRef: "refs/heads/automation/skill-updates/g000002",
-    body: renderManagedPrSection({
-      schemaVersion: 1,
-      kind: "managed-pr",
-      repositoryId: context.repositoryId,
-      repository: context.repository,
-      generation: 2,
-      headRef: "refs/heads/automation/skill-updates/g000002",
-      baseRef: context.defaultBranchRef,
-      expectedHeadSha: sha("6"),
-      validationBaseSha: context.triggerSha,
-      candidateDigest: `sha256:${"1".repeat(64)}`,
-      reportDigest: `sha256:${"2".repeat(64)}`,
-      validation: { status: "pending", run: { workflowRunId: "100", workflowRunAttempt: 1 } },
-    }, "second fixture"),
     headSha: sha("6"),
   });
   const directory = artifact([first], {
@@ -233,7 +583,7 @@ test("multiple strict open PRs stop before every write", async () => {
     prNumber: 1,
     headRef: first.headRef,
     expectedBranch: { state: "present", sha: first.headSha },
-    markerDigest: (classifyPrBody(first.body, first.draft) as Extract<ReturnType<typeof classifyPrBody>, { kind: "strict" }>).markerDigest,
+    markerDigest: latestDigest(first),
     historyDigest: historyDigest([first]),
   });
   const adapter = createFakeGithubAdapter({
@@ -269,7 +619,139 @@ test("validated manual resume creates the next generation after closed-unmerged"
       context: { ...context, resumeClosed: true },
     });
     assert.equal(result.kind, "published");
-    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), ["create-branch", "create-draft-pull-request"]);
+    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), [
+      "create-branch", "create-draft-pull-request", "append-journal-comment",
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("terminal branch-append prepared recovers from before and commits the same operation", async () => {
+  const existing = pull();
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const prepared = withPrepared(existing, "branch-append", desiredState(directory));
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: existing.headRef, sha: existing.headSha }],
+    pullRequests: [prepared],
+  });
+  try {
+    await publishDraft({ adapter, artifactDirectory: directory, context });
+    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), ["append-branch", "append-journal-comment"]);
+    const journal = reduceJournalCommentsV2((await adapter.listJournalComments(1)).items, context.creatorUserId);
+    assert.equal(journal.pending, null);
+    assert.equal(journal.entries.at(-1)?.operationId, decodeJournalCommentBodyV2(prepared.journalComments!.at(-1)!.body)?.operationId);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("terminal branch-append prepared recovers from after without repeating the branch mutation", async () => {
+  const existing = pull();
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const prepared = withPrepared(existing, "branch-append", desiredState(directory));
+  const liveAfter = { ...prepared, headSha: sha("4") };
+  const adapter = createFakeGithubAdapter({ branches: [{ ref: existing.headRef, sha: sha("4") }], pullRequests: [liveAfter] });
+  try {
+    await publishDraft({ adapter, artifactDirectory: directory, context });
+    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), ["append-journal-comment"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("terminal branch-append recovery rejects an after-before-after branch regression across stabilization phases", async () => {
+  const existing = pull();
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const prepared = withPrepared(existing, "branch-append", desiredState(directory));
+  const liveAfter = { ...prepared, headSha: sha("4") };
+  const source = createFakeGithubAdapter({
+    branches: [{ ref: existing.headRef, sha: sha("4") }],
+    pullRequests: [liveAfter],
+  });
+  const adapter = withCrossPhaseBranchRegression(source, prepared);
+  try {
+    await assert.rejects(publishDraft({ adapter, artifactDirectory: directory, context }), /recovery-required/);
+    assert.equal(source.transcript.filter((entry) => entry.operation === "append-branch").length, 0);
+    const journal = reduceJournalCommentsV2((await source.listJournalComments(1)).items, context.creatorUserId);
+    assert.notEqual(journal.pending, null);
+    assert.equal(journal.entries.some((entry) => entry.operation === "branch-append" && entry.phase === "committed"), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("terminal prepared with divergent live state fails closed", async () => {
+  const existing = pull();
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const prepared = withPrepared(existing, "branch-append", desiredState(directory));
+  const divergent = { ...prepared, headSha: sha("9") };
+  const adapter = createFakeGithubAdapter({ branches: [{ ref: existing.headRef, sha: sha("9") }], pullRequests: [divergent] });
+  try {
+    await assert.rejects(publishDraft({ adapter, artifactDirectory: directory, context }), /identity|recovery-required/);
+    assert.deepEqual(adapter.transcript, []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("branch mutation rejection leaves exactly one terminal prepared entry", async () => {
+  const existing = pull();
+  const target = {
+    mode: "update" as const,
+    generation: 1,
+    prNumber: 1,
+    headRef: existing.headRef,
+    expectedBranch: { state: "present" as const, sha: existing.headSha },
+    markerDigest: latestDigest(existing),
+    historyDigest: historyDigest([existing]),
+  };
+  const directory = artifact([existing], target);
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: existing.headRef, sha: existing.headSha }],
+    pullRequests: [existing],
+    faults: [{ operation: "append-branch", kind: "permission-denied" }],
+  });
+  try {
+    await assert.rejects(publishDraft({ adapter, artifactDirectory: directory, context }), /permission denied/);
+    assert.deepEqual(adapter.transcript.map((entry) => entry.operation), ["append-journal-comment", "append-branch"]);
+    assert.notEqual(reduceJournalCommentsV2((await adapter.listJournalComments(1)).items, context.creatorUserId).pending, null);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

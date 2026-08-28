@@ -17,12 +17,14 @@ snapshot とし、可変 state を改変検出可能な append-only comment jour
 
 - branch create / append / delete は explicit `--force-with-lease=<ref>:<expected>` だけで実行する。create の expected は空、append / delete は exact SHA とする。
 - `cleanup-merged` を独立 job とし、candidate-update、existing-head-validation、no-op の eligible run で実行する。
-- managed PR / tracking Issue body は作成時の immutable root snapshot とし、作成後は更新しない。
+- managed PR / tracking Issue body は作成時の immutable root snapshot とし、作成後は更新しない。rootはcanonicalなfull initial snapshotとそのdigestを保持し、両者の一致を必須とする。
 - 可変 state は creator numeric user ID に束縛した append-only canonical comment journal v2 に保存する。
 - journal entry は full snapshot と前 entry digest を持つ。改変、中間欠落、fork、別 author marker、非 canonical 表現、journalとlive stateの不一致を fail closed にする。state mutationを伴わない末尾entry suffixの全削除は検出不能と明記する。v1 migrationは提供しない。
 - branch append と PR draft / ready mutation は `prepared -> mutation -> committed` protocol を使い、中断後の live state と journal を決定論的に再検証する。
+- mutation直後にGitHubの複数read projectionがbefore / afterの混在を返す場合、追加mutationせず有界なread-only再取得だけを行う。同じrecovery実行中に一度観測したbranch after証拠を再取得phase間で保持し、その後のbefore / missing回帰をfail closedにする。全projectionがexact afterへ収束した場合だけ`committed`をappendし、未収束または別stateはfail closedにする。
+- create応答消失後のcommentless rootは、resource authorがroot creatorと一致し、bodyが未編集で、immutable rootのinitial snapshotとfresh live stateが一致する場合だけ、既存writer経路でinitial journal commentを1回作成して回復する。append応答消失時は再送せずfresh journalを再取得する。
 - closed tracking issue は再 open しない。新 failure は新 issue と新 journal root を作る。
-- schema v2 real-host smoke は fresh smoke repository だけを使う。全 write 前に read-only preview と fresh approval を要求する。
+- schema v2 real-host smoke は fresh smoke repository だけを使う。全 write 前に read-only preview と fresh approval を要求する。terminal recoveryはpreviewに束縛したresource identityとexact branch SHAを直接再検証し、aggregate merged cleanup discoveryに依存せず残存branchをexact leaseで削除する。
 
 ## Impact
 

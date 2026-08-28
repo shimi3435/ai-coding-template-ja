@@ -99,6 +99,18 @@ test("prepared transition permits exactly one matching committed entry or termin
     comment("10", "123", root), comment("11", "123", prepared), comment("12", "123", committed),
   ], "123").pending, null);
 
+  const wrongSnapshot = appendJournalEntryDigest(input({
+    sequence: 3,
+    previousDigest: prepared.digest,
+    phase: "committed",
+    operation: "branch-append",
+    operationId: prepared.operationId,
+    snapshot: { ...prepared.snapshot, state: '{"draft":true,"headSha":"2222222222222222222222222222222222222222"}', stateDigest: "" },
+  }));
+  assert.throws(() => reduceJournalCommentsV2([
+    comment("10", "123", root), comment("11", "123", prepared), comment("12", "123", wrongSnapshot),
+  ], "123"), /snapshot/);
+
   const wrong = appendJournalEntryDigest(input({
     sequence: 3,
     previousDigest: prepared.digest,

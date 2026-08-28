@@ -100,6 +100,10 @@ function writeValidRepository(): string {
       "  validate:",
       "    permissions:",
       "      contents: read",
+      "  cleanup-merged:",
+      "    permissions:",
+      "      contents: write",
+      "      pull-requests: read",
       "  publish-finalize:",
       "    permissions:",
       "      contents: read",
@@ -112,7 +116,8 @@ function writeValidRepository(): string {
   writeFileSync(join(repository, "scripts", "bootstrap.sh"), "#!/bin/sh\n", "utf8");
   writeFileSync(
     join(repository, "repo-tools", "cli.ts"),
-    "skills:automation:smoke / runSmokeCommand / ProductionSmokeHost / process.stdin / process.stdout / process.stderr\n",
+    "skills:automation:smoke / runFreshSmokeCli / ProductionPublishAdapter / ProductionSmokeHost / " +
+      "process.stdin / process.stdout / process.stderr\n",
     "utf8",
   );
   writeFileSync(
@@ -132,13 +137,13 @@ function writeValidRepository(): string {
   );
   writeFileSync(
     join(repository, "docs", "guide.md"),
-    "validation-failed / recovery-required / cleanup-failed / fresh approval / exact digest / " +
-      "SmokePreview` v3 / recovery mode / ahead_by >= 1\n",
+    "validation-failed / recovery-required / cleanup-failed / fresh approval / exact digest / journal v2 / " +
+      "fresh repository / creator numeric user ID / force-with-lease\n",
     "utf8",
   );
   writeFileSync(
     join(repository, "docs", "agents", "safety.md"),
-    "publish-draft / publish-finalize / existing operator gh auth / real GitHub write\n",
+    "publish-draft / cleanup-merged / publish-finalize / immutable root / gh auth / real GitHub write\n",
     "utf8",
   );
   return repository;
@@ -211,10 +216,19 @@ test("check-contracts requires the human smoke CLI without a stored credential r
 test("check-contracts rejects a smoke command label without the approval command route", () => {
   const repository = writeValidRepository();
   const cliPath = join(repository, "repo-tools", "cli.ts");
-  writeFileSync(cliPath, readFileSync(cliPath, "utf8").replace("runSmokeCommand", "missingRunner"), "utf8");
+  writeFileSync(cliPath, readFileSync(cliPath, "utf8").replace("runFreshSmokeCli", "missingRunner"), "utf8");
   const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /human smoke CLI route/);
+});
+
+test("check-contracts rejects mutable root and closed issue write surfaces", () => {
+  const repository = writeValidRepository();
+  const adapterPath = join(repository, "repo-tools", "skill-update-automation", "smoke", "forbidden.ts");
+  writeFileSync(adapterPath, "adapter.reopenIssue(7);\n", "utf8");
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /immutable root.*closed issue/);
 });
 
 test("check-contracts requires the operator runbook markers", () => {

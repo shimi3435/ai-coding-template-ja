@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { decodeCanonicalJson, encodeCanonicalJson, type ExactSchema } from "./canonical-json.ts";
+import type { FullSnapshotV2, ReducedJournalV2 } from "./journal.ts";
 import {
   parseDecimalId,
   parseDigest,
@@ -60,7 +61,24 @@ export type PrRootV2 = Readonly<{
   headRef: string;
   baseRef: string;
   candidateDigest: string;
+  initialSnapshot: FullSnapshotV2;
   initialSnapshotDigest: string;
+}>;
+
+export type PrStateV2 = Readonly<{
+  schemaVersion: 2;
+  kind: "managed-pr-state";
+  repositoryId: string;
+  repository: string;
+  generation: number;
+  headRef: string;
+  baseRef: string;
+  expectedHeadSha: string;
+  validationBaseSha: string;
+  candidateDigest: string;
+  reportDigest: string;
+  draft: boolean;
+  validation: ValidationState;
 }>;
 
 const prRootV2Schema: ExactSchema<PrRootV2> = {
@@ -68,13 +86,13 @@ const prRootV2Schema: ExactSchema<PrRootV2> = {
     const object = parseObject(value, "PrRootV2");
     requireExactKeys(object, [
       "schemaVersion", "kind", "repositoryId", "repository", "creatorUserId", "generation", "headRef", "baseRef",
-      "candidateDigest", "initialSnapshotDigest",
+      "candidateDigest", "initialSnapshot", "initialSnapshotDigest",
     ], "PrRootV2");
     if (object.schemaVersion !== 2 || object.kind !== "managed-pr-root") throw new Error("PrRootV2 discriminatorが不正です");
     const generation = parseGeneration(object.generation);
     const headRef = `refs/heads/automation/skill-updates/g${String(generation).padStart(6, "0")}`;
     if (object.headRef !== headRef) throw new Error("PrRootV2 headRefとgenerationが一致しません");
-    return {
+    const root: PrRootV2 = {
       schemaVersion: 2,
       kind: "managed-pr-root",
       repositoryId: parseDecimalId(object.repositoryId),
@@ -84,7 +102,62 @@ const prRootV2Schema: ExactSchema<PrRootV2> = {
       headRef,
       baseRef: parseBaseRef(object.baseRef),
       candidateDigest: parseDigest(object.candidateDigest),
+      initialSnapshot: parseFullSnapshot(object.initialSnapshot, "PrRootV2 initialSnapshot"),
       initialSnapshotDigest: parseDigest(object.initialSnapshotDigest),
+    };
+    if (root.initialSnapshot.stateDigest !== root.initialSnapshotDigest) {
+      throw new Error("PrRootV2 initial snapshot digestが一致しません");
+    }
+    const initialState = decodePrStateSnapshotV2(root.initialSnapshot);
+    if (initialState.repositoryId !== root.repositoryId || initialState.repository !== root.repository ||
+      initialState.generation !== root.generation || initialState.headRef !== root.headRef ||
+      initialState.baseRef !== root.baseRef || initialState.candidateDigest !== root.candidateDigest) {
+      throw new Error("PrRootV2 initial snapshot identityが一致しません");
+    }
+    return root;
+  },
+};
+
+function parseFullSnapshot(value: unknown, label: string): FullSnapshotV2 {
+  const object = parseObject(value, label);
+  requireExactKeys(object, ["kind", "state", "stateDigest"], label);
+  if (object.kind !== "full-snapshot" || typeof object.state !== "string") {
+    throw new Error(`${label}が不正です`);
+  }
+  return { kind: "full-snapshot", state: object.state, stateDigest: parseDigest(object.stateDigest) };
+}
+
+const prStateV2Schema: ExactSchema<PrStateV2> = {
+  parse(value: unknown): PrStateV2 {
+    const object = parseObject(value, "PrStateV2");
+    requireExactKeys(object, [
+      "schemaVersion", "kind", "repositoryId", "repository", "generation", "headRef", "baseRef",
+      "expectedHeadSha", "validationBaseSha", "candidateDigest", "reportDigest", "draft", "validation",
+    ], "PrStateV2");
+    if (object.schemaVersion !== 2 || object.kind !== "managed-pr-state" || typeof object.draft !== "boolean") {
+      throw new Error("PrStateV2 discriminator / draftが不正です");
+    }
+    const generation = parseGeneration(object.generation);
+    const headRef = `refs/heads/automation/skill-updates/g${String(generation).padStart(6, "0")}`;
+    if (object.headRef !== headRef) throw new Error("PrStateV2 headRefとgenerationが一致しません");
+    const validation = parseValidation(object.validation);
+    if ((object.draft && validation.status === "passed") || (!object.draft && validation.status !== "passed")) {
+      throw new Error("PrStateV2 draftとvalidationが一致しません");
+    }
+    return {
+      schemaVersion: 2,
+      kind: "managed-pr-state",
+      repositoryId: parseDecimalId(object.repositoryId),
+      repository: parseRepositoryFullName(object.repository),
+      generation,
+      headRef,
+      baseRef: parseBaseRef(object.baseRef),
+      expectedHeadSha: parseSha(object.expectedHeadSha),
+      validationBaseSha: parseSha(object.validationBaseSha),
+      candidateDigest: parseDigest(object.candidateDigest),
+      reportDigest: parseDigest(object.reportDigest),
+      draft: object.draft,
+      validation,
     };
   },
 };
@@ -95,6 +168,47 @@ export function encodePrRootV2(value: unknown): Buffer {
 
 export function decodePrRootV2(bytes: Uint8Array): PrRootV2 {
   return decodeCanonicalJson(prRootV2Schema, bytes);
+}
+
+export function encodePrStateV2(value: unknown): Buffer {
+  return encodeCanonicalJson(prStateV2Schema, value);
+}
+
+export function decodePrStateV2(bytes: Uint8Array): PrStateV2 {
+  return decodeCanonicalJson(prStateV2Schema, bytes);
+}
+
+export function prStateSnapshotV2(value: unknown): FullSnapshotV2 {
+  const state = encodePrStateV2(value).toString("utf8");
+  return { kind: "full-snapshot", state, stateDigest: digestBytes(Buffer.from(state, "utf8")) };
+}
+
+export function decodePrStateSnapshotV2(snapshot: FullSnapshotV2): PrStateV2 {
+  if (digestBytes(Buffer.from(snapshot.state, "utf8")) !== snapshot.stateDigest) {
+    throw new Error("PrStateV2 snapshot digestが不正です");
+  }
+  return decodePrStateV2(Buffer.from(snapshot.state, "utf8"));
+}
+
+export function validatePrJournalV2(root: PrRootV2, journal: ReducedJournalV2): readonly PrStateV2[] {
+  if (journal.entries.length === 0 || journal.entries[0]!.snapshot.stateDigest !== root.initialSnapshotDigest) {
+    throw new Error("PR journal initial snapshotがrootと一致しません");
+  }
+  const states = journal.entries.map((entry) => {
+    if (entry.resourceKind !== "pull-request" || entry.creatorUserId !== root.creatorUserId) {
+      throw new Error("PR journal resource identityが不正です");
+    }
+    const state = decodePrStateSnapshotV2(entry.snapshot);
+    if (state.repositoryId !== root.repositoryId || state.repository !== root.repository ||
+      state.generation !== root.generation || state.headRef !== root.headRef || state.baseRef !== root.baseRef) {
+      throw new Error("PR journal stable identityがrootと一致しません");
+    }
+    return state;
+  });
+  if (states[0]!.candidateDigest !== root.candidateDigest) {
+    throw new Error("PR journal initial candidate identityがrootと一致しません");
+  }
+  return states;
 }
 
 export type PrRootV2Classification =

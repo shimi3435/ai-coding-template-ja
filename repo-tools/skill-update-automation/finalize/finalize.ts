@@ -2,30 +2,39 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
 import { discoverCandidateHistory } from "../candidate/index.ts";
-import type { GithubAdapter, GithubPermissionEvidence } from "../github/adapter.ts";
-import { discoverManagedIssue } from "../github/issue-discovery.ts";
-import { reduceIssueEntries } from "../github/issue-reducer.ts";
-import { discoverManagedPullRequests } from "../github/discovery.ts";
+import type { GithubAdapter, GithubPermissionEvidence, JournalGithubAdapter } from "../github/adapter.ts";
 import {
-  classifyPrBody,
+  appendJournalEntryDigest,
+  classifyPrRootV2,
   computeIssueEntryKey,
-  managedIssueTitle,
-  renderManagedIssueSection,
-  renderManagedPrSection,
+  decodePrStateSnapshotV2,
+  reduceJournalCommentsV2,
   selectFailureScope,
   type ArtifactManifest,
   type DraftReceipt,
   type FailureState,
   type IssueEntry,
   type IssueEntryObservation,
+  type PrStateV2,
   type ValidationState,
 } from "../model/index.ts";
+import { syncManagedIssueEntriesV2, type IssueJournalAdapter } from "./issue-journal.ts";
+import {
+  appendCommittedPrState,
+  loadPrJournal,
+  recoverExactPreparedTransition,
+  runPreparedTransition,
+  samePrSnapshot,
+  rootOperationId,
+} from "../publish/pr-journal.ts";
+import { appendInitialJournalEntry } from "../publish/initial-journal.ts";
 
 export type FinalizeContext = Readonly<{
   repositoryId: string;
   repository: string;
   defaultBranchSha: string;
   defaultBranchRef: string;
+  creatorUserId: string;
   now: () => Date;
 }>;
 
@@ -35,6 +44,8 @@ export type FinalizeResult = Readonly<{
   issue?: string;
   permission?: GithubPermissionEvidence;
 }>;
+
+export type FinalizeGithubAdapter = GithubAdapter & JournalGithubAdapter;
 
 function detailDigest(value: unknown): string {
   return `sha256:${createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex")}`;
@@ -93,51 +104,18 @@ function issueObservation(
   };
 }
 
-function issueSection(repositoryId: string, repository: string, entries: readonly unknown[]): string {
-  return renderManagedIssueSection({
-    schemaVersion: 1,
-    kind: "managed-issue",
-    repositoryId,
-    repository,
-    entries,
-  }, entries.length === 0 ? "All managed automation failures are resolved." : "Managed automation failures require attention.");
-}
-
 export async function syncManagedIssueEntries(input: Readonly<{
-  adapter: GithubAdapter;
-  context: Pick<FinalizeContext, "repositoryId" | "repository">;
+  adapter: IssueJournalAdapter;
+  context: Pick<FinalizeContext, "repositoryId" | "repository" | "creatorUserId">;
   observations: readonly IssueEntryObservation[];
   resolvedKeys?: readonly string[];
   resolveCurrent?: (entries: readonly IssueEntry[]) => readonly string[];
 }>): Promise<string> {
-  const page = await input.adapter.listIssues();
-  const decision = discoverManagedIssue({
-    repositoryId: input.context.repositoryId,
-    repository: input.context.repository,
-    paginationComplete: page.complete,
-    issues: page.items,
-  });
-  if (decision.issueWritePolicy === "none") return decision.kind;
-  const currentEntries = decision.kind === "update" || decision.kind === "reopen" ? decision.envelope.entries : [];
-  const entries = reduceIssueEntries({
-    currentEntries,
-    observations: input.observations,
-    resolvedKeys: input.resolveCurrent?.(currentEntries) ?? input.resolvedKeys ?? [],
-  });
-  if (entries.length === 0 && decision.kind === "create") return "none";
-  const section = issueSection(input.context.repositoryId, input.context.repository, entries);
-  if (decision.kind === "create") {
-    await input.adapter.createIssue({ title: managedIssueTitle, body: section });
-    return "created";
-  }
-  if (isDeepStrictEqual(entries, decision.envelope.entries)) return "unchanged";
-  if (decision.kind === "reopen") await input.adapter.reopenIssue(decision.issueNumber);
-  await input.adapter.updateIssue({ issueNumber: decision.issueNumber, managedSection: section });
-  return decision.kind === "reopen" ? "reopened" : "updated";
+  return await syncManagedIssueEntriesV2(input);
 }
 
 async function syncIssue(input: Readonly<{
-  adapter: GithubAdapter;
+  adapter: FinalizeGithubAdapter;
   context: FinalizeContext;
   candidateDigest: string;
   validation: Exclude<ValidationState, { status: "pending" }>;
@@ -160,7 +138,7 @@ async function syncIssue(input: Readonly<{
 }
 
 async function syncCleanupIssue(input: Readonly<{
-  adapter: GithubAdapter;
+  adapter: FinalizeGithubAdapter;
   context: FinalizeContext;
   run: Exclude<ValidationState, { status: "pending" }>["run"];
   status: "passed" | "failed";
@@ -228,7 +206,7 @@ function targetIdentity(
 }
 
 export async function finalizeManagedPullRequest(input: Readonly<{
-  adapter: GithubAdapter;
+  adapter: FinalizeGithubAdapter;
   context: FinalizeContext;
   manifest: Exclude<ArtifactManifest, { kind: "no-op" }>;
   receipt?: DraftReceipt;
@@ -240,81 +218,170 @@ export async function finalizeManagedPullRequest(input: Readonly<{
   if (!isDeepStrictEqual(validation.run, input.manifest.run)) throw new Error("validation runがmanifestと一致しません");
   const target = targetIdentity(input.manifest, input.receipt);
   const page = await input.adapter.listPullRequests();
-  const state = discoverManagedPullRequests({
-    repositoryId: input.context.repositoryId,
-    repository: input.context.repository,
-    defaultBaseRef: input.context.defaultBranchRef,
-    resumeClosed: false,
-    paginationComplete: page.complete,
-    pullRequests: page.items,
-  });
-  if (state.decision.kind === "pr-identity-conflict") return { kind: "pr-identity-conflict" };
-  if (state.decision.kind === "recovery-required") return { kind: "recovery-required" };
-  if (state.decision.kind === "intervention-required") return { kind: "intervention-required" };
-  if (state.decision.kind !== "open" || state.decision.member.prNumber !== target.prNumber) {
-    return { kind: "recovery-required" };
-  }
-  const current = await input.adapter.readPullRequest(target.prNumber);
-  const branch = await input.adapter.readBranch(target.headRef);
-  if (current === null || branch?.sha !== target.headSha || current.headSha !== target.headSha) {
-    return { kind: "recovery-required" };
-  }
-  const classification = classifyPrBody(current.body, current.draft);
-  if (classification.kind !== "strict") return { kind: "pr-identity-conflict" };
-  const desiredDraft = validation.status !== "passed";
-  const alreadyFinalized = classification.envelope.candidateDigest === input.manifest.candidateDigest &&
-    classification.envelope.expectedHeadSha === target.headSha && current.draft === desiredDraft &&
-    isDeepStrictEqual(classification.envelope.validation, validation);
-  if (!alreadyFinalized) {
-    const discovery = discoverCandidateHistory({ complete: page.complete, pages: [page.items] }, {
+  let discovery;
+  try {
+    discovery = discoverCandidateHistory({ complete: page.complete, pages: [page.items] }, {
       repositoryId: input.context.repositoryId,
       repository: input.context.repository,
       defaultBranchSha: input.context.defaultBranchSha,
       defaultBranchRef: input.context.defaultBranchRef,
       resumeClosed: false,
+      allowPendingRecovery: true,
     });
-    if (discovery.historyDigest !== target.historyDigest || classification.markerDigest !== target.markerDigest) {
+  } catch {
+    return { kind: "pr-identity-conflict" };
+  }
+  if (discovery.open?.prNumber !== target.prNumber || discovery.historyDigest !== target.historyDigest) {
+    return { kind: "recovery-required" };
+  }
+  let current = await input.adapter.readPullRequest(target.prNumber);
+  let branch = await input.adapter.readBranch(target.headRef);
+  if (current === null || branch === null) return { kind: "recovery-required" };
+  const immutableBody = current.body;
+  const rootClassification = classifyPrRootV2(current.body);
+  const initialComments = await input.adapter.listJournalComments(target.prNumber);
+  let semanticCommentless = false;
+  if (rootClassification.kind === "strict" && initialComments.complete) {
+    try {
+      semanticCommentless = reduceJournalCommentsV2(
+        initialComments.items,
+        rootClassification.root.creatorUserId,
+      ).entries.length === 0;
+    } catch {
+      return { kind: "pr-identity-conflict" };
+    }
+  }
+  if (rootClassification.kind === "strict" && semanticCommentless) {
+    const root = rootClassification.root;
+    let initialState: PrStateV2;
+    try {
+      initialState = decodePrStateSnapshotV2(root.initialSnapshot);
+    } catch {
+      return { kind: "pr-identity-conflict" };
+    }
+    if (target.markerDigest !== root.initialSnapshotDigest || root.creatorUserId !== input.context.creatorUserId ||
+      current.authorUserId !== root.creatorUserId || current.lastEditedAt !== null || current.state !== "open" ||
+      current.merged || !current.draft || current.headSha !== initialState.expectedHeadSha ||
+      branch.sha !== initialState.expectedHeadSha || current.headRef !== initialState.headRef ||
+      current.baseRef !== initialState.baseRef || initialState.candidateDigest !== input.manifest.candidateDigest) {
+      return { kind: "pr-identity-conflict" };
+    }
+    const rootEntry = appendJournalEntryDigest({
+      schemaVersion: 2,
+      resourceKind: "pull-request",
+      resourceNumber: target.prNumber,
+      creatorUserId: root.creatorUserId,
+      sequence: 1,
+      previousDigest: null,
+      phase: "committed",
+      operation: "root",
+      operationId: rootOperationId(root.repositoryId, target.prNumber, root.initialSnapshotDigest),
+      snapshot: root.initialSnapshot,
+    });
+    try {
+      await appendInitialJournalEntry(input.adapter, rootEntry);
+    } catch {
       return { kind: "recovery-required" };
     }
-    const section = renderManagedPrSection({
-      ...classification.envelope,
-      validation,
-    }, validation.status === "passed"
-      ? "Candidate validation passed; ready for human review."
-      : validation.failureKind === "command"
-        ? `Candidate remains draft after failed command: ${validation.command}`
-        : `Candidate remains draft after infrastructure failure: ${validation.stage}`);
-    try {
-      await input.adapter.updatePullRequest({ prNumber: target.prNumber, draft: desiredDraft, managedSection: section });
-    } catch (error: unknown) {
-      const permission = permissionEvidence(error);
-      if (permission !== null) {
-        if (permission.postState === "unknown") return { kind: "recovery-required", permission };
-        let issue: string;
-        try {
-          issue = await recoverIssueWrite(() => syncIssue({
-            adapter: input.adapter,
-            context: input.context,
-            candidateDigest: input.manifest.candidateDigest,
-            validation: {
-              status: "failed",
-              run: validation.run,
-              failureKind: "infrastructure",
-              stage: "unknown",
-            },
-          }));
-        } catch (issueError: unknown) {
-          issue = isPermissionDenied(issueError) ? "permission-denied" : "recovery-required";
-        }
-        return { kind: "permission-denied", issue, permission };
+  }
+  let loaded;
+  try {
+    loaded = await loadPrJournal(input.adapter, current);
+  } catch {
+    return { kind: "pr-identity-conflict" };
+  }
+  if (loaded.root.creatorUserId !== input.context.creatorUserId) return { kind: "pr-identity-conflict" };
+  const targetEntry = loaded.journal.entries.find((entry) => entry.digest === target.markerDigest) ??
+    (target.markerDigest === loaded.root.initialSnapshotDigest ? loaded.journal.entries[0] : undefined);
+  if (targetEntry === undefined) return { kind: "recovery-required" };
+  let targetState: PrStateV2;
+  try {
+    targetState = decodePrStateSnapshotV2(targetEntry.snapshot);
+  } catch {
+    return { kind: "recovery-required" };
+  }
+  if (targetState.expectedHeadSha !== target.headSha ||
+    targetState.candidateDigest !== input.manifest.candidateDigest) return { kind: "recovery-required" };
+  const desiredDraft = validation.status !== "passed";
+  const desiredState: PrStateV2 = { ...targetState, draft: desiredDraft, validation };
+  if (loaded.currentEntry.digest !== targetEntry.digest && !samePrSnapshot(loaded.currentState, desiredState)) {
+    return { kind: "recovery-required" };
+  }
+
+  try {
+    if (loaded.journal.pending !== null) {
+      if (validation.status !== "passed") return { kind: "recovery-required" };
+      await recoverExactPreparedTransition({
+        adapter: input.adapter,
+        pullRequest: current,
+        branch,
+        loaded,
+        operation: "pr-ready",
+        after: desiredState,
+        mutate: () => input.adapter.updatePullRequest({ prNumber: target.prNumber, draft: false }),
+      });
+      current = await input.adapter.readPullRequest(target.prNumber);
+      branch = await input.adapter.readBranch(target.headRef);
+      if (current === null || branch === null) return { kind: "recovery-required" };
+      loaded = await loadPrJournal(input.adapter, current);
+    }
+    if (!samePrSnapshot(loaded.currentState, desiredState)) {
+      if (validation.status === "passed") {
+        await runPreparedTransition({
+          adapter: input.adapter,
+          pullRequest: current,
+          branch,
+          loaded,
+          operation: "pr-ready",
+          after: desiredState,
+          mutate: () => input.adapter.updatePullRequest({ prNumber: target.prNumber, draft: false }),
+        });
+      } else {
+        await appendCommittedPrState({
+          adapter: input.adapter,
+          pullRequest: current,
+          branch,
+          loaded,
+          operation: "validation",
+          after: desiredState,
+        });
       }
     }
-    const post = await input.adapter.readPullRequest(target.prNumber);
-    const postClassification = classifyPrBody(post?.body ?? null, post?.draft ?? desiredDraft);
-    if (post === null || post.draft !== desiredDraft || postClassification.kind !== "strict" ||
-      !isDeepStrictEqual(postClassification.envelope.validation, validation)) {
-      return { kind: "recovery-required" };
+  } catch (error: unknown) {
+    const permission = permissionEvidence(error);
+    if (permission === null) return { kind: "recovery-required" };
+    if (permission.postState === "unknown") return { kind: "recovery-required", permission };
+    let issue: string;
+    try {
+      issue = await syncIssue({
+        adapter: input.adapter,
+        context: input.context,
+        candidateDigest: input.manifest.candidateDigest,
+        validation: {
+          status: "failed",
+          run: validation.run,
+          failureKind: "infrastructure",
+          stage: "unknown",
+        },
+      });
+    } catch {
+      issue = "recovery-required";
     }
+    return { kind: "permission-denied", issue, permission };
+  }
+  const post = await input.adapter.readPullRequest(target.prNumber);
+  const postBranch = await input.adapter.readBranch(target.headRef);
+  if (post === null || postBranch?.sha !== target.headSha || post.body !== immutableBody || post.draft !== desiredDraft) {
+    return { kind: "recovery-required" };
+  }
+  let postLoaded;
+  try {
+    postLoaded = await loadPrJournal(input.adapter, post);
+  } catch {
+    return { kind: "recovery-required" };
+  }
+  if (postLoaded.journal.pending !== null || !samePrSnapshot(postLoaded.currentState, desiredState)) {
+    return { kind: "recovery-required" };
   }
   let issue: string;
   try {

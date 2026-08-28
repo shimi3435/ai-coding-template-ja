@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 
 import type { CandidateCommandReport, CandidateStopState } from "../candidate/index.ts";
-import type { GithubAdapter, GithubPermissionEvidence } from "../github/adapter.ts";
+import type { GithubAdapter, GithubPermissionEvidence, JournalGithubAdapter } from "../github/adapter.ts";
 import { discoverManagedPullRequests } from "../github/discovery.ts";
 import { discoverManagedIssue } from "../github/issue-discovery.ts";
 import {
   computeIssueEntryKey,
+  selectFailureScope,
   type FailureState,
   type IssueEntry,
   type IssueEntryObservation,
@@ -72,10 +73,15 @@ function isDetectionEntry(entry: IssueEntry): boolean {
     entry.state === "open-pr-conflict" || entry.state === "paused-closed";
 }
 
+function isCleanupEntry(entry: IssueEntry): boolean {
+  return entry.state === "cleanup-failed";
+}
+
 export type PublishDraftResult = "success" | "failure" | "cancelled" | "skipped";
 
 export async function publishDetectionOutcome(input: Readonly<{
-  adapter: GithubAdapter;
+  adapter: GithubAdapter & JournalGithubAdapter;
+  creatorUserId: string;
   repositoryId: string;
   repository: string;
   defaultBranchRef: string;
@@ -84,6 +90,7 @@ export async function publishDetectionOutcome(input: Readonly<{
   report: CandidateCommandReport;
   publishDraftResult: PublishDraftResult;
   publishDraftPermission?: GithubPermissionEvidence;
+  cleanup?: Readonly<{ status: "passed" | "failed"; failedRefs: readonly string[] }>;
 }>): Promise<Readonly<{ kind: "published" | "summary-only"; issue?: string; summary: string }>> {
   const failure = input.report.failure ?? (
     input.report.status === "candidate-update" && input.publishDraftResult !== "success"
@@ -141,13 +148,31 @@ export async function publishDetectionOutcome(input: Readonly<{
       summary: issueSummary(failure.state as FailureState, input.report, input.publishDraftPermission),
     }));
   }
+  if (input.cleanup?.status === "failed") {
+    const scopes = input.cleanup.failedRefs.length === 0
+      ? [selectFailureScope({ operation: "cleanup" })]
+      : input.cleanup.failedRefs.map((identity) => selectFailureScope({
+          resource: { resourceKind: "branch", identity },
+          operation: "cleanup",
+        }));
+    observations = [...observations, ...scopes.map((scope): IssueEntryObservation => ({
+      state: "cleanup-failed",
+      scope,
+      seen: { run: input.run, at: input.at },
+      detailDigest: detailDigest({ status: input.cleanup?.status, scope }),
+      summary: scope.kind === "resource"
+        ? `Guarded cleanup failed for ${scope.identity}.`
+        : "One or more guarded merged-branch cleanup operations failed.",
+    }))];
+  }
   const observedKeys = new Set(observations.map((observation) => computeIssueEntryKey(observation.state, observation.scope)));
   const issue = await syncManagedIssueEntries({
     adapter: input.adapter,
-    context: { repositoryId: input.repositoryId, repository: input.repository },
+    context: { repositoryId: input.repositoryId, repository: input.repository, creatorUserId: input.creatorUserId },
     observations,
     resolveCurrent: (entries) => entries
-      .filter((entry) => isDetectionEntry(entry) && !observedKeys.has(entry.key))
+      .filter((entry) => (isDetectionEntry(entry) || (input.cleanup !== undefined && isCleanupEntry(entry))) &&
+        !observedKeys.has(entry.key))
       .map((entry) => entry.key),
   });
   let issueConflict = "";

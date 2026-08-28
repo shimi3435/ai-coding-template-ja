@@ -1,4 +1,11 @@
-import { classifyPrBody, managedPrTitle } from "../model/index.ts";
+import {
+  classifyPrRootV2,
+  decodePrStateSnapshotV2,
+  managedPrTitle,
+  reduceJournalCommentsV2,
+  validatePrJournalV2,
+  type JournalCommentV2,
+} from "../model/index.ts";
 import { reduceManagedPrHistory, type ManagedPrDecision, type ManagedPrObservation } from "./reducer.ts";
 
 export type GithubPullRequest = Readonly<{
@@ -13,6 +20,9 @@ export type GithubPullRequest = Readonly<{
   baseRef: string;
   title: string;
   body: string | null;
+  authorUserId: string;
+  lastEditedAt: string | null;
+  journalComments?: readonly JournalCommentV2[];
 }>;
 
 export type GithubDiscoveryInput = Readonly<{
@@ -52,9 +62,10 @@ function managedBranch(ref: string): boolean {
   return /^refs\/heads\/automation\/skill-updates\/g[0-9]{6}$/.test(ref);
 }
 
-function identityMatches(pullRequest: GithubPullRequest): boolean {
+export function hasManagedPrEvidence(pullRequest: GithubPullRequest): boolean {
   return managedBranch(pullRequest.headRef) || pullRequest.title === managedPrTitle ||
-    (pullRequest.body ?? "").includes("<!-- skill-update-pr-automation:pr:v1:");
+    (pullRequest.body ?? "").includes("<!-- skill-update-pr-automation:pr:v1:") ||
+    (pullRequest.body ?? "").includes("<!-- skill-update-pr-automation:pr-root:v2:");
 }
 
 export function discoverManagedPullRequests(input: GithubDiscoveryInput): GithubDiscoveryResult {
@@ -68,7 +79,7 @@ export function discoverManagedPullRequests(input: GithubDiscoveryInput): Github
   const managed: ManagedPrObservation[] = [];
   const humanHeadMismatches = new Map<number, number>();
   for (const pullRequest of [...input.pullRequests].sort((left, right) => left.prNumber - right.prNumber)) {
-    if (!identityMatches(pullRequest)) continue;
+    if (!hasManagedPrEvidence(pullRequest)) continue;
     if (
       pullRequest.headRepositoryId !== input.repositoryId ||
       pullRequest.baseRepositoryId !== input.repositoryId
@@ -76,7 +87,7 @@ export function discoverManagedPullRequests(input: GithubDiscoveryInput): Github
       warnings.push(`cross-repository automation mimic: #${pullRequest.prNumber}`);
       continue;
     }
-    const classification = classifyPrBody(pullRequest.body, pullRequest.draft);
+    const classification = classifyPrRootV2(pullRequest.body);
     if (
       classification.kind !== "strict" || pullRequest.title !== managedPrTitle ||
       !managedBranch(pullRequest.headRef) || pullRequest.baseRef !== input.defaultBaseRef
@@ -91,10 +102,67 @@ export function discoverManagedPullRequests(input: GithubDiscoveryInput): Github
         warnings,
       };
     }
-    const envelope = classification.envelope;
+    const root = classification.root;
+    let journal;
+    try {
+      journal = reduceJournalCommentsV2(pullRequest.journalComments ?? [], root.creatorUserId);
+    } catch {
+      return {
+        decision: { kind: "pr-identity-conflict", writePolicy: "none", summaryOnly: true, prNumber: pullRequest.prNumber },
+        warnings,
+      };
+    }
+    const first = journal.entries[0];
+    const latest = journal.entries.at(-1);
+    if (first === undefined && latest === undefined && journal.entries.length === 0) {
+      let initial;
+      try {
+        initial = decodePrStateSnapshotV2(root.initialSnapshot);
+      } catch {
+        return {
+          decision: { kind: "pr-identity-conflict", writePolicy: "none", summaryOnly: true, prNumber: pullRequest.prNumber },
+          warnings,
+        };
+      }
+      if (pullRequest.authorUserId !== root.creatorUserId || pullRequest.lastEditedAt !== null ||
+        pullRequest.state !== "open" || pullRequest.merged || !pullRequest.draft ||
+        initial.expectedHeadSha !== pullRequest.headSha || initial.draft !== pullRequest.draft ||
+        initial.repositoryId !== input.repositoryId || initial.repository !== input.repository ||
+        initial.headRef !== pullRequest.headRef || initial.baseRef !== pullRequest.baseRef) {
+        return {
+          decision: { kind: "pr-identity-conflict", writePolicy: "none", summaryOnly: true, prNumber: pullRequest.prNumber },
+          warnings,
+        };
+      }
+      managed.push({
+        generation: initial.generation,
+        prNumber: pullRequest.prNumber,
+        state: pullRequest.state,
+        merged: pullRequest.merged,
+      });
+      continue;
+    }
+    if (first === undefined || latest === undefined || journal.pending !== null || first.resourceKind !== "pull-request" ||
+      first.resourceNumber !== pullRequest.prNumber || first.snapshot.stateDigest !== root.initialSnapshotDigest) {
+      return {
+        decision: { kind: "pr-identity-conflict", writePolicy: "none", summaryOnly: true, prNumber: pullRequest.prNumber },
+        warnings,
+      };
+    }
+    let envelope;
+    try {
+      envelope = validatePrJournalV2(root, journal).at(-1)!;
+    } catch {
+      return {
+        decision: { kind: "pr-identity-conflict", writePolicy: "none", summaryOnly: true, prNumber: pullRequest.prNumber },
+        warnings,
+      };
+    }
     if (
+      root.repositoryId !== input.repositoryId || root.repository !== input.repository ||
+      root.generation !== envelope.generation || root.headRef !== envelope.headRef || root.baseRef !== envelope.baseRef ||
       envelope.repositoryId !== input.repositoryId || envelope.repository !== input.repository ||
-      envelope.headRef !== pullRequest.headRef || envelope.baseRef !== pullRequest.baseRef
+      envelope.headRef !== pullRequest.headRef || envelope.baseRef !== pullRequest.baseRef || envelope.draft !== pullRequest.draft
     ) {
       return {
         decision: {

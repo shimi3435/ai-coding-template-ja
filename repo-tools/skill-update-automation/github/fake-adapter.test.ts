@@ -6,16 +6,15 @@ import {
   createFakeGithubAdapter,
   type FakeGithubPullRequest,
 } from "./fake-adapter.ts";
+import { githubAdapterOperations } from "./adapter.ts";
 import {
-  managedIssueTitle,
   managedPrTitle,
-  renderManagedIssueSection,
   renderManagedPrSection,
 } from "../model/index.ts";
 
 const sha = (digit: string): string => digit.repeat(40);
 
-function prSection(status: "pending" | "passed" = "pending", expectedHeadSha = sha("2")): string {
+function prSection(): string {
   return renderManagedPrSection({
     schemaVersion: 1,
     kind: "managed-pr",
@@ -24,22 +23,12 @@ function prSection(status: "pending" | "passed" = "pending", expectedHeadSha = s
     generation: 1,
     headRef: "refs/heads/automation/skill-updates/g000001",
     baseRef: "refs/heads/main",
-    expectedHeadSha,
+    expectedHeadSha: sha("2"),
     validationBaseSha: sha("0"),
     candidateDigest: `sha256:${"1".repeat(64)}`,
     reportDigest: `sha256:${"2".repeat(64)}`,
-    validation: { status, run: { workflowRunId: "10", workflowRunAttempt: 1 } },
-  }, status);
-}
-
-function issueSection(repositoryId = "123"): string {
-  return renderManagedIssueSection({
-    schemaVersion: 1,
-    kind: "managed-issue",
-    repositoryId,
-    repository: "owner/repository",
-    entries: [],
-  }, "現在の未解決項目なし");
+    validation: { status: "pending", run: { workflowRunId: "10", workflowRunAttempt: 1 } },
+  }, "pending");
 }
 
 function pullRequest(overrides: Partial<FakeGithubPullRequest> = {}): FakeGithubPullRequest {
@@ -55,6 +44,8 @@ function pullRequest(overrides: Partial<FakeGithubPullRequest> = {}): FakeGithub
     baseRef: "refs/heads/main",
     title: managedPrTitle,
     body: `human before\n${prSection()}\nhuman after`,
+    authorUserId: "456",
+    lastEditedAt: null,
     ...overrides,
   };
 }
@@ -105,57 +96,24 @@ test("draft PR creation binds to the live branch head", async () => {
   assert.equal(created.merged, false);
 });
 
-test("PR lifecycle is draft-first and close remains unmerged", async () => {
+test("PR lifecycle changes draft state without updating the immutable body", async () => {
   const adapter = createFakeGithubAdapter({ pullRequests: [pullRequest()] });
+  const immutableBody = pullRequest().body;
 
-  await adapter.updatePullRequest({ prNumber: 1, draft: false, managedSection: prSection("passed") });
+  await adapter.updatePullRequest({ prNumber: 1, draft: false });
   await adapter.closePullRequest(1);
-  assert.deepEqual(await adapter.readPullRequest(1), pullRequest({ state: "closed", draft: false, body: `human before\n${prSection("passed")}\nhuman after` }));
-  await adapter.reopenPullRequest(1);
-  assert.equal((await adapter.readPullRequest(1))?.state, "open");
-
-  const merged = createFakeGithubAdapter({ pullRequests: [pullRequest({ state: "closed", merged: true })] });
-  await assert.rejects(merged.reopenPullRequest(1), /merged PR/);
+  assert.deepEqual(await adapter.readPullRequest(1), pullRequest({ state: "closed", draft: false, body: immutableBody }));
 });
 
-test("PR and issue managed updates preserve marker-external human text", async () => {
+test("adapter surface excludes body update and closed issue reopen operations", () => {
   const adapter = createFakeGithubAdapter({
     pullRequests: [pullRequest()],
-    issues: [{
-      issueNumber: 7,
-      state: "open",
-      title: managedIssueTitle,
-      body: `human issue before\n${issueSection()}\nhuman issue after`,
-      isPullRequest: false,
-    }],
   });
 
-  await adapter.updatePullRequest({ prNumber: 1, managedSection: prSection() });
-  await adapter.updateIssue({ issueNumber: 7, managedSection: issueSection() });
-  assert.match((await adapter.readPullRequest(1))?.body ?? "", /^human before[\s\S]*human after$/);
-  assert.match((await adapter.readIssue(7))?.body ?? "", /^human issue before[\s\S]*human issue after$/);
-});
-
-test("managed updates reject marker identity that diverges from live resources", async () => {
-  const adapter = createFakeGithubAdapter({
-    pullRequests: [pullRequest()],
-    issues: [{
-      issueNumber: 7,
-      state: "open",
-      title: managedIssueTitle,
-      body: issueSection(),
-      isPullRequest: false,
-    }],
-  });
-
-  await assert.rejects(
-    adapter.updatePullRequest({ prNumber: 1, managedSection: prSection("pending", sha("3")) }),
-    /expected head/,
-  );
-  await assert.rejects(
-    adapter.updateIssue({ issueNumber: 7, managedSection: issueSection("999") }),
-    /repository identity/,
-  );
+  assert.equal("updateIssue" in adapter, false);
+  assert.equal("reopenIssue" in adapter, false);
+  assert.equal(githubAdapterOperations.includes("update-issue" as never), false);
+  assert.equal(githubAdapterOperations.includes("reopen-issue" as never), false);
 });
 
 test("permission denial leaves state unchanged and never falls back", async () => {
@@ -165,7 +123,7 @@ test("permission denial leaves state unchanged and never falls back", async () =
   });
 
   await assert.rejects(
-    adapter.updatePullRequest({ prNumber: 1, draft: false, managedSection: prSection("passed") }),
+    adapter.updatePullRequest({ prNumber: 1, draft: false }),
     (error: unknown) => error instanceof GithubAdapterError && error.kind === "permission-denied" &&
       error.operation === "update-pull-request" && error.postState === "unchanged",
   );

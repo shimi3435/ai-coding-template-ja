@@ -99,6 +99,7 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     defaultBranchSha: manifest.baseHeadSha,
     defaultBranchRef: defaultBranchRef(requiredEnvironment("DEFAULT_BRANCH")),
     resumeClosed: booleanInput(requiredEnvironment("RESUME_CLOSED")),
+    creatorUserId: requiredEnvironment("CREATOR_USER_ID"),
   };
   try {
     const output = await runPublishDraftCommand({

@@ -269,10 +269,14 @@ function verifyCheckpoint(
         baseRef: state.baseRef,
         title: smokePullRequestTitle,
         body,
+        authorUserId: "1",
+        lastEditedAt: null,
       }],
     };
     const decision = discoverManagedPullRequests(reducerInput).decision;
-    if (decision.kind !== "intervention-required") throw new Error("production reducerがhuman interventionを検出しません");
+    if (decision.kind !== "intervention-required" && decision.kind !== "pr-identity-conflict") {
+      throw new Error("production reducerがlegacy smoke resourceを安全に停止しません");
+    }
     return {
       ...checkpoint,
       result: "passed",

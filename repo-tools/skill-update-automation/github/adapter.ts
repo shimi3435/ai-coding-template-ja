@@ -7,7 +7,7 @@ export type GithubPage<Value> = Readonly<{ complete: boolean; items: readonly Va
 export const githubAdapterOperations = [
   "list-pull-requests", "list-issues", "read-branch", "read-pull-request", "read-issue",
   "create-branch", "append-branch", "delete-branch", "create-draft-pull-request", "update-pull-request",
-  "close-pull-request", "reopen-pull-request", "create-issue", "update-issue", "close-issue", "reopen-issue",
+  "close-pull-request", "create-issue", "close-issue",
   "list-journal-comments", "append-journal-comment",
 ] as const;
 export type GithubAdapterOperation = (typeof githubAdapterOperations)[number];
@@ -39,19 +39,12 @@ export interface GithubAdapter {
   appendBranch(input: Readonly<{ ref: string; expectedSha: string; candidateSha: string }>): Promise<void>;
   deleteBranch(input: Readonly<{ ref: string; expectedSha: string }>): Promise<void>;
   createDraftPullRequest(
-    input: Omit<GithubPullRequest, "prNumber" | "state" | "merged" | "draft">,
+    input: Omit<GithubPullRequest, "prNumber" | "state" | "merged" | "draft" | "authorUserId" | "lastEditedAt">,
   ): Promise<GithubPullRequest>;
-  updatePullRequest(input: Readonly<{
-    prNumber: number;
-    draft?: boolean;
-    managedSection?: string;
-  }>): Promise<void>;
+  updatePullRequest(input: Readonly<{ prNumber: number; draft: boolean }>): Promise<void>;
   closePullRequest(prNumber: number): Promise<void>;
-  reopenPullRequest(prNumber: number): Promise<void>;
   createIssue(input: Readonly<{ title: string; body: string }>): Promise<GithubIssue>;
-  updateIssue(input: Readonly<{ issueNumber: number; managedSection: string }>): Promise<void>;
   closeIssue(issueNumber: number): Promise<void>;
-  reopenIssue(issueNumber: number): Promise<void>;
 }
 
 export interface JournalGithubAdapter {

@@ -154,9 +154,11 @@ README の「研究成果物の扱い」節を参照。
 3. `resume_closed=false` で実行する。最新 managed PR を merge せず close した後、同じ候補を再開せず
    次 generation を作る意思がある場合だけ `resume_closed=true` を選ぶ。
 
-workflow は一つの candidate artifact を作り、draft PR を作成または fast-forward append し、read-only
-validation で `task check` と focused tests を実行する。exact branch head、PR marker、history、artifact、
-DraftReceipt が一致し、validation が成功した場合だけ ready にする。ready はレビュー可能という意味であり、
+workflow は一つの candidate artifact を作り、draft PR を作成または branch append し、read-only
+validation で `task check` と focused tests を実行する。branch create / append / delete は explicit
+`force-with-lease=<ref>:<expected>` の expected valueでCAS化する。`cleanup-merged` は独立 jobとして
+candidate-update、existing-head-validation、no-opの全eligible runで動き、publish結果に関係なくfresh historyを再検証する。
+exact branch head、PR journal、history、artifact、DraftReceipt が一致し、validation が成功した場合だけ ready にする。ready はレビュー可能という意味であり、
 merge、approval、merge queue、auto-merge は人が別に判断する。
 
 ### 状態と復旧
@@ -170,47 +172,57 @@ merge、approval、merge queue、auto-merge は人が別に判断する。
   巻き戻さない。次 run で branch name、generation、marker、head を再検証して再試行する。
 - `issue-identity-conflict` / `issue-cardinality-conflict`: tracking issue だけ更新しない。安全な PR finalize は
   継続する。partial marker や複数 open managed issue を人が解消してから再実行する。
-- branch tip、PR marker、history が一致しない場合は human intervention として write を停止する。automation
-  branch や marker を手で推測修復しない。
+- branch tip、immutable root、journal v2、history が一致しない場合は human intervention として write を停止する。
+  append / ready / draft は同じoperation IDのprepared → mutation → committedで実行する。automation branch、root、commentを手で推測修復しない。
 
-tracking issue は未解決 entry を stable key で重複排除する。解消した entry は managed section から除くが、
-issue 自体は自動 close しない。marker 外の人の本文と close 判断を保持する。
+PR / tracking issue本文はcanonicalなfull initial snapshotとdigestを持つ作成時のimmutable rootであり、以後更新しない。可変stateはrootのcreator numeric user IDと
+comment author numeric IDが一致するappend-only canonical comment journal v2へfull snapshotで記録する。改変、中間欠落、fork、
+foreign author marker、live state不一致はfail closed。create応答消失後のcommentless rootはresource author一致、body未編集、
+embedded initial snapshotとfresh live stateのexact一致時だけinitial commentを回復する。append応答消失時は再送せず、fresh complete readに
+expected entryがexact 1件ある場合だけ続行する。v1 resourceは移行しない。open tracking issue内では未解決entryをstable keyで
+重複排除する。closed tracking issueはterminal rootとして本文・comment・stateを変更せず、新failureは新しいissueを作成する。
 
 ### real-host smoke
 
-real GitHub write smoke は通常運用ではなく、Task 11 の完了確認専用。production automationを無効にした専用 test
-repositoryを使う。Task 8で追加される human-operated CLI を次の interface で起動する。
+real GitHub write smoke は通常運用ではなく、最終完了確認専用。production automationを無効にしたfresh repositoryを使う。
+既存のv1 / v2 managed PR・Issueと`refs/heads/automation/skill-updates/g900001`が存在しないことが前提。human-operated CLIを次のinterfaceで起動する。
 
 ```bash
 node repo-tools/entrypoint.mjs skills:automation:smoke \
   --repository OWNER/REPOSITORY \
+  --repository-id NUMERIC_REPOSITORY_ID \
+  --creator-user-id NUMERIC_GH_USER_ID \
   --run-id WORKFLOW_RUN_ID \
   --run-attempt WORKFLOW_RUN_ATTEMPT \
+  --default-branch-ref refs/heads/main \
+  --default-branch-sha FULL_40_CHARACTER_SHA \
+  --source-parent-commit FULL_40_CHARACTER_SHA \
   --source-commit FULL_40_CHARACTER_SHA
 ```
 
-1. 先に `gh auth status` で対象 test repository の existing operator session を確認する。新しい token は作らない。
-2. normal smokeでは、workflow runのsource commitをdefault branchから2 commits以上aheadのtest branchへ置く。
-   CLIはdefault branch tipからsource commitのfirst parentが`ahead_by >= 1`かつ`behind_by == 0`でない場合、
-   approval前に拒否する。
-3. CLI が表示する canonical `SmokePreview` v3全文、normal / recovery mode、repository、run ID / attempt、base commit、
-   source first parent / commit、全step、各stepのmulti-resource before / after、semantic checkpoint、terminal cleanup と
-   exact digest を読む。この段階は read-only。
-4. 内容すべてを承認する場合だけ、同じ process、同じ TTY / stdin に表示された exact digest を入力する。
+1. `GH_TOKEN`、`GITHUB_TOKEN`、enterprise tokenをunsetし、`gh auth status`で対象fresh repositoryのexisting operator sessionを確認する。
+   新しいtokenは作らない。`gh api /user --jq .id`の値を`--creator-user-id`へ渡す。
+2. fresh repositoryのmerged branch自動削除を無効化し、workflow runのsource commitをdefault branchよりaheadのtest branchへ置く。
+   CLIはrepository ID、run ID / attempt、source commit、first parent、default branch、creator numeric user IDをread-only再取得し、
+   不一致またはahead関係不成立ならapproval前に拒否する。merge checkpoint後のrecoveryだけはdefault branchがsource commitを含む
+   behind関係を`merged`として受け入れる。
+3. CLIが表示する`fresh-real-host-smoke-preview` schema v2全文を読む。previewはfresh repository precondition、full initial snapshotを含むimmutable root本文、
+   journal v2 full snapshot comment template、explicit force-with-lease expected SHA、prepared recovery、closed issue世代、terminal cleanupを束縛する。
+   この段階はread-only。
+4. 内容すべてを承認する場合だけ、同じprocess、同じTTY / stdinに表示されたexact digestを入力する。
    EOF、空入力、不一致なら write なしで終了する。
-5. write応答がexactでも直後のafter state / numberだけが一時的に不一致なら、CLIは500 ms間隔で最大10回read-only再取得する。
-   write、before / identity、API errorはretryせず、各stepの試行回数をevidenceへ残す。
-6. 途中失敗時は残存 resource を記録し、同じ preview を再利用しない。次processはlive residual stateからrecovery modeを
-   生成する。recovery modeは必要なPR draft、PR / issue close、branch deleteだけをterminal方向へ許可する。branch deleteには
-   同run / sourceへ本文で束縛されたstrict smoke PRまたはissueが必要である。branch-only residualはcanonical recovery対象外とし、
-   live repository / ref / SHAとexact delete commandを示す別のmanual previewと人のfresh approvalへ送る。別のread-only
-   previewとfresh approvalを得るまでwrite / cleanupを再開しない。
+5. approved planはabsence CAS branch create、immutable PR root、journal root、branch append prepared / exact lease / committed、
+   synthetic response-loss recovery、validation comment、closed issue terminalと新issue、PR ready prepared / mutation / committedを実行する。
+   CLIがcheckpoint digestを表示したら、対象PRを人がmergeする。CLIへ同digestを入力するとfresh merged stateを検証し、
+   `cleanupMergedBranches`のmerged eligibilityとexact lease deleteを実行する。merge前にbranchが自動削除された場合はfail closed。
+   automation自身はmergeしない。
+6. 途中失敗時は同じpreviewやapprovalを再利用しない。次processはresidual PR / Issue body digest、journal末尾digest、branch exact SHAを
+   束縛したterminal-only recovery previewを表示する。別のfresh approval後だけopen resource closeとexact branch deleteを行う。
 
-CLIは`gh` child processへambient `GH_TOKEN` / `GITHUB_TOKEN` / enterprise tokenを転送せず、既存operator `gh auth`
-sessionの発見に必要な非credential環境だけを明示的に渡す。
+CLIはambient `GH_TOKEN` / `GITHUB_TOKEN` / enterprise tokenが設定されていれば開始前に拒否し、existing operator `gh auth` sessionだけを使う。
 
 preview を別 process へ保存して承認 artifact にしない。approval を test、script、AI で自動入力しない。
-Task 11 到達前、またはpreview確認後の人の fresh approval 前には実行しない。
+read-only preview確認後の人のfresh approval前には実行しない。
 
 ## 8. 詰まったとき
 

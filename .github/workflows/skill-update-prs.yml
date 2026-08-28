@@ -141,9 +141,6 @@ jobs:
     outputs:
       candidate-sha: ${{ steps.publish-draft.outputs.candidate-sha }}
       pr-number: ${{ steps.publish-draft.outputs.pr-number }}
-      cleanup-status: ${{ steps.cleanup-merged.outputs.cleanup-status }}
-      cleanup-outcome: ${{ steps.cleanup-merged.outcome }}
-      cleanup-failed-refs: ${{ steps.cleanup-merged.outputs.cleanup-failed-refs }}
       permission-operation: ${{ steps.publish-draft.outputs.permission-operation }}
       permission-post-state: ${{ steps.publish-draft.outputs.permission-post-state }}
     env:
@@ -167,6 +164,17 @@ jobs:
         with:
           name: skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/skill-update-publish-${{ github.run_id }}-${{ github.run_attempt }}/candidate
+      - name: Resolve journal creator numeric ID
+        id: journal-creator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          creator_id="$(gh api '/users/github-actions%5Bbot%5D' --jq .id)"
+          case "$creator_id" in
+            ''|*[!0-9]*) echo 'invalid github-actions bot user ID' >&2; exit 1 ;;
+          esac
+          printf 'id=%s\n' "$creator_id" >> "$GITHUB_OUTPUT"
       - name: Publish managed draft
         id: publish-draft
         env:
@@ -180,6 +188,7 @@ jobs:
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
           TRIGGER_SHA: ${{ github.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CREATOR_USER_ID: ${{ steps.journal-creator.outputs.id }}
         run: node repo-tools/skill-update-automation/publish/command.ts >> "$GITHUB_OUTPUT"
       - name: Upload exact draft receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -188,15 +197,6 @@ jobs:
           path: ${{ runner.temp }}/skill-update-publish-${{ github.run_id }}-${{ github.run_attempt }}/draft-receipt.json
           if-no-files-found: error
           retention-days: 1
-      - name: Cleanup guarded merged branches
-        id: cleanup-merged
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY_ID: ${{ github.repository_id }}
-          REPOSITORY: ${{ github.repository }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: node repo-tools/skill-update-automation/finalize/cleanup-command.ts >> "$GITHUB_OUTPUT"
       - name: Cleanup publish stage
         if: always()
         env:
@@ -204,6 +204,56 @@ jobs:
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
           STAGE: publish
         run: node repo-tools/skill-update-automation/publish/cleanup.ts
+
+  cleanup-merged:
+    needs: [detect, publish-draft]
+    if: >-
+      always() && needs.detect.result == 'success' && needs.detect.outputs.should-run == 'true' &&
+      (needs.detect.outputs.artifact-kind == 'candidate-update' ||
+      needs.detect.outputs.artifact-kind == 'existing-head-validation' ||
+      needs.detect.outputs.artifact-kind == 'no-op')
+    permissions:
+      contents: write
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      cleanup-status: ${{ steps.cleanup-merged.outputs.cleanup-status }}
+      cleanup-failed-refs: ${{ steps.cleanup-merged.outputs.cleanup-failed-refs }}
+    steps:
+      - name: Checkout automation source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node 24
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install Node dependencies (locked, no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Resolve journal creator numeric ID
+        id: cleanup-journal-creator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          creator_id="$(gh api '/users/github-actions%5Bbot%5D' --jq .id)"
+          case "$creator_id" in
+            ''|*[!0-9]*) echo 'invalid github-actions bot user ID' >&2; exit 1 ;;
+          esac
+          printf 'id=%s\n' "$creator_id" >> "$GITHUB_OUTPUT"
+      - name: Cleanup guarded merged branches
+        id: cleanup-merged
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CREATOR_USER_ID: ${{ steps.cleanup-journal-creator.outputs.id }}
+        run: node repo-tools/skill-update-automation/finalize/cleanup-command.ts >> "$GITHUB_OUTPUT"
 
   validate:
     needs: [detect, publish-draft]
@@ -285,7 +335,7 @@ jobs:
         run: node repo-tools/skill-update-automation/publish/cleanup.ts
 
   publish-finalize:
-    needs: [detect, publish-draft, validate]
+    needs: [detect, publish-draft, validate, cleanup-merged]
     if: >-
       always() && needs.detect.result == 'success' && needs.detect.outputs.should-run == 'true' &&
       needs.detect.outputs.candidate-status != '' && needs.detect.outputs.summary-only != 'true'
@@ -330,6 +380,17 @@ jobs:
         with:
           name: skill-update-draft-receipt-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/skill-update-finalize-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Resolve journal creator numeric ID
+        id: journal-creator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          creator_id="$(gh api '/users/github-actions%5Bbot%5D' --jq .id)"
+          case "$creator_id" in
+            ''|*[!0-9]*) echo 'invalid github-actions bot user ID' >&2; exit 1 ;;
+          esac
+          printf 'id=%s\n' "$creator_id" >> "$GITHUB_OUTPUT"
       - name: Publish detection outcome
         id: publish-detection-outcome
         if: always()
@@ -341,9 +402,13 @@ jobs:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CREATOR_USER_ID: ${{ steps.journal-creator.outputs.id }}
           PUBLISH_DRAFT_RESULT: ${{ needs.publish-draft.result }}
           PUBLISH_DRAFT_PERMISSION_OPERATION: ${{ needs.publish-draft.outputs.permission-operation }}
           PUBLISH_DRAFT_PERMISSION_POST_STATE: ${{ needs.publish-draft.outputs.permission-post-state }}
+          CLEANUP_STATUS: ${{ needs.cleanup-merged.outputs.cleanup-status }}
+          CLEANUP_OUTCOME: ${{ needs.cleanup-merged.result }}
+          CLEANUP_FAILED_REFS: ${{ needs.cleanup-merged.outputs.cleanup-failed-refs }}
         run: node repo-tools/skill-update-automation/finalize/detection-command.ts >> "$GITHUB_STEP_SUMMARY"
       - name: Publish finalized state
         id: publish-finalize
@@ -361,6 +426,7 @@ jobs:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CREATOR_USER_ID: ${{ steps.journal-creator.outputs.id }}
           VALIDATION_JOB_RESULT: ${{ needs.validate.result }}
           VALIDATION_CHECKOUT_OUTCOME: ${{ needs.validate.outputs.checkout-outcome }}
           VALIDATION_ARTIFACT_OUTCOME: ${{ needs.validate.outputs.artifact-outcome }}
@@ -369,9 +435,6 @@ jobs:
           VALIDATION_FAILURE_KIND: ${{ needs.validate.outputs.failure-kind }}
           VALIDATION_COMMAND: ${{ needs.validate.outputs.command }}
           VALIDATION_STAGE: ${{ needs.validate.outputs.stage }}
-          CLEANUP_STATUS: ${{ needs.publish-draft.outputs.cleanup-status }}
-          CLEANUP_OUTCOME: ${{ needs.publish-draft.outputs.cleanup-outcome }}
-          CLEANUP_FAILED_REFS: ${{ needs.publish-draft.outputs.cleanup-failed-refs }}
         run: node repo-tools/skill-update-automation/finalize/command.ts >> "$GITHUB_STEP_SUMMARY"
       - name: Cleanup finalize stage
         if: always()

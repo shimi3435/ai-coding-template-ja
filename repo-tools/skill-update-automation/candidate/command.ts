@@ -119,7 +119,11 @@ export async function runCandidateCommand(
         defaultBaseRef: options.defaultBranchRef,
         resumeClosed: options.resumeClosed,
         paginationComplete: history.complete,
-        pullRequests: history.pages.flat(),
+        pullRequests: history.pages.flat().map((pullRequest) => ({
+          ...pullRequest,
+          authorUserId: pullRequest.authorUserId ?? "metadata-unavailable",
+          lastEditedAt: pullRequest.lastEditedAt === undefined ? "metadata-unavailable" : pullRequest.lastEditedAt,
+        })),
       }).decision;
     } catch (error: unknown) {
       if (error instanceof Error && error.message.includes("closed-unmergedではないためresumeできません")) {

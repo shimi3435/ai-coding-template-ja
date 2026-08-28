@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
+
 import { detectAndValidateRuntimes } from "./runtime.ts";
 import { validateRepositoryContracts } from "./repository-contracts.ts";
 import type { SkillCommandName } from "./skill-updater/index.ts";
@@ -41,10 +43,18 @@ try {
     if (result.stderr.length > 0) process.stderr.write(result.stderr);
     process.exitCode = result.exitCode;
   } else if (command === "skills:automation:smoke") {
-    const { runSmokeCommand } = await import("./skill-update-automation/smoke/cli-command.ts");
+    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]) {
+      if ((process.env[name] ?? "") !== "") throw new Error(`${name} must be unset for human-operated smoke`);
+    }
+    const { runFreshSmokeCli } = await import("./skill-update-automation/smoke/fresh-cli.ts");
+    const { ProductionPublishAdapter } = await import("./skill-update-automation/publish/production-adapter.ts");
     const { ProductionSmokeHost } = await import("./skill-update-automation/smoke/production-host.ts");
-    const result = await runSmokeCommand(process.argv.slice(3), {
-      createHost: (repository) => new ProductionSmokeHost({ repository }),
+    const result = await runFreshSmokeCli(process.argv.slice(3), {
+      createAdapter: (repository) => new ProductionPublishAdapter({ repository, repositoryRoot: process.cwd() }),
+      createIdentityHost: (repository) => new ProductionSmokeHost({ repository }),
+      readCreatorUserId: async () => execFileSync("gh", [
+        "api", "/user", "--jq", ".id",
+      ], { encoding: "utf8" }).trim(),
       input: process.stdin,
       stdout: process.stdout,
       stderr: process.stderr,

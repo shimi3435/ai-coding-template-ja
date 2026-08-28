@@ -6,7 +6,9 @@ import {
   classifyIssueRootV2,
   computeIssueEntryKey,
   decodeIssueEnvelope,
+  decodeIssueStateSnapshotV2,
   encodeIssueEnvelope,
+  issueStateSnapshotV2,
   managedIssueTitle,
   renderManagedIssueSection,
   renderManagedIssueRootV2,
@@ -150,6 +152,13 @@ test("stable issue key uses canonical HTML-sensitive escaping", () => {
 });
 
 test("immutable issue root v2 binds creator and treats v1 as a version conflict", () => {
+  const initialSnapshot = issueStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-issue-state",
+    repositoryId: "123",
+    repository: "owner/repo",
+    entries: [],
+  });
   const root = {
     schemaVersion: 2,
     kind: "managed-issue-root",
@@ -157,13 +166,18 @@ test("immutable issue root v2 binds creator and treats v1 as a version conflict"
     repository: "owner/repo",
     creatorUserId: "456",
     rootOperationId: digest("a"),
-    initialSnapshotDigest: digest("b"),
+    initialSnapshot,
+    initialSnapshotDigest: initialSnapshot.stateDigest,
   } as const;
   assert.deepEqual(classifyIssueRootV2(managedIssueTitle, renderManagedIssueRootV2(root, "immutable root")), {
     kind: "strict",
     root,
     summary: "immutable root",
   });
+  assert.throws(() => renderManagedIssueRootV2({
+    ...root,
+    initialSnapshotDigest: digest("f"),
+  }, "digest mismatch"), /snapshot|digest/);
   const v1 = renderManagedIssueSection({
     schemaVersion: 1,
     kind: "managed-issue",
@@ -172,4 +186,21 @@ test("immutable issue root v2 binds creator and treats v1 as a version conflict"
     entries: [],
   }, "v1");
   assert.equal(classifyIssueRootV2(managedIssueTitle, v1).kind, "version-conflict");
+});
+
+test("issue v2 full snapshot roundtrips exact entries", () => {
+  const snapshot = issueStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-issue-state",
+    repositoryId: "123",
+    repository: "owner/repo",
+    entries: [],
+  });
+  assert.deepEqual(decodeIssueStateSnapshotV2(snapshot), {
+    schemaVersion: 2,
+    kind: "managed-issue-state",
+    repositoryId: "123",
+    repository: "owner/repo",
+    entries: [],
+  });
 });

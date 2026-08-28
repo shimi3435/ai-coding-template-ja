@@ -118,6 +118,7 @@ export async function runFinalizeCommand(input: Readonly<{
   repositoryRoot: string;
   repositoryId: string;
   repository: string;
+  creatorUserId: string;
   workflowRunId: string;
   workflowRunAttempt: number;
   defaultBranchRef: string;
@@ -155,6 +156,7 @@ export async function runFinalizeCommand(input: Readonly<{
       repository: input.repository,
       defaultBranchSha: execFileSync("git", ["rev-parse", "HEAD"], { cwd: input.repositoryRoot, encoding: "utf8" }).trim(),
       defaultBranchRef: input.defaultBranchRef,
+      creatorUserId: input.creatorUserId,
       now: () => now,
     },
     manifest,
@@ -194,6 +196,7 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     repositoryRoot: process.cwd(),
     repositoryId: requiredEnvironment("REPOSITORY_ID"),
     repository: requiredEnvironment("REPOSITORY"),
+    creatorUserId: requiredEnvironment("CREATOR_USER_ID"),
     workflowRunId: requiredEnvironment("WORKFLOW_RUN_ID"),
     workflowRunAttempt: attempt,
     defaultBranchRef: defaultBranchRef(requiredEnvironment("DEFAULT_BRANCH")),

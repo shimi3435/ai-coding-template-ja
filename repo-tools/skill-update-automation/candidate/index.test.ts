@@ -5,8 +5,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { decodeArtifactManifest, managedPrTitle, renderManagedPrSection } from "../model/index.ts";
 import {
+  appendJournalEntryDigest,
+  decodeArtifactManifest,
+  journalCommentBody,
+  managedPrTitle,
+  prStateSnapshotV2,
+  renderManagedPrRootV2,
+  type ValidationState,
+} from "../model/index.ts";
+import {
+  discoverCandidateHistory,
   runCandidateCommand,
   readCandidateHistory,
   validateArtifactByteTotal,
@@ -68,6 +77,142 @@ function candidateArgs(repositorySha: string, output: string): readonly string[]
     "--default-branch-ref", "refs/heads/main",
   ];
 }
+
+function managedV2Fields(input: Readonly<{
+  prNumber: number;
+  generation: number;
+  headSha: string;
+  validationBaseSha: string;
+  candidateDigest: string;
+  reportDigest: string;
+  validation: ValidationState;
+}>): Readonly<{ body: string; journalComments: readonly Readonly<{
+  id: string; authorUserId: string; createdAt: string; updatedAt: string; body: string;
+}>[] }> {
+  const headRef = `refs/heads/automation/skill-updates/g${String(input.generation).padStart(6, "0")}`;
+  const snapshot = prStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-pr-state",
+    repositoryId: "123",
+    repository: "owner/repository",
+    generation: input.generation,
+    headRef,
+    baseRef: "refs/heads/main",
+    expectedHeadSha: input.headSha,
+    validationBaseSha: input.validationBaseSha,
+    candidateDigest: input.candidateDigest,
+    reportDigest: input.reportDigest,
+    draft: input.validation.status !== "passed",
+    validation: input.validation,
+  });
+  const root = {
+    schemaVersion: 2 as const,
+    kind: "managed-pr-root" as const,
+    repositoryId: "123",
+    repository: "owner/repository",
+    creatorUserId: "456",
+    generation: input.generation,
+    headRef,
+    baseRef: "refs/heads/main",
+    candidateDigest: input.candidateDigest,
+    initialSnapshot: snapshot,
+    initialSnapshotDigest: snapshot.stateDigest,
+  };
+  const entry = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: input.prNumber,
+    creatorUserId: root.creatorUserId,
+    sequence: 1,
+    previousDigest: null,
+    phase: "committed",
+    operation: "root",
+    operationId: `sha256:${"a".repeat(64)}`,
+    snapshot,
+  });
+  return {
+    body: renderManagedPrRootV2(root, "fixture summary"),
+    journalComments: [{
+      id: "1",
+      authorUserId: root.creatorUserId,
+      createdAt: "2026-08-27T00:00:00Z",
+      updatedAt: "2026-08-27T00:00:00Z",
+      body: journalCommentBody(entry),
+    }],
+  };
+}
+
+test("candidate history reconstructs v2 state from the creator-bound journal", () => {
+  const headSha = "3".repeat(40);
+  const snapshot = prStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-pr-state",
+    repositoryId: "123",
+    repository: "owner/repository",
+    generation: 1,
+    headRef: "refs/heads/automation/skill-updates/g000001",
+    baseRef: "refs/heads/main",
+    expectedHeadSha: headSha,
+    validationBaseSha: "0".repeat(40),
+    candidateDigest: `sha256:${"1".repeat(64)}`,
+    reportDigest: `sha256:${"2".repeat(64)}`,
+    draft: true,
+    validation: { status: "pending", run: { workflowRunId: "10", workflowRunAttempt: 1 } },
+  });
+  const root = {
+    schemaVersion: 2 as const,
+    kind: "managed-pr-root" as const,
+    repositoryId: "123",
+    repository: "owner/repository",
+    creatorUserId: "456",
+    generation: 1,
+    headRef: "refs/heads/automation/skill-updates/g000001",
+    baseRef: "refs/heads/main",
+    candidateDigest: `sha256:${"1".repeat(64)}`,
+    initialSnapshot: snapshot,
+    initialSnapshotDigest: snapshot.stateDigest,
+  };
+  const entry = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "pull-request",
+    resourceNumber: 7,
+    creatorUserId: "456",
+    sequence: 1,
+    previousDigest: null,
+    phase: "committed",
+    operation: "root",
+    operationId: `sha256:${"a".repeat(64)}`,
+    snapshot,
+  });
+  const discovery = discoverCandidateHistory({ complete: true, pages: [[{
+    prNumber: 7,
+    state: "open",
+    merged: false,
+    draft: true,
+    headRepositoryId: "123",
+    headRef: root.headRef,
+    headSha,
+    baseRepositoryId: "123",
+    baseRef: root.baseRef,
+    title: managedPrTitle,
+    body: renderManagedPrRootV2(root, "fixture"),
+    journalComments: [{
+      id: "1",
+      authorUserId: "456",
+      createdAt: "2026-08-27T00:00:00Z",
+      updatedAt: "2026-08-27T00:00:00Z",
+      body: journalCommentBody(entry),
+    }],
+  }]] }, {
+    repositoryId: "123",
+    repository: "owner/repository",
+    defaultBranchSha: "0".repeat(40),
+    defaultBranchRef: "refs/heads/main",
+    resumeClosed: false,
+  });
+  assert.equal(discovery.open?.markerDigest, entry.digest);
+  assert.equal(discovery.open?.envelope.expectedHeadSha, headSha);
+});
 
 test("public candidate command emits an exact no-op artifact and cleans its worktree", async () => {
   const repository = createRepository();
@@ -203,15 +348,10 @@ test("public candidate command binds an update to the exact open managed PR head
   const managedHead = git(repository.root, "rev-parse", "HEAD");
   const candidateDigest = `sha256:${"1".repeat(64)}`;
   const reportDigest = `sha256:${"2".repeat(64)}`;
-  const body = renderManagedPrSection({
-    schemaVersion: 1,
-    kind: "managed-pr",
-    repositoryId: "123",
-    repository: "owner/repository",
+  const managed = managedV2Fields({
+    prNumber: 42,
     generation: 7,
-    headRef: "refs/heads/automation/skill-updates/g000007",
-    baseRef: "refs/heads/main",
-    expectedHeadSha: managedHead,
+    headSha: managedHead,
     validationBaseSha: repository.sha,
     candidateDigest,
     reportDigest,
@@ -221,7 +361,7 @@ test("public candidate command binds an update to the exact open managed PR head
       failureKind: "command",
       command: "uv run --no-sync task check",
     },
-  }, "fixture summary");
+  });
   const updater: CandidateUpdaterRunner = async (_command, args, context) => {
     if (!args.includes("--apply")) {
       return updaterResult("update-available", [{ key: "one", status: "update-available", names: ["alpha"] }]);
@@ -257,7 +397,7 @@ test("public candidate command binds an update to the exact open managed PR head
         baseRepositoryId: "123",
         baseRef: "refs/heads/main",
         title: managedPrTitle,
-        body,
+        ...managed,
       }]] }),
       now: () => new Date("2026-08-20T00:00:00.000Z"),
     });
@@ -306,20 +446,15 @@ test("candidate detection preserves active pending and stops completed old pendi
   const repository = createRepository();
   const pendingRun = { workflowRunId: "455", workflowRunAttempt: 1 } as const;
   const headRef = "refs/heads/automation/skill-updates/g000007";
-  const body = renderManagedPrSection({
-    schemaVersion: 1,
-    kind: "managed-pr",
-    repositoryId: "123",
-    repository: "owner/repository",
+  const managed = managedV2Fields({
+    prNumber: 42,
     generation: 7,
-    headRef,
-    baseRef: "refs/heads/main",
-    expectedHeadSha: repository.sha,
+    headSha: repository.sha,
     validationBaseSha: repository.sha,
     candidateDigest: `sha256:${"1".repeat(64)}`,
     reportDigest: `sha256:${"2".repeat(64)}`,
     validation: { status: "pending", run: pendingRun },
-  }, "pending fixture");
+  });
   const history = async () => ({ complete: true as const, pages: [[{
     prNumber: 42,
     state: "open" as const,
@@ -331,7 +466,7 @@ test("candidate detection preserves active pending and stops completed old pendi
     baseRepositoryId: "123",
     baseRef: "refs/heads/main",
     title: managedPrTitle,
-    body,
+    ...managed,
   }]] });
   let updaterCalls = 0;
   try {
@@ -501,20 +636,15 @@ test("open managed draft with no new content emits exact existing-head validatio
   git(repository.root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "candidate");
   const headSha = git(repository.root, "rev-parse", "HEAD");
   const candidateDigest = `sha256:${"3".repeat(64)}`;
-  const body = renderManagedPrSection({
-    schemaVersion: 1,
-    kind: "managed-pr",
-    repositoryId: "123",
-    repository: "owner/repository",
+  const managed = managedV2Fields({
+    prNumber: 30,
     generation: 3,
-    headRef: "refs/heads/automation/skill-updates/g000003",
-    baseRef: "refs/heads/main",
-    expectedHeadSha: headSha,
+    headSha,
     validationBaseSha: repository.sha,
     candidateDigest,
     reportDigest: `sha256:${"4".repeat(64)}`,
     validation: { status: "failed", run: { workflowRunId: "455", workflowRunAttempt: 1 }, failureKind: "command", command: "task check" },
-  }, "failed fixture");
+  });
   const output = join(repository.root, "artifact");
   try {
     const result = await runCandidateCommand(candidateArgs(repository.sha, output), {
@@ -531,7 +661,7 @@ test("open managed draft with no new content emits exact existing-head validatio
         baseRepositoryId: "123",
         baseRef: "refs/heads/main",
         title: managedPrTitle,
-        body,
+        ...managed,
       }]] }),
       now: () => new Date("2026-08-20T00:00:00.000Z"),
     });
@@ -597,6 +727,74 @@ test("GitHub history adapter requests all pages and preserves page members", asy
   assert.deepEqual(history.pages.map((page) => page.map((pull) => pull.prNumber)), [[1], [2, 3]]);
   assert.equal(history.pages[1]![0]!.merged, true);
   assert.equal(history.pages[1]![1]!.headRepositoryId, null);
+});
+
+test("GitHub history adapter hydrates immutable metadata for a commentless v2 root", async () => {
+  const headSha = "1".repeat(40);
+  const managed = managedV2Fields({
+    prNumber: 1,
+    generation: 1,
+    headSha,
+    validationBaseSha: "0".repeat(40),
+    candidateDigest: `sha256:${"2".repeat(64)}`,
+    reportDigest: `sha256:${"3".repeat(64)}`,
+    validation: { status: "pending", run: { workflowRunId: "10", workflowRunAttempt: 1 } },
+  });
+  const calls: string[][] = [];
+  const history = await readCandidateHistory("owner/repository", async (args) => {
+    calls.push([...args]);
+    if (args.includes("graphql")) {
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({ data: { repository: { pullRequest: { lastEditedAt: null } } } }),
+        stderr: "",
+      };
+    }
+    if (args.some((argument) => argument.includes("/comments"))) {
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify([[
+          {
+            id: 99,
+            body: "human comment",
+            user: { id: 999 },
+            created_at: "2026-08-28T00:00:00Z",
+            updated_at: "2026-08-28T00:00:00Z",
+          },
+        ]]),
+        stderr: "",
+      };
+    }
+    return {
+      exitCode: 0,
+      stdout: JSON.stringify([[
+        {
+          number: 1,
+          state: "open",
+          merged_at: null,
+          draft: true,
+          user: { id: 456 },
+          head: { repo: { id: 123 }, ref: "automation/skill-updates/g000001", sha: headSha },
+          base: { repo: { id: 123 }, ref: "main" },
+          title: managedPrTitle,
+          body: managed.body,
+        },
+      ]]),
+      stderr: "",
+    };
+  });
+
+  assert.equal(history.pages[0]![0]!.authorUserId, "456");
+  assert.equal(history.pages[0]![0]!.lastEditedAt, null);
+  assert.equal(calls.length, 3);
+  assert.ok(calls[2]!.includes("graphql"));
+  assert.equal(discoverCandidateHistory(history, {
+    repositoryId: "123",
+    repository: "owner/repository",
+    defaultBranchSha: "0".repeat(40),
+    defaultBranchRef: "refs/heads/main",
+    resumeClosed: false,
+  }).open?.prNumber, 1);
 });
 
 test("apply refresh with no content change becomes no-op instead of candidate-invalid", async () => {

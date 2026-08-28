@@ -1,4 +1,11 @@
-import { classifyIssueBody, type IssueEnvelope } from "../model/index.ts";
+import {
+  classifyIssueRootV2,
+  reduceJournalCommentsV2,
+  validateIssueJournalV2,
+  type IssueRootV2,
+  type IssueStateV2,
+  type JournalCommentV2,
+} from "../model/index.ts";
 
 export type GithubIssue = Readonly<{
   issueNumber: number;
@@ -6,6 +13,9 @@ export type GithubIssue = Readonly<{
   title: string;
   body: string | null;
   isPullRequest: boolean;
+  authorUserId: string;
+  lastEditedAt: string | null;
+  journalComments?: readonly JournalCommentV2[];
 }>;
 
 export type GithubIssueDiscoveryInput = Readonly<{
@@ -23,17 +33,18 @@ type IssueWriteStop = Readonly<{
   issueNumbers: readonly number[];
 }>;
 
-type SelectedIssue = Readonly<{
+type RootIssue = Readonly<{
   issueNumber: number;
-  envelope: IssueEnvelope;
-  markerDigest: string;
+  root: IssueRootV2;
   body: string;
 }>;
 
+type SelectedIssue = RootIssue & Readonly<{ envelope: IssueStateV2; markerDigest: string }>;
+
 export type GithubIssueDecision =
   | Readonly<{ kind: "create"; issueWritePolicy: "create"; prWritePolicy: "continue" }>
+  | (Readonly<{ kind: "recover-root"; issueWritePolicy: "update"; prWritePolicy: "continue" }> & RootIssue)
   | (Readonly<{ kind: "update"; issueWritePolicy: "update"; prWritePolicy: "continue" }> & SelectedIssue)
-  | (Readonly<{ kind: "reopen"; issueWritePolicy: "reopen"; prWritePolicy: "continue" }> & SelectedIssue)
   | IssueWriteStop;
 
 export function discoverManagedIssue(input: GithubIssueDiscoveryInput): GithubIssueDecision {
@@ -47,26 +58,53 @@ export function discoverManagedIssue(input: GithubIssueDiscoveryInput): GithubIs
     };
   }
 
-  const strict: Array<SelectedIssue & Readonly<{ state: "open" | "closed" }>> = [];
+  const strict: Array<RootIssue & Readonly<{
+    state: "open" | "closed";
+    envelope: IssueStateV2 | null;
+    markerDigest: string | null;
+  }>> = [];
   const partial: number[] = [];
   for (const issue of [...input.issues].sort((left, right) => left.issueNumber - right.issueNumber)) {
     if (issue.isPullRequest) continue;
-    const classification = classifyIssueBody(issue.title, issue.body);
+    const classification = classifyIssueRootV2(issue.title, issue.body);
     if (classification.kind === "none") continue;
-    if (
-      classification.kind === "partial" || classification.envelope.repositoryId !== input.repositoryId ||
-      classification.envelope.repository !== input.repository
-    ) {
+    if (classification.kind !== "strict" || classification.root.repositoryId !== input.repositoryId ||
+      classification.root.repository !== input.repository) {
       partial.push(issue.issueNumber);
       continue;
     }
-    strict.push({
-      issueNumber: issue.issueNumber,
-      state: issue.state,
-      envelope: classification.envelope,
-      markerDigest: classification.markerDigest,
-      body: issue.body ?? "",
-    });
+    let journal;
+    try {
+      const journal = reduceJournalCommentsV2(issue.journalComments ?? [], classification.root.creatorUserId);
+      if (journal.entries.length === 0) {
+        if (issue.authorUserId !== classification.root.creatorUserId || issue.lastEditedAt !== null) {
+          throw new Error("commentless issue root authorまたはbody edit証拠が不正です");
+        }
+        strict.push({
+          issueNumber: issue.issueNumber,
+          state: issue.state,
+          root: classification.root,
+          envelope: null,
+          markerDigest: null,
+          body: issue.body ?? "",
+        });
+        continue;
+      }
+      const first = journal.entries[0];
+      if (first === undefined || first.resourceKind !== "issue" || first.resourceNumber !== issue.issueNumber ||
+        journal.pending !== null) throw new Error("issue journal rootが不正です");
+      const envelope = validateIssueJournalV2(classification.root, journal).at(-1)!;
+      strict.push({
+        issueNumber: issue.issueNumber,
+        state: issue.state,
+        root: classification.root,
+        envelope,
+        markerDigest: journal.entries.at(-1)!.digest,
+        body: issue.body ?? "",
+      });
+    } catch {
+      partial.push(issue.issueNumber);
+    }
   }
 
   if (partial.length > 0) {
@@ -90,11 +128,26 @@ export function discoverManagedIssue(input: GithubIssueDiscoveryInput): GithubIs
   }
   const selected = open[0];
   if (selected !== undefined) {
-    return { kind: "update", issueWritePolicy: "update", prWritePolicy: "continue", ...selected };
-  }
-  const closed = strict.at(-1);
-  if (closed !== undefined) {
-    return { kind: "reopen", issueWritePolicy: "reopen", prWritePolicy: "continue", ...closed };
+    if (selected.envelope === null || selected.markerDigest === null) {
+      return {
+        kind: "recover-root",
+        issueWritePolicy: "update",
+        prWritePolicy: "continue",
+        issueNumber: selected.issueNumber,
+        root: selected.root,
+        body: selected.body,
+      };
+    }
+    return {
+      kind: "update",
+      issueWritePolicy: "update",
+      prWritePolicy: "continue",
+      issueNumber: selected.issueNumber,
+      root: selected.root,
+      envelope: selected.envelope,
+      markerDigest: selected.markerDigest,
+      body: selected.body,
+    };
   }
   return { kind: "create", issueWritePolicy: "create", prWritePolicy: "continue" };
 }
