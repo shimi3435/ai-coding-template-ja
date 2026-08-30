@@ -403,8 +403,13 @@
   - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
   - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
   - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
-- [ ] **実装:** RED testsからsame-run / cross-run共通validatorを作り、append直前のfresh PR / branch / complete journal full predicate matrixを適用する。`ready-recovered`と後続stable ready / passed no-opを既存`publish-finalize` reconciliation-only seamへ接続し、同candidateの`validation-failed` / `recovery-required`だけを解消する。safety文書へ4 write jobのexact permission topologyを記載し、repository contractへ接続する。
-- [ ] **検証:** initial discovery後に各predicateを変化させるrace matrixでinitial append 0件、marker-free human comment許可、foreign / malformed marker拒否を確認する。ready reconciliationのsuccess / retry / permission denial / incomplete read / identity conflictで対象外entry保持とunsafe issue write 0件を確認し、focused tests、typecheck、strict OpenSpec、`git diff --check`をgreenにする。
+- [x] **実装:** RED testsからsame-run / cross-run共通validatorを作り、append直前のfresh PR / branch / complete journal full predicate matrixを適用する。`ready-recovered`と後続stable ready / passed no-opを既存`publish-finalize` reconciliation-only seamへ接続し、同candidateの`validation-failed` / `recovery-required`だけを解消する。safety文書へ4 write jobのexact permission topologyを記載し、repository contractへ接続する。
+- [x] **検証:** initial discovery後に各predicateを変化させるrace matrixでinitial append 0件、marker-free human comment許可、foreign / malformed marker拒否を確認する。ready reconciliationのsuccess / retry / permission denial / incomplete read / identity conflictで対象外entry保持とunsafe issue write 0件を確認し、focused tests、typecheck、strict OpenSpec、`git diff --check`をgreenにする。
+  - TDD RED: initial discovery後のready変化でinitial journal appendが1件発生することを確認。ready reconciliation public seam不在もREDで確認。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + current worktree diff、fresh実行。
+  - self-review: no managed PR / active pendingの通常no-opをreconciliation成功no-opへ限定し、reconciliation責務を`ready-reconciliation.ts`へ分離。仕様外write、credential、permission拡大なし。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" node --test repo-tools/skill-update-automation/publish/draft.test.ts repo-tools/skill-update-automation/recovery/lifecycle.test.ts repo-tools/skill-update-automation/finalize/*.test.ts repo-tools/skill-update-automation/publish/workflow.test.ts repo-tools/repository-contracts.test.ts`: 120 tests passed、exit 0。Node 24.14.1、latest Task 17入力のindependent verifier fresh実行。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" npm run typecheck`: exit 0。同source、fresh実行。
+  - `openspec validate harden-skill-update-automation-concurrency --strict`、`git diff --check`: exit 0。同source、fresh実行。
 
 ### Task 18: review finding修正cycleのreview / verifierを完了する
 
@@ -412,5 +417,81 @@
 - **依存:** Task 17。
 - **対象:**
   - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
-- [ ] **実装:** 全diff self-review、initial independent review、finding修正をfix・focused validation・diff reviewの一組として最大3 iterationsで完了する。
-- [ ] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub comment / Issue reconciliation writeは自動実行せず、offline lifecycleとworkflow / repository contractをrequired evidenceとする。
+- [x] **実装:** 全diff self-review、initial independent review、finding修正をfix・focused validation・diff reviewの一組として最大3 iterationsで完了する。
+- [x] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub comment / Issue reconciliation writeは自動実行せず、offline lifecycleとworkflow / repository contractをrequired evidenceとする。
+  - self-review: 通常no-opのreconciliation適用条件、artifact-bound commentless root、current cleanup failure入力のfail-closed parserを修正。focused 57 tests、repository contracts 35 tests、typecheck、`git diff --check`はgreen。
+  - initial independent review iteration 1: `publish-finalize` commentless経路の共通validator未適用と、stable no-opでreconciliation前にgeneral detectionが対象外entryを解消するBLOCKER 2件を検出。共通validator適用、reconciliation先行routingへ修正。
+  - initial independent re-review iteration 1: finalize期待rootをfresh readから導出するprovenance不足と、stable ready経路でcurrent cleanup failureを記録しないfindingを検出。artifact-bound discovery入力へ固定し、cleanup observationをreconciliationへ統合。
+  - initial independent re-review iteration 2: PASS、BLOCKER / WARNING / NIT 0件。finalize focused 53 tests、`git diff --check`はgreen。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" uv run --no-sync task check`: exit 0。Node 24.14.1、root Node 162 tests、automation 263 tests、Python 152 tests、contracts / typecheck / ruff / basedpyright全green。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + latest review fix worktree diffのfresh実行。
+  - `openspec validate harden-skill-update-automation-concurrency --strict`: valid、exit 0。`git diff --check`: exit 0。同source、latest review fix入力のfresh実行。
+  - final independent verifier: FAIL、BLOCKER 1件。ready reconciliationがvalid Issue lifecycleを処理できない。既存Issueなし＋cleanup failureでは正常な`created`結果を異常扱いしwrite後にjob失敗する。commentless tracking Issue rootではroot initial snapshot内のstale candidate failureを解消できず`issue-identity-conflict`が継続する。focused 120 tests、typecheck、strict OpenSpec、`git diff --check`はgreenだが回帰test欠落。OSWF-5 soft stop。利用者承認後の新cycleで`created` / `recovered`正常化、commentless Issue root exact recovery後の再discovery・解消、2経路のRED test、独立review、project checks、今回と別verifierを実行する。real GitHub comment / Issue writeは未実行。
+  - Task 19〜22でblockerをTDD修正。Task 22のlatest project checksと別independent verifier PASSをもって繰越検証を完了した。
+
+### Task 19: ready reconciliationのIssue lifecycle blockerをTDDで修正する
+
+- **成果:** stable ready reconciliationがIssue absent createとcommentless root recoveryを安全・冪等に完了し、stale candidate failureだけを解消する。
+- **依存:** Task 17。Task 18の最終検証はverifier blockerによりTask 20へ繰り越す。
+- **対象:**
+  - `repo-tools/skill-update-automation/finalize/ready-reconciliation.ts`
+  - `repo-tools/skill-update-automation/finalize/issue-journal.ts`
+  - `repo-tools/skill-update-automation/finalize/finalize.test.ts`
+  - `openspec/changes/harden-skill-update-automation-concurrency/proposal.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/design.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [x] **実装:** public reconciliation seamのRED testsから`created` / `recovered`を正常結果へ含め、commentless rootのinitial snapshotをexact回復後、fresh rediscoveryでdesired observation / resolutionを別entryとして適用する。
+- [x] **検証:** Issue absent＋cleanup failure、commentless root＋stale candidate failure、各retryをgreenにし、対象外entry保持、Issue重複なし、journal transition重複なし、permission / identity conflictのwrite安全性をfocused tests、typecheck、strict OpenSpec、`git diff --check`で確認する。
+  - RED: `node --test --test-name-pattern='creates one cleanup issue|recovers a commentless issue root' repo-tools/skill-update-automation/finalize/finalize.test.ts`: 2 failed、exit 1。`created`正常write後のthrowとcommentless rootの`issue-identity-conflict`を再現。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + latest Task 19 test diff、Node 24.14.1、fresh実行。
+  - GREEN: 同commandは2 tests passed、exit 0。同source、root initial entry回復とseparate resolution実装後のfresh実行。Issue create / journal appendは各1回、commentless rootはroot / resolution各1 entry、retry write 0件。
+  - focused: `node --test repo-tools/skill-update-automation/finalize/*.test.ts`: 57 tests passed、exit 0。`npm run typecheck`、`git diff --check`: exit 0。同source、Task 20 review fixを含むlatest Task 19入力のfresh実行。
+
+### Task 20: Issue lifecycle修正cycleのreview / verifierを完了する
+
+- **成果:** Task 19のIssue external write変更に対するOSWF-5 convergence evidenceとPR #64の再レビュー可能状態。
+- **依存:** Task 19。
+- **対象:**
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [x] **実装:** latest diff self-review、initial independent review、finding修正を最大3 iterationsで完了する。
+- [x] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、Task 18 initial reviewer / failed verifierと別のindependent verifierをgreenにする。real GitHub comment / Issue writeは未実行として明記する。
+  - self-review: root initial snapshotとdesired stateを別entryにし、root continuation / closed rediscoveryのbudgetを独立して各1回に制限。`created` / `recovered`をready reconciliationの正常結果へ追加。scope外refactor、permission変更なし。
+  - initial independent review iteration 1: commentless root回復後と通常update境界でIssue body edit evidence、author、PR-kindを再検証しないBLOCKER 1件、root / resolution append response-lossとclosed raceのtest不足WARNING 1件を検出。
+  - iteration 1 fix: create / recover / update全mutation境界へ`isExactIssueIdentity`を適用。root append後`lastEditedAt`変化のRED testをresolution append 0件へGREEN化。root append response-lossはfresh確認後same-run続行、resolution append response-lossは次run`unchanged`・重複0をtest追加。focused 57 tests、typecheck、diff reviewはgreen。
+  - initial independent re-review iteration 1: PASS、BLOCKER / WARNING / NIT 0件。focused 57 tests、`git diff --check`はgreen。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" uv run --no-sync task check`: exit 0。Node 24.14.1、root Node 162 tests、automation 267 tests、Python 152 tests、contracts / typecheck / ruff / basedpyright全green。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + latest review fix worktree diffのfresh実行。
+  - `openspec validate harden-skill-update-automation-concurrency --strict`: valid、exit 0。`git diff --check`: exit 0。同source、latest review fix入力のfresh実行。
+  - final independent verifier: FAIL、BLOCKER 1件。commentless root append後のresolution用fresh rediscoveryがstale `recover-root`を返すと、消費済み`allowRootContinuation:false`をwrite前に確認せずroot entryを再appendする。probeは`append-applied=2`、journal comments 2件、sequence / previous digest不正を再現。focused 124 tests、finalize 57 tests、typecheck、strict OpenSpec、`git diff --check`はgreenだがstale rediscovery regression test欠落。OSWF-5 soft stop。利用者承認後の新cycleでrecover-root branch入口のbudget fail-closed guard、write 0 regression test、独立review、project checks、今回と別verifierを実行する。real GitHub comment / Issue writeは未実行。
+  - Task 21〜22でblockerをTDD修正。Task 22のlatest project checksと別independent verifier PASSをもって繰越検証を完了した。
+
+### Task 21: stale Issue rediscoveryのroot重複writeをTDDで防ぐ
+
+- **成果:** commentless root回復後のresolution rediscoveryがstaleでも、root transitionを再appendせずwrite 0でfail closedにする。
+- **依存:** Task 19。Task 20の最終検証はverifier blockerによりTask 22へ繰り越す。
+- **対象:**
+  - `repo-tools/skill-update-automation/finalize/issue-journal.ts`
+  - `repo-tools/skill-update-automation/finalize/finalize.test.ts`
+  - `openspec/changes/harden-skill-update-automation-concurrency/proposal.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/design.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [x] **実装:** public reconciliation race RED testから、root continuation budget消費後の`recover-root` branchを追加write前に拒否する。
+- [x] **検証:** 2回目discoveryと直後journal readだけをstale commentlessへ回帰させ、root append 1件、resolution append 0件、journal transition重複なし、後続run retry可能をfocused tests、typecheck、strict OpenSpec、`git diff --check`で確認する。
+  - RED: `node --test --test-name-pattern='never repeats root append on stale resolution rediscovery' repo-tools/skill-update-automation/finalize/finalize.test.ts`: root append applied 2件、1 failed、exit 1。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + latest Task 21 test diff、Node 24.14.1、fresh実行。
+  - GREEN: 同commandは1 test passed、exit 0。root continuation budget消費後の`recover-root`入口でwrite前停止し、root append 1件、resolution append 0件。次runは`updated`、journal最終2 entry、重複なし。同source、fresh実行。
+  - focused: `node --test repo-tools/skill-update-automation/finalize/*.test.ts`: 58 tests passed、exit 0。`npm run typecheck`、strict OpenSpec、`git diff --check`: exit 0。同source、latest Task 21入力のfresh実行。
+
+### Task 22: stale rediscovery修正cycleのreview / verifierを完了する
+
+- **成果:** Task 21のIssue external write boundary変更に対するOSWF-5 convergence evidenceとPR #64の再レビュー可能状態。
+- **依存:** Task 21。
+- **対象:**
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [x] **実装:** latest diff self-review、initial independent review、finding修正を最大3 iterationsで完了する。
+- [x] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、Task 20 reviewer / failed verifierと別のindependent verifierをgreenにする。real GitHub comment / Issue writeは未実行として明記する。
+  - self-review: `allowRootContinuation` guardが`recover-root` branchのread / append前にあり、root post-state確認後のresolution再帰だけがbudgetをfalseへ単調遷移することを確認。closed rediscovery budget、permissions、scopeは不変。
+  - initial independent review: PASS、BLOCKER / WARNING / NIT 0件。stale projection時write 0、response-loss収束、2 budgetの単調消費、後続run retry、test感度を確認。focused 58 tests、typecheck、`git diff --check`はgreen。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" uv run --no-sync task check`: exit 0。Node 24.14.1、root Node 162 tests、automation 268 tests、Python 152 tests、contracts / typecheck / ruff / basedpyright全green。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + latest Task 21 fix worktree diffのfresh実行。
+  - `openspec validate harden-skill-update-automation-concurrency --strict`: valid、exit 0。`git diff --check`: exit 0。同source、latest Task 21 fix入力のfresh実行。
+  - final independent verifier（Task 20 reviewer / failed verifier / Task 22 initial reviewerと別agent）: PASS、BLOCKER / WARNING / NIT 0件。recover-root入口のwrite前guard、root / closed budget独立性、stale rediscovery test感度、response-loss / closed race、共通commentless validator、ready reconciliation、4 write job permission / documentation contractを確認。focused finalize 58 tests、latest project checks、strict OpenSpec、`git diff --check`全green。real GitHub comment / Issue writeは未実行。

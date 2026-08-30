@@ -29,10 +29,19 @@
 
 ## Skill update PR automation
 
-production workflow は top-level `permissions: {}` を維持し、write permission を次の三jobだけへ与える。
+production workflow は top-level `permissions: {}` を維持し、write permission を次の4 jobだけへ与える。
+
+<!-- skill-update-write-permissions:start -->
+- publish-draft: actions=none, contents=write, pull-requests=write, issues=none
+- recover: actions=read, contents=write, pull-requests=write, issues=none
+- cleanup-merged: actions=none, contents=write, pull-requests=read, issues=none
+- publish-finalize: actions=none, contents=read, pull-requests=write, issues=write
+<!-- skill-update-write-permissions:end -->
 
 - `publish-draft`: `contents: write`、`pull-requests: write`。explicit lease branch create / append、immutable root PR作成、
   journal comment append、draft mutationだけを行う。
+- `recover`: `actions: read`、`contents: write`、`pull-requests: write`、`issues: none`。exact origin artifactと
+  fresh live identityが一致する場合だけcross-run transitional recoveryを行う。
 - `cleanup-merged`: `contents: write`、`pull-requests: read`。candidate publish完了後、成功可否に依存せずfresh historyを読み、
   merged strict branchだけをexact leaseで削除する。
 - `publish-finalize`: `contents: read`、`pull-requests: write`、`issues: write`。journal検証、ready / draft、

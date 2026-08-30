@@ -125,18 +125,18 @@
 
 | # | 分類 | 判断 | 穴の内容 | 潰し方 |
 | --- | --- | --- | --- | --- |
-| 1 | 空・ゼロ長・None | 該当 |tracking issueなし、対象entryなし | 1:成功no-op。新issueは作らない |
+| 1 | 空・ゼロ長・None | 該当 |tracking issueなし、対象entryなし、current cleanup failureあり | 1:対象entryもobservationもなければ成功no-op。cleanup observationがあれば新issue createを正常完了として扱う |
 | 2 | 境界値 | 該当 |対象entry 0 / 1 / 2件、issue 0 / 1 / 複数root | 1:exact candidate scopeの2 keyだけ処理。identity cardinality不正はwrite禁止 |
 | 3 | 重複・衝突 | 該当 |同entry重複、別candidate entry、同時issue更新 | 1:既存journal reducerとstable keyでdedupeし、別scopeを保持 |
-| 4 | 順序 | 該当 |pr-ready committed、fresh ready / passed検証、issue resolve順 | 1:`publish-finalize`のreconciliation-only seamでexact順を固定。`recover`はissueを書かない |
+| 4 | 順序 | 該当 |pr-ready committed、fresh ready / passed検証、commentless issue root回復、fresh rediscovery、issue resolve順、rediscoveryのstale回帰 | 1:`publish-finalize`のreconciliation-only seamでexact順を固定。root initial snapshotとdesired resolved snapshotを別entryにし、root確認後の`recover-root`再観測はwrite 0で停止する。`recover`はissueを書かない |
 | 5 | 型・形式不正 | 該当 |recovery descriptor、PR root / journal、issue root / journal不正 | 1:各exact codec / reducerで拒否し、issue write 0件 |
 | 6 | エラー経路 | 該当 |permission denial、partial read、append応答消失 | 1:workflowを失敗させ、post-stateをfresh確認。blind resend禁止 |
-| 7 | 冪等性・再実行 | 該当 |ready-recovered同run失敗、後続no-op retry | 1:stable ready / passed状態から同candidate keyを再計算し、解消済みentryはno-op |
+| 7 | 冪等性・再実行 | 該当 |ready-recovered同run失敗、Issue create / commentless root回復後の中断、stale rediscovery、後続no-op retry | 1:stable ready / passed状態から同candidate keyを再計算。`created` / `recovered` / `updated`を正常化し、root continuation budget消費後はroot entryを再送しない。fresh rediscovery後の解消済みentryはno-op |
 | 8 | 時刻・タイムゾーン | 非該当 |reconciliation eligibilityは経過時間を使わない | 2:fresh exact stateだけを根拠にする |
 | 9 | 文字列 | 該当 |candidate digest / scope / failure key表現差 | 1:canonical digestと列挙済み2 keyだけ許可 |
 | 10 | 数値 | 該当 |PR / Issue / operation ID境界 | 1:既存positive integer / digest parserを使用 |
 | 11 | 巨大入力・リソース枯渇 | 該当 |PR / Issue comment pagination、artifact size | 1:complete paginationと既存artifact上限を必須化 |
-| 12 | 状態遷移の未定義パス | 該当 |PRはreadyだがvalidation非passed、branch / root不一致、permission / cleanup / updater entry混在 | 1:readyかつpassedのexact candidateだけ処理し、対象外entryを保持 |
+| 12 | 状態遷移の未定義パス | 該当 |PRはreadyだがvalidation非passed、branch / root不一致、permission / cleanup / updater entry混在、Issue absent / commentless / journal済み | 1:readyかつpassedのexact candidateだけ処理し、Issue lifecycle全variantで対象外entryを保持 |
 
 ## Requirement 9: exact write-job permission documentation
 
@@ -175,6 +175,8 @@
 | recovery workflow routing / permissions / retention | 静的 contract test | `publish/workflow.test.ts`, `finalize/workflow.test.ts` | recovery job、30日、cleanup除外、`issues: write`不在 |
 | commentless final pre-write predicate race matrix | security matrix integration test | `publish/draft.test.ts`, `recovery/lifecycle.test.ts` | initial discovery後に各PR / branch / root / journal predicateを変化させ、initial journal append 0件を確認 |
 | ready-recovered issue reconciliation / later no-op retry | public lifecycle / workflow test | `recovery/lifecycle.test.ts`, `finalize/finalize.test.ts`, `finalize/workflow.test.ts` | 同candidateの2 failure keyだけ解消。permission / partial read / identity conflictはworkflow red、対象外entry保持 |
+| ready reconciliation Issue lifecycle | public reconciliation / journal test | `finalize/finalize.test.ts` | Issue absent＋cleanup failureはcreate成功。commentless rootはinitial entry回復→fresh rediscovery→stale failure解消。retryで重複なし |
+| ready reconciliation stale rediscovery | public reconciliation race test | `finalize/finalize.test.ts` | root entry post-state確認後の2回目discoveryだけcommentlessへ回帰させ、root append 1件、resolution append 0件を確認 |
 | exact four-write-job safety documentation | 静的 contract test | `repository-contracts.test.ts` | `expectedPermissions`、workflow、bounded safety sectionのexact一致 |
 | real GitHub CAS / comment / cleanup behavior | real-host smoke | fresh smoke repository | fresh approval前は未検証 blocker |
 | 時刻非依存契約 | 静的 contract test | focused model / workflow tests | age-based推測がないことを検査 |

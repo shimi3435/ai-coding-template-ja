@@ -38,14 +38,28 @@ test("validation exports observable step outcomes without adding write permissio
   assert.deepEqual(job.permissions, { contents: "read" });
 });
 
-test("successful recovery re-enters validation while ready recovery and recovery failure skip final writes", () => {
+test("validation recovery re-enters finalize while ready recovery uses reconciliation-only writes", () => {
   const jobs = workflow().jobs;
   assert.match(jobs.validate.if, /needs\.recover\.outputs\.recovery-status == 'validation-required'/);
   assert.match(jobs["publish-finalize"].if, /artifact-kind != 'recovery'/);
   assert.match(jobs["publish-finalize"].if, /recovery-status == 'validation-required'/);
+  assert.match(jobs["publish-finalize"].if, /recovery-status == 'ready-recovered'/);
+  const reconciliation = (jobs["publish-finalize"].steps as Array<Record<string, any>>)
+    .find((step) => step.id === "reconcile-ready");
+  assert.match(reconciliation?.if ?? "", /artifact-kind == 'no-op'/);
+  assert.match(reconciliation?.if ?? "", /recovery-status == 'ready-recovered'/);
+  assert.match(reconciliation?.run ?? "", /ready-reconciliation-command\.ts/);
+  assert.match(reconciliation?.run ?? "", /GITHUB_OUTPUT/);
+  assert.equal(reconciliation?.env.CLEANUP_STATUS, "${{ needs.cleanup-merged.outputs.cleanup-status }}");
+  assert.equal(reconciliation?.env.CLEANUP_OUTCOME, "${{ needs.cleanup-merged.result }}");
+  assert.equal(reconciliation?.env.CLEANUP_FAILED_REFS,
+    "${{ needs.cleanup-merged.outputs.cleanup-failed-refs }}");
   const detection = (jobs["publish-finalize"].steps as Array<Record<string, any>>)
     .find((step) => step.id === "publish-detection-outcome");
   assert.match(detection?.if ?? "", /artifact-kind != 'recovery'/);
+  assert.match(detection?.if ?? "", /ready-reconciliation-status == 'not-applicable'/);
+  const steps = jobs["publish-finalize"].steps as Array<Record<string, any>>;
+  assert.ok(steps.indexOf(reconciliation!) < steps.indexOf(detection!));
 });
 
 test("finalize downloads exact same-run inputs, uses scoped token, and always cleans", () => {
@@ -86,7 +100,8 @@ test("finalize always routes detection and draft failures before candidate-speci
   assert.match(job.if, /needs\.detect\.outputs\.candidate-status != ''/);
   assert.match(job.if, /needs\.detect\.outputs\.summary-only != 'true'/);
   assert.match(reportDownload?.uses ?? "", /^actions\/download-artifact@[0-9a-f]{40}$/);
-  assert.equal(detection?.if, "always() && needs.detect.outputs.artifact-kind != 'recovery'");
+  assert.match(detection?.if ?? "", /^always\(\)/);
+  assert.match(detection?.if ?? "", /ready-reconciliation-status == 'not-applicable'/);
   assert.match(detection?.run ?? "", /detection-command\.ts.*GITHUB_STEP_SUMMARY/s);
   assert.equal(detection?.env.PUBLISH_DRAFT_RESULT, "${{ needs.publish-draft.result }}");
   assert.equal(detection?.env.PUBLISH_DRAFT_PERMISSION_OPERATION,

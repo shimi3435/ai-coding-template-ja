@@ -8,15 +8,23 @@ import test from "node:test";
 import { FakeGithubAdapter } from "../github/fake-adapter.ts";
 import { discoverManagedPullRequests } from "../github/discovery.ts";
 import { loadPrJournal } from "../publish/pr-journal.ts";
+import { reconcileReadyTrackingFailures } from "../finalize/ready-reconciliation.ts";
 import {
   appendJournalEntryDigest,
+  classifyIssueRootV2,
   computeCandidateDigest,
+  computeIssueEntryKey,
   decodeArtifactManifest,
   encodeArtifactManifest,
+  issueStateSnapshotV2,
   journalCommentBody,
+  managedIssueTitle,
   managedPrTitle,
   prStateSnapshotV2,
+  reduceJournalCommentsV2,
+  renderManagedIssueRootV2,
   renderManagedPrRootV2,
+  validateIssueJournalV2,
 } from "../model/index.ts";
 import { recoverCrossRunTransition } from "./lifecycle.ts";
 
@@ -383,6 +391,73 @@ test("run N+1 restores an exact commentless root then enters current validation"
   }));
   const adapter = new FakeGithubAdapter({ branches: [{ ref: root.headRef, sha: headSha }], pullRequests: [pullRequest] });
   try {
+    const readyAfterDiscovery = new Proxy(adapter, {
+      get(source, property) {
+        if (property === "readPullRequest") return async () => ({ ...pullRequest, draft: false });
+        const value = Reflect.get(source, property, source) as unknown;
+        return typeof value === "function" ? value.bind(source) : value;
+      },
+    });
+    await assert.rejects(recoverCrossRunTransition({
+      adapter: readyAfterDiscovery,
+      recoveryArtifactDirectory: recoveryDirectory,
+      originArtifactDirectory: originDirectory,
+      outputArtifactDirectory: outputDirectory,
+      repositoryId: "123",
+      repository: "owner/repository",
+      creatorUserId: "456",
+      defaultBranchSha: sha("0"),
+      defaultBranchRef: root.baseRef,
+      triggerSha: sha("0"),
+      currentRun,
+    }), /fresh exact state/);
+    assert.equal(adapter.transcript.filter((entry) => entry.operation === "append-journal-comment").length, 0);
+
+    const initialEntry = appendJournalEntryDigest({
+      schemaVersion: 2,
+      resourceKind: "pull-request",
+      resourceNumber: 1,
+      creatorUserId: root.creatorUserId,
+      sequence: 1,
+      previousDigest: null,
+      phase: "committed",
+      operation: "root",
+      operationId: decision.target.operationId,
+      snapshot,
+    });
+    const journalAfterDiscovery = new Proxy(adapter, {
+      get(source, property) {
+        if (property === "listJournalComments") {
+          return async () => ({
+            complete: true,
+            items: [{
+              id: "1",
+              authorUserId: root.creatorUserId,
+              createdAt: "2026-08-30T00:00:00Z",
+              updatedAt: "2026-08-30T00:00:00Z",
+              body: journalCommentBody(initialEntry),
+            }],
+          });
+        }
+        const value = Reflect.get(source, property, source) as unknown;
+        return typeof value === "function" ? value.bind(source) : value;
+      },
+    });
+    await assert.rejects(recoverCrossRunTransition({
+      adapter: journalAfterDiscovery,
+      recoveryArtifactDirectory: recoveryDirectory,
+      originArtifactDirectory: originDirectory,
+      outputArtifactDirectory: outputDirectory,
+      repositoryId: "123",
+      repository: "owner/repository",
+      creatorUserId: "456",
+      defaultBranchSha: sha("0"),
+      defaultBranchRef: root.baseRef,
+      triggerSha: sha("0"),
+      currentRun,
+    }), /fresh exact state/);
+    assert.equal(adapter.transcript.filter((entry) => entry.operation === "append-journal-comment").length, 0);
+
     assert.equal((await recoverCrossRunTransition({
       adapter,
       recoveryArtifactDirectory: recoveryDirectory,
@@ -540,7 +615,66 @@ test("run N+1 completes prepared pr-ready without repeating validation or PR mut
     createdAt: "2026-08-29T01:00:00.000Z",
     files: [{ name: "preview-report.json", byteLength: preview.length, digest: digest(preview) }],
   }));
-  const adapter = new FakeGithubAdapter({ branches: [{ ref: state.headRef, sha: headSha }], pullRequests: [pullRequest] });
+  const failureScope = { kind: "candidate" as const, digest: candidateDigest };
+  const failureEntry = {
+    key: computeIssueEntryKey("validation-failed", failureScope),
+    state: "validation-failed" as const,
+    scope: failureScope,
+    firstSeen: { run: originRun, at: "2026-08-29T00:00:00.000Z" },
+    lastSeen: { run: originRun, at: "2026-08-29T00:00:00.000Z" },
+    detailDigest: `sha256:${"8".repeat(64)}`,
+    summary: "validation failed",
+  };
+  const issueSnapshot = issueStateSnapshotV2({
+    schemaVersion: 2,
+    kind: "managed-issue-state",
+    repositoryId: "123",
+    repository: "owner/repository",
+    entries: [failureEntry],
+  });
+  const issueRoot = {
+    schemaVersion: 2 as const,
+    kind: "managed-issue-root" as const,
+    repositoryId: "123",
+    repository: "owner/repository",
+    creatorUserId: "456",
+    rootOperationId: `sha256:${"9".repeat(64)}`,
+    initialSnapshot: issueSnapshot,
+    initialSnapshotDigest: issueSnapshot.stateDigest,
+  };
+  const issueRootEntry = appendJournalEntryDigest({
+    schemaVersion: 2,
+    resourceKind: "issue",
+    resourceNumber: 10,
+    creatorUserId: "456",
+    sequence: 1,
+    previousDigest: null,
+    phase: "committed",
+    operation: "root",
+    operationId: issueRoot.rootOperationId,
+    snapshot: issueSnapshot,
+  });
+  const trackingIssue = {
+    issueNumber: 10,
+    state: "open" as const,
+    title: managedIssueTitle,
+    body: renderManagedIssueRootV2(issueRoot, "Managed automation failures."),
+    isPullRequest: false,
+    authorUserId: "456",
+    lastEditedAt: null,
+    journalComments: [{
+      id: "10",
+      authorUserId: "456",
+      createdAt: "2026-08-29T00:00:00Z",
+      updatedAt: "2026-08-29T00:00:00Z",
+      body: journalCommentBody(issueRootEntry),
+    }],
+  };
+  const adapter = new FakeGithubAdapter({
+    branches: [{ ref: state.headRef, sha: headSha }],
+    pullRequests: [pullRequest],
+    issues: [trackingIssue],
+  });
   try {
     const result = await recoverCrossRunTransition({
       adapter,
@@ -558,6 +692,27 @@ test("run N+1 completes prepared pr-ready without repeating validation or PR mut
     assert.equal(result.kind, "ready-recovered");
     assert.equal(adapter.transcript.filter((entry) => entry.operation === "update-pull-request").length, 0);
     assert.equal(adapter.transcript.filter((entry) => entry.operation === "append-journal-comment").length, 1);
+    const recoveryManifest = decodeArtifactManifest(readFileSync(join(recoveryDirectory, "manifest.json")));
+    if (recoveryManifest.kind !== "recovery") throw new Error("fixture recovery manifest missing");
+    assert.equal(await reconcileReadyTrackingFailures({
+      adapter,
+      context: {
+        repositoryId: "123",
+        repository: "owner/repository",
+        creatorUserId: "456",
+        defaultBranchSha: sha("0"),
+        defaultBranchRef: state.baseRef,
+        now: () => new Date("2026-08-30T01:02:00Z"),
+      },
+      manifest: recoveryManifest,
+    }), "updated");
+    const currentIssue = await adapter.readIssue(10);
+    if (currentIssue === null) throw new Error("tracking issue missing");
+    const currentIssueRoot = classifyIssueRootV2(currentIssue.title, currentIssue.body);
+    if (currentIssueRoot.kind !== "strict") throw new Error("tracking issue root invalid");
+    const currentComments = await adapter.listJournalComments(10);
+    const currentJournal = reduceJournalCommentsV2(currentComments.items, currentIssueRoot.root.creatorUserId);
+    assert.deepEqual(validateIssueJournalV2(currentIssueRoot.root, currentJournal).at(-1)?.entries, []);
   } finally {
     rmSync(rootDirectory, { recursive: true, force: true });
   }

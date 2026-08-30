@@ -192,6 +192,21 @@ The automation MUST use the existing publish-finalize job to reconcile stale tra
 - **THEN** it performs no unsafe Issue mutation and the workflow fails while the PR remains ready
 - **AND** a later stable ready and passed no-op run repeats the same fresh verification and idempotent reconciliation
 
+#### Scenario: Ready reconciliation traverses valid Issue lifecycle states
+
+- **GIVEN** the ready candidate is exact and either no tracking Issue exists with a current cleanup failure or an exact commentless tracking Issue root contains the stale candidate failure
+- **WHEN** publish-finalize reconciles tracking state
+- **THEN** it accepts a freshly verified created Issue as success
+- **AND** it recovers an exact commentless root entry before fresh rediscovery and a separate stale-failure resolution append
+- **AND** retry observes the same final entries without duplicating the Issue or journal transition
+
+#### Scenario: Stale rediscovery never repeats the recovered root transition
+
+- **GIVEN** publish-finalize appended and freshly verified the exact commentless Issue root entry
+- **WHEN** the resolution rediscovery still projects the Issue as commentless
+- **THEN** it fails closed before another Issue comment write
+- **AND** leaves exactly one root journal transition for a later run to retry
+
 ### Requirement: Write-job permissions and safety documentation remain exact
 
 The production workflow MUST have exactly four write-capable jobs, and the repository contract MUST verify that the workflow and the bounded safety-document permission topology remain exact.

@@ -28,7 +28,7 @@ import {
   runPreparedTransition,
   samePrSnapshot,
 } from "./pr-journal.ts";
-import { appendInitialJournalEntry } from "./initial-journal.ts";
+import { appendInitialJournalEntry, assertExactCommentlessRecoveryTarget } from "./initial-journal.ts";
 
 export type PublishDraftContext = Readonly<{
   repositoryId: string;
@@ -102,19 +102,10 @@ async function recoverCommentlessPrRoot(input: Readonly<{
   if (manifest.kind !== "candidate-update") throw stopReason("publish-target-changed");
   const expectedState = pendingPrState(manifest, input.context, manifest.candidateSha);
   const initialState = decodePrStateSnapshotV2(root.initialSnapshot);
-  const branch = await input.adapter.readBranch(input.decoded.target.headRef);
-  const comments = await input.adapter.listJournalComments(pullRequest.prNumber);
   if (root.repositoryId !== input.context.repositoryId || root.repository !== input.context.repository ||
     root.creatorUserId !== input.context.creatorUserId || root.generation !== input.decoded.target.generation ||
     root.headRef !== input.decoded.target.headRef || root.baseRef !== input.context.defaultBranchRef ||
-    root.candidateDigest !== manifest.candidateDigest || !samePrSnapshot(initialState, expectedState) ||
-    pullRequest.state !== "open" || pullRequest.merged || !pullRequest.draft ||
-    pullRequest.authorUserId !== root.creatorUserId || pullRequest.lastEditedAt !== null ||
-    pullRequest.title !== managedPrTitle || pullRequest.headRepositoryId !== input.context.repositoryId ||
-    pullRequest.baseRepositoryId !== input.context.repositoryId || pullRequest.headRef !== root.headRef ||
-    pullRequest.baseRef !== root.baseRef || pullRequest.headSha !== expectedState.expectedHeadSha ||
-    branch?.sha !== expectedState.expectedHeadSha || !comments.complete ||
-    reduceJournalCommentsV2(comments.items, root.creatorUserId).entries.length !== 0) {
+    root.candidateDigest !== manifest.candidateDigest || !samePrSnapshot(initialState, expectedState)) {
     throw stopReason("publish-target-changed");
   }
   const entry = appendJournalEntryDigest({
@@ -129,7 +120,18 @@ async function recoverCommentlessPrRoot(input: Readonly<{
     operationId: rootOperationId(root.repositoryId, pullRequest.prNumber, root.initialSnapshotDigest),
     snapshot: root.initialSnapshot,
   });
-  await appendInitialJournalEntry(input.adapter, entry);
+  try {
+    await assertExactCommentlessRecoveryTarget({
+      adapter: input.adapter,
+      prNumber: pullRequest.prNumber,
+      immutableBody: pullRequest.body!,
+      expectedRoot: root,
+      expectedState,
+    });
+    await appendInitialJournalEntry(input.adapter, entry);
+  } catch {
+    throw stopReason("publish-target-changed");
+  }
   return { manifest, prNumber: pullRequest.prNumber };
 }
 

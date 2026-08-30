@@ -148,7 +148,16 @@ function writeValidRepository(): string {
   );
   writeFileSync(
     join(repository, "docs", "agents", "safety.md"),
-    "publish-draft / cleanup-merged / publish-finalize / immutable root / gh auth / real GitHub write\n",
+    [
+      "publish-draft / recover / cleanup-merged / publish-finalize / immutable root / gh auth / real GitHub write",
+      "<!-- skill-update-write-permissions:start -->",
+      "- publish-draft: actions=none, contents=write, pull-requests=write, issues=none",
+      "- recover: actions=read, contents=write, pull-requests=write, issues=none",
+      "- cleanup-merged: actions=none, contents=write, pull-requests=read, issues=none",
+      "- publish-finalize: actions=none, contents=read, pull-requests=write, issues=write",
+      "<!-- skill-update-write-permissions:end -->",
+      "",
+    ].join("\n"),
     "utf8",
   );
   return repository;
@@ -207,6 +216,22 @@ test("check-contracts rejects weakened automation permission topology", () => {
   const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /detect permissions/);
+});
+
+test("check-contracts rejects safety documentation permission drift", () => {
+  const repository = writeValidRepository();
+  const safety = join(repository, "docs", "agents", "safety.md");
+  writeFileSync(
+    safety,
+    readFileSync(safety, "utf8").replace(
+      "- recover: actions=read, contents=write, pull-requests=write, issues=none",
+      "- recover: actions=read, contents=write, pull-requests=write, issues=write",
+    ),
+    "utf8",
+  );
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /safety\.md.*permission topology/);
 });
 
 test("check-contracts requires the human smoke CLI without a stored credential route", () => {

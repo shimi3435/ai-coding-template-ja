@@ -27,7 +27,7 @@ import {
   samePrSnapshot,
   rootOperationId,
 } from "../publish/pr-journal.ts";
-import { appendInitialJournalEntry } from "../publish/initial-journal.ts";
+import { appendInitialJournalEntry, assertExactCommentlessRecoveryTarget } from "../publish/initial-journal.ts";
 
 export type FinalizeContext = Readonly<{
   repositoryId: string;
@@ -236,17 +236,18 @@ export async function finalizeManagedPullRequest(input: Readonly<{
   if (discovery.open?.prNumber !== target.prNumber || discovery.historyDigest !== target.historyDigest) {
     return { kind: "recovery-required" };
   }
+  const artifactPullRequest = page.items.find((pullRequest) => pullRequest.prNumber === target.prNumber);
+  if (artifactPullRequest === undefined) return { kind: "recovery-required" };
   let current = await input.adapter.readPullRequest(target.prNumber);
   let branch = await input.adapter.readBranch(target.headRef);
   if (current === null || branch === null) return { kind: "recovery-required" };
-  const immutableBody = current.body;
-  const rootClassification = classifyPrRootV2(current.body);
-  const initialComments = await input.adapter.listJournalComments(target.prNumber);
+  const immutableBody = artifactPullRequest.body;
+  const rootClassification = classifyPrRootV2(artifactPullRequest.body);
   let semanticCommentless = false;
-  if (rootClassification.kind === "strict" && initialComments.complete) {
+  if (rootClassification.kind === "strict") {
     try {
       semanticCommentless = reduceJournalCommentsV2(
-        initialComments.items,
+        artifactPullRequest.journalComments ?? [],
         rootClassification.root.creatorUserId,
       ).entries.length === 0;
     } catch {
@@ -262,10 +263,7 @@ export async function finalizeManagedPullRequest(input: Readonly<{
       return { kind: "pr-identity-conflict" };
     }
     if (target.markerDigest !== root.initialSnapshotDigest || root.creatorUserId !== input.context.creatorUserId ||
-      current.authorUserId !== root.creatorUserId || current.lastEditedAt !== null || current.state !== "open" ||
-      current.merged || !current.draft || current.headSha !== initialState.expectedHeadSha ||
-      branch.sha !== initialState.expectedHeadSha || current.headRef !== initialState.headRef ||
-      current.baseRef !== initialState.baseRef || initialState.candidateDigest !== input.manifest.candidateDigest) {
+      initialState.candidateDigest !== input.manifest.candidateDigest) {
       return { kind: "pr-identity-conflict" };
     }
     const rootEntry = appendJournalEntryDigest({
@@ -281,6 +279,13 @@ export async function finalizeManagedPullRequest(input: Readonly<{
       snapshot: root.initialSnapshot,
     });
     try {
+      await assertExactCommentlessRecoveryTarget({
+        adapter: input.adapter,
+        prNumber: target.prNumber,
+        immutableBody: artifactPullRequest.body!,
+        expectedRoot: root,
+        expectedState: initialState,
+      });
       await appendInitialJournalEntry(input.adapter, rootEntry);
     } catch {
       return { kind: "recovery-required" };

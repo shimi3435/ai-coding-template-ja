@@ -159,6 +159,13 @@ after snapshotを照合する。後続runのstable ready / passed no-opでもfre
 保持する。identity conflict、permission denial、incomplete readはissueへunsafe writeせずworkflowを失敗させる。PR ready状態は維持し、後続runで
 冪等に再試行する。
 
+reconciliation時にtracking Issueが存在せずcurrent cleanup failureを観測した場合、既存Issue lifecycleの`created`を正常完了として受理する。
+commentless Issue rootでは、rootに埋め込まれたinitial snapshotのexact root entryを先に回復し、fresh rediscovery後に同candidateのstale failure解消を
+別のcommitted entryとしてappendする。root回復と解消を一つのdesired snapshotへ短絡しない。`created` / `recovered` / `updated` / `unchanged` /
+`none`は安全に検証済みの正常結果とし、identity conflict、incomplete read、permission denialだけを失敗として扱う。
+root continuation budgetはroot entryのfresh post-state確認後に消費する。resolution用fresh rediscoveryが再び`recover-root`を返した場合は
+GitHub projectionの回帰として、root branch入口で追加comment write 0件のままfail closedにする。projection回復は推測せず後続runへ委ねる。
+
 productionのwrite jobは`publish-draft`、`recover`、`publish-finalize`、`cleanup-merged`のexact 4 jobとする。
 `docs/agents/safety.md`は各jobのpermission matrixと役割を列挙し、`repository-contracts.ts`の`expectedPermissions`をcanonical sourceとして、
 bounded sectionまたはexact markerでworkflowと文書の一致を検証する。`recover`は`actions: read`、`contents: write`、

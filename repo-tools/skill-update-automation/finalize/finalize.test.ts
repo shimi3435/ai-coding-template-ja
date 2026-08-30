@@ -6,6 +6,7 @@ import {
   appendJournalEntryDigest,
   classifyIssueRootV2,
   classifyPrRootV2,
+  computeIssueEntryKey,
   computePrHistoryDigest,
   decodeIssueStateSnapshotV2,
   decodeJournalCommentBodyV2,
@@ -23,13 +24,19 @@ import {
   type DraftReceipt,
   type ExistingHeadValidationManifest,
   type IssueEntry,
+  type NoOpManifest,
   type ValidationState,
 } from "../model/index.ts";
 import { createFakeGithubAdapter, GithubAdapterError } from "../github/fake-adapter.ts";
 import type { GithubAdapter } from "../github/adapter.ts";
 import type { GithubIssue } from "../github/issue-discovery.ts";
 import type { GithubPullRequest } from "../github/discovery.ts";
-import { finalizeManagedPullRequest, syncManagedIssueEntries, type FinalizeGithubAdapter } from "./finalize.ts";
+import {
+  finalizeManagedPullRequest,
+  syncManagedIssueEntries,
+  type FinalizeGithubAdapter,
+} from "./finalize.ts";
+import { reconcileReadyTrackingFailures } from "./ready-reconciliation.ts";
 
 const sha = (digit: string): string => digit.repeat(40);
 const digest = (value: string): string => `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -223,7 +230,9 @@ function issue(number: number, entries: readonly IssueEntry[] = [], creatorUserI
     repository: context.repository,
     entries,
   });
-  const rootOperationId = `sha256:${"b".repeat(64)}`;
+  const rootOperationId = `sha256:${createHash("sha256").update([
+    "issue-root-v2", context.repositoryId, creatorUserId, snapshot.stateDigest,
+  ].join("\0"), "utf8").digest("hex")}`;
   const root = {
     schemaVersion: 2 as const,
     kind: "managed-issue-root" as const,
@@ -273,6 +282,444 @@ async function issueEntries(adapter: FinalizeGithubAdapter, issueNumber: number)
   const journal = reduceJournalCommentsV2(comments.items, root.root.creatorUserId);
   return validateIssueJournalV2(root.root, journal).at(-1)?.entries ?? [];
 }
+
+function failureEntry(state: IssueEntry["state"], candidateDigest: string, suffix: string): IssueEntry {
+  const scope = { kind: "candidate" as const, digest: candidateDigest };
+  return scopedFailureEntry(state, scope, suffix);
+}
+
+function scopedFailureEntry(
+  state: IssueEntry["state"],
+  scope: IssueEntry["scope"],
+  suffix: string,
+): IssueEntry {
+  return {
+    key: computeIssueEntryKey(state, scope),
+    state,
+    scope,
+    firstSeen: { run, at: "2026-08-20T00:00:00.000Z" },
+    lastSeen: { run, at: "2026-08-20T00:00:00.000Z" },
+    detailDigest: `sha256:${suffix.repeat(64)}`,
+    summary: state,
+  };
+}
+
+async function readyPullRequest(): Promise<GithubPullRequest> {
+  const pull = pendingPull();
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+  });
+  const result = await finalizeManagedPullRequest({
+    adapter,
+    context,
+    ...inputs(pull, { status: "passed", run }),
+  });
+  assert.equal(result.kind, "finalized");
+  return (await adapter.listPullRequests()).items[0]!;
+}
+
+test("stable ready reconciliation resolves only candidate-scoped validation failures", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const otherDigest = `sha256:${"8".repeat(64)}`;
+  const tracked = issue(10, [
+    failureEntry("validation-failed", candidateDigest, "1"),
+    failureEntry("recovery-required", candidateDigest, "2"),
+    failureEntry("permission-denied", candidateDigest, "3"),
+    failureEntry("validation-failed", otherDigest, "4"),
+    scopedFailureEntry("cleanup-failed", { kind: "global", operation: "cleanup" }, "6"),
+    scopedFailureEntry("updater-rejected", { kind: "global", operation: "detect" }, "7"),
+  ].sort((left, right) => left.key.localeCompare(right.key)));
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [tracked],
+  });
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+  const reconciliationInput = {
+    adapter,
+    context,
+    manifest,
+    cleanupStatus: "failed" as const,
+    cleanupFailedRefs: ["refs/heads/automation/skill-updates/g000002"],
+  };
+  assert.equal(await reconcileReadyTrackingFailures(reconciliationInput), "updated");
+  const entries = await issueEntries(adapter, 10);
+  assert.equal(entries.some((entry) => entry.state === "validation-failed" &&
+    entry.scope.kind === "candidate" && entry.scope.digest === candidateDigest), false);
+  assert.equal(entries.some((entry) => entry.state === "recovery-required" &&
+    entry.scope.kind === "candidate" && entry.scope.digest === candidateDigest), false);
+  assert.equal(entries.some((entry) => entry.state === "validation-failed" &&
+    entry.scope.kind === "candidate" && entry.scope.digest === otherDigest), true);
+  assert.equal(entries.some((entry) => entry.state === "permission-denied"), true);
+  assert.equal(entries.some((entry) => entry.state === "updater-rejected"), true);
+  assert.equal(entries.some((entry) => entry.state === "cleanup-failed" && entry.scope.kind === "global"), true);
+  assert.equal(entries.some((entry) => entry.state === "cleanup-failed" && entry.scope.kind === "resource" &&
+    entry.scope.identity === "refs/heads/automation/skill-updates/g000002"), true);
+  assert.equal((await adapter.readPullRequest(pull.prNumber))?.draft, false);
+  assert.equal(await reconcileReadyTrackingFailures(reconciliationInput), "unchanged");
+});
+
+test("stable ready reconciliation creates one cleanup issue and retry is idempotent", async () => {
+  const pull = await readyPullRequest();
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+  });
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+  const reconciliationInput = {
+    adapter,
+    context,
+    manifest,
+    cleanupStatus: "failed" as const,
+    cleanupFailedRefs: ["refs/heads/automation/skill-updates/g000002"],
+  };
+
+  assert.equal(await reconcileReadyTrackingFailures(reconciliationInput), "created");
+  const issues = (await adapter.listIssues()).items;
+  assert.equal(issues.length, 1);
+  assert.deepEqual((await issueEntries(adapter, issues[0]!.issueNumber)).map((entry) => [entry.state, entry.scope]), [[
+    "cleanup-failed",
+    { kind: "resource", resourceKind: "branch", identity: "refs/heads/automation/skill-updates/g000002" },
+  ]]);
+  const applied = adapter.transcript.filter((entry) => entry.outcome === "applied").length;
+  assert.equal(await reconcileReadyTrackingFailures(reconciliationInput), "unchanged");
+  assert.equal((await adapter.listIssues()).items.length, 1);
+  assert.equal(adapter.transcript.filter((entry) => entry.outcome === "applied").length, applied);
+});
+
+test("stable ready reconciliation recovers a commentless issue root before resolving stale failure", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const otherDigest = `sha256:${"8".repeat(64)}`;
+  const commentless = {
+    ...issue(10, [
+      failureEntry("validation-failed", candidateDigest, "1"),
+      failureEntry("permission-denied", candidateDigest, "2"),
+      failureEntry("validation-failed", otherDigest, "3"),
+    ].sort((left, right) => left.key.localeCompare(right.key))),
+    journalComments: [],
+  };
+  const source = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [commentless],
+  });
+  let rootResponseLost = false;
+  const adapter = new Proxy(source, {
+    get(target, property, receiver) {
+      if (property === "appendJournalComment") {
+        return async (...args: Parameters<typeof target.appendJournalComment>) => {
+          const result = await target.appendJournalComment(...args);
+          if (!rootResponseLost) {
+            rootResponseLost = true;
+            throw new Error("root append response lost");
+          }
+          return result;
+        };
+      }
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as FinalizeGithubAdapter;
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  assert.equal(await reconcileReadyTrackingFailures({ adapter, context, manifest }), "updated");
+  assert.deepEqual((await issueEntries(source, 10)).map((entry) => [entry.state, entry.scope]), [
+    ["validation-failed", { kind: "candidate", digest: otherDigest }],
+    ["permission-denied", { kind: "candidate", digest: candidateDigest }],
+  ]);
+  assert.equal((await adapter.listJournalComments(10)).items.length, 2);
+  const applied = source.transcript.filter((entry) => entry.outcome === "applied").length;
+  assert.equal(await reconcileReadyTrackingFailures({ adapter, context, manifest }), "unchanged");
+  assert.equal((await adapter.listJournalComments(10)).items.length, 2);
+  assert.equal(source.transcript.filter((entry) => entry.outcome === "applied").length, applied);
+});
+
+test("ready reconciliation retry accepts a lost resolution append response without duplicate transition", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const commentless = {
+    ...issue(10, [failureEntry("validation-failed", candidateDigest, "1")]),
+    journalComments: [],
+  };
+  const source = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [commentless],
+  });
+  let appendCalls = 0;
+  const responseLost = new Proxy(source, {
+    get(target, property, receiver) {
+      if (property === "appendJournalComment") {
+        return async (...args: Parameters<typeof target.appendJournalComment>) => {
+          appendCalls += 1;
+          const result = await target.appendJournalComment(...args);
+          if (appendCalls === 2) throw new Error("resolution append response lost");
+          return result;
+        };
+      }
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as FinalizeGithubAdapter;
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  await assert.rejects(reconcileReadyTrackingFailures({ adapter: responseLost, context, manifest }), /response lost/);
+  assert.equal(appendCalls, 2);
+  assert.deepEqual(await issueEntries(source, 10), []);
+  assert.equal((await source.listJournalComments(10)).items.length, 2);
+  assert.equal(await reconcileReadyTrackingFailures({ adapter: responseLost, context, manifest }), "unchanged");
+  assert.equal(appendCalls, 2);
+  assert.equal((await source.listJournalComments(10)).items.length, 2);
+});
+
+test("ready reconciliation never repeats root append on stale resolution rediscovery", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const commentless = {
+    ...issue(10, [failureEntry("validation-failed", candidateDigest, "1")]),
+    journalComments: [],
+  };
+  const source = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [commentless],
+  });
+  let issueListReads = 0;
+  let staleJournalReturned = false;
+  const staleRediscovery = new Proxy(source, {
+    get(target, property, receiver) {
+      if (property === "listIssues") {
+        return async () => {
+          issueListReads += 1;
+          const current = await target.listIssues();
+          return issueListReads === 2
+            ? { ...current, items: current.items.map((item) => ({ ...item, journalComments: [] })) }
+            : current;
+        };
+      }
+      if (property === "listJournalComments") {
+        return async (resourceNumber: number) => {
+          if (resourceNumber === 10 && issueListReads === 2 && !staleJournalReturned) {
+            staleJournalReturned = true;
+            return { complete: true, items: [] };
+          }
+          return await target.listJournalComments(resourceNumber);
+        };
+      }
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as FinalizeGithubAdapter;
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  await assert.rejects(reconcileReadyTrackingFailures({ adapter: staleRediscovery, context, manifest }));
+  assert.equal(source.transcript.filter((entry) =>
+    entry.operation === "append-journal-comment" && entry.outcome === "applied").length, 1);
+  assert.equal((await source.listJournalComments(10)).items.length, 1);
+  assert.deepEqual(await issueEntries(source, 10), [failureEntry("validation-failed", candidateDigest, "1")]);
+
+  assert.equal(await reconcileReadyTrackingFailures({ adapter: staleRediscovery, context, manifest }), "updated");
+  assert.equal((await source.listJournalComments(10)).items.length, 2);
+  assert.deepEqual(await issueEntries(source, 10), []);
+});
+
+test("ready reconciliation stops resolution when issue edit evidence changes after root recovery", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const commentless = {
+    ...issue(10, [failureEntry("validation-failed", candidateDigest, "1")]),
+    journalComments: [],
+  };
+  const source = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [commentless],
+  });
+  let appendCalls = 0;
+  const raced = new Proxy(source, {
+    get(target, property, receiver) {
+      if (property === "appendJournalComment") {
+        return async (...args: Parameters<typeof target.appendJournalComment>) => {
+          appendCalls += 1;
+          return await target.appendJournalComment(...args);
+        };
+      }
+      if (property === "readIssue") {
+        return async (issueNumber: number) => {
+          const current = await target.readIssue(issueNumber);
+          return appendCalls === 0 || current === null
+            ? current
+            : { ...current, lastEditedAt: "2026-08-30T00:00:00Z" };
+        };
+      }
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as FinalizeGithubAdapter;
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  await assert.rejects(reconcileReadyTrackingFailures({ adapter: raced, context, manifest }), /issue state/);
+  assert.equal(appendCalls, 1);
+  assert.equal(source.transcript.filter((entry) =>
+    entry.operation === "append-journal-comment" && entry.outcome === "applied").length, 1);
+  assert.deepEqual(await issueEntries(source, 10), [failureEntry("validation-failed", candidateDigest, "1")]);
+});
+
+test("no-op without a stable ready candidate performs no tracking write", async () => {
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: context.defaultBranchSha,
+    target: { mode: "none", historyDigest: computePrHistoryDigest(context.repositoryId, []) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+  const adapter = createFakeGithubAdapter();
+  assert.equal(await reconcileReadyTrackingFailures({ adapter, context, manifest }), "not-applicable");
+  await assert.rejects(reconcileReadyTrackingFailures({
+    adapter,
+    context,
+    manifest,
+    cleanupFailedRefs: ["refs/heads/automation/skill-updates/g000002"],
+  }), /cleanup status/);
+  assert.deepEqual(adapter.transcript, []);
+});
+
+test("ready reconciliation fails closed on incomplete identity or Issue permission denial", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const tracked = issue(10, [failureEntry("validation-failed", candidateDigest, "1")]);
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+  for (const testCase of [
+    {
+      name: "incomplete PR discovery",
+      branches: [{ ref: pull.headRef, sha: pull.headSha }],
+      faults: [{ operation: "list-pull-requests" as const, kind: "partial-response" as const }],
+    },
+    {
+      name: "divergent branch identity",
+      branches: [{ ref: pull.headRef, sha: sha("9") }],
+      faults: [],
+    },
+    {
+      name: "incomplete Issue discovery",
+      branches: [{ ref: pull.headRef, sha: pull.headSha }],
+      faults: [{ operation: "list-issues" as const, kind: "partial-response" as const }],
+    },
+  ]) {
+    const adapter = createFakeGithubAdapter({
+      branches: testCase.branches,
+      pullRequests: [pull],
+      issues: [tracked],
+      faults: testCase.faults,
+    });
+    await assert.rejects(reconcileReadyTrackingFailures({ adapter, context, manifest }));
+    assert.equal(
+      adapter.transcript.filter((entry) =>
+        entry.operation === "append-journal-comment" && entry.outcome === "applied"
+      ).length,
+      0,
+      testCase.name,
+    );
+    assert.deepEqual(await issueEntries(adapter, 10), [failureEntry("validation-failed", candidateDigest, "1")]);
+    assert.equal((await adapter.readPullRequest(pull.prNumber))?.draft, false);
+  }
+
+  const denied = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [tracked],
+    faults: [{ operation: "append-journal-comment", kind: "permission-denied" }],
+  });
+  await assert.rejects(reconcileReadyTrackingFailures({ adapter: denied, context, manifest }), /permission denied/);
+  assert.equal(denied.transcript.filter((entry) => entry.outcome === "applied").length, 0);
+  assert.deepEqual(await issueEntries(denied, 10), [failureEntry("validation-failed", candidateDigest, "1")]);
+  assert.equal((await denied.readPullRequest(pull.prNumber))?.draft, false);
+});
 
 test("passed exact head becomes ready without issue write", async () => {
   const pull = pendingPull();
@@ -368,6 +815,63 @@ test("publish-finalize recovers an unedited commentless PR root and accepts init
     createdAt: updateInput.manifest.createdAt,
     files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"4".repeat(64)}` }],
   };
+  for (const override of [
+    { draft: false },
+    { title: "changed" },
+    { headRepositoryId: "999" },
+    { body: renderManagedPrRootV2(root.root, "Changed summary."), lastEditedAt: null },
+  ]) {
+    const raceSource = createFakeGithubAdapter({
+      branches: [{ ref: original.headRef, sha: original.headSha }],
+      pullRequests: [commentless],
+    });
+    let pullRequestReads = 0;
+    const raced = new Proxy(raceSource, {
+      get(target, property, receiver) {
+        if (property === "readPullRequest") {
+          return async (prNumber: number) => {
+            pullRequestReads += 1;
+            const current = await target.readPullRequest(prNumber);
+            return pullRequestReads < 2 || current === null ? current : { ...current, ...override };
+          };
+        }
+        const value = Reflect.get(target, property, receiver) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as FinalizeGithubAdapter;
+    assert.equal((await finalizeManagedPullRequest({
+      adapter: raced,
+      context,
+      manifest,
+      validation: { status: "passed", run },
+    })).kind, "recovery-required");
+    assert.equal(raceSource.transcript.filter((entry) => entry.outcome === "applied").length, 0);
+  }
+
+  const journalRaceSource = createFakeGithubAdapter({
+    branches: [{ ref: original.headRef, sha: original.headSha }],
+    pullRequests: [commentless],
+  });
+  const journalRaced = new Proxy(journalRaceSource, {
+    get(target, property, receiver) {
+      if (property === "listJournalComments") {
+        return async (prNumber: number) => {
+          const current = await target.listJournalComments(prNumber);
+          return { complete: true, items: [...current.items, original.journalComments![0]!] };
+        };
+      }
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as FinalizeGithubAdapter;
+  assert.equal((await finalizeManagedPullRequest({
+    adapter: journalRaced,
+    context,
+    manifest,
+    validation: { status: "passed", run },
+  })).kind, "recovery-required");
+  assert.equal(journalRaceSource.transcript.filter((entry) => entry.outcome === "applied").length, 0);
+
   const source = createFakeGithubAdapter({
     branches: [{ ref: original.headRef, sha: original.headSha }],
     pullRequests: [commentless],

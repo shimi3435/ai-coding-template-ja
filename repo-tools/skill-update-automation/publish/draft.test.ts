@@ -404,6 +404,100 @@ test("publish-draft recovers an exact unedited commentless PR root", async () =>
   }
 });
 
+test("commentless PR recovery rechecks every write-boundary predicate after discovery", async () => {
+  const cases: readonly Readonly<{
+    name: string;
+    pullRequest?: Partial<GithubPullRequest>;
+    branchSha?: string | null;
+    journal?: "incomplete" | "managed" | "foreign-marker" | "malformed-marker";
+  }>[] = [
+    { name: "ready", pullRequest: { draft: false } },
+    { name: "closed", pullRequest: { state: "closed" } },
+    { name: "merged", pullRequest: { state: "closed", merged: true, draft: false } },
+    { name: "title", pullRequest: { title: "changed" } },
+    { name: "head repository", pullRequest: { headRepositoryId: "999" } },
+    { name: "base repository", pullRequest: { baseRepositoryId: "999" } },
+    { name: "head ref", pullRequest: { headRef: "refs/heads/changed" } },
+    { name: "base ref", pullRequest: { baseRef: "refs/heads/changed" } },
+    { name: "PR head", pullRequest: { headSha: sha("9") } },
+    { name: "branch head", branchSha: sha("9") },
+    { name: "author", pullRequest: { authorUserId: "999" } },
+    { name: "edited body", pullRequest: { lastEditedAt: "2026-08-30T00:00:00Z" } },
+    { name: "immutable body", pullRequest: { body: "changed" } },
+    { name: "incomplete journal", journal: "incomplete" },
+    { name: "managed journal", journal: "managed" },
+    { name: "foreign marker", journal: "foreign-marker" },
+    { name: "malformed marker", journal: "malformed-marker" },
+  ];
+  for (const race of cases) {
+    const fixture = await commentlessCreateFixture();
+    const root = classifyPrRootV2(fixture.created.body);
+    assert.equal(root.kind, "strict");
+    if (root.kind !== "strict") throw new Error("fixture root missing");
+    const initial = appendJournalEntryDigest({
+      schemaVersion: 2,
+      resourceKind: "pull-request",
+      resourceNumber: fixture.created.prNumber,
+      creatorUserId: root.root.creatorUserId,
+      sequence: 1,
+      previousDigest: null,
+      phase: "committed",
+      operation: "root",
+      operationId: digest(Buffer.from([
+        "root", root.root.repositoryId, String(fixture.created.prNumber), root.root.initialSnapshotDigest,
+      ].join("\0"), "utf8")),
+      snapshot: root.root.initialSnapshot,
+    });
+    const adapter = new Proxy(fixture.source, {
+      get(source, property) {
+        if (property === "readPullRequest") {
+          return async () => ({ ...fixture.created, ...(race.pullRequest ?? {}) });
+        }
+        if (property === "readBranch" && race.branchSha !== undefined) {
+          return async () => race.branchSha === null ? null : { ref: fixture.target.headRef, sha: race.branchSha };
+        }
+        if (property === "listJournalComments" && race.journal !== undefined) {
+          return async () => {
+            const observed = await source.listJournalComments(fixture.created.prNumber);
+            if (race.journal === "incomplete") return { ...observed, complete: false };
+            const marker = race.journal === "managed"
+              ? journalCommentBody(initial)
+              : race.journal === "foreign-marker"
+                ? journalCommentBody({ ...initial, creatorUserId: "999" })
+                : "<!-- skill-update-pr-automation:journal:v2:start -->";
+            return {
+              complete: true,
+              items: [...observed.items, {
+                id: "100",
+                authorUserId: race.journal === "foreign-marker" ? "999" : context.creatorUserId,
+                createdAt: "2026-08-30T00:00:00Z",
+                updatedAt: "2026-08-30T00:00:00Z",
+                body: marker,
+              }],
+            };
+          };
+        }
+        const value = Reflect.get(source, property, source) as unknown;
+        return typeof value === "function" ? value.bind(source) : value;
+      },
+    });
+    try {
+      await assert.rejects(
+        publishDraft({ adapter, artifactDirectory: fixture.directory, context }),
+        /publish-target-changed|post-publish-state-unknown/,
+        race.name,
+      );
+      assert.equal(
+        fixture.source.transcript.filter((entry) => entry.operation === "append-journal-comment").length,
+        0,
+        race.name,
+      );
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  }
+});
+
 test("commentless PR root recovery rejects foreign author, edited body evidence, and live mismatch", async () => {
   for (const override of [
     { authorUserId: "999" },

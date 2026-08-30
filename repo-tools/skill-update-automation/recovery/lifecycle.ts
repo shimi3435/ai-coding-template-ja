@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { validateCandidateArtifact, writeExistingValidationArtifact } from "../candidate/index.ts";
 import { discoverCandidateHistory } from "../candidate/history.ts";
 import type { PublishDraftGithubAdapter } from "../publish/draft.ts";
-import { appendInitialJournalEntry } from "../publish/initial-journal.ts";
+import { appendInitialJournalEntry, assertExactCommentlessRecoveryTarget } from "../publish/initial-journal.ts";
 import {
   loadPrJournal,
   pendingPrState,
@@ -95,15 +95,14 @@ export async function recoverCrossRunTransition(input: Readonly<{
 
   const target = recovery.target;
   if (target.mode === "commentless-root") {
-    const pullRequest = await input.adapter.readPullRequest(target.prNumber);
-    const branch = await input.adapter.readBranch(target.headRef);
-    const classification = classifyPrRootV2(pullRequest?.body ?? null);
-    if (pullRequest === null || branch?.sha !== target.afterHeadSha || classification.kind !== "strict" ||
-      pullRequest.authorUserId !== target.creatorUserId || pullRequest.lastEditedAt !== null ||
-      digest(Buffer.from(pullRequest.body ?? "", "utf8")) !== target.rootDigest) {
+    const discovered = page.items.find((pullRequest) => pullRequest.prNumber === target.prNumber);
+    const classification = classifyPrRootV2(discovered?.body ?? null);
+    if (discovered === undefined || classification.kind !== "strict" ||
+      digest(Buffer.from(discovered.body ?? "", "utf8")) !== target.rootDigest) {
       throw new Error("commentless recovery stateが不正です");
     }
     const root = classification.root;
+    const initialState = decodePrStateSnapshotV2(root.initialSnapshot);
     const entry = appendJournalEntryDigest({
       schemaVersion: 2,
       resourceKind: "pull-request",
@@ -119,6 +118,13 @@ export async function recoverCrossRunTransition(input: Readonly<{
     if (entry.operationId !== target.operationId || entry.snapshot.stateDigest !== target.afterSnapshotDigest) {
       throw new Error("commentless recovery descriptorがinitial journal entryと一致しません");
     }
+    await assertExactCommentlessRecoveryTarget({
+      adapter: input.adapter,
+      prNumber: target.prNumber,
+      immutableBody: discovered.body!,
+      expectedRoot: root,
+      expectedState: initialState,
+    });
     await appendInitialJournalEntry(input.adapter, entry);
   } else if (target.mode !== "stale-validation") {
     const pullRequest = await input.adapter.readPullRequest(target.prNumber);

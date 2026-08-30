@@ -93,6 +93,39 @@ function yamlPermissions(jobBlock: readonly string[]): Record<string, string> {
   return Object.fromEntries(entries);
 }
 
+const skillUpdateExpectedPermissions: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  detect: { contents: "read", "pull-requests": "read", issues: "read" },
+  "publish-draft": { contents: "write", "pull-requests": "write" },
+  recover: { actions: "read", contents: "write", "pull-requests": "write" },
+  "cleanup-merged": { contents: "write", "pull-requests": "read" },
+  validate: { contents: "read" },
+  "publish-finalize": { contents: "read", "pull-requests": "write", issues: "write" },
+};
+
+const safetyPermissionMarkerStart = "<!-- skill-update-write-permissions:start -->";
+const safetyPermissionMarkerEnd = "<!-- skill-update-write-permissions:end -->";
+
+function validateSkillUpdateSafetyPermissions(repositoryRoot: string): void {
+  const path = join(repositoryRoot, "docs", "agents", "safety.md");
+  const source = readFileSync(path, "utf8");
+  if (source.split(safetyPermissionMarkerStart).length !== 2 || source.split(safetyPermissionMarkerEnd).length !== 2) {
+    throw new Error(`${path}: write permission topology markerがexactではありません`);
+  }
+  const start = source.indexOf(safetyPermissionMarkerStart) + safetyPermissionMarkerStart.length;
+  const end = source.indexOf(safetyPermissionMarkerEnd);
+  if (end <= start) throw new Error(`${path}: write permission topology sectionが不正です`);
+  const writeJobs = ["publish-draft", "recover", "cleanup-merged", "publish-finalize"] as const;
+  const permissionNames = ["actions", "contents", "pull-requests", "issues"] as const;
+  const expected = writeJobs.map((jobName) => {
+    const permissions = skillUpdateExpectedPermissions[jobName]!;
+    const rendered = permissionNames.map((name) => `${name}=${permissions[name] ?? "none"}`).join(", ");
+    return `- ${jobName}: ${rendered}`;
+  }).join("\n");
+  if (source.slice(start, end).trim() !== expected) {
+    throw new Error(`${path}: workflowとwrite permission topologyが一致しません`);
+  }
+}
+
 function validateSkillUpdateWorkflow(repositoryRoot: string): void {
   const path = join(repositoryRoot, ".github", "workflows", "skill-update-prs.yml");
   const source = readFileSync(path, "utf8");
@@ -125,15 +158,7 @@ function validateSkillUpdateWorkflow(repositoryRoot: string): void {
   ])) {
     throw new Error(`${path}: production workflow job集合が不正です。real-host smokeはworkflow外が必要です`);
   }
-  const expectedPermissions: Record<string, Record<string, string>> = {
-    detect: { contents: "read", "pull-requests": "read", issues: "read" },
-    "publish-draft": { contents: "write", "pull-requests": "write" },
-    recover: { actions: "read", contents: "write", "pull-requests": "write" },
-    "cleanup-merged": { contents: "write", "pull-requests": "read" },
-    validate: { contents: "read" },
-    "publish-finalize": { contents: "read", "pull-requests": "write", issues: "write" },
-  };
-  for (const [jobName, expected] of Object.entries(expectedPermissions)) {
+  for (const [jobName, expected] of Object.entries(skillUpdateExpectedPermissions)) {
     const job = yamlBlock(jobs, jobName, 2);
     if (!isDeepStrictEqual(yamlPermissions(job), expected)) throw new Error(`${path}: ${jobName} permissions が不正です`);
   }
@@ -193,7 +218,7 @@ function requireDocumentMarkers(repositoryRoot: string): void {
     ["README.md", ["SKILLS_AUTO_UPDATE", "resume_closed", "skill-update-prs.yml", "task check"]],
     ["docs/guide.md", ["validation-failed", "recovery-required", "cleanup-failed", "fresh approval", "exact digest",
       "journal v2", "fresh repository", "creator numeric user ID", "force-with-lease"]],
-    ["docs/agents/safety.md", ["publish-draft", "cleanup-merged", "publish-finalize", "immutable root",
+    ["docs/agents/safety.md", ["publish-draft", "recover", "cleanup-merged", "publish-finalize", "immutable root",
       "gh auth", "real GitHub write"]],
   ]);
   for (const [relativePath, markers] of requirements) {
@@ -357,6 +382,7 @@ export function validateRepositoryContracts(): readonly string[] {
     throw new Error(`${taskfilePath}: skill-update-automation tests を task check に追加してください`);
   }
   validateSkillUpdateWorkflow(repositoryRoot);
+  validateSkillUpdateSafetyPermissions(repositoryRoot);
   validateSmokeCliBoundary(repositoryRoot);
   requireDocumentMarkers(repositoryRoot);
   const legacySkillPaths = [
