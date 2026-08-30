@@ -175,9 +175,9 @@ The automation MUST classify exact recoverable transitional state during read-on
 - **THEN** it is retained for 30 days so a later scheduled run can recover it
 - **AND** recovery after artifact expiry fails closed without regenerating the historical candidate
 
-### Requirement: Ready recovery reconciles candidate-scoped tracking failures
+### Requirement: Ready paths reconcile exact current tracking failures
 
-The automation MUST use the existing publish-finalize job to reconcile stale tracking failures after an exact pr-ready recovery, and MUST make the same reconciliation retryable from a later stable ready and passed no-op run.
+The automation MUST use the existing publish-finalize job to reconcile candidate-scoped failures after an exact pr-ready recovery, and MUST use a later stable ready and passed no-op run to reconcile both that candidate state and the healthy run's exact detection and cleanup state in one canonical Issue transition.
 
 #### Scenario: Reconcile the recovered ready candidate
 
@@ -186,11 +186,25 @@ The automation MUST use the existing publish-finalize job to reconcile stale tra
 - **THEN** it resolves only validation-failed and recovery-required entries in that candidate scope
 - **AND** preserves permission, cleanup, updater, and unrelated candidate entries
 
+#### Scenario: Stable healthy no-op reconciles detection and cleanup state
+
+- **GIVEN** an exact ready and passed managed PR has stale candidate, detection, or cleanup tracking entries
+- **WHEN** a healthy no-op run freshly verifies that PR and supplies cleanup evidence
+- **THEN** it resolves validation-failed and recovery-required entries for the current candidate
+- **AND** resolves stale detection entries under the existing detection scope rules while preserving candidate-scoped permission entries whose operation is not proven
+- **AND** replaces cleanup-failed entries with the exact current failed-ref set, or resolves them all when cleanup passed
+- **AND** performs the combined observations and resolutions as one canonical Issue journal transition
+
+#### Scenario: Missing cleanup evidence preserves cleanup failures
+
+- **WHEN** a stable ready and passed no-op run has no cleanup evidence
+- **THEN** it reconciles candidate and detection entries but preserves existing cleanup-failed entries
+
 #### Scenario: Ready reconciliation fails or is retried
 
 - **WHEN** reconciliation encounters identity conflict, incomplete reads, permission denial, or an uncertain Issue write
 - **THEN** it performs no unsafe Issue mutation and the workflow fails while the PR remains ready
-- **AND** a later stable ready and passed no-op run repeats the same fresh verification and idempotent reconciliation
+- **AND** a later stable ready and passed no-op run repeats the same fresh verification and idempotent single-transition reconciliation
 
 #### Scenario: Ready reconciliation traverses valid Issue lifecycle states
 

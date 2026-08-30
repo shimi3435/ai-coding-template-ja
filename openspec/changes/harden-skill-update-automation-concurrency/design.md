@@ -155,9 +155,12 @@ blind resendしない。
 recovered `pr-ready`後のtracking issue解消は新しいwrite jobを作らず、`issues: write`を持つ既存`publish-finalize` jobへ
 reconciliation-only seamとして接続する。同runの`ready-recovered`ではrecovery descriptorと最終committed `pr-ready` entryのoperation ID /
 after snapshotを照合する。後続runのstable ready / passed no-opでもfreshなPR、branch、root、journal、candidate digestを再検証して同じ処理を
-再試行できる。解消対象は同じcandidate scopeの`validation-failed`と`recovery-required`だけとし、permission、cleanup、updater等のentryは
-保持する。identity conflict、permission denial、incomplete readはissueへunsafe writeせずworkflowを失敗させる。PR ready状態は維持し、後続runで
-冪等に再試行する。
+再試行できる。`ready-recovered`は同じcandidate scopeの`validation-failed`と`recovery-required`だけを解消し、他entryを保持する。
+stable ready / passed no-opは通常のhealthy detection runでもあるため、同じcandidateの2 entryに加え、既存detection reconciliationのscope規則で
+否定されたentryを解消する。global `detect` / `publish-draft`のpermission entryは対象に含めるが、由来operationを証明できないcandidate-scoped
+permission entryは保持する。cleanup evidenceが`passed`なら既存cleanup entryを解消し、`failed`なら失敗refのcurrent setへ置換し、未取得なら
+既存cleanup entryを保持する。detection / cleanup計算は共通pure plannerへ集約し、ready解消分と合わせて1回のcanonical Issue journal transitionにする。
+identity conflict、permission denial、incomplete readはissueへunsafe writeせずworkflowを失敗させる。PR ready状態は維持し、後続runで冪等に再試行する。
 
 reconciliation時にtracking Issueが存在せずcurrent cleanup failureを観測した場合、既存Issue lifecycleの`created`を正常完了として受理する。
 commentless Issue rootでは、rootに埋め込まれたinitial snapshotのexact root entryを先に回復し、fresh rediscovery後に同candidateのstale failure解消を

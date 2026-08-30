@@ -495,3 +495,30 @@
   - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" uv run --no-sync task check`: exit 0。Node 24.14.1、root Node 162 tests、automation 268 tests、Python 152 tests、contracts / typecheck / ruff / basedpyright全green。source commit `5b456228777557d2b6462e15c973ac224549dc8f` + latest Task 21 fix worktree diffのfresh実行。
   - `openspec validate harden-skill-update-automation-concurrency --strict`: valid、exit 0。`git diff --check`: exit 0。同source、latest Task 21 fix入力のfresh実行。
   - final independent verifier（Task 20 reviewer / failed verifier / Task 22 initial reviewerと別agent）: PASS、BLOCKER / WARNING / NIT 0件。recover-root入口のwrite前guard、root / closed budget独立性、stale rediscovery test感度、response-loss / closed race、共通commentless validator、ready reconciliation、4 write job permission / documentation contractを確認。focused finalize 58 tests、latest project checks、strict OpenSpec、`git diff --check`全green。real GitHub comment / Issue writeは未実行。
+
+### Task 23: stable ready no-opのcurrent-state reconciliationをTDDで統合する
+
+- **成果:** `ready-recovered`のnarrow semanticsを維持しつつ、stable ready / passed no-opがhealthy detectionとcleanupのcurrent stateを1回のcanonical Issue transitionへ反映する。
+- **依存:** Task 22。
+- **対象:**
+  - `repo-tools/skill-update-automation/finalize/tracking-reconciliation.ts`
+  - `repo-tools/skill-update-automation/finalize/detection-failure.ts`
+  - `repo-tools/skill-update-automation/finalize/detection-failure.test.ts`
+  - `repo-tools/skill-update-automation/finalize/ready-reconciliation.ts`
+  - `repo-tools/skill-update-automation/finalize/finalize.test.ts`
+  - `openspec/changes/harden-skill-update-automation-concurrency/proposal.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/design.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [ ] **実装:** public reconciliation seamのRED testsから、既存detection / cleanup分類を共通pure plannerへ抽出し、stable no-opのcandidate解消分と合成して`syncManagedIssueEntries`を1回だけ呼ぶ。recoveryはcandidate 2 keyだけ、candidate-scoped permissionとcleanup evidence未取得時のcleanup entryは保持する。
+- [ ] **検証:** cleanup passed、healthy updater recovery、cleanup ref A→B、recovery narrow、cleanup evidence未取得、統合transition response-loss / retryの6境界をgreenにし、focused tests、typecheck、strict OpenSpec、`git diff --check`を通す。
+
+### Task 24: current-state reconciliation修正cycleのreview / verifierを完了する
+
+- **成果:** Task 23のIssue external write semantics変更に対するOSWF-5 convergence evidenceとPR #64の再レビュー可能状態。
+- **依存:** Task 23。
+- **対象:**
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [ ] **実装:** latest diff self-review、initial independent review、finding修正をfix・focused validation・diff reviewの一組として最大3 iterationsで完了する。
+- [ ] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub Issue writeは未実行として明記する。
