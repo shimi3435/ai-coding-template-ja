@@ -24,6 +24,9 @@ snapshot とし、可変 state を改変検出可能な append-only comment jour
 - mutation直後にGitHubの複数read projectionがbefore / afterの混在を返す場合、追加mutationせず有界なread-only再取得だけを行う。同じrecovery実行中に一度観測したbranch after証拠を再取得phase間で保持し、その後のbefore / missing回帰をfail closedにする。全projectionがexact afterへ収束した場合だけ`committed`をappendし、未収束または別stateはfail closedにする。
 - create応答消失後のcommentless rootは、resource authorがroot creatorと一致し、bodyが未編集で、immutable rootのinitial snapshotとfresh live stateが一致する場合だけ、既存writer経路でinitial journal commentを1回作成して回復する。append応答消失時は再送せずfresh journalを再取得する。
 - workflow run境界を越えたcommentless root、末尾prepared、完了済みrunに残るstable pending validationは、read-only detectが単一のcanonical recovery artifactへ分類する。専用recovery jobは旧runのimmutable candidate artifactを30日以内に取得し、fresh identity / journal / live stateとexact一致する場合だけ回復する。回復後はcurrent-run existing-head-validation artifactへ変換し、同じrunのvalidation / finalizeへ戻す。prepared `pr-ready`は回復だけで完了する。
+- same-run / cross-runのcommentless PR recoveryは共通のfinal pre-write validatorを使い、comment append直前にPR、branch、完全なjournalをfresh再取得する。最終readで観測できた差分はwrite 0件にする。Issue Comment APIにconditional writeがないため、最終read後からappendまでのraceはpost-state検証で検出し、blind resendしない。
+- recovered `pr-ready`と後続のstable ready / passed no-opは、既存`publish-finalize` jobで同じcandidateの`validation-failed` / `recovery-required` tracking entryだけを冪等に解消する。`recover` jobへ`issues: write`は追加しない。
+- production write権限を持つ4 jobのexact topologyをsafety文書へ記載し、workflowと文書の一致をrepository contractで検証する。
 - closed tracking issue は再 open しない。新 failure は新 issue と新 journal root を作る。
 - schema v2 real-host smoke は fresh smoke repository だけを使う。全 write 前に read-only preview と fresh approval を要求する。terminal recoveryはpreviewに束縛したresource identityとexact branch SHAを直接再検証し、aggregate merged cleanup discoveryに依存せず残存branchをexact leaseで削除する。
 

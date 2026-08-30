@@ -122,6 +122,21 @@ The automation MUST classify exact recoverable transitional state during read-on
 - **THEN** the recovery job appends or confirms the exact initial entry once
 - **AND** emits a current-run existing-head-validation artifact for validation and finalization in run N+1
 
+#### Scenario: Final pre-write boundary for commentless recovery
+
+- **GIVEN** initial discovery classified a PR root as commentless and recoverable
+- **WHEN** same-run or cross-run recovery is about to append the initial managed journal entry
+- **THEN** one shared validator freshly reads the PR, branch, and complete paginated journal
+- **AND** requires the exact expected open, unmerged, draft, title, repository identities, refs, PR head SHA, branch SHA, creator, unedited immutable root, initial snapshot, and digest
+- **AND** permits marker-free human comments while requiring zero managed journal entries and rejecting malformed or foreign markers
+- **AND** any divergence observed by the final read causes zero comment appends
+
+#### Scenario: Comment append cannot use compare-and-swap
+
+- **WHEN** live state changes after the final fresh read but before the Issue Comment API accepts the append
+- **THEN** the automation treats that interval as outside its pre-write race-exclusion guarantee because the API has no conditional comment write
+- **AND** it verifies the fresh post-state and never blindly resends an uncertain append
+
 #### Scenario: Recover a prepared branch append before mutation
 
 - **GIVEN** run N appended a valid terminal prepared branch-append entry and stopped before mutation
@@ -159,6 +174,33 @@ The automation MUST classify exact recoverable transitional state during read-on
 - **WHEN** a candidate artifact is uploaded for a managed update
 - **THEN** it is retained for 30 days so a later scheduled run can recover it
 - **AND** recovery after artifact expiry fails closed without regenerating the historical candidate
+
+### Requirement: Ready recovery reconciles candidate-scoped tracking failures
+
+The automation MUST use the existing publish-finalize job to reconcile stale tracking failures after an exact pr-ready recovery, and MUST make the same reconciliation retryable from a later stable ready and passed no-op run.
+
+#### Scenario: Reconcile the recovered ready candidate
+
+- **GIVEN** a candidate has stale validation-failed or recovery-required tracking entries
+- **WHEN** pr-ready recovery completes and publish-finalize freshly verifies the exact committed pr-ready operation, ready and passed PR state, branch, root, journal, and candidate digest
+- **THEN** it resolves only validation-failed and recovery-required entries in that candidate scope
+- **AND** preserves permission, cleanup, updater, and unrelated candidate entries
+
+#### Scenario: Ready reconciliation fails or is retried
+
+- **WHEN** reconciliation encounters identity conflict, incomplete reads, permission denial, or an uncertain Issue write
+- **THEN** it performs no unsafe Issue mutation and the workflow fails while the PR remains ready
+- **AND** a later stable ready and passed no-op run repeats the same fresh verification and idempotent reconciliation
+
+### Requirement: Write-job permissions and safety documentation remain exact
+
+The production workflow MUST have exactly four write-capable jobs, and the repository contract MUST verify that the workflow and the bounded safety-document permission topology remain exact.
+
+#### Scenario: Cross-run recovery permission boundary
+
+- **WHEN** repository contracts validate the production workflow and safety documentation
+- **THEN** publish-draft, recover, publish-finalize, and cleanup-merged are the only documented write-capable jobs
+- **AND** recover has actions read, contents write, and pull-requests write, has no issues permission, and is limited to exact cross-run transitional recovery
 
 ### Requirement: Schema v2 smoke uses a fresh repository and fresh approval
 

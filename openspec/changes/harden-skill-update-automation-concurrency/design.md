@@ -139,10 +139,35 @@ branch stateはorigin run identityを維持し、途中停止した次runも同�
 passedであることをprepared snapshotから検証し、exact recoveryだけで完了する。recovery runではaggregate merged cleanupを
 実行しない。recovery jobの権限は`actions: read`、`contents: write`、`pull-requests: write`だけとし、`issues: write`を与えない。
 
+### 8. commentless final boundaryとready recovery reconciliationを閉じる
+
+same-runとcross-runのcommentless PR recoveryは、共通の`assertExactCommentlessRecoveryTarget`相当のvalidatorを使う。
+initial journal commentのappend直前にPR、branch、全pagination済みjournalをfresh再取得し、open、unmerged、期待するdraft状態、
+managed title、repository ID、head / base ref、PR head SHA、branch SHA、creator、`lastEditedAt === null`、immutable body / root /
+initial snapshot / digest、journalの完全性、semantic commentlessを一度に検証する。markerを含まないhuman commentは無視するが、
+managed entry、foreign marker、malformed marker、incomplete paginationはcommentlessとして受理しない。initial discovery後に各predicateが
+変化するraceはappend 0件で停止する。
+
+GitHub Issue Comment APIにはconditional write / compare-and-swapがない。保証境界はappend直前の上記fresh readまでとし、そのread後から
+comment createまでのstate changeはwrite前に排除できない。append応答とfresh post-stateをexact検証し、差分や応答消失時にcommentを
+blind resendしない。
+
+recovered `pr-ready`後のtracking issue解消は新しいwrite jobを作らず、`issues: write`を持つ既存`publish-finalize` jobへ
+reconciliation-only seamとして接続する。同runの`ready-recovered`ではrecovery descriptorと最終committed `pr-ready` entryのoperation ID /
+after snapshotを照合する。後続runのstable ready / passed no-opでもfreshなPR、branch、root、journal、candidate digestを再検証して同じ処理を
+再試行できる。解消対象は同じcandidate scopeの`validation-failed`と`recovery-required`だけとし、permission、cleanup、updater等のentryは
+保持する。identity conflict、permission denial、incomplete readはissueへunsafe writeせずworkflowを失敗させる。PR ready状態は維持し、後続runで
+冪等に再試行する。
+
+productionのwrite jobは`publish-draft`、`recover`、`publish-finalize`、`cleanup-merged`のexact 4 jobとする。
+`docs/agents/safety.md`は各jobのpermission matrixと役割を列挙し、`repository-contracts.ts`の`expectedPermissions`をcanonical sourceとして、
+bounded sectionまたはexact markerでworkflowと文書の一致を検証する。`recover`は`actions: read`、`contents: write`、
+`pull-requests: write`だけを持ち、exact origin artifactとfresh live identityが一致するcross-run transitional recoveryに限定する。
+
 ## Validation Strategy
 
 - public seam: production adapter command runner、fake GitHub adapter、candidate / recovery command lifecycle、workflow YAML contract、smoke preview / execution CLI。
-- TDD: race、tamper、missing / fork、foreign author、commentless root、append response loss、prepared crash recovery、cross-run recovery、stale validation、cross-phase projection regression、terminal-only exact cleanup、no-op cleanup、closed issue generationをREDから追加する。
+- TDD: race、tamper、missing / fork、foreign author、commentless rootのfinal-boundary predicate matrix、append response loss、prepared crash recovery、cross-run recovery、ready issue reconciliation / retry、stale validation、cross-phase projection regression、terminal-only exact cleanup、no-op cleanup、closed issue generationをREDから追加する。
 - Node 24 focused tests、typecheck、`uv run --no-sync task check`。
 - cross-run recoveryのreal GitHub writeは外部writeとなるため自動実行せず、fake adapter lifecycleとworkflow contractをrequired final evidenceとする。
 

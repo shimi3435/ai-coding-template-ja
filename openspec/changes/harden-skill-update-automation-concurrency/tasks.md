@@ -379,3 +379,38 @@
   - latest focused: recovery / discovery / workflow 34 tests passed、typecheck、strict OpenSpec、`git diff --check`すべてexit 0。source同上、verifier fix後のfresh実行。
   - latest project: `uv run --no-sync task check`: root Node 161、automation 258、Python 152、typecheck / ruff / basedpyright / contractsすべてpassed、exit 0。source同上、verifier fix後のfresh実行。
   - initial verifierと別のindependent verifier: PASS、BLOCKER / WARNING 0件。real GitHub cross-run recovery write、artifact期限切れ / download timeout実動作は未実行。designどおりoffline lifecycle＋workflow contractをrequired evidenceとする。
+
+### Task 17: commentless final boundaryとready recovery reconciliationをTDDで閉じる
+
+- **成果:** same-run / cross-run共通のcommentless final pre-write validator、recovered ready candidateのtracking issue reconciliation、4 write jobのexact safety documentation contract。
+- **依存:** Task 16。
+- **対象:**
+  - `repo-tools/skill-update-automation/publish/initial-journal.ts`
+  - `repo-tools/skill-update-automation/publish/draft.ts`
+  - `repo-tools/skill-update-automation/publish/draft.test.ts`
+  - `repo-tools/skill-update-automation/recovery/lifecycle.ts`
+  - `repo-tools/skill-update-automation/recovery/lifecycle.test.ts`
+  - `repo-tools/skill-update-automation/finalize/`
+  - `repo-tools/skill-update-automation/finalize/finalize.test.ts`
+  - `repo-tools/skill-update-automation/finalize/workflow.test.ts`
+  - `.github/workflows/skill-update-prs.yml`
+  - `repo-tools/skill-update-automation/publish/workflow.test.ts`
+  - `docs/agents/safety.md`
+  - `repo-tools/repository-contracts.ts`
+  - `repo-tools/repository-contracts.test.ts`
+  - `openspec/changes/harden-skill-update-automation-concurrency/proposal.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/design.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [ ] **実装:** RED testsからsame-run / cross-run共通validatorを作り、append直前のfresh PR / branch / complete journal full predicate matrixを適用する。`ready-recovered`と後続stable ready / passed no-opを既存`publish-finalize` reconciliation-only seamへ接続し、同candidateの`validation-failed` / `recovery-required`だけを解消する。safety文書へ4 write jobのexact permission topologyを記載し、repository contractへ接続する。
+- [ ] **検証:** initial discovery後に各predicateを変化させるrace matrixでinitial append 0件、marker-free human comment許可、foreign / malformed marker拒否を確認する。ready reconciliationのsuccess / retry / permission denial / incomplete read / identity conflictで対象外entry保持とunsafe issue write 0件を確認し、focused tests、typecheck、strict OpenSpec、`git diff --check`をgreenにする。
+
+### Task 18: review finding修正cycleのreview / verifierを完了する
+
+- **成果:** Task 17のsecurity / external write / public workflow / build・CI変更に対するOSWF-5 convergence evidenceとPR #64の再レビュー可能状態。
+- **依存:** Task 17。
+- **対象:**
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [ ] **実装:** 全diff self-review、initial independent review、finding修正をfix・focused validation・diff reviewの一組として最大3 iterationsで完了する。
+- [ ] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub comment / Issue reconciliation writeは自動実行せず、offline lifecycleとworkflow / repository contractをrequired evidenceとする。

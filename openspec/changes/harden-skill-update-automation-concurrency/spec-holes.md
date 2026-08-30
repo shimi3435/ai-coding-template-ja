@@ -111,15 +111,49 @@
 | 1 | 空・ゼロ長・None | 該当 |commentless journal、origin artifact欠落 | 1:strict commentlessだけroot recovery。artifact欠落はwrite 0件 |
 | 2 | 境界値 | 該当 |run N / N+1、retention 1 / 30 / 31日 | 1:異なるrun identityを必須test化。30日保持、失効後fail closed |
 | 3 | 重複・衝突 | 該当 |複数recoverable PR / artifact、同operation再実行 | 1:recoverableはexact 1件だけ。fresh committed確認でduplicate write禁止 |
-| 4 | 順序 | 該当 |detect、artifact取得、fresh read、mutation、validation順 | 1:専用jobのexact順だけ許可。detectのlive projectionをwrite根拠にしない |
+| 4 | 順序 | 該当 |detect、artifact取得、fresh PR / branch / complete journal read、mutation、validation順 | 1:専用jobのexact順だけ許可。detectのlive projectionをwrite根拠にせず、comment append直前に共通validatorを実行 |
 | 5 | 型・形式不正 | 該当 |recovery mode、descriptor、origin manifest不正 | 1:single top-level kind＋5 modeのstrict canonical parser、unknown field拒否 |
-| 6 | エラー経路 | 該当 |artifact download失敗、mutation / append応答消失、validation中断 | 1:fresh再取得でexact stateだけ受理。失敗時Issueを含むunexpected write 0件 |
+| 6 | エラー経路 | 該当 |artifact download失敗、final read後race、mutation / append応答消失、validation中断 | 1:final readで観測した差分はwrite 0件。conditional comment write不在のread後raceはpost-stateで検出し、blind resend禁止 |
 | 7 | 冪等性・再実行 | 該当 |N+1も同じcheckpointで停止、stale validation再実行 | 1:root / prepared recoveryは既存operation IDで収束。stable stale validationはmutation 0件 |
 | 8 | 時刻・タイムゾーン | 該当 |artifact retention、projection lag | 1:retentionは30日。成功判定は時刻でなくfresh exact state、有界readだけ |
 | 9 | 文字列 | 該当 |artifact名へのremote文字列注入 | 1:検証済みdecimal run ID / positive attemptから定数形式で構築 |
 | 10 | 数値 | 該当 |run ID / attempt / PR番号境界 | 1:既存decimal / positive safe integer parserで拒否 |
-| 11 | 巨大入力・リソース枯渇 | 該当 |100 MiB artifact、download timeout、journal pagination | 1:既存artifact size / digest検証、complete pagination必須、timeout時write 0件 |
-| 12 | 状態遷移の未定義パス | 該当 |closed / merged、unsupported prepared、pr-ready validation非passed、divergent live、cleanup競合 | 1:5 mode whitelist、open / unmerged exact 1件、pr-ready passed必須、recovery run cleanup除外 |
+| 11 | 巨大入力・リソース枯渇 | 該当 |100 MiB artifact、download timeout、journal pagination | 1:既存artifact size / digest検証、complete pagination必須、不完全read / timeout時write 0件 |
+| 12 | 状態遷移の未定義パス | 該当 |closed / merged、draft / title / repository ID / ref / PR head / branch / creator / body / root / journal divergence、unsupported prepared、pr-ready validation非passed、cleanup競合 | 1:final validatorのfull predicate matrix、5 mode whitelist、pr-ready passed必須、recovery run cleanup除外 |
+
+## Requirement 8: ready recovery tracking reconciliation
+
+| # | 分類 | 判断 | 穴の内容 | 潰し方 |
+| --- | --- | --- | --- | --- |
+| 1 | 空・ゼロ長・None | 該当 |tracking issueなし、対象entryなし | 1:成功no-op。新issueは作らない |
+| 2 | 境界値 | 該当 |対象entry 0 / 1 / 2件、issue 0 / 1 / 複数root | 1:exact candidate scopeの2 keyだけ処理。identity cardinality不正はwrite禁止 |
+| 3 | 重複・衝突 | 該当 |同entry重複、別candidate entry、同時issue更新 | 1:既存journal reducerとstable keyでdedupeし、別scopeを保持 |
+| 4 | 順序 | 該当 |pr-ready committed、fresh ready / passed検証、issue resolve順 | 1:`publish-finalize`のreconciliation-only seamでexact順を固定。`recover`はissueを書かない |
+| 5 | 型・形式不正 | 該当 |recovery descriptor、PR root / journal、issue root / journal不正 | 1:各exact codec / reducerで拒否し、issue write 0件 |
+| 6 | エラー経路 | 該当 |permission denial、partial read、append応答消失 | 1:workflowを失敗させ、post-stateをfresh確認。blind resend禁止 |
+| 7 | 冪等性・再実行 | 該当 |ready-recovered同run失敗、後続no-op retry | 1:stable ready / passed状態から同candidate keyを再計算し、解消済みentryはno-op |
+| 8 | 時刻・タイムゾーン | 非該当 |reconciliation eligibilityは経過時間を使わない | 2:fresh exact stateだけを根拠にする |
+| 9 | 文字列 | 該当 |candidate digest / scope / failure key表現差 | 1:canonical digestと列挙済み2 keyだけ許可 |
+| 10 | 数値 | 該当 |PR / Issue / operation ID境界 | 1:既存positive integer / digest parserを使用 |
+| 11 | 巨大入力・リソース枯渇 | 該当 |PR / Issue comment pagination、artifact size | 1:complete paginationと既存artifact上限を必須化 |
+| 12 | 状態遷移の未定義パス | 該当 |PRはreadyだがvalidation非passed、branch / root不一致、permission / cleanup / updater entry混在 | 1:readyかつpassedのexact candidateだけ処理し、対象外entryを保持 |
+
+## Requirement 9: exact write-job permission documentation
+
+| # | 分類 | 判断 | 穴の内容 | 潰し方 |
+| --- | --- | --- | --- | --- |
+| 1 | 空・ゼロ長・None | 該当 |permission section / marker欠落 | 1:repository contractを失敗させる |
+| 2 | 境界値 | 該当 |write jobが3 / 4 / 5件 | 1:exact 4件だけgreen |
+| 3 | 重複・衝突 | 該当 |同job重複、文書とworkflow差分 | 1:`expectedPermissions`をcanonical sourceとしてexact比較 |
+| 4 | 順序 | 非該当 |permission意味は文書列挙順に依存しない | 2:job名とpermission setで比較 |
+| 5 | 型・形式不正 | 該当 |unknown job / permission / access level | 1:bounded sectionまたはexact marker parserで拒否 |
+| 6 | エラー経路 | 該当 |文書parse不能 | 1:contract failure。推測fallback禁止 |
+| 7 | 冪等性・再実行 | 該当 |同じ文書 / workflow再検証 | 1:決定論的exact result |
+| 8 | 時刻・タイムゾーン | 非該当 |permission契約は時刻非依存 | 2:時刻を入力にしない |
+| 9 | 文字列 | 該当 |job名、permission名、access表記差 | 1:canonical literalを要求 |
+| 10 | 数値 | 非該当 |permission契約に数値入力なし | 2:数値を使わない |
+| 11 | 巨大入力・リソース枯渇 | 該当 |文書 / YAML肥大 | 1:対象bounded sectionだけをparseし、重複を拒否 |
+| 12 | 状態遷移の未定義パス | 該当 |recoverへissues write追加、write job追加、文書のみ更新 | 1:workflowと文書を同じexact contractで失敗させる |
 
 ## Phase 2: validation mapping
 
@@ -139,6 +173,9 @@
 | cross-run commentless / prepared / stale validation | public command lifecycle test | `recovery/lifecycle.test.ts` | Run NとN+1で異なるID / attempt。recovery後current-run validation artifactを確認 |
 | cross-run artifact / identity / live failure matrix | security matrix integration test | `recovery/lifecycle.test.ts` | missing / modified artifact、fork / foreign / edit / digest、multiple候補、divergent時unexpected write 0件 |
 | recovery workflow routing / permissions / retention | 静的 contract test | `publish/workflow.test.ts`, `finalize/workflow.test.ts` | recovery job、30日、cleanup除外、`issues: write`不在 |
+| commentless final pre-write predicate race matrix | security matrix integration test | `publish/draft.test.ts`, `recovery/lifecycle.test.ts` | initial discovery後に各PR / branch / root / journal predicateを変化させ、initial journal append 0件を確認 |
+| ready-recovered issue reconciliation / later no-op retry | public lifecycle / workflow test | `recovery/lifecycle.test.ts`, `finalize/finalize.test.ts`, `finalize/workflow.test.ts` | 同candidateの2 failure keyだけ解消。permission / partial read / identity conflictはworkflow red、対象外entry保持 |
+| exact four-write-job safety documentation | 静的 contract test | `repository-contracts.test.ts` | `expectedPermissions`、workflow、bounded safety sectionのexact一致 |
 | real GitHub CAS / comment / cleanup behavior | real-host smoke | fresh smoke repository | fresh approval前は未検証 blocker |
 | 時刻非依存契約 | 静的 contract test | focused model / workflow tests | age-based推測がないことを検査 |
 | resource exhaustion / host timeout | 未検証 | — |外部host依存。上限超過fail-closedをoffline例示testで代替 |
