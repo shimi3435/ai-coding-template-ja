@@ -90,7 +90,7 @@ function manifestDigest(bytes: Uint8Array): string {
 function validateReceipt(
   receipt: DraftReceipt,
   manifestBytes: Buffer,
-  manifest: Exclude<ReturnType<typeof validateCandidateArtifact>, { kind: "no-op" }>,
+  manifest: Extract<ReturnType<typeof validateCandidateArtifact>, { kind: "candidate-update" | "existing-head-validation" }>,
   now: Date,
 ): void {
   if (
@@ -140,7 +140,9 @@ export async function runFinalizeCommand(input: Readonly<{
     workflowRunId: input.workflowRunId,
     workflowRunAttempt: input.workflowRunAttempt,
   });
-  if (manifest.kind === "no-op") throw new Error("no-op artifactはfinalize対象ではありません");
+  if (manifest.kind !== "candidate-update" && manifest.kind !== "existing-head-validation") {
+    throw new Error("artifactはfinalize対象ではありません");
+  }
   const now = (input.now ?? (() => new Date()))();
   const receipt = manifest.kind === "candidate-update" ? decodeDraftReceipt(readFileSync(input.receiptFile)) : undefined;
   if (receipt !== undefined) validateReceipt(receipt, manifestBytes, manifest, now);

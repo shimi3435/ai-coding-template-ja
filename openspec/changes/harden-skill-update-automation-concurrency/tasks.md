@@ -319,3 +319,63 @@
   - review-fix RED: `node --test --test-name-pattern='persistent marker-free human comment' repo-tools/skill-update-automation/smoke/fresh-v2.test.ts`: `fresh smoke created PR root pre-stateが不正です`、1 failed、exit 1。同source、Node 24.14.1、latest review finding入力のfresh実行。
   - review-fix GREEN / focused: `node --test repo-tools/skill-update-automation/smoke/fresh-v2.test.ts`: 19 tests passed、exit 0。同source、Node 24.14.1、latest review fix入力のfresh実行。persistent human commentを保持したままroot entry 1件でterminal cleanupまで完了。
   - review-fix `npm run typecheck`、`git diff --check`: exit 0。同source、fresh実行。
+
+### Task 15: workflow run境界のrecovery lifecycleをTDDで接続する
+
+- **成果:** commentless root、terminal prepared、stale validationをread-only detectから専用recovery jobへ渡し、同じ後続runのvalidation / finalizeへ安全に復帰させる。
+- **依存:** Task 13、Task 14。
+- **対象:**
+  - `repo-tools/skill-update-automation/model/artifact.ts`
+  - `repo-tools/skill-update-automation/model/artifact.test.ts`
+  - `repo-tools/skill-update-automation/model/index.ts`
+  - `repo-tools/skill-update-automation/github/discovery.ts`
+  - `repo-tools/skill-update-automation/github/discovery.test.ts`
+  - `repo-tools/skill-update-automation/candidate/command.ts`
+  - `repo-tools/skill-update-automation/candidate/artifact.ts`
+  - `repo-tools/skill-update-automation/candidate/history.ts`
+  - `repo-tools/skill-update-automation/candidate/index.test.ts`
+  - `repo-tools/skill-update-automation/candidate/report-model.ts`
+  - `repo-tools/skill-update-automation/candidate/report.ts`
+  - `repo-tools/skill-update-automation/finalize/command.ts`
+  - `repo-tools/skill-update-automation/finalize/finalize.ts`
+  - `repo-tools/skill-update-automation/publish/artifact-kind.ts`
+  - `repo-tools/skill-update-automation/publish/artifact-kind.test.ts`
+  - `repo-tools/skill-update-automation/publish/cleanup.ts`
+  - `repo-tools/skill-update-automation/publish/cleanup.test.ts`
+  - `repo-tools/skill-update-automation/publish/pr-journal.ts`
+  - `repo-tools/skill-update-automation/publish/validate-command.ts`
+  - `repo-tools/skill-update-automation/recovery/`
+  - `.github/workflows/skill-update-prs.yml`
+  - `repo-tools/skill-update-automation/publish/workflow.test.ts`
+  - `repo-tools/skill-update-automation/finalize/workflow.test.ts`
+  - `repo-tools/skill-update-automation/workflow/cleanup.test.ts`
+  - `repo-tools/skill-update-automation/workflow/contract.test.ts`
+  - `repo-tools/repository-contracts.ts`
+  - `repo-tools/repository-contracts.test.ts`
+  - `openspec/changes/harden-skill-update-automation-concurrency/proposal.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/design.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [x] **実装:** public candidate / recovery lifecycleとworkflow contractのRED testsからsingle recovery artifact、5 mode whitelist、origin artifact検証、fresh exact recovery、current-run validation artifact変換、30日retentionを実装する。
+- [x] **検証:** 異なるrun ID / attemptのcommentless、branch before / after、pr-draft、pr-ready、stale validationとnegative write-0 matrixをfocused Node testsでgreenにし、typecheck、strict OpenSpec、`git diff --check`を通す。
+  - RED: artifact / discoveryはrecovery schema / decision不在、candidateは旧run pendingを`recovery-required`、lifecycleはmodule不在で失敗。source `297b9861b55aead0657eda0360a2458d831421ff`、Node 24.14.1。
+  - GREEN / focused: `node --test repo-tools/skill-update-automation/**/*.test.ts repo-tools/repository-contracts.test.ts`: 285 tests passed、exit 0。追加fix後のfocused 27 testsもpassed。source同上、fresh実行。
+  - GREEN / project: `uv run --no-sync task check`: Node automation 258 tests、Python 152 tests、typecheck / ruff / basedpyright / contractsすべてpassed、exit 0。source同上、latest review fix入力のfresh実行。
+  - GREEN / spec: `openspec validate harden-skill-update-automation-concurrency --strict`、`git diff --check`: exit 0。source同上、fresh実行。
+
+### Task 16: cross-run recoveryのreview / verifierを完了する
+
+- **成果:** OSWF-5 convergence evidenceとcross-run production orchestrationの最終完了判定。
+- **依存:** Task 15。
+- **対象:**
+  - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
+- [x] **実装:** 全diff self-review、initial independent review、blocker finding修正を最大3 iterationsで完了する。
+  - self-review: validation SHA routing、bot creator identity、recovery cleanup、historic generation coexistence、second-read race、pr-draft再停止時origin identityを修正。各fix後focused test / diff reviewを実行。
+  - initial independent review iteration 1: recovery選択前のhistory reducer不足、recovery-awareでないpending journal callerのwrite許可を検出。reducer一致＋explicit `allowPendingJournal` default fail-closedへ修正。
+  - independent re-review: same-run terminal pendingのpublic reducer降格をWARNING検出。`!oldPrepared` guardと例示testを追加。最終PASS、BLOCKER / WARNING 0件。source同上、latest diff。
+- [x] **検証:** latest focused tests、`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub recovery writeは未実行として明記する。
+  - initial verifier: stale-validationでremote branch SHAのfresh exact検証不足をBLOCKER検出。artifact生成直前の`readBranch`照合とdivergent write-0 testを追加。
+  - latest focused: recovery / discovery / workflow 34 tests passed、typecheck、strict OpenSpec、`git diff --check`すべてexit 0。source同上、verifier fix後のfresh実行。
+  - latest project: `uv run --no-sync task check`: root Node 161、automation 258、Python 152、typecheck / ruff / basedpyright / contractsすべてpassed、exit 0。source同上、verifier fix後のfresh実行。
+  - initial verifierと別のindependent verifier: PASS、BLOCKER / WARNING 0件。real GitHub cross-run recovery write、artifact期限切れ / download timeout実動作は未実行。designどおりoffline lifecycle＋workflow contractをrequired evidenceとする。

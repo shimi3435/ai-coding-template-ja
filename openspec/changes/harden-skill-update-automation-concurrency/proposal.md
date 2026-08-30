@@ -23,6 +23,7 @@ snapshot とし、可変 state を改変検出可能な append-only comment jour
 - branch append と PR draft / ready mutation は `prepared -> mutation -> committed` protocol を使い、中断後の live state と journal を決定論的に再検証する。
 - mutation直後にGitHubの複数read projectionがbefore / afterの混在を返す場合、追加mutationせず有界なread-only再取得だけを行う。同じrecovery実行中に一度観測したbranch after証拠を再取得phase間で保持し、その後のbefore / missing回帰をfail closedにする。全projectionがexact afterへ収束した場合だけ`committed`をappendし、未収束または別stateはfail closedにする。
 - create応答消失後のcommentless rootは、resource authorがroot creatorと一致し、bodyが未編集で、immutable rootのinitial snapshotとfresh live stateが一致する場合だけ、既存writer経路でinitial journal commentを1回作成して回復する。append応答消失時は再送せずfresh journalを再取得する。
+- workflow run境界を越えたcommentless root、末尾prepared、完了済みrunに残るstable pending validationは、read-only detectが単一のcanonical recovery artifactへ分類する。専用recovery jobは旧runのimmutable candidate artifactを30日以内に取得し、fresh identity / journal / live stateとexact一致する場合だけ回復する。回復後はcurrent-run existing-head-validation artifactへ変換し、同じrunのvalidation / finalizeへ戻す。prepared `pr-ready`は回復だけで完了する。
 - closed tracking issue は再 open しない。新 failure は新 issue と新 journal root を作る。
 - schema v2 real-host smoke は fresh smoke repository だけを使う。全 write 前に read-only preview と fresh approval を要求する。terminal recoveryはpreviewに束縛したresource identityとexact branch SHAを直接再検証し、aggregate merged cleanup discoveryに依存せず残存branchをexact leaseで削除する。
 
@@ -41,6 +42,7 @@ snapshot とし、可変 state を改変検出可能な append-only comment jour
 - closed tracking issue の reopen。
 - force push、rebase、auto-merge。
 - GitHub App、PAT、追加 credential。
+- 30日を超えて失効したcandidate artifactの再生成、remote staging refによるcandidate object永続化。
 - fresh approval 前の real GitHub write。
 
 ## Spec Holes

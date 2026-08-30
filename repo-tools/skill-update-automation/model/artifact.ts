@@ -90,7 +90,48 @@ export type NoOpManifest = Readonly<{
   files: readonly [ArtifactFile];
 }>;
 
-export type ArtifactManifest = CandidateUpdateManifest | ExistingHeadValidationManifest | NoOpManifest;
+export const recoveryModes = [
+  "commentless-root",
+  "prepared-branch-append",
+  "prepared-pr-draft",
+  "prepared-pr-ready",
+  "stale-validation",
+] as const;
+
+export type RecoveryMode = (typeof recoveryModes)[number];
+
+export type RecoveryTarget = Readonly<{
+  mode: RecoveryMode;
+  generation: number;
+  prNumber: number;
+  creatorUserId: string;
+  headRef: string;
+  beforeHeadSha: string;
+  afterHeadSha: string;
+  rootDigest: string;
+  journalDigest: string;
+  operationId: string;
+  beforeSnapshotDigest: string;
+  afterSnapshotDigest: string;
+  candidateDigest: string;
+  reportDigest: string;
+  originRun: RunRef;
+}>;
+
+export type RecoveryManifest = Readonly<{
+  schemaVersion: 1;
+  kind: "recovery";
+  repositoryId: string;
+  repository: string;
+  run: RunRef;
+  triggerSha: string;
+  baseHeadSha: string;
+  target: RecoveryTarget;
+  createdAt: string;
+  files: readonly [];
+}>;
+
+export type ArtifactManifest = CandidateUpdateManifest | ExistingHeadValidationManifest | NoOpManifest | RecoveryManifest;
 
 export type DraftReceipt = Readonly<{
   schemaVersion: 1;
@@ -322,12 +363,74 @@ const noOpManifestSchema: ExactSchema<NoOpManifest> = {
   },
 };
 
+function parseRecoveryTarget(value: unknown, baseHeadSha: string): RecoveryTarget {
+  const object = parseObject(value, "recovery target");
+  requireExactKeys(object, [
+    "mode", "generation", "prNumber", "creatorUserId", "headRef", "beforeHeadSha", "afterHeadSha",
+    "rootDigest", "journalDigest", "operationId", "beforeSnapshotDigest", "afterSnapshotDigest",
+    "candidateDigest", "reportDigest", "originRun",
+  ], "recovery target");
+  if (typeof object.mode !== "string" || !recoveryModes.includes(object.mode as RecoveryMode)) {
+    throw new Error("recovery target modeが不正です");
+  }
+  const generation = parseGeneration(object.generation);
+  const headRef = expectedManagedHeadRef(generation);
+  if (object.headRef !== headRef) throw new Error("recovery target headRefとgenerationが一致しません");
+  const beforeHeadSha = parseSha(object.beforeHeadSha);
+  if (beforeHeadSha !== baseHeadSha) throw new Error("recovery target before SHAとbaseHeadShaが一致しません");
+  return {
+    mode: object.mode as RecoveryMode,
+    generation,
+    prNumber: parsePositiveSafeInteger(object.prNumber),
+    creatorUserId: parseDecimalId(object.creatorUserId),
+    headRef,
+    beforeHeadSha,
+    afterHeadSha: parseSha(object.afterHeadSha),
+    rootDigest: parseDigest(object.rootDigest),
+    journalDigest: parseDigest(object.journalDigest),
+    operationId: parseDigest(object.operationId),
+    beforeSnapshotDigest: parseDigest(object.beforeSnapshotDigest),
+    afterSnapshotDigest: parseDigest(object.afterSnapshotDigest),
+    candidateDigest: parseDigest(object.candidateDigest),
+    reportDigest: parseDigest(object.reportDigest),
+    originRun: parseRunRef(object.originRun),
+  };
+}
+
+const recoveryManifestSchema: ExactSchema<RecoveryManifest> = {
+  parse(value: unknown): RecoveryManifest {
+    const object = parseObject(value, "recovery manifest");
+    requireExactKeys(object, [
+      "schemaVersion", "kind", "repositoryId", "repository", "run", "triggerSha", "baseHeadSha",
+      "target", "createdAt", "files",
+    ], "recovery manifest");
+    if (object.schemaVersion !== 1 || object.kind !== "recovery") {
+      throw new Error("recovery manifest discriminatorが不正です");
+    }
+    if (!Array.isArray(object.files) || object.files.length !== 0) throw new Error("recovery manifest filesは空が必要です");
+    const baseHeadSha = parseSha(object.baseHeadSha);
+    return {
+      schemaVersion: 1,
+      kind: "recovery",
+      repositoryId: parseDecimalId(object.repositoryId),
+      repository: parseRepositoryFullName(object.repository),
+      run: parseRunRef(object.run),
+      triggerSha: parseSha(object.triggerSha),
+      baseHeadSha,
+      target: parseRecoveryTarget(object.target, baseHeadSha),
+      createdAt: parseUtcTimestamp(object.createdAt),
+      files: [],
+    };
+  },
+};
+
 const artifactManifestSchema: ExactSchema<ArtifactManifest> = {
   parse(value: unknown): ArtifactManifest {
     const object = parseObject(value, "artifact manifest");
     if (object.kind === "candidate-update") return candidateUpdateManifestSchema.parse(value);
     if (object.kind === "existing-head-validation") return existingHeadValidationManifestSchema.parse(value);
     if (object.kind === "no-op") return noOpManifestSchema.parse(value);
+    if (object.kind === "recovery") return recoveryManifestSchema.parse(value);
     throw new Error("artifact manifest kindが不正です");
   },
 };

@@ -2,7 +2,7 @@ import type { CommandReport } from "../../skill-updater/index.ts";
 import type { FailureState, Scope } from "../model/index.ts";
 
 export type CandidateCommandStatus =
-  | "candidate-update" | "existing-head-validation" | "no-op"
+  | "candidate-update" | "existing-head-validation" | "no-op" | "recovery"
   | "updater-rejected" | "candidate-invalid" | "recovery-required";
 export type CandidateStopState = FailureState | "pr-identity-conflict" | "trigger-usage-failure";
 export type CandidateFailure = Readonly<{ state: CandidateStopState; scope: Scope; summaryOnly: boolean }>;
@@ -31,7 +31,7 @@ export function candidateResult(report: CandidateCommandReport): CandidateComman
         ? { state: "recovery-required", scope: { kind: "global", operation: "detect" }, summaryOnly: false } as const
         : undefined);
   const normalized = failure === undefined ? report : { ...report, failure };
-  const exitCode = ["candidate-update", "existing-head-validation", "no-op"].includes(report.status) ? 0 : 1;
+  const exitCode = ["candidate-update", "existing-head-validation", "no-op", "recovery"].includes(report.status) ? 0 : 1;
   return { exitCode, stdout: `${JSON.stringify(normalized)}\n`, stderr: "", report: normalized };
 }
 

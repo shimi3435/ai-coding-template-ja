@@ -29,6 +29,7 @@ import {
   writeCandidateArtifact,
   writeExistingValidationArtifact,
   writeNoOpArtifact,
+  writeRecoveryArtifact,
 } from "./artifact.ts";
 import {
   discoverCandidateHistory,
@@ -119,6 +120,7 @@ export async function runCandidateCommand(
         defaultBaseRef: options.defaultBranchRef,
         resumeClosed: options.resumeClosed,
         paginationComplete: history.complete,
+        currentRun: { workflowRunId: options.workflowRunId, workflowRunAttempt: options.workflowRunAttempt },
         pullRequests: history.pages.flat().map((pullRequest) => ({
           ...pullRequest,
           authorUserId: pullRequest.authorUserId ?? "metadata-unavailable",
@@ -140,6 +142,48 @@ export async function runCandidateCommand(
         });
       }
       throw error;
+    }
+    if (lifecycle.kind === "recoverable-transition") {
+      const origin = lifecycle.target.originRun;
+      const observation = context.workflowRun === undefined
+        ? {
+            status: origin.workflowRunId === options.workflowRunId &&
+                origin.workflowRunAttempt === options.workflowRunAttempt ? "in_progress" as const : "completed" as const,
+            run: origin,
+          }
+        : await context.workflowRun(origin);
+      if (observation.status === "completed") {
+        mkdirSync(stage, { mode: 0o700 });
+        writeRecoveryArtifact({
+          stage,
+          options,
+          target: lifecycle.target,
+          now: context.now?.() ?? new Date(),
+        });
+        mkdirSync(dirname(options.output), { recursive: true });
+        renameSync(stage, options.output);
+        outputCreated = true;
+        return result({
+          schemaVersion: 1,
+          command: "skills:automation:candidate",
+          status: "recovery",
+          artifactDirectory: options.output,
+          errors: [],
+        });
+      }
+      lifecycle = discoverManagedPullRequests({
+        repositoryId: options.repositoryId,
+        repository: options.repository,
+        defaultBaseRef: options.defaultBranchRef,
+        resumeClosed: options.resumeClosed,
+        paginationComplete: history.complete,
+        allowPendingJournal: true,
+        pullRequests: history.pages.flat().map((pullRequest) => ({
+          ...pullRequest,
+          authorUserId: pullRequest.authorUserId ?? "metadata-unavailable",
+          lastEditedAt: pullRequest.lastEditedAt === undefined ? "metadata-unavailable" : pullRequest.lastEditedAt,
+        })),
+      }).decision;
     }
     if (lifecycle.kind === "pr-identity-conflict" || lifecycle.kind === "recovery-required") {
       return result({

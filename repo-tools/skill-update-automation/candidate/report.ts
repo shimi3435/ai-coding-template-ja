@@ -15,7 +15,7 @@ import type {
 } from "./report-model.ts";
 
 const statuses: readonly CandidateCommandStatus[] = [
-  "candidate-update", "existing-head-validation", "no-op",
+  "candidate-update", "existing-head-validation", "no-op", "recovery",
   "updater-rejected", "candidate-invalid", "recovery-required",
 ];
 const stopStates: readonly CandidateStopState[] = [
@@ -60,7 +60,8 @@ export function decodeCandidateCommandReport(bytes: Uint8Array): CandidateComman
   if (["updater-rejected", "candidate-invalid", "recovery-required"].includes(object.status) && failure === undefined) {
     throw new Error("failed candidate reportにfailureが必要です");
   }
-  if ((object.status === "candidate-update" || object.status === "existing-head-validation") && failure !== undefined) {
+  if ((object.status === "candidate-update" || object.status === "existing-head-validation" || object.status === "recovery") &&
+    failure !== undefined) {
     throw new Error("publish candidate reportにfailureは許可されません");
   }
   if (object.artifactDirectory !== undefined && typeof object.artifactDirectory !== "string") {

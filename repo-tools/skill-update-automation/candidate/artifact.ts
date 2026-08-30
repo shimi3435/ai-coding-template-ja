@@ -19,6 +19,7 @@ import {
   parseRepositoryFullName,
   type ArtifactManifest,
   type CandidateUpdateManifest,
+  type RecoveryTarget,
   type CreatePublishTarget,
   type UpdatePublishTarget,
   type ValidatePublishTarget,
@@ -90,7 +91,8 @@ export function validateCandidateArtifact(directory: string, expected: Candidate
   ) {
     throw new Error("artifact identityがcurrent contextと一致しません");
   }
-  if (expected.historyDigest !== undefined && manifest.target.historyDigest !== expected.historyDigest) {
+  if (expected.historyDigest !== undefined && (!("historyDigest" in manifest.target) ||
+    manifest.target.historyDigest !== expected.historyDigest)) {
     throw new Error("artifact history digestがfresh stateと一致しません");
   }
   if (expected.target !== undefined && !isDeepStrictEqual(manifest.target, expected.target)) {
@@ -197,6 +199,29 @@ export function writeNoOpArtifact(
   const manifestBytes = encodeArtifactManifest(manifest);
   assertArtifactSize(stage, manifestBytes, [previewName]);
   writeFileSync(join(stage, "manifest.json"), manifestBytes, { mode: 0o600 });
+}
+
+export function writeRecoveryArtifact(input: Readonly<{
+  stage: string;
+  options: CandidateArtifactOptions;
+  target: RecoveryTarget;
+  now: Date;
+}>): void {
+  const manifest: ArtifactManifest = {
+    schemaVersion: 1,
+    kind: "recovery",
+    repositoryId: input.options.repositoryId,
+    repository: input.options.repository,
+    run: { workflowRunId: input.options.workflowRunId, workflowRunAttempt: input.options.workflowRunAttempt },
+    triggerSha: input.options.triggerSha,
+    baseHeadSha: input.target.beforeHeadSha,
+    target: input.target,
+    createdAt: input.now.toISOString(),
+    files: [],
+  };
+  const manifestBytes = encodeArtifactManifest(manifest);
+  assertArtifactSize(input.stage, manifestBytes, []);
+  writeFileSync(join(input.stage, "manifest.json"), manifestBytes, { mode: 0o600 });
 }
 
 export function writeExistingValidationArtifact(

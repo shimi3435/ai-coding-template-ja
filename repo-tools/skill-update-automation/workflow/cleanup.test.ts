@@ -65,7 +65,7 @@ test("merged branch cleanup is an independent eligible-run job with least privil
 test("final issue writer receives cleanup evidence and creator identity from independent jobs", () => {
   const jobs = workflow().jobs;
   const finalize = jobs["publish-finalize"];
-  assert.deepEqual(finalize.needs, ["detect", "publish-draft", "validate", "cleanup-merged"]);
+  assert.deepEqual(finalize.needs, ["detect", "publish-draft", "recover", "validate", "cleanup-merged"]);
   const steps = finalize.steps as Array<Record<string, any>>;
   const creator = steps.find((step) => step.id === "journal-creator");
   const detection = steps.find((step) => step.id === "publish-detection-outcome");

@@ -44,7 +44,9 @@ function assertReceipt(
   if (age < 0 || age > 24 * 60 * 60 * 1000) throw new Error("DraftReceipt retentionが終了しています");
 }
 
-function assertLocalCandidate(repositoryRoot: string, manifest: Exclude<ArtifactManifest, { kind: "no-op" }>): void {
+type ValidationManifest = Extract<ArtifactManifest, { kind: "candidate-update" | "existing-head-validation" }>;
+
+function assertLocalCandidate(repositoryRoot: string, manifest: ValidationManifest): void {
   const headSha = git(repositoryRoot, ["rev-parse", "HEAD"]);
   if (headSha !== manifest.candidateSha) throw new Error("checked out candidate SHAがmanifestと一致しません");
   if (git(repositoryRoot, ["rev-parse", "HEAD^{tree}"]) !== manifest.candidateTreeSha) {
@@ -97,7 +99,9 @@ export function runIntegrationValidation(input: Readonly<{
     workflowRunId: input.workflowRunId,
     workflowRunAttempt: input.workflowRunAttempt,
   });
-  if (manifest.kind === "no-op") throw new Error("no-op artifactはvalidation対象ではありません");
+  if (manifest.kind !== "candidate-update" && manifest.kind !== "existing-head-validation") {
+    throw new Error("artifactはvalidation対象ではありません");
+  }
   if (manifest.triggerSha !== parseSha(input.triggerSha) || manifest.candidateSha !== parseSha(input.candidateSha)) {
     throw new Error("validation contextがcandidate manifestと一致しません");
   }

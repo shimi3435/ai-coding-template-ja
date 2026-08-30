@@ -172,8 +172,10 @@ async function syncCleanupIssue(input: Readonly<{
   });
 }
 
+type FinalizeManifest = Extract<ArtifactManifest, { kind: "candidate-update" | "existing-head-validation" }>;
+
 function targetIdentity(
-  manifest: Exclude<ArtifactManifest, { kind: "no-op" }>,
+  manifest: FinalizeManifest,
   receipt: DraftReceipt | undefined,
 ): Readonly<{
   generation: number;
@@ -208,7 +210,7 @@ function targetIdentity(
 export async function finalizeManagedPullRequest(input: Readonly<{
   adapter: FinalizeGithubAdapter;
   context: FinalizeContext;
-  manifest: Exclude<ArtifactManifest, { kind: "no-op" }>;
+  manifest: FinalizeManifest;
   receipt?: DraftReceipt;
   validation: ValidationState;
   cleanupStatus?: "passed" | "failed";

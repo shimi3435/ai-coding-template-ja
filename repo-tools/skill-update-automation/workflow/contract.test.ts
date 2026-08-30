@@ -36,7 +36,7 @@ test("workflow fixes opt-in triggers, concurrency, and read-only detection permi
   assert.equal(value.jobs.detect["timeout-minutes"], 20);
 });
 
-test("opt-in detection validates input before candidate network and uploads one-day exact artifact", () => {
+test("opt-in detection validates input before candidate network and uploads thirty-day exact artifact", () => {
   const steps = workflow().jobs.detect.steps as Array<Record<string, any>>;
   const gate = steps.findIndex((step) => step.id === "gate");
   const candidate = steps.findIndex((step) => step.id === "candidate");
@@ -49,7 +49,7 @@ test("opt-in detection validates input before candidate network and uploads one-
     name: "skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
     path: "${{ runner.temp }}/skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}",
     "if-no-files-found": "error",
-    "retention-days": 1,
+    "retention-days": 30,
   });
   assert.equal(steps[cleanup]?.if, "always()");
   assert.doesNotMatch(JSON.stringify(workflow().jobs.detect), /contents\":\"write|pull-requests\":\"write|issues\":\"write/);

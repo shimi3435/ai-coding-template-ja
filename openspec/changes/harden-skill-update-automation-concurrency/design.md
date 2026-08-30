@@ -113,12 +113,38 @@ terminal prepared journalが通常のmerged-only aggregate cleanup discoveryでc
 束縛済みの単一branchだけをexplicit exact leaseで削除する。通常runの独立aggregate cleanup契約は変更しない。
 merge後の再開はdefault branchがsource commitを含むread-only comparisonを`merged` relationとしてpreviewへ束縛する。
 
+### 7. cross-run recoveryを専用artifact / jobへ接続する
+
+`detect`はstrict open / unmerged managed PRがexact 1件である場合だけ、`commentless-root`、末尾prepared
+`branch-append | pr-draft | pr-ready`、またはjournalがstableでvalidationだけが完了済み旧runを指す
+`stale-validation`をtop-level `recovery` artifactへ分類する。artifactはcurrent repository / run、PR番号、creator、
+immutable root digest、terminal journal / prepared digest、operation ID、before / after snapshot digest、head ref / SHA、
+origin workflow run / attemptをcanonicalに束縛する。複数候補、closed / merged、対応外operation、fork、foreign author、
+edited / noncanonical marker、digest不一致は通常のidentity conflictとしてwrite 0件で停止する。
+候補数だけで選ばず、全managed history reducerの結果が同じPR / generationのopen memberであることも要求し、duplicate
+generationや新しいclosed-unmerged historyを無視しない。terminal prepared journalはrecovery-aware callerだけが明示的に許可し、
+通常のIssue / cleanup discoveryではsame-runを含めidentity conflictへ閉じる。
+
+`detect`はlive before / afterを確定しない。専用`recover` jobがwrite直前にroot、全journal、PR、branchをfresh readし、
+descriptorとexact一致する場合だけ既存のcommentless / prepared recovery seamを呼ぶ。`branch-append`のbefore状態では、
+origin runのimmutable candidate artifactを`actions: read`で取得し、manifest、全file digest、bundle、candidate SHA、
+candidate / report digestをremote snapshotと照合してから同じexplicit lease mutationを実行する。artifact欠落、期限切れ、
+改変、live divergent、projection未収束はIssueを含む追加write 0件で`recovery-required`とする。candidate artifactは
+週次run境界を越えるよう30日保持し、remote staging refは追加しない。
+
+commentless root、recovered `branch-append`、`stale-validation`は、回復後のfresh history / journalへ束縛した
+current-run `existing-head-validation` artifactを生成し、同じrunのvalidate / finalizeへ渡す。recovered `pr-draft`は
+origin candidate artifactへ束縛した`branch-append`を完了してから同じcurrent-run validationへ渡す。中間prepared / committed
+branch stateはorigin run identityを維持し、途中停止した次runも同じimmutable artifactを再取得できるようにする。`pr-ready`は旧validationが
+passedであることをprepared snapshotから検証し、exact recoveryだけで完了する。recovery runではaggregate merged cleanupを
+実行しない。recovery jobの権限は`actions: read`、`contents: write`、`pull-requests: write`だけとし、`issues: write`を与えない。
+
 ## Validation Strategy
 
-- public seam: production adapter command runner、fake GitHub adapter、workflow YAML contract、smoke preview / execution CLI。
-- TDD: race、tamper、missing / fork、foreign author、commentless root、append response loss、prepared crash recovery、cross-phase projection regression、terminal-only exact cleanup、no-op cleanup、closed issue generationをREDから追加する。
+- public seam: production adapter command runner、fake GitHub adapter、candidate / recovery command lifecycle、workflow YAML contract、smoke preview / execution CLI。
+- TDD: race、tamper、missing / fork、foreign author、commentless root、append response loss、prepared crash recovery、cross-run recovery、stale validation、cross-phase projection regression、terminal-only exact cleanup、no-op cleanup、closed issue generationをREDから追加する。
 - Node 24 focused tests、typecheck、`uv run --no-sync task check`。
-- real GitHub writeはrequired final evidenceではあるがfresh approval boundaryまで未実行・change未完了とする。
+- cross-run recoveryのreal GitHub writeは外部writeとなるため自動実行せず、fake adapter lifecycleとworkflow contractをrequired final evidenceとする。
 
 ## Sources
 
@@ -126,3 +152,4 @@ merge後の再開はdefault branchがsource commitを含むread-only comparison�
 - GitHub issue comments API: PR / Issue comment共通。ascending ID、numeric author ID、`created_at` / `updated_at`を取得可能。
 - GitHub GraphQL PullRequest / Issue: resource authorのnumeric database IDとbody edit証拠`lastEditedAt`を取得可能。
 - GitHub Actions jobs: `needs`、job-level `if`、`always()`によりcleanup topologyを独立表現できる。
+- GitHub Actions artifact v4+: `github-token`と`run-id`を指定し、`actions: read`で別workflow runのimmutable artifactを取得できる。

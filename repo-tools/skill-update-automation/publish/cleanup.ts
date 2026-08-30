@@ -8,12 +8,14 @@ export function cleanupPublishStage(input: Readonly<{
   runnerTemp: string;
   workflowRunId: string;
   workflowRunAttempt: string;
-  stage: "publish" | "validation";
+  stage: "publish" | "validation" | "recovery";
 }>): void {
   if (!isAbsolute(input.runnerTemp) || resolve(input.runnerTemp) !== input.runnerTemp) {
     throw new Error("runner tempはabsolute normalized pathが必要です");
   }
-  if (input.stage !== "publish" && input.stage !== "validation") throw new Error("cleanup stageが不正です");
+  if (input.stage !== "publish" && input.stage !== "validation" && input.stage !== "recovery") {
+    throw new Error("cleanup stageが不正です");
+  }
   const workflowRunId = parseDecimalId(input.workflowRunId);
   if (!/^[1-9][0-9]*$/.test(input.workflowRunAttempt)) {
     throw new Error("workflow run attemptがcanonical positive decimalではありません");
@@ -25,8 +27,8 @@ export function cleanupPublishStage(input: Readonly<{
   if (existsSync(target)) throw new Error("publish stage artifact remains");
 }
 
-function parseStage(value: string | undefined): "publish" | "validation" {
-  if (value === "publish" || value === "validation") return value;
+function parseStage(value: string | undefined): "publish" | "validation" | "recovery" {
+  if (value === "publish" || value === "validation" || value === "recovery") return value;
   throw new Error("cleanup stageが不正です");
 }
 

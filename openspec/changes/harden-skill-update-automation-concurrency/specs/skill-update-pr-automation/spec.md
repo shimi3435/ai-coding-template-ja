@@ -111,6 +111,55 @@ The guarantee applies to the final fresh Issue read immediately before comment a
 - **THEN** a new immutable issue root and v2 journal are created
 - **AND** the closed issue remains unchanged
 
+### Requirement: Transitional managed PR state recovers across workflow runs
+
+The automation MUST classify exact recoverable transitional state during read-only detection and MUST resume it through a dedicated write-capable recovery job in a later workflow run.
+
+#### Scenario: Recover a commentless root in a later run
+
+- **GIVEN** run N created the branch and immutable draft PR but stopped before the exact initial journal entry was confirmed
+- **WHEN** run N+1 detects the exact unedited commentless root and its origin candidate artifact remains valid
+- **THEN** the recovery job appends or confirms the exact initial entry once
+- **AND** emits a current-run existing-head-validation artifact for validation and finalization in run N+1
+
+#### Scenario: Recover a prepared branch append before mutation
+
+- **GIVEN** run N appended a valid terminal prepared branch-append entry and stopped before mutation
+- **WHEN** run N+1 verifies the origin artifact, fresh before state, and exact explicit lease
+- **THEN** it performs the exact branch mutation once and appends the matching committed entry once
+- **AND** validates and finalizes the recovered head in run N+1
+
+#### Scenario: Recover a prepared branch append after mutation
+
+- **GIVEN** run N completed the exact branch mutation and stopped before committed append
+- **WHEN** run N+1 observes the exact after state
+- **THEN** it performs no branch mutation and appends only the matching committed entry
+
+#### Scenario: Recover PR draft and ready transitions
+
+- **WHEN** a later run detects a valid terminal prepared pr-draft or pr-ready entry
+- **THEN** it applies the same exact before / after / divergent recovery contract
+- **AND** pr-draft completes the origin candidate append before current-run validation while pr-ready completes without repeating validation
+
+#### Scenario: Resume stale pending validation
+
+- **GIVEN** the journal is stable and validation is pending for a completed earlier workflow run
+- **WHEN** a later run verifies exact root, journal, live head, and origin artifact identity
+- **THEN** it performs no recovery mutation
+- **AND** emits a current-run existing-head-validation artifact for validation and finalization
+
+#### Scenario: Recovery evidence is missing or ambiguous
+
+- **WHEN** the origin artifact is missing or invalid, more than one recovery candidate exists, identity evidence is edited, foreign, forked, or noncanonical, or live state is divergent or does not converge
+- **THEN** recovery performs no branch, PR, comment, or Issue write
+- **AND** reports recovery-required or identity conflict without running merged-branch cleanup
+
+#### Scenario: Recovery artifact retention
+
+- **WHEN** a candidate artifact is uploaded for a managed update
+- **THEN** it is retained for 30 days so a later scheduled run can recover it
+- **AND** recovery after artifact expiry fails closed without regenerating the historical candidate
+
 ### Requirement: Schema v2 smoke uses a fresh repository and fresh approval
 
 The real-host smoke MUST target a fresh repository with no v1 managed resources and MUST perform no write before a read-only preview and fresh in-process approval of the exact v2 operation plan.

@@ -127,6 +127,42 @@ test("no-op manifest has no candidate fields and only a none target", () => {
   assert.throws(() => encodeArtifactManifest({ ...manifest, candidateSha: sha("c") }));
 });
 
+test("recovery manifest roundtrips five strict modes and binds origin run", () => {
+  const common = {
+    schemaVersion: 1 as const,
+    kind: "recovery" as const,
+    repositoryId: "123",
+    repository: "owner/repo",
+    run: { workflowRunId: "999", workflowRunAttempt: 2 },
+    triggerSha: sha("a"),
+    baseHeadSha: sha("b"),
+    createdAt: "2026-08-30T01:02:03.004Z",
+    files: [] as const,
+  };
+  const target = {
+    mode: "prepared-branch-append" as const,
+    generation: 9,
+    prNumber: 77,
+    creatorUserId: "456",
+    headRef: "refs/heads/automation/skill-updates/g000009",
+    beforeHeadSha: sha("b"),
+    afterHeadSha: sha("c"),
+    rootDigest: digest("1"),
+    journalDigest: digest("2"),
+    operationId: digest("3"),
+    beforeSnapshotDigest: digest("4"),
+    afterSnapshotDigest: digest("5"),
+    candidateDigest: digest("6"),
+    reportDigest: digest("7"),
+    originRun: { workflowRunId: "456", workflowRunAttempt: 1 },
+  };
+  const manifest = { ...common, target };
+
+  assert.deepEqual(decodeArtifactManifest(encodeArtifactManifest(manifest)), manifest);
+  assert.throws(() => encodeArtifactManifest({ ...manifest, target: { ...target, unexpected: true } }));
+  assert.throws(() => encodeArtifactManifest({ ...manifest, target: { ...target, mode: "unsupported" } }));
+});
+
 test("DraftReceipt roundtrips with exact generation and managed head binding", () => {
   const receipt = {
     schemaVersion: 1,

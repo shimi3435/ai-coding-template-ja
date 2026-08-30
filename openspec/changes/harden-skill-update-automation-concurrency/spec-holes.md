@@ -104,6 +104,23 @@
 | 11 | 巨大入力・リソース枯渇 | 該当 |preview plan肥大 / API timeout | 1:closed step set、timeout時write停止 |
 | 12 | 状態遷移の未定義パス | 該当 |merge checkpoint未完了、merge後再開、auto-delete、terminal cleanup未達、closed terminal-prepared PRとresidual branch | 1:人手mergeをfresh検証。merge後はsource relationを束縛。auto-deleteはfail closed。別recovery preview＋fresh approval。各terminal write前にbody / journal / state / SHAを再検証 |
 
+## Requirement 7: cross-run transitional recovery
+
+| # | 分類 | 判断 | 穴の内容 | 潰し方 |
+| --- | --- | --- | --- | --- |
+| 1 | 空・ゼロ長・None | 該当 |commentless journal、origin artifact欠落 | 1:strict commentlessだけroot recovery。artifact欠落はwrite 0件 |
+| 2 | 境界値 | 該当 |run N / N+1、retention 1 / 30 / 31日 | 1:異なるrun identityを必須test化。30日保持、失効後fail closed |
+| 3 | 重複・衝突 | 該当 |複数recoverable PR / artifact、同operation再実行 | 1:recoverableはexact 1件だけ。fresh committed確認でduplicate write禁止 |
+| 4 | 順序 | 該当 |detect、artifact取得、fresh read、mutation、validation順 | 1:専用jobのexact順だけ許可。detectのlive projectionをwrite根拠にしない |
+| 5 | 型・形式不正 | 該当 |recovery mode、descriptor、origin manifest不正 | 1:single top-level kind＋5 modeのstrict canonical parser、unknown field拒否 |
+| 6 | エラー経路 | 該当 |artifact download失敗、mutation / append応答消失、validation中断 | 1:fresh再取得でexact stateだけ受理。失敗時Issueを含むunexpected write 0件 |
+| 7 | 冪等性・再実行 | 該当 |N+1も同じcheckpointで停止、stale validation再実行 | 1:root / prepared recoveryは既存operation IDで収束。stable stale validationはmutation 0件 |
+| 8 | 時刻・タイムゾーン | 該当 |artifact retention、projection lag | 1:retentionは30日。成功判定は時刻でなくfresh exact state、有界readだけ |
+| 9 | 文字列 | 該当 |artifact名へのremote文字列注入 | 1:検証済みdecimal run ID / positive attemptから定数形式で構築 |
+| 10 | 数値 | 該当 |run ID / attempt / PR番号境界 | 1:既存decimal / positive safe integer parserで拒否 |
+| 11 | 巨大入力・リソース枯渇 | 該当 |100 MiB artifact、download timeout、journal pagination | 1:既存artifact size / digest検証、complete pagination必須、timeout時write 0件 |
+| 12 | 状態遷移の未定義パス | 該当 |closed / merged、unsupported prepared、pr-ready validation非passed、divergent live、cleanup競合 | 1:5 mode whitelist、open / unmerged exact 1件、pr-ready passed必須、recovery run cleanup除外 |
+
 ## Phase 2: validation mapping
 
 | 穴 | 検証形態 | テスト予定 | 備考 |
@@ -119,6 +136,9 @@
 | closed issue / duplicate failure / cardinality | 例示 reducer test | `github/issue-reducer.test.ts` | no reopen assertion |
 | fresh smoke / stale approval / replay / terminal cleanup | 例示 integration test | `smoke/command.test.ts`, `smoke/production-host.test.ts` | fake host |
 | closed terminal-prepared residual cleanup | 例示 integration test | `smoke/fresh-v2.test.ts` | public smoke recovery seam。preview-bound exact deleteだけ実行 |
+| cross-run commentless / prepared / stale validation | public command lifecycle test | `recovery/lifecycle.test.ts` | Run NとN+1で異なるID / attempt。recovery後current-run validation artifactを確認 |
+| cross-run artifact / identity / live failure matrix | security matrix integration test | `recovery/lifecycle.test.ts` | missing / modified artifact、fork / foreign / edit / digest、multiple候補、divergent時unexpected write 0件 |
+| recovery workflow routing / permissions / retention | 静的 contract test | `publish/workflow.test.ts`, `finalize/workflow.test.ts` | recovery job、30日、cleanup除外、`issues: write`不在 |
 | real GitHub CAS / comment / cleanup behavior | real-host smoke | fresh smoke repository | fresh approval前は未検証 blocker |
 | 時刻非依存契約 | 静的 contract test | focused model / workflow tests | age-based推測がないことを検査 |
 | resource exhaustion / host timeout | 未検証 | — |外部host依存。上限超過fail-closedをoffline例示testで代替 |

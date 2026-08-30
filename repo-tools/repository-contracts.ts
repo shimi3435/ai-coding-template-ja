@@ -121,13 +121,14 @@ function validateSkillUpdateWorkflow(repositoryRoot: string): void {
 
   const jobs = yamlBlock(lines, "jobs", 0);
   if (!isDeepStrictEqual([...directYamlKeys(jobs, 2)].sort(), [
-    "cleanup-merged", "detect", "publish-draft", "publish-finalize", "validate",
+    "cleanup-merged", "detect", "publish-draft", "publish-finalize", "recover", "validate",
   ])) {
     throw new Error(`${path}: production workflow job集合が不正です。real-host smokeはworkflow外が必要です`);
   }
   const expectedPermissions: Record<string, Record<string, string>> = {
     detect: { contents: "read", "pull-requests": "read", issues: "read" },
     "publish-draft": { contents: "write", "pull-requests": "write" },
+    recover: { actions: "read", contents: "write", "pull-requests": "write" },
     "cleanup-merged": { contents: "write", "pull-requests": "read" },
     validate: { contents: "read" },
     "publish-finalize": { contents: "read", "pull-requests": "write", issues: "write" },
@@ -139,7 +140,7 @@ function validateSkillUpdateWorkflow(repositoryRoot: string): void {
   const writeJobs = directYamlKeys(jobs, 2).filter((jobName) =>
     Object.values(yamlPermissions(yamlBlock(jobs, jobName, 2))).includes("write"),
   ).sort();
-  if (!isDeepStrictEqual(writeJobs, ["cleanup-merged", "publish-draft", "publish-finalize"])) {
+  if (!isDeepStrictEqual(writeJobs, ["cleanup-merged", "publish-draft", "publish-finalize", "recover"])) {
     throw new Error(`${path}: write permission job集合が不正です`);
   }
 

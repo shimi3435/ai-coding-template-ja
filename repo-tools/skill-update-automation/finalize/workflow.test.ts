@@ -13,7 +13,7 @@ function workflow(): Record<string, any> {
 
 test("publish-finalize runs after validation with only exact final permissions", () => {
   const job = workflow().jobs["publish-finalize"];
-  assert.deepEqual(job.needs, ["detect", "publish-draft", "validate", "cleanup-merged"]);
+  assert.deepEqual(job.needs, ["detect", "publish-draft", "recover", "validate", "cleanup-merged"]);
   assert.deepEqual(job.permissions, {
     contents: "read",
     "pull-requests": "write",
@@ -36,6 +36,16 @@ test("validation exports observable step outcomes without adding write permissio
     stage: "${{ steps.validate-candidate.outputs.stage }}",
   });
   assert.deepEqual(job.permissions, { contents: "read" });
+});
+
+test("successful recovery re-enters validation while ready recovery and recovery failure skip final writes", () => {
+  const jobs = workflow().jobs;
+  assert.match(jobs.validate.if, /needs\.recover\.outputs\.recovery-status == 'validation-required'/);
+  assert.match(jobs["publish-finalize"].if, /artifact-kind != 'recovery'/);
+  assert.match(jobs["publish-finalize"].if, /recovery-status == 'validation-required'/);
+  const detection = (jobs["publish-finalize"].steps as Array<Record<string, any>>)
+    .find((step) => step.id === "publish-detection-outcome");
+  assert.match(detection?.if ?? "", /artifact-kind != 'recovery'/);
 });
 
 test("finalize downloads exact same-run inputs, uses scoped token, and always cleans", () => {
@@ -76,7 +86,7 @@ test("finalize always routes detection and draft failures before candidate-speci
   assert.match(job.if, /needs\.detect\.outputs\.candidate-status != ''/);
   assert.match(job.if, /needs\.detect\.outputs\.summary-only != 'true'/);
   assert.match(reportDownload?.uses ?? "", /^actions\/download-artifact@[0-9a-f]{40}$/);
-  assert.equal(detection?.if, "always()");
+  assert.equal(detection?.if, "always() && needs.detect.outputs.artifact-kind != 'recovery'");
   assert.match(detection?.run ?? "", /detection-command\.ts.*GITHUB_STEP_SUMMARY/s);
   assert.equal(detection?.env.PUBLISH_DRAFT_RESULT, "${{ needs.publish-draft.result }}");
   assert.equal(detection?.env.PUBLISH_DRAFT_PERMISSION_OPERATION,

@@ -35,6 +35,8 @@ jobs:
       summary-only: ${{ steps.candidate-report.outputs.summary-only }}
       artifact-kind: ${{ steps.artifact.outputs.artifact-kind }}
       candidate-sha: ${{ steps.artifact.outputs.candidate-sha }}
+      origin-run-id: ${{ steps.artifact.outputs.origin-run-id }}
+      origin-run-attempt: ${{ steps.artifact.outputs.origin-run-attempt }}
     env:
       CANDIDATE_DIR: ${{ runner.temp }}/skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
       CANDIDATE_REPORT_FILE: ${{ runner.temp }}/skill-update-candidate-report-${{ github.run_id }}-${{ github.run_attempt }}.json
@@ -108,13 +110,25 @@ jobs:
         if: steps.candidate.outcome == 'success' && steps.candidate-report.outputs.failure-state == ''
         run: node repo-tools/skill-update-automation/publish/artifact-kind.ts >> "$GITHUB_OUTPUT"
       - name: Upload candidate artifact
-        if: steps.candidate.outcome == 'success' && steps.candidate-report.outputs.failure-state == ''
+        if: >-
+          steps.candidate.outcome == 'success' && steps.candidate-report.outputs.failure-state == '' &&
+          steps.artifact.outputs.artifact-kind != 'recovery'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 30
+      - name: Upload exact recovery descriptor
+        if: >-
+          steps.candidate.outcome == 'success' && steps.candidate-report.outputs.failure-state == '' &&
+          steps.artifact.outputs.artifact-kind == 'recovery'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload exact candidate report
         if: always() && steps.gate.outputs.should-run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -205,6 +219,89 @@ jobs:
           STAGE: publish
         run: node repo-tools/skill-update-automation/publish/cleanup.ts
 
+  recover:
+    needs: detect
+    if: needs.detect.outputs.should-run == 'true' && needs.detect.outputs.artifact-kind == 'recovery'
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      recovery-status: ${{ steps.recover.outputs.recovery-status }}
+      candidate-sha: ${{ steps.recover.outputs.candidate-sha }}
+    env:
+      RECOVERY_DIR: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout automation source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node 24
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install Node dependencies (locked, no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Download exact recovery descriptor
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}/descriptor
+      - name: Download immutable origin candidate artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: skill-update-candidate-${{ needs.detect.outputs.origin-run-id }}-${{ needs.detect.outputs.origin-run-attempt }}
+          path: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}/origin
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.detect.outputs.origin-run-id }}
+      - name: Resolve journal creator numeric ID
+        id: recovery-journal-creator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          creator_id="$(gh api '/users/github-actions%5Bbot%5D' --jq .id)"
+          case "$creator_id" in
+            ''|*[!0-9]*) echo 'invalid github-actions bot user ID' >&2; exit 1 ;;
+          esac
+          printf 'id=%s\n' "$creator_id" >> "$GITHUB_OUTPUT"
+      - name: Recover exact transitional state
+        id: recover
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_ARTIFACT_DIR: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}/descriptor
+          ORIGIN_ARTIFACT_DIR: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}/origin
+          OUTPUT_ARTIFACT_DIR: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}/candidate
+          REPOSITORY_ID: ${{ github.repository_id }}
+          REPOSITORY: ${{ github.repository }}
+          CREATOR_USER_ID: ${{ steps.recovery-journal-creator.outputs.id }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+          TRIGGER_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node repo-tools/skill-update-automation/recovery/command.ts >> "$GITHUB_OUTPUT"
+      - name: Upload current-run validation artifact
+        if: steps.recover.outputs.recovery-status == 'validation-required'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: skill-update-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/skill-update-recovery-${{ github.run_id }}-${{ github.run_attempt }}/candidate
+          if-no-files-found: error
+          retention-days: 30
+      - name: Cleanup recovery stage
+        if: always()
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+          STAGE: recovery
+        run: node repo-tools/skill-update-automation/publish/cleanup.ts
+
   cleanup-merged:
     needs: [detect, publish-draft]
     if: >-
@@ -256,10 +353,11 @@ jobs:
         run: node repo-tools/skill-update-automation/finalize/cleanup-command.ts >> "$GITHUB_OUTPUT"
 
   validate:
-    needs: [detect, publish-draft]
+    needs: [detect, publish-draft, recover]
     if: >-
       always() && needs.detect.result == 'success' && needs.detect.outputs.should-run == 'true' &&
-      (needs.detect.outputs.artifact-kind == 'existing-head-validation' || needs.publish-draft.result == 'success')
+      (needs.detect.outputs.artifact-kind == 'existing-head-validation' || needs.publish-draft.result == 'success' ||
+      needs.recover.outputs.recovery-status == 'validation-required')
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -279,7 +377,7 @@ jobs:
         id: checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ needs.detect.outputs.candidate-sha }}
+          ref: ${{ needs.recover.outputs.candidate-sha || needs.detect.outputs.candidate-sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Set up Node 24
@@ -320,7 +418,7 @@ jobs:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
           TRIGGER_SHA: ${{ github.sha }}
-          CANDIDATE_SHA: ${{ needs.detect.outputs.candidate-sha }}
+          CANDIDATE_SHA: ${{ needs.recover.outputs.candidate-sha || needs.detect.outputs.candidate-sha }}
         run: |
           node repo-tools/skill-update-automation/publish/validate-command.ts \
             --merge-command "git merge --no-commit --no-ff $TRIGGER_SHA" \
@@ -335,10 +433,11 @@ jobs:
         run: node repo-tools/skill-update-automation/publish/cleanup.ts
 
   publish-finalize:
-    needs: [detect, publish-draft, validate, cleanup-merged]
+    needs: [detect, publish-draft, recover, validate, cleanup-merged]
     if: >-
       always() && needs.detect.result == 'success' && needs.detect.outputs.should-run == 'true' &&
-      needs.detect.outputs.candidate-status != '' && needs.detect.outputs.summary-only != 'true'
+      needs.detect.outputs.candidate-status != '' && needs.detect.outputs.summary-only != 'true' &&
+      (needs.detect.outputs.artifact-kind != 'recovery' || needs.recover.outputs.recovery-status == 'validation-required')
     permissions:
       contents: read
       pull-requests: write
@@ -393,7 +492,7 @@ jobs:
           printf 'id=%s\n' "$creator_id" >> "$GITHUB_OUTPUT"
       - name: Publish detection outcome
         id: publish-detection-outcome
-        if: always()
+        if: always() && needs.detect.outputs.artifact-kind != 'recovery'
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_REPORT_FILE: ${{ runner.temp }}/skill-update-finalize-${{ github.run_id }}-${{ github.run_attempt }}/skill-update-candidate-report-${{ github.run_id }}-${{ github.run_attempt }}.json
@@ -415,7 +514,8 @@ jobs:
         if: >-
           needs.detect.outputs.failure-state == '' &&
           needs.detect.outputs.artifact-kind != 'no-op' &&
-          (needs.detect.outputs.artifact-kind == 'existing-head-validation' || needs.publish-draft.result == 'success') &&
+          (needs.detect.outputs.artifact-kind == 'existing-head-validation' || needs.publish-draft.result == 'success' ||
+          needs.recover.outputs.recovery-status == 'validation-required') &&
           needs.validate.result != 'skipped'
         env:
           GH_TOKEN: ${{ github.token }}

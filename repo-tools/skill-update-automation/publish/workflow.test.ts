@@ -11,7 +11,7 @@ function workflow(): Record<string, any> {
   return document.toJS() as Record<string, any>;
 }
 
-test("publish-draft is the only first-stage writer and validate is read-only", () => {
+test("publish-draft and exact recovery are isolated first-stage writers while validate is read-only", () => {
   const jobs = workflow().jobs;
   assert.equal(jobs["publish-draft"].needs, "detect");
   assert.deepEqual(jobs["publish-draft"].permissions, {
@@ -19,11 +19,44 @@ test("publish-draft is the only first-stage writer and validate is read-only", (
     "pull-requests": "write",
   });
   assert.equal(jobs["publish-draft"]["timeout-minutes"], 20);
-  assert.deepEqual(jobs.validate.needs, ["detect", "publish-draft"]);
+  assert.deepEqual(jobs.validate.needs, ["detect", "publish-draft", "recover"]);
   assert.deepEqual(jobs.validate.permissions, { contents: "read" });
   assert.equal(jobs.validate["timeout-minutes"], 45);
   assert.equal(jobs["publish-draft"].if,
     "needs.detect.outputs.should-run == 'true' && needs.detect.outputs.artifact-kind == 'candidate-update'");
+});
+
+test("recovery downloads one immutable origin artifact with exact permissions and excludes cleanup", () => {
+  const jobs = workflow().jobs;
+  const job = jobs.recover;
+  assert.equal(job.needs, "detect");
+  assert.deepEqual(job.permissions, {
+    actions: "read",
+    contents: "write",
+    "pull-requests": "write",
+  });
+  assert.equal(job.permissions.issues, undefined);
+  assert.match(job.if, /artifact-kind == 'recovery'/);
+  const steps = job.steps as Array<Record<string, any>>;
+  const origin = steps.find((step) => step.name === "Download immutable origin candidate artifact");
+  const creator = steps.find((step) => step.id === "recovery-journal-creator");
+  const recover = steps.find((step) => step.id === "recover");
+  const cleanup = steps.find((step) => step.name === "Cleanup recovery stage");
+  assert.equal(origin?.with["github-token"], "${{ github.token }}");
+  assert.equal(origin?.with["run-id"], "${{ needs.detect.outputs.origin-run-id }}");
+  assert.match(creator?.run ?? "", /users\/github-actions%5Bbot%5D/);
+  assert.equal(recover?.env.CREATOR_USER_ID, "${{ steps.recovery-journal-creator.outputs.id }}");
+  assert.match(recover?.run ?? "", /recovery\/command\.ts/);
+  assert.equal(cleanup?.env.STAGE, "recovery");
+  assert.match(cleanup?.run ?? "", /publish\/cleanup\.ts/);
+  assert.doesNotMatch(jobs["cleanup-merged"].if, /recovery/);
+});
+
+test("candidate artifacts remain available for thirty-day cross-run recovery", () => {
+  const steps = workflow().jobs.detect.steps as Array<Record<string, any>>;
+  const upload = steps.find((step) => step.name === "Upload candidate artifact");
+  assert.equal(upload?.with["retention-days"], 30);
+  assert.match(upload?.if ?? "", /artifact-kind != 'recovery'/);
 });
 
 test("publish-draft downloads the exact run artifact and uploads a one-day receipt", () => {
@@ -61,11 +94,13 @@ test("validate checks out the exact candidate and runs integration checks withou
   const checkout = steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"));
   const validate = steps.find((step) => step.id === "validate-candidate");
   assert.deepEqual(checkout?.with, {
-    ref: "${{ needs.detect.outputs.candidate-sha }}",
+    ref: "${{ needs.recover.outputs.candidate-sha || needs.detect.outputs.candidate-sha }}",
     "fetch-depth": 0,
     "persist-credentials": false,
   });
   assert.equal(validate?.env.GH_TOKEN, undefined);
+  assert.equal(validate?.env.CANDIDATE_SHA,
+    "${{ needs.recover.outputs.candidate-sha || needs.detect.outputs.candidate-sha }}");
   assert.doesNotMatch(validate?.run ?? "", /\$\{\{/);
   assert.match(validate?.run ?? "", /publish\/validate-command\.ts/);
   assert.match(validate?.run ?? "", /uv run --no-sync task check/);

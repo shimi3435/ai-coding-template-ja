@@ -442,7 +442,7 @@ test("public candidate command binds an update to the exact open managed PR head
   }
 });
 
-test("candidate detection preserves active pending and stops completed old pending", async () => {
+test("candidate detection preserves active pending and emits recovery for completed old pending", async () => {
   const repository = createRepository();
   const pendingRun = { workflowRunId: "455", workflowRunAttempt: 1 } as const;
   const headRef = "refs/heads/automation/skill-updates/g000007";
@@ -480,9 +480,14 @@ test("candidate detection preserves active pending and stops completed old pendi
         return updaterResult("update-available", [{ key: "one", status: "update-available", names: ["alpha"] }]);
       },
     });
-    assert.equal(completed.report.status, "recovery-required");
-    assert.equal(completed.exitCode, 1);
-    assert.equal(existsSync(completedOutput), false);
+    assert.equal(completed.report.status, "recovery");
+    assert.equal(completed.exitCode, 0);
+    const recovery = decodeArtifactManifest(readFileSync(join(completedOutput, "manifest.json")));
+    assert.equal(recovery.kind, "recovery");
+    if (recovery.kind === "recovery") {
+      assert.equal(recovery.target.mode, "stale-validation");
+      assert.deepEqual(recovery.target.originRun, pendingRun);
+    }
     assert.equal(updaterCalls, 0);
 
     const activeOutput = join(repository.root, "active-artifact");
