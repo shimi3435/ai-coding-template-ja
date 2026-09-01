@@ -1,18 +1,32 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 
 const cli = new URL("./cli.ts", import.meta.url);
+const temporaryRepositories = new Set<string>();
+
+function temporaryRepository(prefix: string): string {
+  const repository = mkdtempSync(join(tmpdir(), prefix));
+  temporaryRepositories.add(repository);
+  return repository;
+}
+
+afterEach(() => {
+  for (const repository of temporaryRepositories) rmSync(repository, { recursive: true, force: true });
+  temporaryRepositories.clear();
+});
 
 function writeValidRepository(): string {
-  const repository = mkdtempSync(join(tmpdir(), "repo-contracts-"));
+  const repository = temporaryRepository("repo-contracts-");
   mkdirSync(join(repository, ".github", "workflows"), { recursive: true });
   mkdirSync(join(repository, "scripts"));
   mkdirSync(join(repository, "repo-tools"));
+  mkdirSync(join(repository, "repo-tools", "skill-update-automation", "smoke"), { recursive: true });
   mkdirSync(join(repository, "docs", "template"), { recursive: true });
+  mkdirSync(join(repository, "docs", "agents"), { recursive: true });
   writeFileSync(
     join(repository, "package.json"),
     JSON.stringify({
@@ -51,16 +65,99 @@ function writeValidRepository(): string {
       "  skills:lock-local:",
       "    cmds:",
       "      - node repo-tools/entrypoint.mjs skills:lock-local",
+      "  check:",
+      "    cmds:",
+      "      - node --test repo-tools/skill-update-automation/**/*.test.ts",
       "",
     ].join("\n"),
     "utf8",
   );
   writeFileSync(join(repository, ".github", "workflows", "ci.yml"), "name: CI\n", "utf8");
+  writeFileSync(
+    join(repository, ".github", "workflows", "skill-update-prs.yml"),
+    [
+      "name: Skill update PR automation",
+      "on:",
+      "  schedule:",
+      "    - cron: '17 3 * * 1'",
+      "  workflow_dispatch:",
+      "    inputs:",
+      "      resume_closed:",
+      "        required: true",
+      "        default: false",
+      "        type: boolean",
+      "permissions: {}",
+      "jobs:",
+      "  detect:",
+      "    permissions:",
+      "      contents: read",
+      "      pull-requests: read",
+      "      issues: read",
+      "  publish-draft:",
+      "    permissions:",
+      "      contents: write",
+      "      pull-requests: write",
+      "  recover:",
+      "    permissions:",
+      "      actions: read",
+      "      contents: write",
+      "      pull-requests: write",
+      "  validate:",
+      "    permissions:",
+      "      contents: read",
+      "  cleanup-merged:",
+      "    permissions:",
+      "      contents: write",
+      "      pull-requests: read",
+      "  publish-finalize:",
+      "    permissions:",
+      "      contents: read",
+      "      pull-requests: write",
+      "      issues: write",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
   writeFileSync(join(repository, "scripts", "bootstrap.sh"), "#!/bin/sh\n", "utf8");
-  writeFileSync(join(repository, "repo-tools", "cli.ts"), "console.log('ok');\n", "utf8");
+  writeFileSync(
+    join(repository, "repo-tools", "cli.ts"),
+    "skills:automation:smoke / runFreshSmokeCli / ProductionPublishAdapter / ProductionSmokeHost / " +
+      "process.stdin / process.stdout / process.stderr\n",
+    "utf8",
+  );
+  writeFileSync(
+    join(repository, "repo-tools", "skill-update-automation", "smoke", "production-host.ts"),
+    "const command = 'gh api';\n",
+    "utf8",
+  );
   writeFileSync(
     join(repository, "docs", "template", "release.md"),
     "prepare-v2-release: Node.js 24 / Python >=3.14 / TEMPLATE_VERSION=2.0.0\n",
+    "utf8",
+  );
+  writeFileSync(
+    join(repository, "README.md"),
+    "SKILLS_AUTO_UPDATE / resume_closed / skill-update-prs.yml / task check\n",
+    "utf8",
+  );
+  writeFileSync(
+    join(repository, "docs", "guide.md"),
+    "validation-failed / recovery-required / cleanup-failed / fresh approval / exact digest / journal v2 / " +
+      "fresh repository / creator numeric user ID / force-with-lease\n",
+    "utf8",
+  );
+  writeFileSync(
+    join(repository, "docs", "agents", "safety.md"),
+    [
+      "publish-draft / recover / cleanup-merged / publish-finalize / immutable root / gh auth / real GitHub write",
+      "<!-- skill-update-write-permissions:start -->",
+      "- publish-draft: actions=none, contents=write, pull-requests=write, issues=none",
+      "- recover: actions=read, contents=write, pull-requests=write, issues=none",
+      "- cleanup-merged: actions=none, contents=write, pull-requests=read, issues=none",
+      "- publish-finalize: actions=none, contents=read, pull-requests=write, issues=write",
+      "<!-- skill-update-write-permissions:end -->",
+      "",
+    ].join("\n"),
     "utf8",
   );
   return repository;
@@ -78,10 +175,102 @@ test("check-contracts accepts the tracked exact dependency and release ownership
   assert.match(result.stdout, /forbidden Node runners/);
   assert.match(result.stdout, /skill updater routes/);
   assert.match(result.stdout, /legacy skill checker: absent/);
+  assert.match(result.stdout, /skill update automation workflow/);
+  assert.match(result.stdout, /skill update automation runbook/);
+});
+
+test("check-contracts requires automation tests in the offline task check", () => {
+  const repository = writeValidRepository();
+  const taskfile = join(repository, "Taskfile.yml");
+  writeFileSync(
+    taskfile,
+    readFileSync(taskfile, "utf8").replace("node --test repo-tools/skill-update-automation/**/*.test.ts", "node --test repo-tools/*.test.ts"),
+    "utf8",
+  );
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /skill-update-automation.*task check/);
+});
+
+test("check-contracts rejects an automation test route outside task check", () => {
+  const repository = writeValidRepository();
+  const taskfile = join(repository, "Taskfile.yml");
+  writeFileSync(
+    taskfile,
+    readFileSync(taskfile, "utf8").replace("  check:\n", "  automation-only:\n"),
+    "utf8",
+  );
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /task check/);
+});
+
+test("check-contracts rejects weakened automation permission topology", () => {
+  const repository = writeValidRepository();
+  const workflow = join(repository, ".github", "workflows", "skill-update-prs.yml");
+  writeFileSync(
+    workflow,
+    readFileSync(workflow, "utf8").replace("      contents: read\n      pull-requests: read", "      contents: write\n      pull-requests: read"),
+    "utf8",
+  );
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /detect permissions/);
+});
+
+test("check-contracts rejects safety documentation permission drift", () => {
+  const repository = writeValidRepository();
+  const safety = join(repository, "docs", "agents", "safety.md");
+  writeFileSync(
+    safety,
+    readFileSync(safety, "utf8").replace(
+      "- recover: actions=read, contents=write, pull-requests=write, issues=none",
+      "- recover: actions=read, contents=write, pull-requests=write, issues=write",
+    ),
+    "utf8",
+  );
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /safety\.md.*permission topology/);
+});
+
+test("check-contracts requires the human smoke CLI without a stored credential route", () => {
+  const repository = writeValidRepository();
+  const smokeHost = join(repository, "repo-tools", "skill-update-automation", "smoke", "production-host.ts");
+  writeFileSync(smokeHost, "const token = process.env.GH_TOKEN;\n", "utf8");
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /smoke.*credential/i);
+});
+
+test("check-contracts rejects a smoke command label without the approval command route", () => {
+  const repository = writeValidRepository();
+  const cliPath = join(repository, "repo-tools", "cli.ts");
+  writeFileSync(cliPath, readFileSync(cliPath, "utf8").replace("runFreshSmokeCli", "missingRunner"), "utf8");
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /human smoke CLI route/);
+});
+
+test("check-contracts rejects mutable root and closed issue write surfaces", () => {
+  const repository = writeValidRepository();
+  const adapterPath = join(repository, "repo-tools", "skill-update-automation", "smoke", "forbidden.ts");
+  writeFileSync(adapterPath, "adapter.reopenIssue(7);\n", "utf8");
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /immutable root.*closed issue/);
+});
+
+test("check-contracts requires the operator runbook markers", () => {
+  const repository = writeValidRepository();
+  writeFileSync(join(repository, "docs", "guide.md"), "generic guide\n", "utf8");
+  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /docs\/guide\.md.*recovery-required/);
 });
 
 test("check-contracts identifies malformed package metadata", () => {
-  const repository = mkdtempSync(join(tmpdir(), "repo-contracts-"));
+  const repository = temporaryRepository("repo-contracts-");
   writeFileSync(join(repository, "package.json"), "{not-json", "utf8");
 
   const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
@@ -369,7 +558,7 @@ test("property: exact semver forms pass and range forms fail in every dependency
 });
 
 test("npm ci --ignore-scripts --offline rejects a tracked package and lock mismatch", () => {
-  const repository = mkdtempSync(join(tmpdir(), "npm-ci-lock-mismatch-"));
+  const repository = temporaryRepository("npm-ci-lock-mismatch-");
   const firstDependency = join(repository, "vendor", "first");
   const secondDependency = join(repository, "vendor", "second");
   mkdirSync(firstDependency, { recursive: true });

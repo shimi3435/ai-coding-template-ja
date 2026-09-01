@@ -27,6 +27,43 @@
 - major 判定は PR に併記されるバージョンタグ表記による（SHA ピン更新でも同様）。
   pre-1.0（0.x）依存は minor でも breaking がありうるため個別判断側に倒す。
 
+## Skill update PR automation
+
+production workflow は top-level `permissions: {}` を維持し、write permission を次の4 jobだけへ与える。
+
+<!-- skill-update-write-permissions:start -->
+- publish-draft: actions=none, contents=write, pull-requests=write, issues=none
+- recover: actions=read, contents=write, pull-requests=write, issues=none
+- cleanup-merged: actions=none, contents=write, pull-requests=read, issues=none
+- publish-finalize: actions=none, contents=read, pull-requests=write, issues=write
+<!-- skill-update-write-permissions:end -->
+
+- `publish-draft`: `contents: write`、`pull-requests: write`。explicit lease branch create / append、immutable root PR作成、
+  journal comment append、draft mutationだけを行う。
+- `recover`: `actions: read`、`contents: write`、`pull-requests: write`、`issues: none`。exact origin artifactと
+  fresh live identityが一致する場合だけcross-run transitional recoveryを行う。
+- `cleanup-merged`: `contents: write`、`pull-requests: read`。candidate publish完了後、成功可否に依存せずfresh historyを読み、
+  merged strict branchだけをexact leaseで削除する。
+- `publish-finalize`: `contents: read`、`pull-requests: write`、`issues: write`。journal検証、ready / draft、
+  immutable root tracking issue作成、comment appendだけを行う。
+
+`detect` は `contents: read`、`pull-requests: read`、`issues: read`、`validate` は
+`contents: read` だけを持つ。workflow は default `github.token` だけを使い、repository secret、PAT、
+credential fallback、bare force push、rebase、auto-mergeを追加しない。PR / Issue本文は作成時のimmutable rootであり、
+作成後のbody update、comment update / delete、closed issue reopenは禁止する。
+immutable rootはcanonicalなfull initial snapshotとdigestを保持する。commentless root回復はnumeric author一致、
+GitHub body edit証拠`lastEditedAt === null`、fresh live stateのexact一致を必須とし、initial commentの推測再送を禁止する。
+
+real GitHub write smoke はproduction workflow外の別trust boundary。production automationを無効にしたfresh repositoryと
+existing operator `gh auth` sessionだけを使う。新しいPAT / GitHub App、repository保管credential、approval artifactを作らない。
+ambient `GH_TOKEN` / `GITHUB_TOKEN` / enterprise token設定時は開始前に拒否する。read-only previewはrepository / run / source / creator、
+managed resource 0件、immutable root、journal v2 comment template、explicit lease、prepared recovery、terminal cleanupを束縛する。
+同じprocessのTTY / stdinへ人がfresh approvalとしてexact digestを入力した後だけwriteを許可する。EOF、空入力、不一致、process終了、
+operation失敗でapprovalは失効する。PR ready後のmergeは人がcheckpoint digest確認後に行い、automationへmerge permissionを与えない。
+fresh repositoryのmerged branch自動削除は事前に無効化し、cleanup seam前のbranch不在をfail closedとする。
+失敗後はresidual identity / journal digest / exact branch SHAを束縛したterminal-only recovery previewと別のfresh approvalまで
+cleanupを含むwriteを再開しない。
+
 ## 承認 / サンドボックス対応表（Codex `config.toml`）
 
 `.codex/config.toml.template` の既定は AGENTS.md Safety と整合する保守側に揃える
