@@ -511,8 +511,11 @@
   - `openspec/changes/harden-skill-update-automation-concurrency/specs/skill-update-pr-automation/spec.md`
   - `openspec/changes/harden-skill-update-automation-concurrency/spec-holes.md`
   - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
-- [ ] **実装:** public reconciliation seamのRED testsから、既存detection / cleanup分類を共通pure plannerへ抽出し、stable no-opのcandidate解消分と合成して`syncManagedIssueEntries`を1回だけ呼ぶ。recoveryはcandidate 2 keyだけ、candidate-scoped permissionとcleanup evidence未取得時のcleanup entryは保持する。
-- [ ] **検証:** cleanup passed、healthy updater recovery、cleanup ref A→B、recovery narrow、cleanup evidence未取得、統合transition response-loss / retryの6境界をgreenにし、focused tests、typecheck、strict OpenSpec、`git diff --check`を通す。
+- [x] **実装:** public reconciliation seamのRED testsから、既存detection / cleanup分類を共通pure plannerへ抽出し、stable no-opのcandidate解消分と合成して`syncManagedIssueEntries`を1回だけ呼ぶ。recoveryはcandidate 2 keyだけ、candidate-scoped permissionとcleanup evidence未取得時のcleanup entryは保持する。
+- [x] **検証:** cleanup passed、healthy updater recovery、cleanup ref A→B、recovery narrow、cleanup evidence未取得、統合transition response-loss / retryの6境界をgreenにし、focused tests、typecheck、strict OpenSpec、`git diff --check`を通す。
+  - RED: cleanup passedはstale `cleanup-failed`を保持して`unchanged`、healthy no-opはstale detection entryを保持して`unchanged`、recoveryへcleanup evidenceを渡すとnarrow契約外のresource entryを追加した。source commit `609a2118a902abcd34be76a7c6e223e8749152f8` + Task 23 test diff、Node 24.14.1、fresh実行。
+  - GREEN / focused: `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" node --test repo-tools/skill-update-automation/finalize/*.test.ts`: 62 tests passed、exit 0。同source + latest Task 23 worktree diff、fresh実行。cleanup passed、healthy detection、ref A→B、recovery narrow、cleanup evidence未取得、統合response-loss retryを確認。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" npm run typecheck`: exit 0。`openspec validate harden-skill-update-automation-concurrency --strict`: valid、exit 0。`git diff --check`: exit 0。同source、latest Task 23入力のfresh実行。
 
 ### Task 24: current-state reconciliation修正cycleのreview / verifierを完了する
 
@@ -520,5 +523,10 @@
 - **依存:** Task 23。
 - **対象:**
   - `openspec/changes/harden-skill-update-automation-concurrency/tasks.md`
-- [ ] **実装:** latest diff self-review、initial independent review、finding修正をfix・focused validation・diff reviewの一組として最大3 iterationsで完了する。
-- [ ] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub Issue writeは未実行として明記する。
+- [x] **実装:** latest diff self-review、initial independent review、finding修正をfix・focused validation・diff reviewの一組として最大3 iterationsで完了する。
+- [x] **検証:** latest focused tests、Node 24の`uv run --no-sync task check`、strict OpenSpec、`git diff --check`、initial reviewerと別のindependent verifierをgreenにする。real GitHub Issue writeは未実行として明記する。
+  - self-review: shared plannerは既存detection predicateを同値移設し、ready no-opのcandidate / detection / cleanup resolveを1回の`syncManagedIssueEntries`へ統合。recoveryにcleanup evidenceを渡した場合もcleanup observationを追加しないRED testとguardを追加。focused 62 tests、typecheck、strict OpenSpec、`git diff --check`はgreen。
+  - initial independent review: PASS、BLOCKER / WARNING / NIT 0件。recovery narrow、no-op current-set、candidate permission保持、cleanup evidence未取得保持、detection既存挙動、response-loss retry、workflowの二段write不在を確認。focused 62 tests、typecheck、`git diff --check`はgreen。
+  - `PATH="/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PATH" uv run --no-sync task check`: exit 0。Node 24.14.1、root Node 162 tests、automation 272 tests、Python 152 tests、contracts / typecheck / ruff / basedpyright全green。source commit `609a2118a902abcd34be76a7c6e223e8749152f8` + latest Task 23 / 24 worktree diffのfresh実行。
+  - final independent verifier（initial reviewerと別agent）: PASS、BLOCKER / WARNING / NIT 0件。fresh ready / passed boundary、candidate / detection / cleanupの単一transition、cleanup passed / A→B / evidence未取得、recovery narrow、permission scope、detection既存semantics、response-loss retry、workflow単一writerとpermission不変を確認。focused 62 tests、latest project checks、strict OpenSpec、`git diff --check`全green。real GitHub Issue writeは未実行。
+  - verify-change final: Task 23の6境界をpublic reconciliation seamで個別fresh実行し6 tests passed。final checkbox / verifier evidence反映後の`uv run --no-sync task check`もroot Node 162、automation 272、Python 152、contracts / typecheck / ruff / basedpyright全green、exit 0。real GitHub Issue writeは外部writeのため未実行。

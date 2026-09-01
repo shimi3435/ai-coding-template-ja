@@ -5,21 +5,16 @@ import type { GithubAdapter, GithubPermissionEvidence, JournalGithubAdapter } fr
 import { discoverManagedPullRequests } from "../github/discovery.ts";
 import { discoverManagedIssue } from "../github/issue-discovery.ts";
 import {
-  computeIssueEntryKey,
   selectFailureScope,
   type FailureState,
-  type IssueEntry,
   type IssueEntryObservation,
   type RunRef,
   type Scope,
 } from "../model/index.ts";
 import { syncManagedIssueEntries } from "./finalize.ts";
+import { planTrackingReconciliation } from "./tracking-reconciliation.ts";
 
 const summaryOnlyStates: readonly CandidateStopState[] = ["pr-identity-conflict", "trigger-usage-failure"];
-const detectionStates: readonly FailureState[] = [
-  "updater-rejected", "candidate-invalid", "permission-denied", "recovery-required", "intervention-required",
-  "generation-conflict", "open-pr-conflict", "paused-closed",
-];
 
 function detailDigest(value: unknown): string {
   return `sha256:${createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex")}`;
@@ -63,18 +58,6 @@ function issueSummary(
 
 function trackedState(state: CandidateStopState): state is FailureState {
   return !summaryOnlyStates.includes(state);
-}
-
-function isDetectionEntry(entry: IssueEntry): boolean {
-  if (!detectionStates.includes(entry.state)) return false;
-  if (entry.state === "updater-rejected" || entry.state === "candidate-invalid") return true;
-  if (entry.scope.kind === "global") return entry.scope.operation === "detect" || entry.scope.operation === "publish-draft";
-  return entry.state === "intervention-required" || entry.state === "generation-conflict" ||
-    entry.state === "open-pr-conflict" || entry.state === "paused-closed";
-}
-
-function isCleanupEntry(entry: IssueEntry): boolean {
-  return entry.state === "cleanup-failed";
 }
 
 export type PublishDraftResult = "success" | "failure" | "cancelled" | "skipped";
@@ -165,15 +148,15 @@ export async function publishDetectionOutcome(input: Readonly<{
         : "One or more guarded merged-branch cleanup operations failed.",
     }))];
   }
-  const observedKeys = new Set(observations.map((observation) => computeIssueEntryKey(observation.state, observation.scope)));
+  const reconciliation = planTrackingReconciliation({
+    observations,
+    reconcileDetection: true,
+    reconcileCleanup: input.cleanup !== undefined,
+  });
   const issue = await syncManagedIssueEntries({
     adapter: input.adapter,
     context: { repositoryId: input.repositoryId, repository: input.repository, creatorUserId: input.creatorUserId },
-    observations,
-    resolveCurrent: (entries) => entries
-      .filter((entry) => (isDetectionEntry(entry) || (input.cleanup !== undefined && isCleanupEntry(entry))) &&
-        !observedKeys.has(entry.key))
-      .map((entry) => entry.key),
+    ...reconciliation,
   });
   let issueConflict = "";
   if (issue === "issue-identity-conflict" || issue === "issue-cardinality-conflict" || issue === "issue-discovery-incomplete") {

@@ -25,6 +25,7 @@ import {
   type ExistingHeadValidationManifest,
   type IssueEntry,
   type NoOpManifest,
+  type RecoveryManifest,
   type ValidationState,
 } from "../model/index.ts";
 import { createFakeGithubAdapter, GithubAdapterError } from "../github/fake-adapter.ts";
@@ -319,7 +320,7 @@ async function readyPullRequest(): Promise<GithubPullRequest> {
   return (await adapter.listPullRequests()).items[0]!;
 }
 
-test("stable ready reconciliation resolves only candidate-scoped validation failures", async () => {
+test("stable ready no-op replaces cleanup failures and resolves healthy detection state", async () => {
   const pull = await readyPullRequest();
   const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
   const otherDigest = `sha256:${"8".repeat(64)}`;
@@ -364,8 +365,8 @@ test("stable ready reconciliation resolves only candidate-scoped validation fail
   assert.equal(entries.some((entry) => entry.state === "validation-failed" &&
     entry.scope.kind === "candidate" && entry.scope.digest === otherDigest), true);
   assert.equal(entries.some((entry) => entry.state === "permission-denied"), true);
-  assert.equal(entries.some((entry) => entry.state === "updater-rejected"), true);
-  assert.equal(entries.some((entry) => entry.state === "cleanup-failed" && entry.scope.kind === "global"), true);
+  assert.equal(entries.some((entry) => entry.state === "updater-rejected"), false);
+  assert.equal(entries.some((entry) => entry.state === "cleanup-failed" && entry.scope.kind === "global"), false);
   assert.equal(entries.some((entry) => entry.state === "cleanup-failed" && entry.scope.kind === "resource" &&
     entry.scope.identity === "refs/heads/automation/skill-updates/g000002"), true);
   assert.equal((await adapter.readPullRequest(pull.prNumber))?.draft, false);
@@ -409,6 +410,168 @@ test("stable ready reconciliation creates one cleanup issue and retry is idempot
   assert.equal(await reconcileReadyTrackingFailures(reconciliationInput), "unchanged");
   assert.equal((await adapter.listIssues()).items.length, 1);
   assert.equal(adapter.transcript.filter((entry) => entry.outcome === "applied").length, applied);
+});
+
+test("stable ready no-op resolves stale cleanup failures after cleanup passes", async () => {
+  const pull = await readyPullRequest();
+  const tracked = issue(10, [
+    scopedFailureEntry("cleanup-failed", { kind: "global", operation: "cleanup" }, "1"),
+    scopedFailureEntry("cleanup-failed", {
+      kind: "resource",
+      resourceKind: "branch",
+      identity: "refs/heads/automation/skill-updates/g000001",
+    }, "2"),
+  ].sort((left, right) => left.key.localeCompare(right.key)));
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [tracked],
+  });
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  assert.equal(await reconcileReadyTrackingFailures({
+    adapter,
+    context,
+    manifest,
+    cleanupStatus: "passed",
+    cleanupFailedRefs: [],
+  }), "updated");
+  assert.deepEqual(await issueEntries(adapter, 10), []);
+});
+
+test("stable ready no-op resolves healthy detection failures under existing scope rules", async () => {
+  const pull = await readyPullRequest();
+  const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
+  const tracked = issue(10, [
+    scopedFailureEntry("updater-rejected", { kind: "global", operation: "detect" }, "1"),
+    scopedFailureEntry("permission-denied", { kind: "global", operation: "publish-draft" }, "2"),
+    failureEntry("permission-denied", candidateDigest, "3"),
+  ].sort((left, right) => left.key.localeCompare(right.key)));
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [tracked],
+  });
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  assert.equal(await reconcileReadyTrackingFailures({ adapter, context, manifest }), "updated");
+  const entries = await issueEntries(adapter, 10);
+  assert.equal(entries.some((entry) => entry.state === "updater-rejected"), false);
+  assert.equal(entries.some((entry) => entry.state === "permission-denied" && entry.scope.kind === "global"), false);
+  assert.equal(entries.some((entry) => entry.state === "permission-denied" && entry.scope.kind === "candidate"), true);
+});
+
+test("ready-recovered reconciliation preserves detection and cleanup failures", async () => {
+  const pull = await readyPullRequest();
+  assert.notEqual(pull.body, null);
+  const entry = latestPrEntry(pull);
+  const state = decodePrStateSnapshotV2(entry.snapshot);
+  const tracked = issue(10, [
+    failureEntry("validation-failed", state.candidateDigest, "1"),
+    failureEntry("recovery-required", state.candidateDigest, "2"),
+    scopedFailureEntry("updater-rejected", { kind: "global", operation: "detect" }, "3"),
+    scopedFailureEntry("cleanup-failed", { kind: "global", operation: "cleanup" }, "4"),
+  ].sort((left, right) => left.key.localeCompare(right.key)));
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [tracked],
+  });
+  const manifest: RecoveryManifest = {
+    schemaVersion: 1,
+    kind: "recovery",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: {
+      mode: "prepared-pr-ready",
+      generation: state.generation,
+      prNumber: pull.prNumber,
+      creatorUserId: context.creatorUserId,
+      headRef: pull.headRef,
+      beforeHeadSha: pull.headSha,
+      afterHeadSha: pull.headSha,
+      rootDigest: digest(pull.body!),
+      journalDigest: entry.digest,
+      operationId: entry.operationId,
+      beforeSnapshotDigest: entry.snapshot.stateDigest,
+      afterSnapshotDigest: entry.snapshot.stateDigest,
+      candidateDigest: state.candidateDigest,
+      reportDigest: state.reportDigest,
+      originRun: run,
+    },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [],
+  };
+
+  assert.equal(await reconcileReadyTrackingFailures({
+    adapter,
+    context,
+    manifest,
+    cleanupStatus: "failed",
+    cleanupFailedRefs: ["refs/heads/automation/skill-updates/g000002"],
+  }), "updated");
+  const entries = await issueEntries(adapter, 10);
+  assert.equal(entries.some((current) => current.state === "validation-failed"), false);
+  assert.equal(entries.some((current) => current.state === "recovery-required"), false);
+  assert.equal(entries.some((current) => current.state === "updater-rejected"), true);
+  assert.deepEqual(entries.filter((current) => current.state === "cleanup-failed").map((current) => current.scope), [
+    { kind: "global", operation: "cleanup" },
+  ]);
+});
+
+test("stable ready no-op preserves cleanup failures without cleanup evidence", async () => {
+  const pull = await readyPullRequest();
+  const tracked = issue(10, [
+    scopedFailureEntry("updater-rejected", { kind: "global", operation: "detect" }, "1"),
+    scopedFailureEntry("cleanup-failed", { kind: "global", operation: "cleanup" }, "2"),
+  ].sort((left, right) => left.key.localeCompare(right.key)));
+  const adapter = createFakeGithubAdapter({
+    branches: [{ ref: pull.headRef, sha: pull.headSha }],
+    pullRequests: [pull],
+    issues: [tracked],
+  });
+  const manifest: NoOpManifest = {
+    schemaVersion: 1,
+    kind: "no-op",
+    repositoryId: context.repositoryId,
+    repository: context.repository,
+    run,
+    triggerSha: sha("0"),
+    baseHeadSha: pull.headSha,
+    target: { mode: "none", historyDigest: historyDigest([pull]) },
+    createdAt: "2026-08-20T00:00:00.000Z",
+    files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
+  };
+
+  assert.equal(await reconcileReadyTrackingFailures({ adapter, context, manifest }), "updated");
+  const entries = await issueEntries(adapter, 10);
+  assert.equal(entries.some((current) => current.state === "updater-rejected"), false);
+  assert.equal(entries.some((current) => current.state === "cleanup-failed"), true);
 });
 
 test("stable ready reconciliation recovers a commentless issue root before resolving stale failure", async () => {
@@ -470,11 +633,19 @@ test("stable ready reconciliation recovers a commentless issue root before resol
   assert.equal(source.transcript.filter((entry) => entry.outcome === "applied").length, applied);
 });
 
-test("ready reconciliation retry accepts a lost resolution append response without duplicate transition", async () => {
+test("combined ready no-op reconciliation retries a lost append without duplicate transition", async () => {
   const pull = await readyPullRequest();
   const candidateDigest = decodePrStateSnapshotV2(latestPrEntry(pull).snapshot).candidateDigest;
   const commentless = {
-    ...issue(10, [failureEntry("validation-failed", candidateDigest, "1")]),
+    ...issue(10, [
+      failureEntry("validation-failed", candidateDigest, "1"),
+      scopedFailureEntry("updater-rejected", { kind: "global", operation: "detect" }, "2"),
+      scopedFailureEntry("cleanup-failed", {
+        kind: "resource",
+        resourceKind: "branch",
+        identity: "refs/heads/automation/skill-updates/g000001",
+      }, "3"),
+    ].sort((left, right) => left.key.localeCompare(right.key))),
     journalComments: [],
   };
   const source = createFakeGithubAdapter({
@@ -510,11 +681,21 @@ test("ready reconciliation retry accepts a lost resolution append response witho
     files: [{ name: "preview-report.json", byteLength: 1, digest: `sha256:${"5".repeat(64)}` }],
   };
 
-  await assert.rejects(reconcileReadyTrackingFailures({ adapter: responseLost, context, manifest }), /response lost/);
+  const reconciliationInput = {
+    adapter: responseLost,
+    context,
+    manifest,
+    cleanupStatus: "failed" as const,
+    cleanupFailedRefs: ["refs/heads/automation/skill-updates/g000002"],
+  };
+  await assert.rejects(reconcileReadyTrackingFailures(reconciliationInput), /response lost/);
   assert.equal(appendCalls, 2);
-  assert.deepEqual(await issueEntries(source, 10), []);
+  assert.deepEqual((await issueEntries(source, 10)).map((entry) => [entry.state, entry.scope]), [[
+    "cleanup-failed",
+    { kind: "resource", resourceKind: "branch", identity: "refs/heads/automation/skill-updates/g000002" },
+  ]]);
   assert.equal((await source.listJournalComments(10)).items.length, 2);
-  assert.equal(await reconcileReadyTrackingFailures({ adapter: responseLost, context, manifest }), "unchanged");
+  assert.equal(await reconcileReadyTrackingFailures(reconciliationInput), "unchanged");
   assert.equal(appendCalls, 2);
   assert.equal((await source.listJournalComments(10)).items.length, 2);
 });

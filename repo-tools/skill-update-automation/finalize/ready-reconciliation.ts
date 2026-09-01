@@ -14,6 +14,7 @@ import {
   type FinalizeContext,
   type FinalizeGithubAdapter,
 } from "./finalize.ts";
+import { planTrackingReconciliation } from "./tracking-reconciliation.ts";
 
 type ReadyReconciliationManifest = Extract<ArtifactManifest, { kind: "no-op" | "recovery" }>;
 
@@ -90,7 +91,7 @@ export async function reconcileReadyTrackingFailures(input: Readonly<{
     candidateDigest: loaded.currentState.candidateDigest,
     operation: "publish-finalize",
   });
-  const cleanupScopes = input.cleanupStatus !== "failed"
+  const cleanupScopes = input.manifest.kind !== "no-op" || input.cleanupStatus !== "failed"
     ? []
     : (input.cleanupFailedRefs ?? []).length === 0
       ? [selectFailureScope({ operation: "cleanup" })]
@@ -110,14 +111,19 @@ export async function reconcileReadyTrackingFailures(input: Readonly<{
       ? `Guarded cleanup failed for ${cleanupScope.identity}.`
       : "One or more guarded merged-branch cleanup operations failed.",
   }));
-  const result = await syncManagedIssueEntries({
-    adapter: input.adapter,
-    context: input.context,
+  const reconciliation = planTrackingReconciliation({
     observations: cleanupObservations,
     resolvedKeys: [
       computeIssueEntryKey("validation-failed", scope),
       computeIssueEntryKey("recovery-required", scope),
     ],
+    reconcileDetection: input.manifest.kind === "no-op",
+    reconcileCleanup: input.manifest.kind === "no-op" && input.cleanupStatus !== undefined,
+  });
+  const result = await syncManagedIssueEntries({
+    adapter: input.adapter,
+    context: input.context,
+    ...reconciliation,
   });
   if (result !== "none" && result !== "unchanged" && result !== "created" && result !== "recovered" &&
     result !== "updated") {
