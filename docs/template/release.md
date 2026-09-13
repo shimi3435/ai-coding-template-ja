@@ -5,6 +5,9 @@
 削除される（保守者向けで下流には残らない）。対になる下流側の取り込み手順は
 [docs/optional/template-update.md](../optional/template-update.md)。
 
+v2の責務境界と後続実装の担当は[配布境界監査](v2-boundary-audit.md)を参照する。
+監査完了は修復完了やrelease-readyを意味しない。
+
 ## semver 規律
 
 `TEMPLATE_VERSION` は semver（`X.Y.Z`）。境界判断の基準は「**下流の互換を壊すか**」。
