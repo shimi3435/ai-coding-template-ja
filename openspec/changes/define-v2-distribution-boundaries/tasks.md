@@ -51,19 +51,20 @@
 
 ### 3. self-reviewと最終検証を完了する
 
-- 成果: 未追跡を含む差分の自己検査、focused validation、project checks、未検証の区別。
+- 成果: 未追跡を含む差分の自己検査、独立reviewと別verifier、focused validation、project checks、retrospective、実Issueへの接続、未検証の区別。
 - 依存: 2。
 - 対象:
   - `docs/template/adr/0011-v2-distribution-boundaries.md`
   - `docs/template/v2-boundary-audit.md`
   - `docs/template/release.md`
+  - `docs/template/retrospectives.md`
   - `openspec/changes/define-v2-distribution-boundaries/`
 - [x] 実装: self-reviewを実施し、明白な文書欠陥があれば修正する。
 - [x] 検証: strict target validate、task openspec:validate、task check、文書coverage確認を完了する。
 
 検証証跡（source commit: `00d3a9713a8eecbe3e0a1af594293f97121e0c5c`、全てfresh）:
 
-- self-review: `git diff` / `git diff --cached` / `git diff origin/main...HEAD`、untracked全7ファイルを含む全8文書の全文を確認。合意方針、owner、shared/prune境界、scope、spec-holes検証対応を照合。既知不具合は実装修復せず後続へ記録。live interface・CI・dependency・削除処理を変更していないためOSWF-5独立review/verifierは非該当。
+- self-review: `git diff` / `git diff --cached` / `git diff origin/main...HEAD`、untracked全7ファイルを含む全8文書の全文を確認。合意方針、owner、shared/prune境界、scope、spec-holes検証対応を照合。既知不具合は実装修復せず後続へ記録。当時は実装変更なしを理由にOSWF-5非該当としたが、削除/migration契約を確定するPRとしての判定は誤りであり、cycle 2で撤回する。
 - `node --test repo-tools/repository-contracts.test.ts repo-tools/skill-updater-cli.test.ts`: exit 0、54 passed。
 - `uv run --no-sync pytest -q tests/test_runtime_foundation_contract.py tests/test_tool_neutral_documentation_contract.py`: exit 0、15 passed。文書契約のみの実行なのでアプリ未importのcoverage warningあり。
 - `task doctor`: exit 0、FAIL=0 / WARN=3（既定package名、.env不在、Context7 key未設定）。資格情報の有効性は検証していない。
@@ -75,5 +76,37 @@
 未検証・対象外: #51/#65/#66の修復後動作、Genshijin実host互換、実GitHub CI、online audit、実upstream更新、実host write、rename後/正常prune後の最終構成checkは本監査では未実施。既存testsの成功や欠陥再現で代替しない。設計文書専用の恒久testは追加せず、一時coverage/link/prose検査をfocused validationとして用いた。
 当初の監査依頼ではcommit・push・PR作成・Issue更新・close・mergeを対象外とした。
 追加のcode-review依頼により、Standards / Specの独立2軸reviewを実施し、両軸とも指摘0件。
-追加のPR作成依頼により、commit・push・PR作成を行う。Issue更新・change close・mergeは引き続き対象外。
-PRは#67を参照し、自動close指定は付けない。active changeはレビュー入力として保持する。
+PR作成時点ではcommit・push・PR作成だけを追加し、Issue更新・change close・mergeは対象外としていた。
+PRは#67を参照し、自動close指定は付けず、active changeをレビュー入力として保持した。次のcycle 2で承認範囲を更新した。
+
+## Cycle 2: PR #68のレビュー指摘対応（利用者合意済み）
+
+利用者はgrillingで、(1) OSWF-5対象として新cycleで検証、(2) 独立Issue 2件の起票と実番号への置換、
+(3) 成功後のpre-merge closeとPR更新を承認した。Issue #67のcloseとPR mergeは行わない。
+先行taskの達成済み監査と検証証跡は保持し、task 3のvalidationを再開する。新cycle完了までchange全体は未完了。
+
+- レビュー指摘1: ADRで削除/migrationの契約を確定しているためOSWF-5対象。実装コードの変更がないことは例外ではない。
+- レビュー指摘2: 未発行文面だけでは完了handoffに不足。承認された2件を起票し、監査内の全追跡参照を実番号へ接続する。
+- 前cycleのStandards / Specはinitial independent review相当の2軸review。別verifierは未実施であり、今回の代用にはしない。
+- 実行順: 修正方針の反映 → self-review → 新しいinitial independent review → 必要なfix/focused validation/diff review → 最新入力task check → initial reviewerと別のindependent verifier。
+- close前に全taskの検証、strict target validate、task openspec:validate、retrospectiveと必要な再検証を完了し、tasksを含む修正commitを保存する。
+- closeは対象changeの5文書だけを最終commitで削除する。削除後task openspec:validateでactive change 0 / green、必要なproject checksと最終GitHub CIを確認する。恒久文書と他changeは保持する。
+
+検証証跡（source commit: `b156ccd7df9ea7719a88a642605e2b233ed5c810`、fresh）:
+
+- 一時Python probeでdesignの非該当文とauditの未発行状態を再現。純proseのpolicy解釈・完了境界の修正であり、恒久の文字列固定testは追加しない。
+- git fetch / gh pr view: mainは00d3a97、PR headはb156ccd、worktree clean。PRの既存CIは5 jobs成功。
+- AGENTS.md / workflowとIssue #67/#51/#65/#66の最新本文・全コメントを再確認。root policyの例外追加と#57/#64/Nodeの再設計は行わない。
+- `gh issue list --state all`で重複確認後、利用者承認に基づき#69（通常CI範囲）と#70（prepare-v2-release）を起票した。監査の追跡先を置換した。実装修復は未完了。
+- `gh issue view 69/70 --json number,title,state,body,url`（番号ごと）: 両方OPEN、本文・対象外・#69→#70の前提参照を照合した。
+- self-review: 未コミットdiff、mainとの差分の全9文書、未追跡（0件）、関連policyとIssueを確認。OSWF-5、scope、shared/prune境界、4要件×12分類の検証対応に未解決指摘なし。表の空行とretrospectiveのtask対象記載を整えた。
+- `openspec validate define-v2-distribution-boundaries --strict --no-interactive` / `task openspec:validate`: exit 0、active 1 valid。
+- `node --test repo-tools/repository-contracts.test.ts repo-tools/skill-updater-cli.test.ts`: exit 0、54 passed。
+- `uv run --no-sync pytest --no-cov -q tests/test_runtime_foundation_contract.py tests/test_tool_neutral_documentation_contract.py`: exit 0、15 passed。
+- 一時Python coverage/link/residual probe: 274 main tracked paths、29 public tasks、12 CI jobs、Dependabot 2設定、全9文書の相対リンク、4要件×12分類を確認。初回probeのdirectory symlink自身の集計漏れを修正して再実行しexit 0。repository側の欠落ではない。
+- `git diff --check`: exit 0。
+- initial independent review（`/root/review_68_cycle2`）: 全PR/dirty差分、policy、Issue、限定close計画を照合し指摘0件。fix iterationは0回。過去の2軸reviewと別にfresh実施した。
+- `export PATH=/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PWD/.venv/bin:$PATH; task check`: initial review後の最新入力でfresh実行、exit 0。Node 162、automation 272、Python 152 passed、contracts/skills:verify/tsc/ruff/basedpyright成功。Node 24.14.1 / npm 11.11.0 / Python 3.14.6。
+- independent verifier（`/root/verify_68_cycle2`、initial reviewerと別agent）: close前gate PASS、blockerなし。全9文書とIssue #67/#51/#65/#66/#69/#70、policy、review順序と証跡を独立照合。strict target/gate（active 1）、diff --check、相対リンク11件/48穴もfresh再確認し成功。
+- close前の全task検証は完了。retrospectiveはreview/check/verifier入力に含めた。最後のtasks証跡・checkbox更新後はOpenSpec gateと文書residualを再検証する。source/tests/lock/CI/恒久文書は最新task checkから無変更であり、close前full checkの再実行は不要。
+- close後active change 0検証と最終CIは未実施。この証跡commit保存後、承認済みの5文書限定削除とfresh project checksを実施し、結果はPR #68へ記録する。Issue #67 closeとPR mergeは行わない。

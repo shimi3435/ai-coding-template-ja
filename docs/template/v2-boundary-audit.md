@@ -4,7 +4,10 @@
 
 本書はテンプレート保守者向けのリファレンスである。判断の理由は[ADR-0011](adr/0011-v2-distribution-boundaries.md)、
 進捗・実行結果は作業中のOpenSpec `define-v2-distribution-boundaries` の `tasks.md` が所有する。
-通常CIから本書や作業中のchangeへ依存させない。下流利用手順の正本を本書へ移さない。
+pre-merge close後の仕様と検証証跡は[PR #68](https://github.com/shimi3435/ai-coding-template-ja/pull/68)のclose前commitから参照する。
+本ADRによる削除/migration契約の確定は[AGENTS.md](../../AGENTS.md)のOSWF-5対象である。
+文書のみを理由に対象外とした当初の判定は撤回し、[既存workflow](../agents/workflow.md)の独立reviewと別verifierを適用する。
+通常CIから本書や作業中のchange、close前のGit履歴へ依存させない。下流利用手順の正本を本書へ移さない。
 
 監査対象はmain `00d3a9713a8eecbe3e0a1af594293f97121e0c5c`（2026-09-13再確認）。
 入力は[Issue #67](https://github.com/shimi3435/ai-coding-template-ja/issues/67)、
@@ -51,7 +54,7 @@ pathはrepository root基準。`*` / `**` は明示的な集合表記であり�
 | `tests/test_execute_openspec_change_skill.py`, `tests/fixtures/execute_openspec_change/`, `tests/fixtures/review_convergence/` | M: 実行・所有差分保護・review境界を検証 | live Skills/policy、静的fixtures | offlineの通常tests。実agentの動作保証とは区別 | #65 Change 1/#66で意味のある契約を保持。実agentは#47 |
 | `tests/test_runtime_foundation_contract.py`, `tests/test_review_convergence_contract.py`, `tests/test_openspec_direct_workflow_contract.py`, `tests/test_tool_neutral_documentation_contract.py` | Mのlive契約とTの履歴/release契約が混在 | ADR/release notes/retrospectives、runtime、workflow | 現在通常pytestがprune対象を直接読む | #51で責務分離。live安全性検査は保持、履歴専用は保守検証へ移す。歴史文書を書換えてgreenにしない |
 | `tests/test_removed_handoff_contract.py`, `tests/test_taskfile.py`, `tests/test_setup_skills.py`, `tests/test_setup_mcp.py` | M: 廃止入口の再導入防止・共有task・設定安全性 | live treeとfixture、公開入口 | 通常checkでoffline実行 | #51/#65/#66の該当成果で必要な契約だけ整合。#67の監査文言自体を恒久テスト化しない |
-| `TEMPLATE_VERSION`, `docs/template/release.md`, `docs/template/v2-release-notes.md` | TEMPLATE_VERSION=Mの由来、releaseとv2出荷判定=T | template versionはPython package versionとは別 | 現在checkが1.0.0/handoffを要求。下流にrelease準備を要求してはいけない | #51で境界分離。prepare-v2-release提案が版更新/最終移行ガイド/出荷判定を所有 |
+| `TEMPLATE_VERSION`, `docs/template/release.md`, `docs/template/v2-release-notes.md` | TEMPLATE_VERSION=Mの由来、releaseとv2出荷判定=T | template versionはPython package versionとは別 | 現在checkが1.0.0/handoffを要求。下流にrelease準備を要求してはいけない | #51で境界分離。#70が版更新/最終移行ガイド/出荷判定を所有 |
 | `docs/template/adr/*.md`, `docs/template/retrospectives.md`, 本監査 | T: テンプレートの判断履歴と保守引き渡し | 保守release手順、既存履歴 | 下流では任意prune。通常checkから必須参照しない | #51で専用検証へ。#66の保守close手順はこの領域に限定。#63の新機能はv2対象外 |
 | `docs/adr/0000-template.md`, `README.md`, `docs/guide.md`, `docs/optional/template-update.md` | 下流の入口/研究ADR=M、テンプレート変更の手動取り込み=O | live owner文書、TEMPLATE_VERSION、上流の公開差分 | docs/template prune後も利用可能である必要がある | #51で壊れる参照を整合、#62で最終構成の情報設計。更新は自動伝播しない |
 | `docs/optional/{notebook,extras-audit,serena,codex-review}.md`, `notebooks/README.md`とnotebook文書内のoverlay snippet | O: 研究用途・host別の追加手順 | extras、任意host/MCP、notebook overlay | host不在で通常checkを壊さない。online audit/送信は明示 | 同梱方針維持。#62で導線。#51は除去時に共通securityやbase hookを保持 |
@@ -76,7 +79,7 @@ Taskfileの全29入口を列挙する。分類は入口の責務であり、Mで
 | `setup:notebook` | O: notebook / uv notebook extra | 同上、nb操作との組合せ確認 / #51保持、#62導線 |
 | `setup:experiment` | O: 実験追跡 / uv experiment extra | 同上、既存extras契約保持 / #51保持、#62導線 |
 | `setup:all` | O: 全extras / uv sync --all-extras | 明示導入、通常checkの必須化なし / #51保持、#62導線 |
-| `check` | Mの集約入口、Oは同梱時、Tは分離対象 | offline。#57保持・#64 prune後専用route除去 / #51、CI同等性は独立提案 |
+| `check` | Mの集約入口、Oは同梱時、Tは分離対象 | offline。#57保持・#64 prune後専用route除去 / #51、CI同等性は#69 |
 | `check:isolated` | M: host/CLI/接続不要の証明 / task check,隔離HOME等 | 通常checkと別の検証入口。環境隔離は完全network sandboxではない / #51 |
 | `audit:node` | M: 依存安全性 / npm audit | 明示online操作、check/doctorに混ぜない / #51保持 |
 | `fix` | M: Python整形/lint修正 / ruff | 明示変更。通常checkは検査だけ / #51保持 |
@@ -110,8 +113,8 @@ Taskfileの全29入口を列挙する。分類は入口の責務であり、Mで
 
 | workflow / job / 設定 | 分類・価値 / 依存 | 現状と移行・検証 / owner |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` / `check` | M: Node/Python品質保証 / locked deps,contracts,typecheck,tests | skills:verifyとautomation testsが欠落。独立CI修正提案で同等性を確保。#51で構成別の範囲を反映 |
-| 同`rename-smoke` | M: 下流名で通常開発が成立 / rename,check相当 | 同じ2経路が欠落。独立CI修正提案。#51でprune組合せを検証 |
+| `.github/workflows/ci.yml` / `check` | M: Node/Python品質保証 / locked deps,contracts,typecheck,tests | skills:verifyとautomation testsが欠落。#69で同等性を確保。#51で構成別の範囲を反映 |
+| 同`rename-smoke` | M: 下流名で通常開発が成立 / rename,check相当 | 同じ2経路が欠落。#69。#51でprune組合せを検証 |
 | 同`security` | M: secret検出 / gitleaks,read権限 | 保持。orgのlicense等host事情は専用CI側の設定で扱い、通常offline checkへ持ち込まない / #51保持 |
 | 同`audit` | M: npm/Python依存監査とsrc SAST / advisory DB,bandit | 明示onlineのCI job。extrasは既定監査対象外。保持 / #51 |
 | 同`openspec-validate` | O: CLI追加gate、整合要件はM / exact pin 1.3.1,Python gate | 現状active changesのみ。#66でcanonical/archive検証とCLI不在fallback境界を設計。通常checkへengineを混入しない |
@@ -120,7 +123,7 @@ Taskfileの全29入口を列挙する。分類は入口の責務であり、Mで
 | 同`publish-draft` | O: 候補をdraft PR化 / publish,限定write権限 | 通常checkではfake adapter testsのみ。既存権限分離を保持 / #51 |
 | 同`recover` | O: 中断から復旧 / recovery,journal,限定write | 同上。復旧経路も専用subtreeと一体 / #51 |
 | 同`cleanup-merged` | O: merge後管理branch整理 / finalize,contents write | repository pruneから外部branch削除を呼ばない / #51 |
-| 同`validate` | O: 候補の品質確認 / shared task check + focused tests,readのみ | 同梱中offline tests保持。通常CIの不足をこのjobで代替しない / #51、独立CI提案 |
+| 同`validate` | O: 候補の品質確認 / shared task check + focused tests,readのみ | 同梱中offline tests保持。通常CIの不足をこのjobで代替しない / #51、#69 |
 | 同`publish-finalize` | O: ready化/結果追跡 / finalize,PR/Issue write | no auto-merge、既存安全境界を保持 / #51 |
 | `.github/dependabot.yml` / `github-actions` | O: action pin更新PR / GitHub Dependabot | 既存weekly設定。同梱=mandatoryとはしない。#64の既定無効設定とは別。通常checkから外部更新を要求しない / #51境界、#62導線 |
 | 同`pre-commit` | O: rev更新PR / rev付きremote hooks | repo:localは対象外。削除時もbase hook/lock検証を残す / #51境界、#62導線 |
@@ -137,7 +140,7 @@ Taskfileの全29入口を列挙する。分類は入口の責務であり、Mで
 | 混在CLIを編集 | `repo-tools/cli.ts` | usageのautomation名、2分岐、専用dynamic imports、smokeだけが使うexecFileSync importを除去。runtimeと#57の5分岐は保持 |
 | 混在validatorを編集 | `repo-tools/repository-contracts.ts` | validateSkillUpdateWorkflow、validateSkillUpdateSafetyPermissions、validateSmokeCliBoundary、requireDocumentMarkersと専用helper/戻り値/呼出を同梱契約へ分離。shared runtime/lock/runner/network安全契約は残す |
 | 混在testsを編集 | `repo-tools/repository-contracts.test.ts` | #64必須fixture/permission/smoke/runbook検査を同梱側へ分離。fresh disabled/整合pruned/部分欠落の公開動作を別状態で検証。ファイル全体を消さない |
-| task/CIを整合 | `Taskfile.yml`のautomation test行、`ci.yml`の構成別検査 | #64不在時に空globでnode:testを失敗させない。独立CI修正が先行してroute追加済みならそこも除去。全Node testsやskills:verifyを削らない |
+| task/CIを整合 | `Taskfile.yml`のautomation test行、`ci.yml`の構成別検査 | #64不在時に空globでnode:testを失敗させない。#69のCI修正が先行してroute追加済みならそこも除去。全Node testsやskills:verifyを削らない |
 | typecheckを保持 | `tsconfig.json`の`repo-tools/**/*.ts` / `**/*.mjs` | broad include自体は削除subtreeの不存在を要求しない。残存importをtscで検出し、残した共有sourceを引き続き検査 |
 | 混在文書を編集 | `README.md`, `docs/guide.md`, `docs/agents/safety.md` | #64有効化・復旧・human smokeの専用説明/参照とpermission markersを除去または専用ownerへ移す。README/guide/safety全体は保持。#57の手動更新と一般的な外部write安全境界を残す |
 | 保守履歴を保持 | `docs/template/retrospectives.md`などの#64履歴 | #64 pruneだけでは削除しない。現在機能の有無を履歴文字列で判定しない。保守文書pruneは独立操作 |
@@ -171,16 +174,16 @@ receipt欠落/不一致、移動済みrepository、複数cloneの競合は自動
 
 ## 既知問題の再確認と担当
 
-以下は固定mainで成立する現状の欠陥であり、本changeでは修復しない。
+以下は固定mainで確認した問題である。実装上の欠陥は本changeでは修復しない。追跡先の欠落だけは承認された起票で解消した。
 
 | 問題 | 確認箇所・観測 | 修復owner |
 | --- | --- | --- |
 | template prune後validator失敗 | repository-contracts.tsのreleaseHandoffPath/readFileSync（345行付近）。使い捨てmainでprune成功後、check-contractsがrelease.mdのENOENT | #51 |
 | 通常Python testsが履歴に依存 | runtime_foundation / review_convergence / openspec_direct_workflowの3ファイルをprune後実行し5 failed・23 passed。tool_neutral_documentationもADR/release notes/retrospectivesのread_textがある（静的確認） | #51 |
 | #64無効でも専用資産必須 | validatorがworkflow/CLI/smokeディレクトリ/文書markersを無条件要求。workflow単独欠落でENOENT。これは部分欠落であり正常pruneの成功例ではない | #51 |
-| 通常CIとcheckの範囲不一致 | Taskfileはskills:verifyとautomation/**/*.test.tsを実行。ci.ymlのcheck/rename-smokeは両方なし。#64 validate jobは通常CIの代替にならない | 独立CI修正提案（下記、未発行） |
-| release準備契約が通常検証へ固定 | validatorのTEMPLATE_VERSION==1.0.0、release handoff markers。test_runtime_foundation_contract.pyは「全 4 changes」を要求 | #51が下流から分離、prepare-v2-releaseが出荷契約を更新 |
-| prepare-v2-releaseの追跡先がない | 全stateのIssue一覧に対応タイトルなし。release.mdとruntime testには名前だけ残る | 独立release準備提案（下記、未発行） |
+| 通常CIとcheckの範囲不一致 | Taskfileはskills:verifyとautomation/**/*.test.tsを実行。ci.ymlのcheck/rename-smokeは両方なし。#64 validate jobは通常CIの代替にならない | #69 |
+| release準備契約が通常検証へ固定 | validatorのTEMPLATE_VERSION==1.0.0、release handoff markers。test_runtime_foundation_contract.pyは「全 4 changes」を要求 | #51が下流から分離、#70が出荷契約を更新 |
+| prepare-v2-releaseの追跡先が監査開始時に未確定 | 当初はrelease.mdとruntime testに名前だけ残っていた。全stateで重複確認後に起票 | #70へ接続済み。release準備実装は未完了 |
 | 同梱=コアの利用説明 | docs/guide.md §2「作成直後に入っているものすべて」が同梱任意機能と不整合 | #51は変更経路の説明を最小修正、最終情報設計#62 |
 
 ## 後続Issueへの引き渡しと受け入れ条件
@@ -242,38 +245,21 @@ Change 3の受け入れ条件:
 
 ### 残る順序と対象外
 
-#67 → 必要な#51修復と独立CI修正 → #65 Change 1 → #65 Change 3に必要な範囲判断 → 必要なChange 2 → Change 3。
-#66はChange 1後に整理済みownerへ実装する。#65/#66を含む出荷構成が確定したら#62、最終workflowで#47、最後にprepare-v2-releaseへ渡す。
+#67 → 必要な#51修復と#69のCI修正 → #65 Change 1 → #65 Change 3に必要な範囲判断 → 必要なChange 2 → Change 3。
+#66はChange 1後に整理済みownerへ実装する。#65/#66を含む出荷構成が確定したら#62、最終workflowで#47、最後にprepare-v2-release（#70）へ渡す。
 #52のinstaller分離はv2.x、#61・#63はv2対象外。新しいscheduler/配布基盤/汎用plugin managerは追加しない。
 
-## 独立Issue提案（未発行）
+## 独立成果の追跡
 
-2026-09-13の全state Issue一覧に、この2成果の独立追跡項目は見当たらない。以下は貼り付け用文面であり、発行・更新は行っていない。
+利用者の明示承認を受け、2026-09-13に全stateのIssue一覧で重複を確認して次の2件を起票した。
+受け入れ条件の正本は各Issueとし、貼り付け用文面は本書に重複保持しない。どちらも実装は未完了である。
 
-### 提案: 通常CIとrename smokeをtask checkのoffline検証範囲へ揃える
+- [#69: 通常CIとrename smokeをtask checkのoffline検証範囲へ揃える](https://github.com/shimi3435/ai-coding-template-ja/issues/69):
+  同じ構成でskills:verifyとautomation testsの実行範囲を一致させる。#51のprune実装とは独立して受け入れ、
+  #51による構成変更後も必須検証を保持する。外部host・認証・ネットワークを通常offline検証へ追加しない。
+- [#70: prepare-v2-releaseで版更新・移行ガイド・release-ready判定を確定する](https://github.com/shimi3435/ai-coding-template-ja/issues/70):
+  #51、#69、#65の必須成果、#66、#62、#47の検証完了後に版更新・移行ガイド・保守専用の出荷判定を仕上げる。
+  #65の条件付き拡張だけを必要性判断に応じて前提とし、#52/#61/#63や#64のplugin更新PR統合を無条件の前提にしない。
 
-背景: main `00d3a9713a8eecbe3e0a1af594293f97121e0c5c` のTaskfileは `skills:verify` と
-`node --test repo-tools/skill-update-automation/**/*.test.ts` を実行するが、`ci.yml`のcheckとrename-smokeは両方を実行しない。
-通常CIがgreenでも配布Skillのintegrityやautomationの回帰を見逃すため、独立したcorrectness修正とする。
-
-目的: 同じ構成・入力で通常CIとローカルcheckのoffline検証範囲を一致させる。
-対象: `ci.yml`、必要なtask/恒久contract tests、実行範囲の既存説明。通常CIを一時OpenSpec artifactsへ依存させない。
-受け入れ条件: fresh/renameで両経路が実行され、Skill lock破損とautomation test失敗をCI相当経路で検出する。
-#64が同梱される間は無効でも検証し、#51のprune導入後は残存構成に一致させる。外部host・認証・networkをoffline gateへ足さない。
-通常CIと#64の候補validate jobを混同しない。OpenSpec authoring、focused validation、task checkと適用reviewを行う。
-対象外: #51のprune実装、一般的なCI最適化、#65のplugin更新統合。
-
-### 提案: prepare-v2-releaseで版更新・移行ガイド・release-ready判定を確定する
-
-背景: `release.md`とruntime契約にはprepare-v2-releaseという名前だけが残り、TEMPLATE_VERSION=1.0.0と「全 4 changes」が固定されている。
-現在のv2 deliveryは#67/#51/#65/#66/#62/#47を含み、固定change数では出荷可否を表現できない。
-
-目的: #67の境界と後続実装の実績に基づき、v2の版更新、下流移行手順、保守者の出荷判定を一つの成果として仕上げる。
-前提: #51の検証境界修復、独立CI修正、#65の必須成果、#66、#62、#47が必要な検証を完了している。
-#65 Change 2は必要性判断に基づく範囲だけを前提にし、#52/#61/#63や#64 plugin更新統合を無条件に加えない。
-対象: TEMPLATE_VERSIONの2.0.0更新、`docs/template/release.md`、`docs/template/v2-release-notes.md`、
-必要な`docs/optional/template-update.md`の移行導線、保守専用の出荷検証。Python package versionは独立に扱う。
-受け入れ条件: 固定「全 4 changes」を実際のdelivery条件へ置換し、Node 24/npm、Python >=3.14、prune、Skill手動更新、
-任意自動化、Genshijin opt-in、下流archiveの移行手順を最終化する。出荷構成で必須project checksと最終host evidenceを確認する。
-TEMPLATE_VERSIONは下流由来情報として残し、通常checkへ特定版やrelease文書存在を再導入しない。
-未検証をrelease-readyへ読み替えない。tag/push/GitHub Release公開は別の明示依頼で行う。
+#67の完了判断には、この2件への接続と監査changeの必須review・検証完了が必要である。
+Issueの起票は修復完了やv2出荷可能を意味しない。PR #68のpre-merge closeもIssue #67のcloseやPR mergeとは別操作である。

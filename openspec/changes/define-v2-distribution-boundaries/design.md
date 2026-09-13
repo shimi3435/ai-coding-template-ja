@@ -24,6 +24,13 @@ Genshijinの具体的なvendor先・host対応version・最小bundle拡張の要
 既知障害は使い捨てのmainコピーでpruneと欠落probeを実施し、観測事実と未実装の期待結果を区別する。
 全public task・CI job・必須監査項目のcoverageと相対リンクを一時検査し、新しい恒久テストや台帳を増やさない。
 self-reviewではuntrackedを含む全差分、分類と合意、穴と検証対応を照合する。
-今回変更するのは監査・将来設計だけであり、live interfaceや削除処理は変更しない。
-AGENTS.md OSWF-5の発火条件に該当する実装変更はないため、独立review / verifierは起動しない。
-後続の実装changeには、それぞれ適用されるreviewを要求する。
+本changeはAccepted ADRによって削除/migration契約を確定するため、AGENTS.md OSWF-5対象である。
+実装コードを変更しないことを非該当の理由にはしない。root policyに例外を追加しない。
+前cycleのStandards / Specの2軸reviewはinitial independent review相当であり、別verifierの実績ではない。
+利用者承認によるcycle 2でself-review、新しいinitial independent review、必要な修正とfocused validation/diff review、
+最新入力のtask check、initial reviewerとは別のindependent verifierを順に実施する。詳細手順と停止条件はworkflowを参照する。
+CI検証漏れとrelease準備は承認された実Issueへ接続する。起票失敗または片方だけの成功時は、
+成功したIssue番号を保存し、未完了handoffを残す。両方の実追跡先が確定するまで#67完了とは扱わない。
+close前に仕様・tasksと検証証跡をcommitへ保存し、retrospectiveと必要な検証を完了する。
+利用者が承認したpre-merge closeではこのchangeの5文書だけを削除し、active change 0 / greenと最終CIを確認する。
+恒久監査はPRのclose前記録へ案内し、通常CIから削除済みartifactsやGit履歴を要求しない。PR mergeとIssue #67 closeは行わない。
