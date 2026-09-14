@@ -23,3 +23,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-08-11 establish-v2-runtime-foundation（PR #49）: 逃した欠陥 21 件（self-review=4 / review=16 / CI=1 / merge後=0）— self-review=bootstrap race・scope逸脱・symlink escape・Python型互換、review=runtime guard・依存/offline契約・bootstrap PATH・rename・全workflow走査などを収束、CI=setup-uv が Python 3.14 を PATH に反映しない設定を検出
 - 2026-08-26 automate-skill-update-prs（PR #64）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— Task完了前のself-review・独立review・real-host smokeでfindingを収束
 - 2026-09-01 harden-skill-update-automation-concurrency（PR #64）: 逃した欠陥 40 件（self-review=13 / review=27 / CI=0 / merge後=0）— race・cross-run recovery・Issue current-stateのfindingを収束（同一findingの経路間伝播漏れは重複除外）
+- 2026-09-13 define-v2-distribution-boundaries（PR #68）: 逃した欠陥 2 件（self-review=0 / review=2 / CI=0 / merge後=0）— 文書のみを理由としたOSWF-5非該当判定と独立成果の追跡先未確定をPR reviewで検出
