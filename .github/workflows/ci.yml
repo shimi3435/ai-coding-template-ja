@@ -29,24 +29,15 @@ jobs:
           activate-environment: true
       - name: Runtime preflight
         run: node repo-tools/entrypoint.mjs runtime-preflight
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+        with:
+          version: "3.51.1"
       - name: Sync (locked)
         run: uv sync --locked
       - name: Install Node dependencies (locked, no lifecycle scripts)
         run: npm ci --ignore-scripts
-      - name: Repository contracts
-        run: node repo-tools/entrypoint.mjs check-contracts
-      - name: TypeScript typecheck
-        run: node_modules/.bin/tsc --noEmit
-      - name: Node tests
-        run: node --test repo-tools/*.test.ts
-      - name: ruff format --check
-        run: uv run --no-sync ruff format --check .
-      - name: ruff check
-        run: uv run --no-sync ruff check .
-      - name: basedpyright
-        run: uv run --no-sync basedpyright
-      - name: pytest
-        run: uv run --no-sync pytest
+      - name: Offline checks (shared with local development)
+        run: task check
 
   rename-smoke:
     name: rename-smoke (改名後にフル check 相当)
@@ -64,26 +55,17 @@ jobs:
           activate-environment: true
       - name: Runtime preflight
         run: node repo-tools/entrypoint.mjs runtime-preflight
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2
+        with:
+          version: "3.51.1"
       - name: Sync (locked)
         run: uv sync --locked
       - name: Install Node dependencies (locked, no lifecycle scripts)
         run: npm ci --ignore-scripts
       - name: rename (apply・使い捨て名)
         run: uv run python scripts/rename-package.py ci_rename_smoke --apply
-      - name: Repository contracts
-        run: node repo-tools/entrypoint.mjs check-contracts
-      - name: TypeScript typecheck
-        run: node_modules/.bin/tsc --noEmit
-      - name: Node tests
-        run: node --test repo-tools/*.test.ts
-      - name: ruff format --check
-        run: uv run --no-sync ruff format --check .
-      - name: ruff check
-        run: uv run --no-sync ruff check .
-      - name: basedpyright
-        run: uv run --no-sync basedpyright
-      - name: pytest
-        run: uv run --no-sync pytest
+      - name: Offline checks (shared with local development)
+        run: task check
 
   security:
     name: security (gitleaks)

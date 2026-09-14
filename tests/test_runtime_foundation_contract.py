@@ -51,17 +51,7 @@ def test_ci_uses_node_24_and_python_314_for_the_offline_check() -> None:
         assert 'node-version: "24"' in job
         assert "activate-environment: true" in job
         assert "npm ci --ignore-scripts" in job
-        for command in (
-            "node repo-tools/entrypoint.mjs runtime-preflight",
-            "node repo-tools/entrypoint.mjs check-contracts",
-            "node_modules/.bin/tsc --noEmit",
-            "node --test repo-tools/*.test.ts",
-            "uv run --no-sync ruff format --check .",
-            "uv run --no-sync ruff check .",
-            "uv run --no-sync basedpyright",
-            "uv run --no-sync pytest",
-        ):
-            assert command in job
+        assert "node repo-tools/entrypoint.mjs runtime-preflight" in job
 
     extras_smoke = EXTRAS_WORKFLOW.read_text(encoding="utf-8")
     assert 'python-version: "3.14"' in extras_smoke
@@ -70,6 +60,37 @@ def test_ci_uses_node_24_and_python_314_for_the_offline_check() -> None:
     assert 'node-version: "24"' in extras_smoke
     assert "node repo-tools/entrypoint.mjs runtime-preflight" in extras_smoke
     assert "npm ci --ignore-scripts" in extras_smoke
+
+
+def test_ci_runs_the_shared_offline_gate_after_pinned_setup_and_rename() -> None:
+    for job_name in ("check", "rename-smoke"):
+        job = _ci_job_body(job_name)
+        # 条件付き実行や失敗の握り潰しで、同梱機能の検証を省略しない。
+        assert re.search(r"^\s+(?:if|continue-on-error):", job, re.MULTILINE) is None
+        commands = re.findall(r"^        run: (.+)$", job, re.MULTILINE)
+        preparation = [
+            "node repo-tools/entrypoint.mjs runtime-preflight",
+            "uv sync --locked",
+            "npm ci --ignore-scripts",
+        ]
+        if job_name == "rename-smoke":
+            preparation.append(
+                "uv run python scripts/rename-package.py ci_rename_smoke --apply"
+            )
+        assert commands == [*preparation, "task check"]
+
+        task_setup = re.search(
+            r"^      - uses: go-task/setup-task@([0-9a-f]{40})[^\n]*\n"
+            r'        with:\n          version: "(\d+\.\d+\.\d+)"\n',
+            job,
+            re.MULTILINE,
+        )
+        assert task_setup is not None, "Task action と本体の exact pin が必要"
+        assert task_setup.groups() == (
+            "a00fbb05ce67b35648be3c78cbc9fd85354c757e",
+            "3.51.1",
+        )
+        assert task_setup.end() < job.index("run: task check")
 
 
 def test_existing_audit_job_runs_the_explicit_online_node_audit() -> None:
