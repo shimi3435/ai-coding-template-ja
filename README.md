@@ -60,21 +60,13 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task prune-template-docs [-- --apply]` | テンプレ メタ文書 docs/template/ の削除 |
 | `task clean` | キャッシュ・カバレッジ生成物の削除 |
 
-## Skill update PR automation
+## Skillの手動更新
 
-`.github/workflows/skill-update-prs.yml` は vendored skill 更新を一つの managed PR にまとめる。
-既定は無効。Repository Actions variable `SKILLS_AUTO_UPDATE` を文字列 `true` にした場合だけ、毎週の
-schedule が動く。手動実行は Actions の `workflow_dispatch` から行い、入力は boolean
-`resume_closed` 一つだけである。通常は `false` を選ぶ。最新 managed PR を人が merge せず close し、
-次 generation を明示的に始める場合だけ `true` を選ぶ。
-
-処理順は read-only detection → draft publish → read-only `task check` → finalize。`cleanup-merged` は独立 job として
-candidate-update、existing-head-validation、no-op の全 eligible run で動く。branch create / append / delete は explicit
-`force-with-lease` の expected valueでCAS化し、検証成功時だけ PR を ready にする。merge、auto-merge、通常のforce pushは行わない。
-PR / Issue 本文はcanonicalなfull initial snapshotとdigestを持つ作成時の immutable root、可変状態は creator numeric user ID に束縛した append-only journal v2 に保存する。
-command failure、GitHub Actions infrastructure failure、cleanup failure は draft PR と managed tracking issue に残る。運用と復旧は
-[利用ガイド](docs/guide.md#7-skill-update-pr-automation-の運用)、permission と real GitHub write の承認境界は
-[セキュリティ方針](docs/agents/safety.md#skill-update-pr-automation) を参照する。
+同梱Skillはそのまま利用できる。上流確認は `task skills:check`、更新previewは
+`task skills:update`、適用は `task skills:update -- --apply`。隔離した作業コピーで
+更新と `task skills:verify` / `task check` を確認し、通常PRでレビューする。
+更新PR自動化の提供は終了した。既存の利用環境は先に
+[手動更新・自動化撤去の手順](docs/guide.md#7-skillの手動更新と旧自動化の撤去)に従って停止・棚卸しを行う。
 
 ## 構成
 

@@ -90,7 +90,6 @@ def test_check_runs_direct_node_and_existing_python_checks_without_installing() 
         "node repo-tools/entrypoint.mjs skills:verify",
         "node_modules/.bin/tsc --noEmit",
         "node --test repo-tools/*.test.ts",
-        "node --test repo-tools/skill-update-automation/**/*.test.ts",
         "uv run --no-sync ruff format --check .",
         "uv run --no-sync ruff check .",
         "uv run --no-sync basedpyright",
