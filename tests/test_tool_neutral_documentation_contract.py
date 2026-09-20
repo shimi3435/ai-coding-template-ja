@@ -67,6 +67,24 @@ def test_current_docs_explain_direct_execution_and_markdown_fallback() -> None:
         assert "execute-openspec-change" in text, path
 
 
+def test_current_ci_guide_does_not_advertise_retired_skill_automation() -> None:
+    guide = (REPO_ROOT / "docs/guide.md").read_text(encoding="utf-8")
+    current_checks = re.search(
+        r"^## 4\.[^\n]*\n(?P<body>.*?)(?=^## |\Z)",
+        guide,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    assert current_checks is not None, "現行check/CI説明節が見つかりません"
+    normalized = re.sub(r"[\s`]", "", current_checks["body"]).casefold()
+    retired_descriptions = (
+        r"skill-update-automation",
+        r"skill(?:更新|update)(?:pr)?(?:automation|自動化)",
+        r"(?:候補|candidate)validate(?:job|ジョブ)",
+    )
+    remaining = [p for p in retired_descriptions if re.search(p, normalized)]
+    assert remaining == [], f"現行CI説明に撤去済み機能が残っています: {remaining}"
+
+
 def test_obsolete_optional_guide_and_historical_grill_are_not_distributed() -> None:
     assert not (REPO_ROOT / "docs/optional" / (LEGACY_TOKEN + ".md")).exists()
     assert not (REPO_ROOT / "docs/template/grill" / f"{TEMPLATE_SLUG}.md").exists()

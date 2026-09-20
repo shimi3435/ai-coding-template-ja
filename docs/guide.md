@@ -79,9 +79,9 @@ README の「研究成果物の扱い」節を参照。
 
 通常 CI の `check` と改名後の `rename-smoke` も、ローカルと同じ `task check` を実行する。
 検証一覧の正は [Taskfile.yml](../Taskfile.yml) の `check`。Skill の source / lock / 実体 / legal /
-symlink の整合と、同梱された Skill 更新 automation のテストも含み、更新機能が無効でも省略しない。
+symlink の整合、top-level Node tests、TypeScript、Python checks を検証する。
 CI は固定版 Task と locked dependencies を事前導入し、検証段階では導入や外部 host・認証を要求しない。
-依存監査・OpenSpec の独立ジョブや、Skill 更新 PR の候補 `validate` job は、この通常 offline gate とは別である。
+依存監査・OpenSpec の独立ジョブは、この通常 offline gate とは別である。
 
 ## 5. エージェントに渡す入口
 
