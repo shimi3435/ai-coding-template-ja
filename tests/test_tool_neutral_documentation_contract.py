@@ -121,6 +121,24 @@ def test_adr_0006_preserves_history_and_records_the_v2_current_state() -> None:
     assert "テンプレ固有メタ文書" in adr
 
 
+def test_adr_0011_amends_retired_automation_and_preserves_history() -> None:
+    adr = (
+        REPO_ROOT / "docs/template/adr/0011-v2-distribution-boundaries.md"
+    ).read_text(encoding="utf-8")
+    header, body = adr.split("## 文脈", maxsplit=1)
+    assert "> Status: Accepted" in header
+    assert "> Amended in part by" in header
+    for issue in (71, 75):
+        assert f"https://github.com/shimi3435/{TEMPLATE_SLUG}/issues/{issue}" in header
+    assert "downstream optional / opt-in / prune方針" in header
+    assert "#64へのplugin更新PR統合案" in header
+    assert "撤回" in header
+    assert "他の責務境界を一括で失効させない" in header
+    assert "../../guide.md#7-skillの手動更新と旧自動化の撤去" in header
+    assert "#64のPR自動化は別の任意機能" in body
+    assert "既定無効・明示opt-in・専用資産prune可能" in body
+
+
 def test_v2_notes_document_breaking_removal_and_direct_migration() -> None:
     notes = (REPO_ROOT / V2_NOTES).read_text(encoding="utf-8")
 

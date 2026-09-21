@@ -1,6 +1,10 @@
 # ADR-0011: v2の下流必須・任意・テンプレート保守の責務境界
 
-> Status: Accepted（Issue #67の合意を記録。後続の実装修復は未完了）。
+> Status: Accepted at Issue #67; amended in part as noted below.
+> Amended in part by [Issue #71](https://github.com/shimi3435/ai-coding-template-ja/issues/71) / [Issue #75](https://github.com/shimi3435/ai-coding-template-ja/issues/75).
+> #64 Skill更新PR自動化のdownstream optional / opt-in / prune方針と、#64へのplugin更新PR統合案は撤回された。
+> 自動化は本体から完全撤去し、保守者専用・下流optionalとしても提供しない。現行運用は[手動更新・撤去手順](../../guide.md#7-skillの手動更新と旧自動化の撤去)を参照する。
+> 以下の本文はIssue #67当時の判断記録として保持する。この部分改訂によって他の責務境界を一括で失効させない。
 
 ## 文脈
 
