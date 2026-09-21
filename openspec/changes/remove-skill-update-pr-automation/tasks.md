@@ -143,8 +143,8 @@ cycle 2完了記録の訂正: ADR-0011の現行効力表示とPR番号未反映�
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/remove-skill-update-pr-automation`
-- [ ] 実装: 同一headのPR不在を確認してDraft PRを作成し、実番号を規定形式へ反映する。
-- [ ] 検証: PR identityと形式を確認し、最新task checkと前cycle/initial reviewerとは別のverifierを完了する。
+- [x] 実装: 同一headのPR不在を確認してDraft PRを作成し、実番号を規定形式へ反映する。
+- [x] 検証: PR identityと形式を確認し、最新task checkと前cycle/initial reviewerとは別のverifierを完了する。
 
 cycle 3の基点は`577f1b1`。作業開始時はclean、元worktreeの未追跡PoCのdigestは初回と一致。active change 1件、必須artifacts・spec-holes・依存順・重複対象の推移依存・dirty ownershipを確認して実装する。PR作成/metadata更新は利用者承認済み。最終close後のgate確認とpush、hosted checksの観測まで実施する。
 
@@ -159,3 +159,11 @@ T7 evidence（fresh、source `577f1b1`＋作業差分）: 新ADR testは修正�
 T8 self-review（fresh、source `577f1b1`＋作業差分）: 恒久差分3ファイルを確認し、部分改訂の効力と当時の本文を区別した。runtime/CI/dependencyの差分なし。今回の2件を加えreview=3、merge後=0とする。strict OpenSpec validationと`task openspec:validate`はexit 0。
 
 T8 independent review（fresh、source `577f1b1`＋作業差分、reviewer `issue75_cycle3_review`）: PASS、blocker 0件。documentation/Taskfile/runtime focused testsは29件成功。ADR本文byte一致・guideリンク存在・diff check成功。finding修正iteration 0回。PR本文を一時ファイルへ準備し、全撤去差分と保持する手動更新経路、移行順、検証の実施済み/未実施を照合した。T9完了までは最終closeしない。
+
+T9 PR evidence（fresh、source `a30cadf`＋作業差分）: 同一headの既存PRが0件であることをread確認し、push後`gh pr create --draft --base main --head fix/issue-75-remove-skill-update-prs --body-file <temporary body>`でPR #79を作成した。`gh pr view 79 --json number,url,isDraft,baseRefName,headRefName,headRefOid,state`でOPEN/Draft、base main、対象branch、head a30cadf一致を確認。retrospectiveを`（PR #79）`へ変更し、固定形式と計3/review3/merge後0を一時Python probeで確認した。
+
+T9 project checks（fresh、source `a30cadf`＋作業差分、Node v24.14.1 / npm 11.11.0 / Python 3.14.6）: `task check`はexit 0、Node 160件・Python 155件成功、contracts/skills:verify/tsc/ruff/basedpyright成功。`openspec validate remove-skill-update-pr-automation --strict`、`task openspec:validate`、`git diff --check`もexit 0。実PR番号反映後の入力で実行した。hosted CIは最終push後に別途観測する。旧automation resource操作とWSL実機は対象外・未検証。
+
+T9 independent verifier（source `a30cadf`＋作業差分、verifier `issue75_cycle3_verifier`）: PASS、blocker 0件。fresh focused testsは29件、ADR本文byte一致・実PR #79 identity・retrospective固定形式/欠陥内訳・元PoC digest・diff checkは成功。最新task checkとstrict OpenSpec/gateはgreen evidenceを再利用した。同worktree、source/tests/fixtures/依存環境/lock/CI/実行環境は全体check後に不変であり、その後の変更はtasks.md証跡だけ。
+
+cycle 3完了: T7〜T9の実装・検証を完了。Draft PR #79の実番号を反映し、既知の逃した欠陥は計3件（review=3）。現在の仕様・証跡をcommitに保存した後、最終close commitで本change directoryを削除する。通常checkは本directoryを入力にせず、削除後は`task openspec:validate`でactive change 0を確認してpushする。最終headのhosted CI結果はPR本文へ記録する。mergeと旧automation resource操作は行わない。
