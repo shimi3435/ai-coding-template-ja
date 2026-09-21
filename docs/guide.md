@@ -79,9 +79,9 @@ README の「研究成果物の扱い」節を参照。
 
 通常 CI の `check` と改名後の `rename-smoke` も、ローカルと同じ `task check` を実行する。
 検証一覧の正は [Taskfile.yml](../Taskfile.yml) の `check`。Skill の source / lock / 実体 / legal /
-symlink の整合と、同梱された Skill 更新 automation のテストも含み、更新機能が無効でも省略しない。
+symlink の整合、top-level Node tests、TypeScript、Python checks を検証する。
 CI は固定版 Task と locked dependencies を事前導入し、検証段階では導入や外部 host・認証を要求しない。
-依存監査・OpenSpec の独立ジョブや、Skill 更新 PR の候補 `validate` job は、この通常 offline gate とは別である。
+依存監査・OpenSpec の独立ジョブは、この通常 offline gate とは別である。
 
 ## 5. エージェントに渡す入口
 
@@ -150,85 +150,93 @@ CI は固定版 Task と locked dependencies を事前導入し、検証段階�
 | Serena MCP | セマンティックなコード理解・symbol 単位編集 | 既存コードが育って大規模リファクタリングをするとき。初期の短い修正が主体のうちは過剰 | 設定 template へ snippet を各自追記 | [docs/optional/serena.md](optional/serena.md) |
 | GitHub MCP | 構造化された Issue / PR / Actions 参照 | コアの gh CLI で足りないとき（構造化出力が要る等）。read-only 既定・token の扱いに注意 | 3 形態から選んで設定へ各自追記 | [docs/agents/mcp.md](agents/mcp.md) |
 
-## 7. Skill update PR automation の運用
+## 7. Skillの手動更新と旧自動化の撤去
 
-### 有効化と手動実行
+Skill更新は手動操作と通常PRで扱う。定期更新、candidate artifact、managed branch / draft PR、
+journal / receipt、finalize、recovery / reconciliation、resume closed、human smokeの提供は終了した。
+保守者専用機能や下流optionalとしても残さない。取得・固定・legal・offline検証は引き続き利用する。
 
-1. Repository Settings の Actions variables で `SKILLS_AUTO_UPDATE=true` を設定する。未設定、または
-   exact `true` 以外なら weekly schedule は checkout、network、write の前で停止する。
-2. 定期実行を待たず確認する場合は Actions の `Skill update PR automation` を選び、Run workflow を開く。
-3. `resume_closed=false` で実行する。最新 managed PR を merge せず close した後、同じ候補を再開せず
-   次 generation を作る意思がある場合だけ `resume_closed=true` を選ぶ。
+### 既存の自動化を停止して撤去する
 
-workflow は一つの candidate artifact を作り、draft PR を作成または branch append し、read-only
-validation で `task check` と focused tests を実行する。branch create / append / delete は explicit
-`force-with-lease=<ref>:<expected>` の expected valueでCAS化する。`cleanup-merged` は独立 jobとして
-candidate-update、existing-head-validation、no-opの全eligible runで動き、publish結果に関係なくfresh historyを再検証する。
-exact branch head、PR journal、history、artifact、DraftReceipt が一致し、validation が成功した場合だけ ready にする。ready はレビュー可能という意味であり、
-merge、approval、merge queue、auto-merge は人が別に判断する。
+以下は旧版を使用しているrepositoryの管理者が、対象repositoryを確認して順番に実施する。
+新規利用で旧workflowも外部resourceも存在しない場合は、不在を確認して「手動更新」へ進む。
+repository内の撤去処理はGitHub上のPR、branch、artifact、設定を自動削除しない。
 
-### 状態と復旧
+1. **新規起動を止める。** 対象repositoryのActionsで旧 `Skill update PR automation`
+   （`skill-update-prs.yml`）を選び、メニューから **Disable workflow** を実行する。
+   `SKILLS_AUTO_UPDATE` を削除またはfalseにするだけでは、手動dispatchや進行中runの停止にはならない。
+   workflowが既にない場合は再作成せず、旧runの確認へ進む。
+   [GitHubの無効化手順](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)も参照する。
+2. **進行中の処理を止める。** 旧workflowのqueued / waiting / in-progress runをすべて確認し、
+   Cancel workflowで取消する。再読み込みして未完了runがないことを確認する。
+   取消失敗、権限不足、状態不明の場合はここで停止する。取消要求の送信だけで停止済みと判断しない。
+   人による旧workflowの再有効化、過去runの再実行、旧human smoke CLIの起動も中止する。
+3. **既存resourceを棚卸しし、利用者変更を保全する。** open / closed / merged PR、tracking issue、
+   `automation/skill-updates/` 配下のbranch、run artifactとlog、旧smoke用repositoryを確認する。
+   PRのbase/head、commit、本文・comment、利用者が追記した変更を確認し、必要な差分・記録を保存する。
+   名前や古いjournal / receiptだけを根拠に所有や安全な削除を推測しない。
+   未mergeの候補は新しい作業コピーで再検証し、通常PRへ引き継ぐか、人が不要と判断してcloseする。
+   不明なbranchや中断状態は保持する。旧recoveryを動かして片付けない。
+4. **撤去差分を反映する。** workflow、専用実装・tests・CLI・task route・専用検査と現行文書を一体で更新する。
+   未コミット差分と競合する場合は保全してから人が解決する。自動stash、reset、cleanは行わない。
+   localの `.agents/skills/.skill-updater-txn/` は手動updaterの中断状態であり、旧自動化のcacheとみなして削除しない。
+5. **不要な設定・resourceの扱いを個別に決める。** `SKILLS_AUTO_UPDATE` variable、旧automation用の設定、
+   branch、artifactは他用途と利用者変更がないことを確認してから、人が必要に応じて削除する。
+   標準の旧workflowは `github.token` を使い、専用PATやrepository secretは要求していなかった。
+   独自追加したsecret / GitHub App / tokenは利用先を確認し、組織共有の認証情報や通常CIの権限を一括削除しない。
+   新しいtokenは作らない。tracking issueやjournalは履歴として残してよい。
+6. **手動運用へ移る。** 下記の更新・検証を実施し、通常PRでレビューする。
+   途中失敗後に手順を再開する場合は、再取得したworkflow/run/resourceの状態から確認する。
+   既に存在しないresourceの操作は省略し、削除済みの機能を再作成しない。
 
-- `validation-failed`: candidate 自体の command failure。PR は draft のまま。PR の validation summary と
-  Actions log で失敗 command を確認し、原因を直して同じ workflow を再実行する。
-- `recovery-required`: checkout、artifact、runner、cancel など infrastructure failure、完了済み旧 run の
-  pending、または remote post-state を証明できない状態。推測修復しない。GitHub 状態が安定してから再実行し、
-  同じ exact head が再検証されるまで ready にしない。
-- `cleanup-failed`: merged PR の exact managed branch を guarded cleanup できなかった状態。ready / merged を
-  巻き戻さない。次 run で branch name、generation、marker、head を再検証して再試行する。
-- `issue-identity-conflict` / `issue-cardinality-conflict`: tracking issue だけ更新しない。安全な PR finalize は
-  継続する。partial marker や複数 open managed issue を人が解消してから再実行する。
-- branch tip、immutable root、journal v2、history が一致しない場合は human intervention として write を停止する。
-  append / ready / draft は同じoperation IDのprepared → mutation → committedで実行する。automation branch、root、commentを手で推測修復しない。
+### 手動更新
 
-PR / tracking issue本文はcanonicalなfull initial snapshotとdigestを持つ作成時のimmutable rootであり、以後更新しない。可変stateはrootのcreator numeric user IDと
-comment author numeric IDが一致するappend-only canonical comment journal v2へfull snapshotで記録する。改変、中間欠落、fork、
-foreign author marker、live state不一致はfail closed。create応答消失後のcommentless rootはresource author一致、body未編集、
-embedded initial snapshotとfresh live stateのexact一致時だけinitial commentを回復する。append応答消失時は再送せず、fresh complete readに
-expected entryがexact 1件ある場合だけ続行する。v1 resourceは移行しない。open tracking issue内では未解決entryをstable keyで
-重複排除する。closed tracking issueはterminal rootとして本文・comment・stateを変更せず、新failureは新しいissueを作成する。
+Node.js 24、npm、Python >=3.14、uv、Task、公開GitHubを読める `gh` を用意する。
+元の作業コピーにある未コミット差分は保持し、更新用の新しいbranchとpathを選ぶ。
+以下の固定例が既に存在する場合は別名に置き換える。既存directoryを上書きしない。
 
-### real-host smoke
+1. 元repositoryで最新baseを取得し、更新用worktreeを作る。
 
-real GitHub write smoke は通常運用ではなく、最終完了確認専用。production automationを無効にしたfresh repositoryを使う。
-既存のv1 / v2 managed PR・Issueと`refs/heads/automation/skill-updates/g900001`が存在しないことが前提。human-operated CLIを次のinterfaceで起動する。
+   ```bash
+   git fetch origin main
+   git worktree add -b chore/manual-skill-update ../manual-skill-update origin/main
+   cd ../manual-skill-update
+   ```
 
-```bash
-node repo-tools/entrypoint.mjs skills:automation:smoke \
-  --repository OWNER/REPOSITORY \
-  --repository-id NUMERIC_REPOSITORY_ID \
-  --creator-user-id NUMERIC_GH_USER_ID \
-  --run-id WORKFLOW_RUN_ID \
-  --run-attempt WORKFLOW_RUN_ATTEMPT \
-  --default-branch-ref refs/heads/main \
-  --default-branch-sha FULL_40_CHARACTER_SHA \
-  --source-parent-commit FULL_40_CHARACTER_SHA \
-  --source-commit FULL_40_CHARACTER_SHA
-```
+2. 更新用worktreeだけでruntimeとlocked dependencyを準備し、現状を検証する。
 
-1. `GH_TOKEN`、`GITHUB_TOKEN`、enterprise tokenをunsetし、`gh auth status`で対象fresh repositoryのexisting operator sessionを確認する。
-   新しいtokenは作らない。`gh api /user --jq .id`の値を`--creator-user-id`へ渡す。
-2. fresh repositoryのmerged branch自動削除を無効化し、workflow runのsource commitをdefault branchよりaheadのtest branchへ置く。
-   CLIはrepository ID、run ID / attempt、source commit、first parent、default branch、creator numeric user IDをread-only再取得し、
-   不一致またはahead関係不成立ならapproval前に拒否する。merge checkpoint後のrecoveryだけはdefault branchがsource commitを含む
-   behind関係を`merged`として受け入れる。
-3. CLIが表示する`fresh-real-host-smoke-preview` schema v2全文を読む。previewはfresh repository precondition、full initial snapshotを含むimmutable root本文、
-   journal v2 full snapshot comment template、explicit force-with-lease expected SHA、prepared recovery、closed issue世代、terminal cleanupを束縛する。
-   この段階はread-only。
-4. 内容すべてを承認する場合だけ、同じprocess、同じTTY / stdinに表示されたexact digestを入力する。
-   EOF、空入力、不一致なら write なしで終了する。
-5. approved planはabsence CAS branch create、immutable PR root、journal root、branch append prepared / exact lease / committed、
-   synthetic response-loss recovery、validation comment、closed issue terminalと新issue、PR ready prepared / mutation / committedを実行する。
-   CLIがcheckpoint digestを表示したら、対象PRを人がmergeする。CLIへ同digestを入力するとfresh merged stateを検証し、
-   `cleanupMergedBranches`のmerged eligibilityとexact lease deleteを実行する。merge前にbranchが自動削除された場合はfail closed。
-   automation自身はmergeしない。
-6. 途中失敗時は同じpreviewやapprovalを再利用しない。次processはresidual PR / Issue body digest、journal末尾digest、branch exact SHAを
-   束縛したterminal-only recovery previewを表示する。別のfresh approval後だけopen resource closeとexact branch deleteを行う。
+   ```bash
+   node repo-tools/entrypoint.mjs runtime-preflight
+   npm ci --ignore-scripts
+   uv sync --locked
+   task skills:verify
+   ```
 
-CLIはambient `GH_TOKEN` / `GITHUB_TOKEN` / enterprise tokenが設定されていれば開始前に拒否し、existing operator `gh auth` sessionだけを使う。
+3. 上流の状態と更新previewを確認する。これらのコマンドは公開GitHubを読み取る。
 
-preview を別 process へ保存して承認 artifact にしない。approval を test、script、AI で自動入力しない。
-read-only preview確認後の人のfresh approval前には実行しない。
+   ```bash
+   task skills:check
+   task skills:update
+   ```
+
+4. previewのcommit、差分、source / lock、LICENSE / NOTICEを確認後、同じworktreeへ適用して検証する。
+
+   ```bash
+   task skills:update -- --apply
+   task skills:verify
+   task check
+   git diff --stat
+   git diff
+   ```
+
+5. 検証成功と差分reviewの後、通常のcommit / push / PR手順へ進む。
+   取得前の件数・byte上限、特殊file、integrity、legal不一致、履歴変更などで失敗した場合は止める。
+   失敗したコピーを元の作業コピーやPRへ持ち込まず、必要な調査情報と利用者変更を保全する。
+   LICENSE / NOTICEの承認hash変更や移動タグ・履歴変更のrepinは、人が内容を確認して別途判断する。
+
+worktreeはOSのセキュリティsandboxではない。取得前の上限検査は、通信全体の厳密な転送量制限を意味しない。
+source / lock形式、first-partyの `task skills:lock-local`、transaction / rollbackは現行契約のままであり、
+後続のSkill管理縮小・lock移行とは分けて扱う。
 
 ## 8. 詰まったとき
 

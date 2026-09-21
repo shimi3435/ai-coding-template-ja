@@ -25,3 +25,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-09-01 harden-skill-update-automation-concurrency（PR #64）: 逃した欠陥 40 件（self-review=13 / review=27 / CI=0 / merge後=0）— race・cross-run recovery・Issue current-stateのfindingを収束（同一findingの経路間伝播漏れは重複除外）
 - 2026-09-13 define-v2-distribution-boundaries（PR #68）: 逃した欠陥 2 件（self-review=0 / review=2 / CI=0 / merge後=0）— 文書のみを理由としたOSWF-5非該当判定と独立成果の追跡先未確定をPR reviewで検出
 - 2026-09-15 align-offline-ci-check（PR #72）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— 通常CIとrename-smokeを共通offline gateへ統一し、両状態の破損検出とGitHub CI成功を確認
+- 2026-09-20 remove-skill-update-pr-automation（PR #79）: 逃した欠陥 3 件（self-review=0 / review=3 / CI=0 / merge後=0）— close後のadversarial reviewで現行CI説明の旧機能残存、ADR-0011の現行効力表示の不整合、PR番号未反映のclose contract違反を検出

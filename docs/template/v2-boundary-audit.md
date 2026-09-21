@@ -23,6 +23,13 @@ pre-merge close後の仕様と検証証跡は[PR #68](https://github.com/shimi34
 - **O = downstream optional**: 明示的に使う機能。同梱中のoffline検証は必要だが、利用やhost導入は必須ではない。
 - **T = template-maintainer only**: テンプレート自身のrelease・履歴・出荷契約。下流の通常checkは存在を要求しない。
 
+## 後続決定への導線（2026-09-16）
+
+以下の監査本文は固定点の記録として保持する。[Issue #71](https://github.com/shimi3435/ai-coding-template-ja/issues/71)と
+[#75](https://github.com/shimi3435/ai-coding-template-ja/issues/75)により、Skill更新PR自動化はoptional移管ではなく本体撤去へ変更された。
+現行の[手動更新・停止移行手順](../guide.md#7-skillの手動更新と旧自動化の撤去)を参照する。
+本文中の旧automationの利用・prune案を現行の提供機能として扱わない。
+
 ## ファイル・機能別の監査
 
 pathはrepository root基準。`*` / `**` は明示的な集合表記であり、存在しない単独ファイル名ではない。
