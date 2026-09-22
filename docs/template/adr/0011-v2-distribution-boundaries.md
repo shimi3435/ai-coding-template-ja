@@ -6,6 +6,11 @@
 > 自動化は本体から完全撤去し、保守者専用・下流optionalとしても提供しない。現行運用は[手動更新・撤去手順](../../guide.md#7-skillの手動更新と旧自動化の撤去)を参照する。
 > 以下の本文はIssue #67当時の判断記録として保持する。この部分改訂によって他の責務境界を一括で失効させない。
 
+> 2026-09-22部分改訂: [Issue #71](https://github.com/shimi3435/ai-coding-template-ja/issues/71) /
+> [Issue #52](https://github.com/shimi3435/ai-coding-template-ja/issues/52)により、自前Node installerの維持と
+> 分離延期の判断は撤回された。導入機能を撤去し、必要版と公式導入先を案内して停止する。
+> Node.js 24 / npm要件は維持する。現行の[移行手順](../../guide.md#node導入と旧installerからの移行)を参照する。
+
 ## 文脈
 
 研究開始に必要な基盤とテンプレート保守契約が通常checkに混在している。

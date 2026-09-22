@@ -36,6 +36,11 @@ v2 release tagを作成しない。
 
 v2 の breaking change と利用者移行手順は [v2 release notes](v2-release-notes.md) に集約する。
 
+Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する。Node.js 24 / npm要件を保持し、
+未導入・不適合時には公式導入先を案内して変更前に停止すること、旧 `--install-node` が移行診断付きで
+拒否されること、既存Node環境が保持されること、helpと[移行案内](../guide.md#node導入と旧installerからの移行)が
+一致することを必須とする。bootstrap focused testsとproject checksの成功を確認し、installerの再導入は行わない。
+
 ## リリース前提チェック（必須）
 
 以下を**全て満たすまでリリースしない**（1 つでも red / 不一致なら tag を打たず、

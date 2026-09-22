@@ -30,6 +30,11 @@ pre-merge close後の仕様と検証証跡は[PR #68](https://github.com/shimi34
 現行の[手動更新・停止移行手順](../guide.md#7-skillの手動更新と旧自動化の撤去)を参照する。
 本文中の旧automationの利用・prune案を現行の提供機能として扱わない。
 
+2026-09-22追記: #71 / [Issue #52](https://github.com/shimi3435/ai-coding-template-ja/issues/52)により、
+自前Node installerも維持・分離から撤去へ変更された。本文中のinstaller維持・専用fixture保持は
+監査当時の記録であり、現行方針ではない。Node.js 24 / npmは引き続き必要とし、
+未導入・不適合時は案内して停止する。[現行移行手順](../guide.md#node導入と旧installerからの移行)を参照する。
+
 ## ファイル・機能別の監査
 
 pathはrepository root基準。`*` / `**` は明示的な集合表記であり、存在しない単独ファイル名ではない。
