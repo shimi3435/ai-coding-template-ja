@@ -1,5 +1,19 @@
 # v2 release notes
 
+## Breaking: 自前Node installerの撤去
+
+[Issue #52](https://github.com/shimi3435/ai-coding-template-ja/issues/52)により、
+`scripts/bootstrap.sh --install-node` の導入機能を撤去した。旧optionは廃止・移行診断付きの
+終了コード2となり、downloadや環境変更を行わない。Node.js 24 LTS / npm要件は維持する。
+
+Node / npmが未導入・不適合の場合は、必要版と[公式導入先](https://nodejs.org/en/download)を
+案内して終了コード1で停止する。手動導入またはPATH確認後、`./scripts/bootstrap.sh` を
+引数なしで再実行する。既存の導入先やshell設定は保持し、旧 `NODE_INSTALL_ROOT` は無視する。
+特定runtime managerは自動導入・起動しない。
+
+`--help` / `-h` はruntime不要で使い方を表示する。詳細な引数・終了statusと移行手順は
+[Node導入と旧installerからの移行](../guide.md#node導入と旧installerからの移行)を参照する。
+
 ## Breaking: GSD handoff integration の削除
 
 v2 は GSD 固有 integration をコアから削除した。次の入口は存在せず、互換 shim なしの breaking change

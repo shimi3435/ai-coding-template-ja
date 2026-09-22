@@ -14,11 +14,13 @@
 ## このテンプレートから新規プロジェクトを作る
 
 1. GitHub の **"Use this template"** で新規リポジトリを作成
-2. `./scripts/bootstrap.sh`
-   （Node.js 24 / npm / Python 3.14 以上を検証し、uv を確認付きで導入して `task setup`
-   まで実行。Node.js 24 がない場合は手動導入するか、Linux x64 / arm64 で
-   `./scripts/bootstrap.sh --install-node` を明示指定する。導入時は出力される
-   `export PATH="<導入先>/bin:$PATH"` を次回 shell でも実行する。go-task / gh は導入手順を表示）
+2. Node.js 24 LTS / npm / Python 3.14 以上を用意して `./scripts/bootstrap.sh` を実行する。
+   Node / npmは[公式導入ページ](https://nodejs.org/en/download)から手動導入し、
+   PATHを確認する。bootstrapはruntimeを検証し、uvを確認付きで導入して `task setup`
+   まで実行する。go-task / ghは導入手順を表示する。
+   旧 `--install-node` は廃止され、終了コード2となる。既存環境は削除せず、
+   [移行案内](docs/guide.md#node導入と旧installerからの移行)を確認して引数なしで再実行する。
+   使い方は `./scripts/bootstrap.sh --help` で確認できる。
 3. パッケージを新プロジェクト名へ改名する（入力は module 名）:
 
    ```bash
