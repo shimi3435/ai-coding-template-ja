@@ -83,14 +83,19 @@
 - 独立verifier (`issue52_verify`): PASS、blockerなし。`.venv/bin/python -` によるread-only差分比較と追加safe probe 5件が成功（runtimeなし・別cwd・混在・重複help・既存HOME不変）。Python検査不変、Node/npm受理文法不変を確認。source commit `66a1cba` + 同一tracked diff。safe probeはfresh実行、project checksは入力同一性確認後のgreen evidence再利用。
 - 完了: 全5 tasksの実装・検証完了。未検証はdesignで対象外とした実WSL、runtime commandのtimeout・巨大出力・#50文法変更。リモートCIは未実行。commit / PR / change closeは未実施。
 
-### 6. PR公開とpre-merge close
-- 成果: 仕様・証跡をcommit履歴に保存し、PR番号付きのふりかえりを残してactive changeをcloseする。
+### 6. PR公開とpre-merge close準備
+- 成果: 仕様・証跡をcommit履歴に保存し、PR番号付きのふりかえりを残してclose可能な状態を確定する。
 - 依存: 5
 - 対象:
   - `openspec/changes/remove-node-installer`
   - `docs/template/retrospectives.md`
-- [ ] 実装: 実装・仕様のcommitを保存し、PR作成、ふりかえり追記とchange削除を行う。
-- [ ] 検証: close前strict validate、close後active change 0とproject checks、公開PRの差分・状態を確認する。
+- [x] 実装: 実装・仕様のcommitを保存し、PR作成とふりかえり追記を行う。
+- [x] 検証: close前strict validateとproject checks、公開PRの差分・状態を確認する。close後active change 0の結果はPR本文へ記録する。
+
+- PR: https://github.com/shimi3435/ai-coding-template-ja/pull/80 （draft）。実装・仕様・証跡commit `36e1f08` をpush済み。pre-merge close後に同PRをreadyへ変更する。
+
+- close前証跡: source `36e1f08` + ふりかえり/tasks追記で `openspec validate remove-node-installer --strict --no-interactive`、`task openspec:validate`、`task check` exit 0（Node 160 / Python 175 tests）、fresh実行。PR #80のhead `36e1f08` ではGitHub CI全5 jobs成功。公開差分は予定範囲内。
+- close手順: この全完了記録とふりかえりをcommit履歴へ保存後、change directoryだけを削除する。通常checkは削除対象artifactの内容を参照せず、source / tests / dependency / CI入力不変のため直前green evidenceを再利用する。削除後のOpenSpec gate結果はPR本文を参照する。
 
 ## 開始状態
 
