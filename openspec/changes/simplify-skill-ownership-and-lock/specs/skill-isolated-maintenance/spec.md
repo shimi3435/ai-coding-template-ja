@@ -1,7 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: R6 元repositoryを変更しない隔離書込み
-システムはSHALL、元repository・完全な開始commit・独立候補cloneを明示入力とし、書込みを検査済み候補だけへ限定する。
+システムはSHALL、update / repin / adopt-local / migrateでは元repository・完全な開始commit・独立候補cloneを明示入力とし、書込みを検査済み候補だけへ限定する。
+
+skills:linksはR8の現在checkout修復であり、本要件の候補隔離・再実行条件の対象外とする。
+WSL Ubuntuでは元repository・候補clone・Git metadataをLinux filesystemに置き、Windows / DrvFSは保証対象外とする。
 
 開始commitのtracked snapshotを読み、元の未コミット変更を含めない。
 同一または包含するroot、共有Git common directory、alternates、候補HEAD不一致、
@@ -36,6 +39,7 @@ remoteの固定commitとcanonical集計を検証・保持し、SemVerはlockのc
 local本文hashだけを除去し、pluginは一致する宣言だけをsourceに残す。
 本文不一致remoteは明示されたlocalize対象だけを本文保持でlocal化する。
 source / lock / legalの不整合を明示指定で迂回しない。
+remote / localともR2のSkill構造・identityを検証し、localize指定でも不正なSKILL.mdは自動修復せず停止する。
 移行用codeとfixtureは配布に含め、削除予定changeや到達不能Git履歴へ依存しない。
 v2同士は検証して無変更成功、旧新混在・欠損・未知versionは停止する。
 失敗・中断した部分移行候補はR6の手順で破棄・再作成する。
@@ -45,7 +49,7 @@ v2同士は検証して無変更成功、旧新混在・欠損・未知version�
 - **THEN** remoteのresolvedCommitを保持し、SemVer探索をせず、local本文とplugin宣言を失わない
 
 #### Scenario: 編集済みremoteを名前指定する
-- **WHEN** v1本文不一致remoteをlocalizeに指定し、出典・legalは整合する
+- **WHEN** v1本文不一致remoteをlocalizeに指定し、R2のSkill構造・identity・出典・legalは整合する
 - **THEN** 元の本文bytesを保持した外部由来localへ移行する。未指定の不一致remoteは停止する
 
 #### Scenario: 移行済みまたは部分状態
@@ -55,21 +59,33 @@ v2同士は検証して無変更成功、旧新混在・欠損・未知version�
 ### Requirement: R8 公開操作と検証済み候補の引渡し
 システムはSHALL、[interfaces.md](../../interfaces.md)のcommand・引数・出力・終了コードと、短絡停止する標準ツール手順を提供する。
 
-既定previewは書込みを行わず、applyだけが検査済み候補を書き換える。
+隔離更新操作の既定previewは書込みを行わず、applyだけが検査済み候補を書き換える。
+skills:linksは現在checkoutで既定の直接修復を行い、候補指定と--applyは受理しない。
+所定のlink配置領域だけを書き換え、本文・source・lock・無関係な編集を保持する。
+全対象の非symlink衝突と親path逸脱を事前拒否し、修復後のlink検証を成功条件とする。
+修復前の全体offline verifyを要求せず、link修復成功を本文の検証成功の代用にしない。
 clone作成・破棄・push・PRは標準Git / ghの人起点操作とし、専用管理CLI・自動PRを提供しない。
 一つでも対象が失敗した場合は操作全体をfailedとする。
-apply成功、最終offline verify、task check、差分レビューのすべてを通過した候補だけを通常PRへ進める。
+隔離更新ではapply成功、最終offline verify、task check、差分レビューのすべてを通過した候補だけを通常PRへ進める。
 candidateの存在、一時report、部分的verify成功を完了証拠にしない。
 実装時の実体・metadata・CLI / task・tests・CI・文書の移行は同じchangeで整合させる。
 review / verifierとcloseはAGENTS.mdのOSWF-5およびproject workflowに従う。
 
 #### Scenario: 不正引数とpreview
-- **WHEN** 必須の候補指定を欠く、未知引数を渡す、または有効なpreviewを行う
+- **WHEN** 隔離更新で必須の候補指定を欠く、未知引数を渡す、または有効なpreviewを行う
 - **THEN** 前二者は書込みなしでexit 1、有効previewは書込みなしでexit 0になる
 
 #### Scenario: 一部成功と後続停止
 - **WHEN** 複数cohortのうち一つが取得または検査で失敗する
 - **THEN** 全体をfailedとし、成功部分だけのcommit / push / PRへ自動で進まない
+
+#### Scenario: 現在checkoutのlinkを冪等に修復する
+- **WHEN** task skills:linksを候補引数なしで実行し、全対象の安全性検査に成功する
+- **THEN** 欠落・壊れたlink・誤ったlinkだけを修復し、本文・source・lock・無関係な編集を保持する。修復後検査の成功でexit 0となり、再実行は無変更成功する
+
+#### Scenario: linkの衝突または親path逸脱
+- **WHEN** 一つでも所定linkに通常file / directoryがある、または親path経由でrepository外へ逸脱する
+- **THEN** 全linkへの書込み前にexit 1となり、既存file / directoryを上書きしない
 
 #### Scenario: 文書作成だけの段階
 - **WHEN** 本changeの文書を検証してpushする

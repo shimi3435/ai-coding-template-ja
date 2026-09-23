@@ -83,17 +83,21 @@ local / plugin entry、orphan entry、remote sourceに対応しないentryは拒
 
 source / lock / 実体の完全一致は、offline verifyと配布可能な最終状態の条件である。
 各文書の型・field・上限検査と、完成状態の対応検査を分離する。
-書込み操作は次の中間状態だけを許可し、最後に全体のoffline verifyを必須とする。
+隔離更新操作（update / repin / adopt-local / migrate）は操作別の前提を検査し、最後に全体のoffline verifyを必須とする。
+update / repinで許可する中間状態は次のとおりである。linksはこの遷移を適用せず、interfaces.mdのlink修復契約に従う。
 
 | 操作 | 許容する差分 | 適用前の検査 | 適用後の検査 |
 | --- | --- | --- | --- |
 | updateの新規remote | sourceにだけremoteがあり、対応lockと配置先がともに存在しない | sourceの出典・legal承認、配置先不存在、取得前検査 | 新lockを生成しsource / lock / 実体一致 |
 | updateのlegal再承認 | 同じlegal mappingのexpectedSha256だけが旧lockと異なる | 旧実体・legalを旧lockで検証し、新取得物を新sourceの承認hashで検証 | 新source / lock / 配置legal一致 |
-| 名前指定repin | 指定名のrepository / ref / subtreeの変更、および上記legal再承認 | 指定名の旧本文を旧lockで検証し、新取得物は新sourceと明示承認SHAで検証 | 指定名を含む全体のsource / lock / 実体一致 |
+| 名前指定repin | 指定名のrepository / ref / subtree / license / legalMappings全体の変更 | 指定名の旧本文・legalを旧lockで検証し、新取得物は新sourceのpolicy・legal承認と明示承認SHAで検証 | 指定名を含む全体のsource / lock / 実体一致 |
 
-この表の中間状態はoffline verifyでは失敗する。name / target / ownership / license / redistributionの不一致、
+この表の中間状態はoffline verifyでは失敗する。name / target / ownership / redistributionの不一致、
 orphan、既存未管理path、対象外の出典不一致を同じ例外で受け入れない。
-repinは指定名以外の欠落lockや出典変更を修復しない。複数の中間状態を無条件にまとめて承認しない。
+license変更とlegalMappingsの追加・削除・sourcePath / targetPath変更は指名repinに限り許可する。
+通常updateの再承認は同じmappingのexpectedSha256変更だけであり、licenseやmapping構造の変更は拒否する。
+redistribution: allowedは変更前後とも必須とする。
+repinは指定名以外の欠落lockや出典・policy・legal変更を修復しない。複数の中間状態を無条件にまとめて承認しない。
 adopt-localが許容する本文差分とmigrateのv1入力は、それぞれR5 / R7で限定した別の前提であり、
 source / lock / legal不一致の一般的な許可ではない。
 

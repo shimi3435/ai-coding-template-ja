@@ -28,7 +28,7 @@ subtree、固定commit、ref、必要なtag情報を `origin` として保存す
 ## 2. 取得と固定
 
 同じrepositoryとrefのremoteを一つのcohortとして解決する。一回の通常更新ではcohort内で一つのcommitを共有する。
-branch更新は各既存lockからfast-forwardであることを確認する。ref / repository / subtreeの変更は
+branch更新は各既存lockからfast-forwardであることを確認する。ref / repository / subtree / license / legalMappings構造の変更は
 通常更新に紛れ込ませず、明示repinの対象とする。既存本文のlock不一致はrepinでも上書きしない。
 新規remoteは承認済みsourceがあり、配置先が存在しない場合だけ取得する。既存の未管理pathは拒否する。
 
@@ -41,7 +41,7 @@ repinは指定されたcommit、tagの場合は直接object SHAとも解決結�
 
 選択subtreeとlegal sourceをtree metadataで列挙し、cohort内の全選択blobの本文取得より前に
 R3の上限・mode・path・衝突を検査する。選択外blob本文は取得しない。
-取得後はGit blob SHA・size、legal hash、配置後canonicalを別々に検査する。
+取得後はGit blob SHA・size、R2のSkill構造・identity、legal hash、配置後canonicalを別々に検査する。
 treeやAPI応答全体を含む通信量の厳密な制限を保証したとは扱わない。
 
 取得したcommitが変われば、本文が同一でもlockのcommitを更新する。GitHubの署名検証状態は
@@ -50,7 +50,12 @@ treeやAPI応答全体を含む通信量の厳密な制限を保証したとは�
 ## 3. legal承認の変更
 
 remote更新中にLICENSE / NOTICEのhashがsourceの承認値と異なれば停止する。
-人が内容を確認し、sourceの承認hash変更をcommitして、新しい開始commitから候補を作り直す。
+同じmappingのhash変更だけなら、人が内容を確認してsourceの承認hash変更をcommitし、
+新しい開始commitから通常updateの候補を作り直す。
+license変更、LICENSEのsourcePath / targetPath移動、NOTICE追加・削除等のlegalMappings構造変更は、
+新sourceをcommitしたうえで `skills:repin --name ...` により対象名と固定SHAを明示承認する。
+repin previewはpolicy / mapping変更を表示し、redistribution: allowedと全取得前検査を維持する。
+同じcommitでも宣言や最終legalが変われば適用し、新subtreeと新mappingから最終treeを構成する。
 更新前の配置済みlegalは旧lockと照合し、更新候補のlegalは新sourceの承認値と照合する。
 この二段階を区別し、旧lockのhashまで手編集して既存実体の検証を回避する手順は提供しない。
 通常のoffline verifyはsource / lock / 配置済みlegalの三者一致を要求するため、
@@ -60,7 +65,7 @@ local化・offline移行ではlegal承認の変更を兼ねない。旧source / 
 
 ## 4. 隔離書込み
 
-CLIは元repository、完全な開始commit SHA、候補cloneを必須入力とする。元の未コミット変更をsnapshotへ
+update / repin / adopt-local / migrateは元repository、完全な開始commit SHA、候補cloneを必須入力とする。元の未コミット変更をsnapshotへ
 取り込まず、開始commitからtracked source / lock / 本文 / legalを読む。
 開始commitを元repositoryで解決できることと候補HEADの一致を検査する。
 
@@ -86,10 +91,16 @@ realpathで同一・包含関係を拒否し、Git common directoryの共有、a
 失敗候補のPR進行禁止は、操作成功→候補検証→project checks→差分レビュー→commit / push / PRという
 短絡停止する手順で担保する。任意の人手pushをシステムが阻止するとは保証しない。
 
+`skills:links` は隔離更新の対象外とし、現在checkoutで既定の直接修復を維持する。
+本文・source・lockは変更せず、所定のlink配置領域だけを修復する。全対象の非symlink衝突と親path逸脱を
+書込み前に拒否し、bootstrapの `scripts/setup-skills.sh` と契約を揃える。
+この操作は候補引数・preview / applyを要求せず、修復後link検証の成功を返す。
+全体offline verifyとは別操作であり、本文の不正を修復成功によって承認しない。
+
 ## 5. ownershipと一度だけの移行
 
 通常local化は対象名を一つ指定し、snapshot内の本文を変更せずsourceをlocalへ変換し、remote lockを除く。
-本文が旧lockと異なる場合も明示操作なら保持するが、regular file / path安全性とlegalの検査は省略しない。
+本文が旧lockと異なる場合も明示操作なら保持するが、regular file / path安全性、R2のSkill構造・identity、legalの検査は省略しない。
 不一致本文を取得元の原本と誤表示しない。すでに同じoriginを持つlocalへの再指定は検証して無変更成功とする。
 純粋な自作localやpluginをremote由来として捏造する操作は拒否する。
 
@@ -97,7 +108,8 @@ realpathで同一・包含関係を拒否し、Git common directoryの共有、a
 SemVerは旧lockのresolvedCommitをcommit refへ変換し、旧範囲、selectedTag、selectedVersionを
 履歴情報として保持する。tag object SHAはofflineで推測せず、移行後の明示tag追跡が必要なら別のrepinを行う。
 branch / commitは固定先を保持する。旧remoteのtreeHash / fileCount / byteCountを再計算結果と照合する。
-local本文の差分は内容lockを再生成せず保持し、legalだけは旧承認値との一致を要求する。
+local本文の差分は内容lockを再生成せず保持する。remote / localともR2のSkill構造・identityを検証し、
+legalは旧承認値との一致を要求する。localizeを明示しても不正なSKILL.mdは停止し、自動修復しない。
 pluginはsource / lockの宣言一致を確認してsourceだけ残す。
 
 編集済みremoteは `--localize` で名前を指定した場合だけ本文を保持してlocal化する。
@@ -132,10 +144,15 @@ schema library、追加runtime、外部tool内部APIやforkは導入しない。
 全要件と12分類の対応は[spec-holes.md](spec-holes.md)、実験・負例は[validation.md](validation.md)を参照する。
 実装時の独立review / verifierはAGENTS.mdのOSWF-5に従う。本書は発火条件を再定義しない。
 今回の文書検証は新挙動の実証ではなく、実装tasksを完了へ進めない。
-Ubuntu / WSL Ubuntuを保証対象とし、WSL実機結果は実装時に取得する。未実行を成功へ読み替えない。
+Ubuntu / WSL Ubuntuを保証対象とする。WSLでは元repository・候補clone・Git metadataをすべてLinux filesystemに置く。
+`/mnt/c` 等のWindows / DrvFSは保証対象外とし、特別なmode / symlink互換処理は追加しない。
+既存のmode・path・symlink・Git共有検査は維持する。WSL実機ではfilesystemとmount条件を記録する。
+結果は実装時に取得し、未実行を成功へ読み替えない。
 
 ## 参照
 
+- [WSL file permissions](https://learn.microsoft.com/en-us/windows/wsl/file-permissions): Linux filesystemとWindows上のpermission処理の違い。
+- [WSL filesystems](https://learn.microsoft.com/en-us/windows/wsl/filesystems): Linux filesystem上の配置方針。
 - [Git clone](https://git-scm.com/docs/git-clone): local最適化を避ける `--no-local` と共有objectの注意点。
 - [Git rev-parse](https://git-scm.com/docs/git-rev-parse): Git common directoryの確認。
 - [OpenSpec delta format](https://github.com/Fission-AI/OpenSpec/blob/main/docs/getting-started.md): requirement / scenarioの形式。

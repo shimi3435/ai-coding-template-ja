@@ -18,9 +18,11 @@ Skill更新PR自動化の撤去（#75、PR #79）は `66a1cba` でマージ済�
 - refはbranch / commit / 明示tagとする。SemVer範囲探索を廃止し、旧設定は固定commitへoffline変換する。
 - `skill-tree-v1` を維持する。本文が同一でも、更新で確認した新commitへlockを進める。
 - tagはrefの直接object SHAと解決済みcommitを固定する。同一commitへのtag再作成も通常更新を停止する。
-- repinには承認するcommitを必須とし、tagでは直接object SHAも指定する。包括的なforceを設けない。
+- repinには承認するcommitを必須とし、tagでは直接object SHAも指定する。指定名だけlicense / legalMappingsの変更も受理し、旧実体は旧lock、新取得物は新sourceで検証する。包括的なforceを設けない。
 - remoteからlocalへの明示切替は編集済み本文を保持し、出典・legalをsourceへ残す。自動remote復帰は提供しない。
-- 元repository、開始commit、更新先の独立cloneを指定し、書込み先を検査する。clone作成・破棄・PR操作は標準ツールの手順とする。
+- remote / local共通のroot SKILL.md、UTF-8、frontmatter / YAML、name一致、必須metadata検証を維持する。
+- update / repin / adopt-local / migrateは元repository、開始commit、更新先の独立cloneを指定し、書込み先を検査する。clone作成・破棄・PR操作は標準ツールの手順とする。
+- `skills:links` は現在checkoutの冪等な直接修復を維持し、非symlink衝突と親path逸脱を全対象で事前拒否する。
 - 失敗・中断した候補は診断用に残し、再実行は新しいcloneから行う。旧transactionの撤去は保護境界の実証後とする。
 - 旧形式は専用移行処理だけで読む。編集済みremoteのlocal化は名前指定で同時移行できる。不明な状態は推測しない。
 - 実装時に実体・metadata・CLI / task・tests・CI・利用手順を一体で整合させる。
@@ -39,7 +41,7 @@ Skill更新PR自動化の撤去（#75、PR #79）は `66a1cba` でマージ済�
 ## Impact
 
 将来の実装対象は `repo-tools/skill-updater/`、関連tests、CLI、Taskfile、Skill metadata、
-既存CIと利用文書である。Node.js 24 / npmとPython >=3.14を維持する。schema libraryを先行導入しない。
+既存CIと利用文書である。WSL Ubuntuの保証対象はLinux filesystem上の元repository・候補clone・Git metadataに限定する。Node.js 24 / npmとPython >=3.14を維持する。schema libraryを先行導入しない。
 #51 / #73 / #74は本change完了後の契約を受け取る。
 
 今回のdiffはこのchange配下のMarkdownだけとする。既存のローカル調査メモ、実装、lock、CI設定は変更しない。
@@ -47,7 +49,7 @@ Skill更新PR自動化の撤去（#75、PR #79）は `66a1cba` でマージ済�
 ## Non-goals
 
 自動PR、専用clone manager、途中再開、localからremoteへの自動復帰、新しいpackage / plugin manager、
-private GitHub・他forge保証、Windowsネイティブ保証、Node全面撤去、Genshijin専用updater、
+private GitHub・他forge保証、Windowsネイティブ保証、WSLのWindows / DrvFS上での動作保証、Node全面撤去、Genshijin専用updater、
 Skill選別（#73）、host integration（#74）は対象外である。
 GitHub metadata検査後にGitで本文を取得する方式は今回採用しない。
 
