@@ -1,4 +1,15 @@
 import { isMap, parseDocument } from "yaml";
+import { canonicalizeTree, type CanonicalTree, type TreeFile } from "./canonical.ts";
+import { validateSkillLimits } from "./legal.ts";
+
+export function validateSkillTree(files: readonly TreeFile[], expectedName: string): CanonicalTree {
+  validateSkillLimits(files);
+  const tree = canonicalizeTree(files);
+  const roots = tree.files.filter(file => file.path === "SKILL.md");
+  if (roots.length !== 1) throw new Error(`root SKILL.mdはexactly one必要です: ${expectedName}`);
+  parseSkillMetadata(roots[0]!.content, expectedName);
+  return tree;
+}
 
 export type SkillMetadata = Readonly<{ name: string; description: string }>;
 

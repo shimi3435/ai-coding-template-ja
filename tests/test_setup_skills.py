@@ -214,3 +214,16 @@ def test_missing_skills_root_is_an_error_for_explicit_names(tmp_path: Path) -> N
 
     assert result.returncode != 0
     assert ".agents/skills" in result.stderr
+
+
+def test_parent_symlink_is_rejected_before_any_link_write(tmp_path: Path) -> None:
+    """後半のlink rootが外部へ逸脱する場合も、先行rootを書き換えない。"""
+    repo = _make_repo(tmp_path, ["tdd"])
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repo / ".codex").symlink_to(outside, target_is_directory=True)
+    result = _run_setup(repo, ["tdd"])
+    assert result.returncode != 0
+    assert "親path" in result.stderr
+    assert not (repo / ".claude").exists()
+    assert list(outside.iterdir()) == []

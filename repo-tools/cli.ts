@@ -5,7 +5,7 @@ import { validateRepositoryContracts } from "./repository-contracts.ts";
 import type { SkillCommandName } from "./skill-updater/index.ts";
 
 function usage(): never {
-  console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts|skills:links|skills:verify|skills:check|skills:update|skills:lock-local>");
+  console.error("usage: node repo-tools/entrypoint.mjs <runtime-preflight|check-contracts|skills:links|skills:verify|skills:check|skills:update|skills:repin|skills:adopt-local|skills:migrate>");
   process.exit(2);
 }
 
@@ -26,6 +26,9 @@ try {
     command === "skills:verify" ||
     command === "skills:check" ||
     command === "skills:update" ||
+    command === "skills:repin" ||
+    command === "skills:adopt-local" ||
+    command === "skills:migrate" ||
     command === "skills:lock-local"
   ) {
     const { runSkillCommand } = await import("./skill-updater/index.ts");

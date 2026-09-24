@@ -1,305 +1,80 @@
-import { sameLegalFiles, sha256 } from "./legal.ts";
-import { serializeLock, serializeSources } from "./schema.ts";
-import { sameSourceRef } from "./types.ts";
+import { sha256 } from "./legal.ts";
 import { utf8Compare, type CanonicalTree } from "./canonical.ts";
-import type { RemoteCohortObservation } from "./github.ts";
-import { remoteObservationFingerprint } from "./observation-fingerprint.ts";
-import type {
-  LocalLegalFile,
-  LocalLock,
-  LockDocument,
-  RemoteLock,
-  RemoteSource,
-  SkillLock,
-  SourceRef,
-  SourcesDocument,
-} from "./types.ts";
-
-export type PlanStatus = "up-to-date" | "update-available" | "no-content-change" | "unchanged";
-
-export type RemotePlanStep = Readonly<{
-  key: string;
-  names: readonly string[];
-  status: PlanStatus;
-  resolvedCommit: string;
-  observationFingerprint: string;
-  warnings: readonly string[];
-  expectedBeforeLockBytes: string;
-  expectedBeforeLockDigest: string;
-  candidateAfterLockBytes: string;
-  candidateAfterLockDigest: string;
-  expectedTargetDigests: ReadonlyMap<string, string | null>;
-  candidateTrees: ReadonlyMap<string, CanonicalTree>;
+import { observeRemoteCohort, type GhRunner, type RepinApproval } from "./github.ts";
+import { decodeSourcesJson as decodeV2Sources, decodeLockJson as decodeV2Lock, serializeSources as serializeV2Sources, serializeLock as serializeV2Lock, sourceFromLock } from "./schema.ts";
+import { validateSkillTree } from "./metadata.ts";
+import type { SourcesDocument as V2Sources, LockDocument as V2Lock, RemoteSource as V2RemoteSource, RemoteLock as V2RemoteLock } from "./types.ts";
+export type MaintenanceChange = Readonly<{
+  name:string; beforeCommit:string|null; afterCommit:string|null; beforeOwnership:string|null; afterOwnership:string|null;
+  beforeRef?:unknown; afterRef?:unknown; beforeTagObjectSha?:string|null; afterTagObjectSha?:string|null;
+  beforeLicense?:string|null; afterLicense?:string|null; beforeLegalMappings?:unknown; afterLegalMappings?:unknown;
 }>;
-
-export type RemoteUpdatePlan = Readonly<{
-  sourcesBytes: string;
-  sourcesDigest: string;
-  initialLockBytes: string;
-  initialLockDigest: string;
-  candidateLockBytes: string;
-  candidateLockDigest: string;
-  steps: readonly RemotePlanStep[];
-  warnings: readonly string[];
+export type MaintenancePlan = Readonly<{
+  sources:V2Sources; lock:V2Lock; trees:ReadonlyMap<string,CanonicalTree>;
+  changes:readonly MaintenanceChange[]; warnings:readonly string[]; metadataChanged?: boolean;
 }>;
-
-export type LocalObservation = Readonly<{
-  name: string;
-  tree: CanonicalTree;
-  legalFiles: readonly LocalLegalFile[];
-}>;
-
-export type LocalLockPlan = Readonly<{
-  sourcesBytes: string;
-  sourcesDigest: string;
-  status: "unchanged" | "update-available";
-  initialLockBytes: string;
-  initialLockDigest: string;
-  candidateLockBytes: string;
-  candidateLockDigest: string;
-  observations: readonly LocalObservation[];
-}>;
-
-function digest(text: string): string {
-  return sha256(Buffer.from(text, "utf8"));
+export function remoteChange(before:V2RemoteLock|undefined,after:V2RemoteLock):MaintenanceChange {
+  const old=before ? sourceFromLock(before):undefined; const next=sourceFromLock(after);
+  return {name:after.name,beforeCommit:before?.resolvedCommit??null,afterCommit:after.resolvedCommit,beforeOwnership:before?.ownership??null,afterOwnership:after.ownership,
+    ...(JSON.stringify(before?.ref)!==JSON.stringify(after.ref)?{beforeRef:before?.ref??null,afterRef:after.ref}:{}),
+    ...(before?.tagObjectSha!==after.tagObjectSha?{beforeTagObjectSha:before?.tagObjectSha??null,afterTagObjectSha:after.tagObjectSha??null}:{}),
+    ...(before?.license!==after.license?{beforeLicense:before?.license??null,afterLicense:after.license}:{}),
+    ...(JSON.stringify(old?.legalMappings)!==JSON.stringify(next.legalMappings)?{beforeLegalMappings:old?.legalMappings??null,afterLegalMappings:next.legalMappings}:{}),
+  };
 }
-
-export function refKey(ref: SourceRef): string {
-  if ("branch" in ref) return `branch:${ref.branch}`;
-  if ("commit" in ref) return `commit:${ref.commit}`;
-  return `semver:${ref.semver}`;
-}
-
-export function cohortKey(repository: string, ref: SourceRef): string {
-  return `${repository}|${refKey(ref)}`;
-}
-
-function replaceLocks(
-  current: LockDocument,
-  replacements: ReadonlyMap<string, SkillLock>,
-): LockDocument {
-  const seen = new Set<string>();
-  const skills = current.skills.map((entry) => {
-    const replacement = replacements.get(entry.name);
-    if (replacement === undefined) return entry;
-    seen.add(entry.name);
-    return replacement;
-  });
-  for (const [name, replacement] of replacements) {
-    if (!seen.has(name)) skills.push(replacement);
-  }
-  return { schemaVersion: 1, skills };
-}
-
-function assertInstalledMatchesLock(name: string, tree: CanonicalTree, lock: RemoteLock): void {
-  if (
-    tree.treeHash !== lock.treeHash ||
-    tree.fileCount !== lock.fileCount ||
-    tree.byteCount !== lock.byteCount
-  ) {
-    throw new Error(`installed treeがlockと一致しません: ${name}`);
+export function verifyRemoteBefore(source:V2RemoteSource,lock:V2RemoteLock,tree:CanonicalTree,allowBodyChange=false):void {
+  const actual=validateSkillTree(tree.files,source.name);
+  if(!allowBodyChange && (actual.treeHash!==lock.treeHash || actual.fileCount!==lock.fileCount || actual.byteCount!==lock.byteCount)) throw new Error(`旧本文 / lock不一致: ${source.name}`);
+  for(const legal of lock.legalFiles) {
+    const file=actual.files.find(f=>f.path===legal.targetPath);
+    if(!file || sha256(file.content)!==legal.sha256) throw new Error(`旧legal / lock不一致: ${source.name}`);
   }
 }
-
-export type RemoteCohortClassification = Readonly<{
-  status: Exclude<PlanStatus, "unchanged">;
-  replacements: ReadonlyMap<string, SkillLock>;
-  expectedTargetDigests: ReadonlyMap<string, string | null>;
-  candidateTrees: ReadonlyMap<string, CanonicalTree>;
-}>;
-
-export function classifyRemoteCohort(input: Readonly<{
-  sources: readonly RemoteSource[];
-  lock: LockDocument;
-  installedTrees: ReadonlyMap<string, CanonicalTree>;
-  observation: RemoteCohortObservation;
-}>): RemoteCohortClassification {
-  const key = cohortKey(input.observation.repository, input.observation.ref);
-  const observedByName = new Map(input.observation.entries.map((entry) => [entry.name, entry]));
-  if (observedByName.size !== input.sources.length) throw new Error(`cohort entry数不一致: ${key}`);
-  const lockByName = new Map(input.lock.skills.map((entry) => [entry.name, entry]));
-  const replacements = new Map<string, SkillLock>();
-  const expectedTargetDigests = new Map<string, string | null>();
-  const candidateTrees = new Map<string, CanonicalTree>();
-  let contentChanged = false;
-  let commitChangedOnly = false;
-  for (const source of input.sources) {
-    const observed = observedByName.get(source.name);
-    if (observed === undefined) throw new Error(`cohort observation entry欠落: ${source.name}`);
-    const previous = lockByName.get(source.name);
-    if (previous !== undefined && previous.ownership !== "remote") {
-      throw new Error(`ownership conflict: ${source.name}`);
-    }
-    const installed = input.installedTrees.get(source.name);
-    expectedTargetDigests.set(source.name, null);
-    if (previous !== undefined) {
-      if (installed === undefined) throw new Error(`installed tree欠落: ${source.name}`);
-      assertInstalledMatchesLock(source.name, installed, previous);
-      expectedTargetDigests.set(source.name, previous.treeHash);
-    }
-    candidateTrees.set(source.name, observed.tree);
-    const sameContent = previous !== undefined &&
-      previous.repository === source.repository &&
-      sameSourceRef(previous.ref, source.ref) &&
-      previous.license === source.license &&
-      previous.redistribution === source.redistribution &&
-      previous.treeHash === observed.tree.treeHash &&
-      previous.fileCount === observed.tree.fileCount &&
-      previous.byteCount === observed.tree.byteCount &&
-      sameLegalFiles(previous.legalFiles, observed.legalFiles);
-    if (sameContent) {
-      if (previous.resolvedCommit !== input.observation.resolvedCommit) commitChangedOnly = true;
+export async function planRemoteMaintenance(input:Readonly<{
+  sources:V2Sources;lock:V2Lock;installedTrees:ReadonlyMap<string,CanonicalTree>;
+}>,runner:GhRunner,repin?:RepinApproval & Readonly<{name:string}>):Promise<MaintenancePlan> {
+  const sources=decodeV2Sources(serializeV2Sources(input.sources));
+  const lock=decodeV2Lock(serializeV2Lock(input.lock));
+  const selected=sources.skills.filter(s=>s.ownership==="remote");
+  if(repin && !selected.some(s=>s.name===repin.name)) throw new Error("repin対象remoteがありません");
+  const byName=new Map(lock.skills.map(l=>[l.name,l]));
+  for(const l of lock.skills) if(!selected.some(s=>s.name===l.name)) throw new Error("orphan / ownership不一致");
+  for(const s of selected) {
+    const previous=byName.get(s.name); const tree=input.installedTrees.get(s.name);
+    if(!previous) {
+      if(repin || tree) throw new Error("lock欠落 / 未管理path衝突");
       continue;
     }
-    contentChanged = true;
-    replacements.set(source.name, {
-      name: source.name,
-      ownership: "remote",
-      license: source.license,
-      redistribution: source.redistribution,
-      target: source.target,
-      repository: source.repository,
-      ref: source.ref,
-      resolvedCommit: input.observation.resolvedCommit,
-      verification: input.observation.verification,
-      ...("semver" in source.ref ? {
-        selectedTag: input.observation.selectedTag!,
-        selectedVersion: input.observation.selectedVersion!,
-      } : {}),
-      treeHash: observed.tree.treeHash,
-      fileCount: observed.tree.fileCount,
-      byteCount: observed.tree.byteCount,
-      legalFiles: observed.legalFiles,
-    } satisfies RemoteLock);
-  }
-  return Object.freeze({
-    status: contentChanged ? "update-available" : commitChangedOnly ? "no-content-change" : "up-to-date",
-    replacements,
-    expectedTargetDigests,
-    candidateTrees,
-  });
-}
-
-export function buildRemoteUpdatePlan(input: Readonly<{
-  sources: SourcesDocument;
-  sourcesBytes?: string;
-  lock: LockDocument;
-  initialLockBytes: string;
-  installedTrees: ReadonlyMap<string, CanonicalTree>;
-  observations: readonly RemoteCohortObservation[];
-}>): RemoteUpdatePlan {
-  const sourcesBytes = input.sourcesBytes ?? serializeSources(input.sources);
-  const remoteSources = input.sources.skills.filter((entry) => entry.ownership === "remote");
-  const sourceGroups = new Map<string, typeof remoteSources>();
-  for (const source of remoteSources) {
-    const key = cohortKey(source.repository, source.ref);
-    sourceGroups.set(key, [...(sourceGroups.get(key) ?? []), source]);
-  }
-  const observationByKey = new Map<string, RemoteCohortObservation>();
-  for (const observation of input.observations) {
-    const key = cohortKey(observation.repository, observation.ref);
-    if (observationByKey.has(key)) throw new Error(`cohort observation重複: ${key}`);
-    observationByKey.set(key, observation);
-  }
-  if (observationByKey.size !== sourceGroups.size) throw new Error("cohort observation数がsourcesと一致しません");
-
-  let currentLock = input.lock;
-  let currentBytes = input.initialLockBytes;
-  const steps: RemotePlanStep[] = [];
-  const warnings: string[] = [];
-  for (const key of [...sourceGroups.keys()].sort(utf8Compare)) {
-    const sources = sourceGroups.get(key)!;
-    const observation = observationByKey.get(key);
-    if (observation === undefined) throw new Error(`cohort observation欠落: ${key}`);
-    const classification = classifyRemoteCohort({
-      sources,
-      lock: currentLock,
-      installedTrees: input.installedTrees,
-      observation,
-    });
-    const expectedBefore = currentBytes;
-    if (classification.status === "update-available") {
-      currentLock = replaceLocks(currentLock, classification.replacements);
-      currentBytes = serializeLock(currentLock);
+    if(previous.target!==s.target || previous.redistribution!==s.redistribution) throw new Error("identity / policy不一致");
+    const old=sourceFromLock(previous);
+    if(repin?.name!==s.name) {
+      const normalize=(entry:V2RemoteSource)=>({...entry,legalMappings:entry.legalMappings.map(({expectedSha256,...mapping})=>repin ? {...mapping,expectedSha256}:mapping)});
+      if(JSON.stringify(normalize(old))!==JSON.stringify(normalize(s))) throw new Error(`通常update / 対象外のprovenance・policy・mapping変更: ${s.name}`);
     }
+    if(!tree) throw new Error("旧本文欠落");
+    verifyRemoteBefore(s,previous,tree);
+  }
+  const groups=new Map<string,V2RemoteSource[]>();
+  for(const s of selected.filter(s=>!repin || s.name===repin.name)) {
+    const key=`${s.repository}|${JSON.stringify(s.ref)}`; groups.set(key,[...(groups.get(key)??[]),s]);
+  }
+  const trees=new Map<string,CanonicalTree>(); const changes:MaintenanceChange[]=[]; const warnings:string[]=[];
+  for(const key of [...groups.keys()].sort(utf8Compare)) {
+    const cohort=groups.get(key)!;
+    const observation=await observeRemoteCohort(cohort,cohort.flatMap(s=>byName.has(s.name)?[byName.get(s.name)!]:[]),runner,repin);
     warnings.push(...observation.warnings);
-    steps.push(Object.freeze({
-      key,
-      names: Object.freeze(sources.map((source) => source.name).sort(utf8Compare)),
-      status: classification.status,
-      resolvedCommit: observation.resolvedCommit,
-      observationFingerprint: remoteObservationFingerprint(observation),
-      warnings: Object.freeze([...observation.warnings]),
-      expectedBeforeLockBytes: expectedBefore,
-      expectedBeforeLockDigest: digest(expectedBefore),
-      candidateAfterLockBytes: currentBytes,
-      candidateAfterLockDigest: digest(currentBytes),
-      expectedTargetDigests: classification.expectedTargetDigests,
-      candidateTrees: classification.candidateTrees,
-    }));
-  }
-  return Object.freeze({
-    sourcesBytes,
-    sourcesDigest: digest(sourcesBytes),
-    initialLockBytes: input.initialLockBytes,
-    initialLockDigest: digest(input.initialLockBytes),
-    candidateLockBytes: currentBytes,
-    candidateLockDigest: digest(currentBytes),
-    steps: Object.freeze(steps),
-    warnings: Object.freeze(warnings),
-  });
-}
-
-export function buildLocalLockPlan(input: Readonly<{
-  sources: SourcesDocument;
-  sourcesBytes?: string;
-  lock: LockDocument;
-  initialLockBytes: string;
-  observations: readonly LocalObservation[];
-}>): LocalLockPlan {
-  const sourcesBytes = input.sourcesBytes ?? serializeSources(input.sources);
-  const localSources = input.sources.skills.filter((entry) => entry.ownership === "local");
-  const byName = new Map(input.observations.map((observation) => [observation.name, observation]));
-  if (byName.size !== localSources.length) throw new Error("local observation数がsourcesと一致しません");
-  const replacements = new Map<string, SkillLock>();
-  const currentByName = new Map(input.lock.skills.map((entry) => [entry.name, entry]));
-  for (const source of localSources) {
-    const observation = byName.get(source.name);
-    if (observation === undefined) throw new Error(`local observation欠落: ${source.name}`);
-    const current = currentByName.get(source.name);
-    if (current !== undefined && current.ownership !== "local") throw new Error(`ownership conflict: ${source.name}`);
-    const unchanged = current !== undefined &&
-      current.license === source.license &&
-      current.redistribution === source.redistribution &&
-      current.treeHash === observation.tree.treeHash &&
-      current.fileCount === observation.tree.fileCount &&
-      current.byteCount === observation.tree.byteCount &&
-      sameLegalFiles(current.legalFiles, observation.legalFiles);
-    if (!unchanged) {
-      const replacement: LocalLock = {
-        name: source.name,
-        ownership: "local",
-        license: source.license,
-        redistribution: source.redistribution,
-        target: source.target,
-        treeHash: observation.tree.treeHash,
-        fileCount: observation.tree.fileCount,
-        byteCount: observation.tree.byteCount,
-        legalFiles: observation.legalFiles,
-      };
-      replacements.set(source.name, replacement);
+    for(const s of cohort) {
+      const observed=observation.entries.find(e=>e.name===s.name)!;
+      const {legalMappings:_,...identity}=s;
+      const after:V2RemoteLock={...identity,resolvedCommit:observation.resolvedCommit,verification:observation.verification,
+        ...(observation.tagObjectSha?{tagObjectSha:observation.tagObjectSha}:{}),treeHash:observed.tree.treeHash,fileCount:observed.tree.fileCount,byteCount:observed.tree.byteCount,legalFiles:observed.legalFiles};
+      const before=byName.get(s.name);
+      if(JSON.stringify(before)!==JSON.stringify(decodeV2Lock(serializeV2Lock({schemaVersion:2,skills:[after]})).skills[0])) {
+        changes.push(remoteChange(before,after)); byName.set(s.name,after);
+        if(before?.treeHash!==after.treeHash) trees.set(s.name,observed.tree);
+      }
     }
   }
-  const candidate = replacements.size === 0 ? input.lock : replaceLocks(input.lock, replacements);
-  const candidateBytes = replacements.size === 0 ? input.initialLockBytes : serializeLock(candidate);
-  return Object.freeze({
-    sourcesBytes,
-    sourcesDigest: digest(sourcesBytes),
-    status: replacements.size === 0 ? "unchanged" : "update-available",
-    initialLockBytes: input.initialLockBytes,
-    initialLockDigest: digest(input.initialLockBytes),
-    candidateLockBytes: candidateBytes,
-    candidateLockDigest: digest(candidateBytes),
-    observations: Object.freeze([...input.observations]),
-  });
+  const afterLock=decodeV2Lock(serializeV2Lock({schemaVersion:2,skills:[...byName.values()]}),sources);
+  return {sources,lock:afterLock,trees,changes:changes.sort((a,b)=>utf8Compare(a.name,b.name)),warnings};
 }

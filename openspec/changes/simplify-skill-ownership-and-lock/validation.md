@@ -1,6 +1,6 @@
 # 検証計画
 
-文書種別: 検証リファレンス。V1–V8は実装時の予定であり、現在の成功証拠ではない。
+文書種別: 検証リファレンス。V1–V8の判定基準を示す。実行結果はtasks.mdを正本とし、文書段階の証拠と実装後の証拠を区別する。
 各例示testは既存 `repo-tools/skill-updater-*.test.ts` 群を優先して拡張する。
 独立した性質がある場合だけ新fileを追加し、proseの存在だけで動作を検証したとは扱わない。
 
@@ -60,4 +60,22 @@ mtimeだけで成功判定しない。環境が作る無関係なcacheやOSア�
 独立review / verifierは実装と文書の完了段階を混同しない。
 文書段階では規範契約・合意・実装計画・検証対応の矛盾を検査し、未実装の挙動を実証したとは記録しない。
 証跡はcommand、結果、source commit、fresh / 再利用、未検証理由の要約だけをtasks.mdに残す。
-今回の文書作成では新testを実装・追加しない。
+
+
+## 実装後の対応先
+
+spec-holesの96分類判断は各行のV番号を通じて以下の実装・testsへ対応する。
+実行環境、fresh実行結果、未検証理由はtasks.mdへ記録する。
+
+| 群 | 実装 | tests / 実動作 |
+| --- | --- | --- |
+| V1 | types.ts / schema.ts | skill-updater-v2-foundation.test.ts（roundtrip・型・重複・境界） |
+| V2 | canonical.ts / metadata.ts / repository.ts | foundation / v2-foundation / repository / cli tests、配布offline verify |
+| V3 | github.ts / installed-path.ts / legal.ts | github tests（metadata拒否時blob 0、integrity・構造）、公開固定commit probe |
+| V4 | github.ts / planner.ts | github / planner / remote-command tests（tag二重固定・repin・同commit legal変更） |
+| V5 | ownership.ts | ownership / remote-command tests、Ubuntu / WSLでcavemanの実local化 |
+| V6 | isolation.ts / apply.ts | isolation tests（実clone・source metadata不変・例外 / kill / fresh retry） |
+| V7 | migration/ | migration / v2-foundation / remote-command tests、配布旧metadataの専用移行 |
+| V8 | commands.ts / links.ts / setup-skills.sh | cli / remote-command tests、test_setup_skills.py、両OSの候補check・rename smoke、失敗時短絡停止 |
+
+TS testsは `repo-tools/`、Python testsは `tests/` を基準とする。

@@ -272,11 +272,16 @@ vendoring しているコア skill の用途:
 - `spec-holes` — 未定義の振る舞いの列挙とテスト対応。
 - `execute-openspec-change` — OpenSpec change の preflight、直接実装、検証、進捗更新。
 
-review 済み供給元、ref、subtree、license は [`.agents/skills/skills.sources.json`](../../.agents/skills/skills.sources.json)、
-resolved commit、tree hash、legal hash は [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する。
-symlink 修復は `task skills:links`、offline 整合検証は `task skills:verify`、上流確認は
-`task skills:check`、更新 preview / apply は `task skills:update -- [--apply]`、first-party lock 更新は
-`task skills:lock-local -- [--apply]` を使う。vendored skill は各 `LICENSE` に従う。
+review済み供給元、ref、subtree、license、ownershipは [`.agents/skills/skills.sources.json`](../../.agents/skills/skills.sources.json)、
+remoteだけのresolved commit、tree hash、legal hashは [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する。
+local本文はGitとレビューで管理し、内容lockを持たない。外部由来localのoriginとLICENSE / NOTICEは保持する。
+
+`task skills:links` は現在checkoutのlinkを直接・冪等に修復し、`task skills:verify` はoffline検証する。
+上流確認は `skills:check --source <repository> --base <full-sha>`、update / repin / adopt-local / migrateは
+これらに `--candidate <independent-clone>` が必須で、`--apply` 指定時だけ候補へ書き込む。
+旧 `skills:lock-local`、SemVer探索、元repositoryへのtransaction / rollbackは提供しない。
+[公開操作と短絡停止手順](../template/skill-maintenance.md)、[metadata v2](../template/skill-metadata-v2.md)を参照する。
+通常checkはnetworkや移行用履歴に依存しない。vendored skillは各 `LICENSE` に従う。
 
 ## クロス AI レビュー（オプション）
 

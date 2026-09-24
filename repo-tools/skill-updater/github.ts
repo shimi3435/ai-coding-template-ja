@@ -1,10 +1,9 @@
+import type { RemoteSource as V2RemoteSource, RemoteLock as V2RemoteLock, SourceRef as V2Ref } from "./types.ts";
+import { validateInstalledTraversalPath, validateInstalledFilePaths } from "./installed-path.ts";
 import { spawn } from "node:child_process";
-import { compare as compareSemver } from "semver";
 import { gitBlobSha1, validateGitObjectSha } from "./git-object.ts";
 import { addRemoteLegalFiles, resourceLimits, sha256 } from "./legal.ts";
 import { parseSkillMetadata, type SkillMetadata } from "./metadata.ts";
-import { selectHighestSemverTag } from "./semver-policy.ts";
-import { sameSourceRef } from "./types.ts";
 import { validateCanonicalPath, type CanonicalTree, type TreeFile } from "./canonical.ts";
 import type {
   RemoteLegalFile,
@@ -22,17 +21,6 @@ export type RemoteEntryObservation = Readonly<{
   metadata: SkillMetadata;
   tree: CanonicalTree;
   legalFiles: readonly RemoteLegalFile[];
-}>;
-
-export type RemoteCohortObservation = Readonly<{
-  repository: string;
-  ref: SourceRef;
-  resolvedCommit: string;
-  verification: Verification;
-  selectedTag?: string;
-  selectedVersion?: string;
-  warnings: readonly string[];
-  entries: readonly RemoteEntryObservation[];
 }>;
 
 const commitPattern = /^[0-9a-f]{40}$/;
@@ -139,79 +127,6 @@ function verificationState(value: unknown, resolvedCommit: string): Verification
   return "unknown";
 }
 
-type ResolvedRef = Readonly<{
-  commit: string;
-  selectedTag?: string;
-  selectedVersion?: string;
-  tags?: ReadonlyMap<string, string>;
-}>;
-
-async function resolveRef(
-  repository: string,
-  sourceRef: SourceRef,
-  locks: readonly RemoteLock[],
-  runner: GhRunner,
-): Promise<ResolvedRef> {
-  if ("commit" in sourceRef) return { commit: sourceRef.commit };
-  if ("branch" in sourceRef) {
-    const response = object(
-      await apiJson(runner, `repos/${repository}/git/ref/heads/${encodeURIComponent(sourceRef.branch)}`),
-      "branch ref",
-    );
-    const target = object(response.object, "branch ref object");
-    if (target.type !== "commit") throw new Error("branch refはcommitを指す必要があります");
-    const commit = string(target.sha, "branch ref sha");
-    if (!commitPattern.test(commit)) throw new Error("branch ref SHAがlowercase 40-hexではありません");
-    return { commit };
-  }
-
-  const pages = await apiJson(runner, `repos/${repository}/tags?per_page=100`, true);
-  if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) {
-    throw new Error("SemVer tag paginationがcomplete page配列ではありません");
-  }
-  const tags = pages.flat().map((item, index) => {
-    const parsed = object(item, `tags[${index}]`);
-    const target = object(parsed.commit, `tags[${index}].commit`);
-    return { tag: string(parsed.name, `tags[${index}].name`), commit: string(target.sha, `tags[${index}].sha`) };
-  });
-  const tagMap = new Map(tags.map((tag) => [tag.tag, tag.commit]));
-  for (const lock of locks) {
-    if (!("semver" in lock.ref)) continue;
-    const current = lock.selectedTag === undefined ? undefined : tagMap.get(lock.selectedTag);
-    if (current === undefined || current !== lock.resolvedCommit) {
-      throw new Error(`locked SemVer tag moved/deleted (history rewrite): ${lock.selectedTag ?? "missing"}`);
-    }
-  }
-  const selected = selectHighestSemverTag(sourceRef.semver, tags);
-  for (const lock of locks) {
-    if (lock.selectedVersion !== undefined && compareSemver(selected.version, lock.selectedVersion) < 0) {
-      throw new Error(`SemVer downgradeを拒否しました: ${lock.selectedVersion} -> ${selected.version}`);
-    }
-  }
-  return { commit: selected.commit, selectedTag: selected.tag, selectedVersion: selected.version, tags: tagMap };
-}
-
-async function verifyAncestry(
-  repository: string,
-  resolvedCommit: string,
-  locks: readonly RemoteLock[],
-  sourceRef: SourceRef,
-  runner: GhRunner,
-): Promise<void> {
-  if ("commit" in sourceRef) return;
-  const previousCommits = new Set(locks.map((lock) => lock.resolvedCommit));
-  for (const previous of previousCommits) {
-    if (previous === resolvedCommit) continue;
-    const comparison = object(
-      await apiJson(runner, `repos/${repository}/compare/${previous}...${resolvedCommit}`),
-      "compare",
-    );
-    if (comparison.status !== "ahead" && comparison.status !== "identical") {
-      throw new Error(`fast-forwardではないhistory rewriteを拒否しました: ${String(comparison.status)}`);
-    }
-  }
-}
-
 type GitTreeEntry = Readonly<{ path: string; mode: string; type: string; sha: string; size?: number }>;
 
 function parseTree(value: unknown): readonly GitTreeEntry[] {
@@ -255,13 +170,13 @@ async function readBlob(runner: GhRunner, repository: string, sha: string, expec
 }
 
 type PreparedSourceTree = Readonly<{
-  source: RemoteSource;
+  source: V2RemoteSource;
   files: readonly Readonly<{ entry: GitTreeEntry; relativePath: string }>[];
   legalEntries: ReadonlyMap<string, GitTreeEntry>;
 }>;
 
 function prepareRemoteTrees(
-  sources: readonly RemoteSource[],
+  sources: readonly (V2RemoteSource)[],
   treeEntries: readonly GitTreeEntry[],
 ): readonly PreparedSourceTree[] {
   const treeByPath = new Map<string, GitTreeEntry>();
@@ -290,7 +205,9 @@ function prepareRemoteTrees(
     const selected = "root" in source.subtree
       ? treeEntries
       : treeEntries.filter((entry) => entry.path.startsWith(prefix));
+    if (selected.length > resourceLimits.filesystemEntries) throw new Error("filesystem entry上限超過");
     const files: Array<{ entry: GitTreeEntry; relativePath: string }> = [];
+    const targetEntries = new Map<string, GitTreeEntry>();
     const targetSizes = new Map<string, number>();
     const validateTargetLimits = (): void => {
       if (targetSizes.size > resourceLimits.skillFiles) {
@@ -303,6 +220,9 @@ function prepareRemoteTrees(
     };
     for (const entry of selected) {
       const relativePath = entry.path.slice(prefix.length);
+      validateInstalledTraversalPath(relativePath);
+      const depth = relativePath.split("/").length - (entry.type === "tree" ? 0 : 1);
+      if (depth > resourceLimits.directoryDepth) throw new Error("directory depth上限超過");
       if (entry.type === "tree" && entry.mode === "040000") continue;
       if (entry.type !== "blob" || (entry.mode !== "100644" && entry.mode !== "100755")) {
         throw new Error(`special fileは取得できません: ${entry.path} (${entry.mode}/${entry.type})`);
@@ -312,7 +232,13 @@ function prepareRemoteTrees(
       addCohortFile(entry);
       files.push({ entry, relativePath });
       targetSizes.set(relativePath, entry.size);
+      targetEntries.set(relativePath, entry);
       validateTargetLimits();
+    }
+    const subtreeLabel = "root" in source.subtree ? "repository root" : source.subtree.path;
+    if (files.length === 0) throw new Error(`empty subtreeです: ${subtreeLabel}`);
+    if (!files.some(file => file.relativePath === "SKILL.md")) {
+      throw new Error(`root SKILL.mdはexactly one必要です: ${source.name}`);
     }
     const legalEntries = new Map<string, GitTreeEntry>();
     for (const mapping of source.legalMappings) {
@@ -324,43 +250,22 @@ function prepareRemoteTrees(
       if (entry.size === undefined) throw new Error(`blob sizeがありません: ${entry.path}`);
       addCohortFile(entry);
       legalEntries.set(mapping.sourcePath, entry);
+      validateInstalledTraversalPath(mapping.targetPath);
       const existingSize = targetSizes.get(mapping.targetPath);
-      if (existingSize !== undefined && existingSize !== entry.size) {
+      const existing = targetEntries.get(mapping.targetPath);
+      if (existingSize !== undefined && (existingSize !== entry.size || existing?.sha !== entry.sha)) {
         throw new Error(`legal target collision: ${mapping.targetPath}`);
       }
       targetSizes.set(mapping.targetPath, entry.size);
+      targetEntries.set(mapping.targetPath, entry);
       validateTargetLimits();
     }
+    validateInstalledFilePaths([...targetSizes.keys()], selected.map(entry => entry.path.slice(prefix.length)));
     return Object.freeze({ source, files: Object.freeze(files), legalEntries });
   });
 }
 
-export async function observeRemoteCohort(
-  sources: readonly RemoteSource[],
-  locks: readonly RemoteLock[],
-  runner: GhRunner,
-): Promise<RemoteCohortObservation> {
-  if (sources.length === 0) throw new Error("remote cohortは1 entry以上必要です");
-  const first = sources[0]!;
-  if (sources.some((entry) => entry.repository !== first.repository || !sameSourceRef(entry.ref, first.ref))) {
-    throw new Error("remote cohort entriesのrepository / refが一致しません");
-  }
-  const repositoryInfo = object(await apiJson(runner, `repos/${first.repository}`), "repository");
-  if (repositoryInfo.private !== false || repositoryInfo.visibility !== "public") {
-    throw new Error(`public repositoryだけ取得できます: ${first.repository}`);
-  }
-
-  const resolved = await resolveRef(first.repository, first.ref, locks, runner);
-  if (!commitPattern.test(resolved.commit)) throw new Error("resolved commitがlowercase 40-hexではありません");
-  await verifyAncestry(first.repository, resolved.commit, locks, first.ref, runner);
-  const commitResponse = await apiJson(runner, `repos/${first.repository}/commits/${resolved.commit}`);
-  const verification = verificationState(commitResponse, resolved.commit);
-  const warnings = verification === "verified" ? [] : [`commit verification: ${verification}`];
-  const treeEntries = parseTree(
-    await apiJson(runner, `repos/${first.repository}/git/trees/${resolved.commit}?recursive=1`),
-  );
-  const preparedSources = prepareRemoteTrees(sources, treeEntries);
-
+async function fetchPreparedSources(preparedSources: readonly PreparedSourceTree[], repository: string, runner: GhRunner): Promise<RemoteEntryObservation[]> {
   const sourceContent = new Map<string, Buffer>();
   const entries: RemoteEntryObservation[] = [];
   for (const prepared of preparedSources) {
@@ -369,7 +274,7 @@ export async function observeRemoteCohort(
     for (const { entry, relativePath } of prepared.files) {
       let content = sourceContent.get(entry.path);
       if (content === undefined) {
-        content = await readBlob(runner, first.repository, entry.sha, entry.size!);
+        content = await readBlob(runner, repository, entry.sha, entry.size!);
         sourceContent.set(entry.path, content);
       }
       files.push({ path: relativePath, executable: entry.mode === "100755", content });
@@ -384,7 +289,7 @@ export async function observeRemoteCohort(
       let content = sourceContent.get(mapping.sourcePath);
       if (content === undefined) {
         const legalEntry = prepared.legalEntries.get(mapping.sourcePath)!;
-        content = await readBlob(runner, first.repository, legalEntry.sha, legalEntry.size!);
+        content = await readBlob(runner, repository, legalEntry.sha, legalEntry.size!);
         sourceContent.set(mapping.sourcePath, content);
       }
       legalBlobs.push({ ...mapping, content });
@@ -393,14 +298,58 @@ export async function observeRemoteCohort(
     entries.push({ name: source.name, metadata, tree: candidate.tree, legalFiles: candidate.legalFiles });
   }
 
-  return Object.freeze({
-    repository: first.repository,
-    ref: first.ref,
-    resolvedCommit: resolved.commit,
-    verification,
-    ...(resolved.selectedTag === undefined ? {} : { selectedTag: resolved.selectedTag }),
-    ...(resolved.selectedVersion === undefined ? {} : { selectedVersion: resolved.selectedVersion }),
-    warnings: Object.freeze(warnings),
-    entries: Object.freeze(entries),
-  });
+  return entries;
+}
+
+export type RemoteCohortObservation = Readonly<{
+  repository:string; ref:V2Ref; resolvedCommit:string; tagObjectSha?:string;
+  verification:Verification; warnings:readonly string[]; entries:readonly RemoteEntryObservation[];
+}>;
+export type RepinApproval = Readonly<{commit:string;tagObjectSha?:string}>;
+async function resolveV2Ref(repository:string, ref:V2Ref, runner:GhRunner):Promise<{commit:string;tagObjectSha?:string}> {
+  if ("commit" in ref) return {commit:validateGitObjectSha(ref.commit,"commit")};
+  const kind="branch" in ref ? "heads" : "tags";
+  const name="branch" in ref ? ref.branch : ref.tag;
+  const response=object(await apiJson(runner,`repos/${repository}/git/ref/${kind}/${encodeURIComponent(name)}`),"ref");
+  let target=object(response.object,"ref.object");
+  const direct=validateGitObjectSha(string(target.sha,"ref.sha"),"ref.sha");
+  if ("branch" in ref) {
+    if(target.type!=="commit") throw new Error("branch refはcommitが必要です");
+    return {commit:direct};
+  }
+  const seen=new Set<string>();
+  for(let depth=0;depth<32;depth++) {
+    const sha=validateGitObjectSha(string(target.sha,"tag.sha"),"tag.sha");
+    if(target.type==="commit") return {commit:sha,tagObjectSha:direct};
+    if(target.type!=="tag" || seen.has(sha)) throw new Error("tag循環 / object type不正");
+    seen.add(sha);
+    const tag=object(await apiJson(runner,`repos/${repository}/git/tags/${sha}`),"tag");
+    if(tag.sha!==sha) throw new Error("tag object SHA不一致");
+    target=object(tag.object,"tag.object");
+  }
+  throw new Error("tag連鎖32段以内にcommitへ到達しません");
+}
+export async function observeRemoteCohort(sources:readonly V2RemoteSource[],locks:readonly V2RemoteLock[],runner:GhRunner,approval?:RepinApproval):Promise<RemoteCohortObservation> {
+  const first=sources[0]; if(!first) throw new Error("空cohort");
+  if(sources.some(s=>s.repository!==first.repository || JSON.stringify(s.ref)!==JSON.stringify(first.ref))) throw new Error("cohortのrepository / ref不一致");
+  const info=object(await apiJson(runner,`repos/${first.repository}`),"repository");
+  if(info.private!==false || info.visibility!=="public") throw new Error("public repositoryだけ取得できます");
+  const resolved=await resolveV2Ref(first.repository,first.ref,runner);
+  if(approval) {
+    if(approval.commit!==resolved.commit || approval.tagObjectSha!==resolved.tagObjectSha) throw new Error("repin承認SHA / 観測SHA不一致");
+  } else for(const lock of locks) {
+    if("tag" in first.ref) {
+      if(lock.tagObjectSha!==resolved.tagObjectSha || lock.resolvedCommit!==resolved.commit) throw new Error("locked tag moved/deleted");
+    } else if("branch" in first.ref && lock.resolvedCommit!==resolved.commit) {
+      const comparison=object(await apiJson(runner,`repos/${first.repository}/compare/${lock.resolvedCommit}...${resolved.commit}`),"compare");
+      if(comparison.status!=="ahead" && comparison.status!=="identical") throw new Error("fast-forwardではないhistory rewrite");
+    }
+  }
+  const verification=verificationState(await apiJson(runner,`repos/${first.repository}/commits/${resolved.commit}`),resolved.commit);
+  const tree=parseTree(await apiJson(runner,`repos/${first.repository}/git/trees/${resolved.commit}?recursive=1`));
+  const prepared=prepareRemoteTrees(sources,tree);
+  const entries=await fetchPreparedSources(prepared,first.repository,runner);
+  const rechecked=await resolveV2Ref(first.repository,first.ref,runner);
+  if(JSON.stringify(rechecked)!==JSON.stringify(resolved)) throw new Error("取得中にrefが変化しました");
+  return {repository:first.repository,ref:first.ref,resolvedCommit:resolved.commit,...(resolved.tagObjectSha ? {tagObjectSha:resolved.tagObjectSha}:{}),verification,warnings:verification==="verified"?[]:[`commit verification: ${verification}`],entries};
 }

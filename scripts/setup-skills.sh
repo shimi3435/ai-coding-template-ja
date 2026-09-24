@@ -48,6 +48,14 @@ if [ ! -d "$SKILLS_ROOT" ]; then
   exit 1
 fi
 
+# 親pathがsymlinkまたは通常directory以外なら、全書込み前に停止する。
+for parent in .agents .agents/skills .claude .claude/skills .codex .codex/skills; do
+  if [ -L "$parent" ] || { [ -e "$parent" ] && [ ! -d "$parent" ]; }; then
+    error "親pathが安全なdirectoryではありません（ファイルシステムは未変更）: $parent"
+    exit 1
+  fi
+done
+
 # preflight（検査パス）: 非 symlink 衝突を全件検出する。1 件でもあれば変更パス
 # （mkdir -p を含む）に入らず、全衝突パスと復旧手順を表示して非ゼロ終了する。
 conflicts=()
@@ -114,3 +122,14 @@ if [ "$created" -eq 0 ]; then
 else
   info "$created 件の symlink を生成 / 修復しました。"
 fi
+
+# 修復成功は全対象linkの再検証を条件とする。
+for name in "${skills[@]}"; do
+  for link_root in "${LINK_ROOTS[@]}"; do
+    link="$link_root/$name"
+    if [ ! -L "$link" ] || [ "$(readlink "$link")" != "../../$SKILLS_ROOT/$name" ] || [ ! -e "$link" ]; then
+      error "修復後link検証に失敗しました: $link"
+      exit 1
+    fi
+  done
+done

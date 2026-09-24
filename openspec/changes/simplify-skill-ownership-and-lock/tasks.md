@@ -1,10 +1,11 @@
 # Tasks: Skill ownership / lock縮小
 
-## 実行制約
+## Execution Constraints
 
 1. **最初のCI parity**: Node.js 24 / npmとPython >=3.14、locked依存で現行 `task check` を確認する。
    最初の環境依存vertical slice（task 2）で実clone境界とoffline verifyを接続し、CIと同じcheckを全実装完了前に実行する。
-2. **停止・再計画条件**: 利用者の現承認は文書作成・pushだけである。実装は新しい明示指示まで開始しない。
+2. **停止・再計画条件**: 2026-09-23の利用者指示で実装を明示承認済み。2026-09-24の「pushまでお願いします」でcommit / pushも承認済み。
+   PR作成・change closeは今回のpush対象に含めず、task 8を未完了のまま保持する。
    実装時の仕様判断、material expansion、review / infrastructure blockerはAGENTS.mdのOSWF-5とworkflowに従い、
    完了済みcheckboxを保持して停止する。未実行・失敗を完了へ読み替えない。
 3. **一時artifact cleanup**: fixture clone、故障注入用file、raw logはrepository外またはgitignore済み領域だけに置く。
@@ -13,7 +14,7 @@
 
 ## Tasks
 
-以下は将来の実装計画である。今回の文書作成で完了させない。
+以下の実装計画を、文書確定commit `162817688839c940a4b6ac8e30793bc0d6b35d62` から実行する。
 一体のchangeを同じexecutorが順次実行し、追加の実装executorは割り当てない。
 独立review / verifierはOSWF-5に従う。
 
@@ -29,8 +30,15 @@
   - `repo-tools/skill-updater/metadata.ts`
   - `repo-tools/skill-updater-v2-foundation.test.ts`
   - `repo-tools/fixtures/skill-updater`
-- [ ] 実装: v2モデルを独立moduleに追加しV1 / V2の純粋変換testsを作る。既存v1 CLI / 配布物はまだ切り替えず、task 2の通常checkを維持する。
-- [ ] 検証: 既存 `task check` baseline、v2 decode / serialize・tree-v1 golden・境界・重複負例と、R2のremote / local共通SKILL.md構造・identity互換をfocused実行する。
+- [x] 実装: v2モデルを独立moduleに追加しV1 / V2の純粋変換testsを作る。既存v1 CLI / 配布物はまだ切り替えず、task 2の通常checkを維持する。
+- [x] 検証: 既存 `task check` baseline、v2 decode / serialize・tree-v1 golden・境界・重複負例と、R2のremote / local共通SKILL.md構造・identity互換をfocused実行する。
+
+- 実装cycle証跡（2026-09-23、source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + 作業差分、すべてfresh実行）:
+  - preflight: active change 1件、必須文書、96分類判断、8依存順task、対象pathを確認。開始時はclean。利用者承認で見出しを修正しsafe boundaryを通過した。
+  - runtime: Node.js 24.14.1 / Python 3.14.6。`uv sync --locked`、`npm ci --ignore-scripts` 成功。各checkで `.venv/bin` とNode 24をPATH先頭に置いた。
+  - `task check` baseline: exit 0（Node 160 / Python 175 tests）。初回はPATH上のPython 3.10で失敗。PATH修正後の実行には作成中testが混入したため、testを一時退避して実装前入力で再実行した結果だけをbaselineとした。
+  - `node --test repo-tools/skill-updater-v2-foundation.test.ts repo-tools/skill-updater-foundation.test.ts`: 50 tests成功。新interface欠落のREDを確認後に実装した。
+  - `npm run typecheck`、`git diff --check`: 成功。v1 CLI・配布metadata・旧transactionは維持。新挙動全体の成功証跡には使用しない。
 
 ### 2. 隔離書込みのvertical slice
 
@@ -42,8 +50,15 @@
   - `repo-tools/skill-updater/apply.ts`
   - `repo-tools/skill-updater-isolation.test.ts`
   - `repo-tools/skill-updater-repository.test.ts`
-- [ ] 実装: R6境界をfixtureの実cloneで接続する。旧transactionはこの時点で撤去しない。
-- [ ] 検証: V6のsource不変・共有領域拒否・途中失敗 / kill・新clone再実行（WSLはLinux filesystem、mount条件を記録）と、最初のCI parity `task check` を実行する。
+- [x] 実装: R6境界をfixtureの実cloneで接続する。旧transactionはこの時点で撤去しない。
+- [x] 検証: V6のsource不変・共有領域拒否・途中失敗 / kill・新clone再実行（WSLはLinux filesystem、mount条件を記録）と、最初のCI parity `task check` を実行する。
+
+- 実装cycle証跡（source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + task 1–2差分、fresh実行）:
+  - `node --test repo-tools/skill-updater-isolation.test.ts`: 23 tests成功。実clone、元のdirty / staged / untrackedとGit metadata不変、共有 / 包含 / linked worktree / alternates / hardlink / symlink / HEAD / ignored衝突、直前変化を検証。
+  - metadataとremote本文の書込み中のEIO / ENOSPC相当注入・実SIGKILLで元snapshot不変、新clone再実行成功を確認。部分候補のoffline verifyが成功しても操作失敗のままとなる反例を確認。
+  - 最初の環境依存vertical sliceで `task check`: exit 0（Node 198 / Python 175 tests）。既存v1 CLI / 配布物、旧transactionは維持した状態で実行。
+  - `npm run typecheck`、`git diff --check`: 成功。Ubuntu 22.04.5 LTS / WSL2 kernel 5.15.167.4-microsoft-standard-WSL2。source / candidate / 各 `.git` は `/tmp` 配下の実directory。`findmnt -T /tmp` は `/ ext4 rw,relatime,discard,errors=remount-ro,data=ordered`。repository作業領域も同じext4。Windows / DrvFSは未検証・保証対象外。
+  - V6隔離実証を完了。transaction撤去はtask 5まで行わない。非WSLのUbuntu実機は未検証。
 
 ### 3. branch / commit / tag取得とrepin
 
@@ -56,8 +71,13 @@
   - `repo-tools/skill-updater-github.test.ts`
   - `repo-tools/skill-updater-planner.test.ts`
   - `repo-tools/skill-updater-remote-command.test.ts`
-- [ ] 実装: R3 / R4を接続し、SemVer範囲探索を通常経路から外す。
-- [ ] 検証: V3 / V4、事前拒否時blob呼出0、通常updateのpolicy / mapping変更拒否、指名repinの旧lock / 新source別検証・同commit legal変更、SKILL.md構造・identity拒否、実公開GitHubの固定commit read-only取得を実行する。
+- [x] 実装: R3 / R4を接続し、SemVer範囲探索を通常経路から外す。
+- [x] 検証: V3 / V4、事前拒否時blob呼出0、通常updateのpolicy / mapping変更拒否、指名repinの旧lock / 新source別検証・同commit legal変更、SKILL.md構造・identity拒否、実公開GitHubの固定commit read-only取得を実行する。
+
+- 実装cycle証跡（2026-09-24、source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + 作業差分、fresh実行）:
+  - `node --test repo-tools/skill-updater-github.test.ts repo-tools/skill-updater-planner.test.ts`: 62 tests成功。タグ二重固定・連鎖上限・循環・削除 / 移動・承認SHA・取得中ref変更、履歴、metadata N / N+1、blob前衝突拒否、取得後構造拒否、同commitの5種policy / mapping変更を確認。
+  - `npm run typecheck`、`git diff --check`: 成功。v2経路にSemVer探索なし。公開CLI切替までは既存v1経路を維持する。
+  - Node 24の `node --input-type=module` で `createGhRunner` → `planRemoteMaintenance` → `preflightIsolation` / `applyCandidate` → `verifyV2Repository` の公開GitHub probeを実行。`juliusbrussee/caveman` commit `0d95a81d35a9f2d123a5e9430d1cfc43d55f1bb0` をread-only取得し、tree API 1回 / blob API 3回、候補3 files、最終offline verify成功。fixture cloneは成功後cleanupした。
 
 ### 4. local化とv1専用移行
 
@@ -69,8 +89,13 @@
   - `repo-tools/skill-updater-migration.test.ts`
   - `repo-tools/skill-updater-ownership.test.ts`
   - `repo-tools/fixtures/skill-updater`
-- [ ] 実装: R5 / R7を実装し、旧decoderを通常CLIから分離する。
-- [ ] 検証: V5 / V7、network呼出0、全本文 / mode / commit / legal保持、混在 / 欠損 / 未指定編集 / SKILL.md構造・identity不正の拒否を実行する。
+- [x] 実装: R5 / R7を実装し、旧decoderを通常CLIから分離する。
+- [x] 検証: V5 / V7、network呼出0、全本文 / mode / commit / legal保持、混在 / 欠損 / 未指定編集 / SKILL.md構造・identity不正の拒否を実行する。
+
+- 実装cycle証跡（2026-09-24、source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + 作業差分、fresh実行）:
+  - `node --test repo-tools/skill-updater-migration.test.ts repo-tools/skill-updater-ownership.test.ts repo-tools/skill-updater-v2-foundation.test.ts`: 34 tests成功。HTTP / HTTPS / ALL_PROXYを到達不能なlocalhostへ固定して再実行。移行経路はGit snapshotだけを読み、GitHub runnerを呼ばない。
+  - v1 branch / commit / SemVer / local / plugin fixtureを実cloneへ移行し、全本文bytes / 実行bit・固定commit・legal保持、編集local / 指名localize、v2無変更、混在 / 欠損 / 重複 / 未知名 / policy / legal / 構造不正の拒否を確認。
+  - `npm run typecheck`、`git diff --check`: 成功。v1 decoderと純粋変換をmigration配下へ分離。現行v1 CLIの撤去・v2公開接続は依存順どおりtask 5で行う。
 
 ### 5. 公開操作への統合と不要責務の撤去
 
@@ -84,8 +109,14 @@
   - `scripts/setup-skills.sh`
   - `tests/test_setup_skills.py`
   - `Taskfile.yml`
-- [ ] 実装: interfaces.mdの隔離更新preview / apply / JSON / exitとlinksの直接修復・全対象衝突 / 親path検査を実装し、V6の成功証拠を確認してから不要処理を撤去する。
-- [ ] 検証: V8、legacy route拒否、隔離更新のsource直接書込み拒否、linksの現在checkout修復・冪等性・衝突時書込み0、部分失敗の全体失敗、typecheck / focused testsを実行する。
+- [x] 実装: interfaces.mdの隔離更新preview / apply / JSON / exitとlinksの直接修復・全対象衝突 / 親path検査を実装し、V6の成功証拠を確認してから不要処理を撤去する。
+- [x] 検証: V8、legacy route拒否、隔離更新のsource直接書込み拒否、linksの現在checkout修復・冪等性・衝突時書込み0、部分失敗の全体失敗、typecheck / focused testsを実行する。
+
+- 実装cycle証跡（2026-09-24、source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + 作業差分、fresh実行）:
+  - `node --test repo-tools/skill-updater-*.test.ts`: 180 tests成功。CLI v2 JSON / exit、preview書込み0、独立候補apply、指名repin / adopt-local / migrate、後続cohort失敗の全体失敗、links冪等・全対象事前拒否・途中I/O失敗再実行を確認。
+  - `uv run --no-sync pytest tests/test_setup_skills.py -q --no-cov`: 11 tests成功。bootstrapの親symlink逸脱も全書込み前に拒否。
+  - `npm run typecheck`、末尾空行修正後の `git diff --check`: 成功。候補indexのassume-unchanged / skip-worktreeでdirty判定を迂回するREDを固定し、事前拒否を追加。
+  - task 2のV6成功証跡を確認した後、transaction / rollback / observation journal・local-lock更新・SemVer探索を撤去。旧decoderとSemVer構文検証はmigrationだけに残す。配布metadataと通常contractはtask 6で移行する。
 
 ### 6. 配布物・CI・利用文書の一体移行
 
@@ -96,15 +127,25 @@
   - `.claude/skills`
   - `.codex/skills`
   - `repo-tools/repository-contracts.ts`
+  - `repo-tools/repository-contracts.test.ts`
   - `repo-tools/skill-updater-migration.test.ts`
   - `.github/workflows/ci.yml`
   - `Taskfile.yml`
   - `README.md`
+  - `docs/guide.md`
   - `docs/agents/workflow.md`
   - `docs/template`
   - `tests/test_setup_skills.py`
-- [ ] 実装: 旧配布物を専用移行で変換し、必要なCI / contract / 文書参照だけを更新する。Skill選別やhost integrationを追加しない。
-- [ ] 検証: offline verify、通常check / rename smokeの整合、Ubuntu / WSL Ubuntu（Linux filesystem上のsource・candidate・Git metadata、mount条件を記録）の標準手順、失敗候補のPR手順停止を確認する。
+- [x] 実装: 旧配布物を専用移行で変換し、必要なCI / contract / 文書参照だけを更新する。Skill選別やhost integrationを追加しない。
+- [x] 検証: offline verify、通常check / rename smokeの整合、Ubuntu / WSL Ubuntu（Linux filesystem上のsource・candidate・Git metadata、mount条件を記録）の標準手順、失敗候補のPR手順停止を確認する。
+
+- 実装cycle証跡（2026-09-24、source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + 作業差分、fresh実行）:
+  - 配布metadataを、旧HEADから作った独立source / candidateで新CLIの `skills:migrate --apply` により変換し、検証済みmetadataだけを作業treeへ反映した。Skill本文・mode・linkは保持。12宣言、remote lock 8件。専用fixture以外の旧履歴依存を通常CIから除去した。
+  - `node --test repo-tools/skill-updater-migration.test.ts repo-tools/skill-updater-remote-command.test.ts`: 21 tests成功。配布v2、失敗操作がcandidateのoffline成功にかかわらず後続PR段階へ進まないshell seamを確認。
+  - `task check`: exit 0（Node 231 / Python 176）。統合時に未知の全体CLI commandのexitを2から1へ変えていた逸脱を既存testで検出。全体CLIのexit 2を保持し、Skill操作内の引数エラーはexit 1とした。新testの誤った期待値も修正した。
+  - Ubuntu: `ssh volt`、Ubuntu 22.04.5 LTS、kernel 5.15.0-187-generic。source / candidate / `.git`は専用 `/tmp` directory、`findmnt -T /tmp` は `/ ext4 rw,relatime`。Node 24.14.1 / Python 3.14.6とlocked依存を専用一時環境に用意した。
+  - WSL: Ubuntu 22.04.5 LTS、kernel 5.15.167.4-microsoft-standard-WSL2、専用 `/tmp` directory、mountはtask 2と同じext4条件。両環境で最新作業差分を一時fixture commitへ固定して `git clone --no-local` → `uv sync --locked` → `npm ci --ignore-scripts` → `skills:adopt-local` preview / apply（caveman）→ `skills:verify` → `task check` → `rename-package.py ci_rename_smoke --apply` → `task check` が成功。各checkはNode 231 / Python 176 tests。sourceはcleanのまま、候補だけ変更された。
+  - `.github/workflows/ci.yml`は既にNode 24 / Python 3.14・locked依存・共有check / rename smokeを満たし、変更不要。`git diff --check`成功。実GitHub push / PRは実行していない。
 
 ### 7. change全体のreviewと検証
 
@@ -117,8 +158,27 @@
   - `.github/workflows/ci.yml`
   - `docs`
   - `openspec/changes/simplify-skill-ownership-and-lock`
-- [ ] 実装: self-review、OSWF-5のinitial independent review、必要なfinding修正を実施する。
-- [ ] 検証: focused validation、最新入力の `task check`、`task check:isolated`、strict OpenSpec検証、`task openspec:validate`、別agentのindependent verifierを成功させる。
+- [x] 実装: self-review、OSWF-5のinitial independent review、必要なfinding修正を実施する。
+- [x] 検証: focused validation、最新入力の `task check`、`task check:isolated`、strict OpenSpec検証、`task openspec:validate`、別agentのindependent verifierを成功させる。
+
+- self-review（2026-09-24、同じsource commit + 作業差分）:
+  - 公開操作、純粋モデル、隔離・migration、配布物と文書、96分類判断のV1–V8対応を照合した。
+  - 明白な5件をREDから修正: repinの人間向け承認 / 観測SHA表示欠落、宣言0件のv1 migration無変更誤判定、snapshot / legal追加先のdirectory depth・entry上限検査欠落、verification enumのarray型受理、未宣言Skill symlinkのsnapshot検出漏れ。migrationの変更一覧とlinks名のUTF-8順序も整合させた。
+  - `node --test repo-tools/skill-updater-*.test.ts`: 189 tests成功。`npm run typecheck`、`git diff --check`成功（fresh）。initial independent reviewはこの修正後の入力で実施する。
+
+- initial independent review: 2件のblocker（cohort後半のsubtree / root SKILL.md欠落時に先行blob取得が起きる、local legalのGit pathspecがwildcardを解釈する）を再現。
+- iteration 1: metadata preflightへ欠落検査を移し、tracked legalを `--literal-pathspecs` とNUL区切り完全一致へ固定。3 REDを確認後に修正し、`node --test repo-tools/skill-updater-github.test.ts repo-tools/skill-updater-repository.test.ts` は58 tests成功、typecheck / diff whitespace成功。
+- 同initial reviewerのdiff review: PASS。指摘2件解消、新規blockerなし。58 testsをreviewerもfresh実行した。追加executorは起動していない。
+
+- review収束後のproject checks（2026-09-24、source commit `162817688839c940a4b6ac8e30793bc0d6b35d62` + 最新作業差分、全てfresh）:
+  - `task check`、`task check:isolated`: 両方exit 0、各Node 241 / Python 176 tests成功。後者は空HOME・OpenSpec / npxなし・到達不能proxy・UV_OFFLINE=1で実行。
+  - `openspec validate simplify-skill-ownership-and-lock --strict --no-interactive`、`task openspec:validate`: 成功（1 change、失敗0）。`git diff --check`成功。
+  - 修正済み最新実装を新しい一時sourceへ固定し、Ubuntu voltとWSLの両環境で独立clone → locked依存 → cavemanのadopt-local preview / apply → offline verify → `task check` → rename apply → `task check` をfresh再実行。両環境の両checkともNode 241 / Python 176、標準手順とrename成功、source clean保持。mount / runtime条件はtask 6と同じ。
+  - 初期reviewerとは別のindependent verifierは次の段階。Windows / DrvFSは保証対象外。実GitHubへのwriteは実施していない。
+
+- initial reviewerとは別のindependent verifier: PASS、blockerなし。R1–R8 / 96分類判断 / V1–V8を実装・恒久文書・証跡と照合した。
+  - verifier fresh実行: Skill tests 192 / 192、setup-skills Python tests 11 / 11、実CLI `skills:verify --json` unchanged / exit 0、strict OpenSpec validate / diff whitespace成功。
+  - `task check` / `task check:isolated`は、実行後にsource / tests / dependencies / lockfile / CI / fixturesが無変更でtasks証跡追記のみであることを確認し、各Node 241 / Python 176のgreen evidenceを再利用した。実GitHub固定commit取得と両OS手順はtasks証跡を確認し、verifier自身の再実行とはしていない。
 
 ### 8. 完了確認とpre-merge close
 
@@ -129,6 +189,20 @@
   - `openspec/changes/simplify-skill-ownership-and-lock`
 - [ ] 実装: workflow所定のふりかえりを記録し、実装PRのmerge前にこのchangeをcloseする。
 - [ ] 検証: 全checkboxと受け入れ条件を確認し、close後の `task openspec:validate` と影響入力の必要checkを実行する。
+
+- 一時artifact cleanup: volt / WSLの専用fixture source・候補・持込みruntime・cacheを成功後に削除した。利用者repositoryのHEAD / index / branchは保持した。
+
+- 現在の再開位置（実装後）: task 1–7の14 checkboxを完了。task 8の2 checkboxは未完了。
+  実装・指定検証は完了し、残るのはPR番号付きふりかえりと最終commitでのclose、close後gateである。
+  `gh pr view docs/issue-76-skill-ownership-lock --json number,url,state,headRefName` はPRなしを返した。
+- 2026-09-24の利用者指示「pushまでお願いします」に基づき、検証済み実装と本証跡をcommitし、
+  `origin`の `docs/issue-76-skill-ownership-lock` へ通常pushする。PR作成・change close・mergeは実行しない。
+  commit前に累積ownership snapshotの53 pathsと全digestの一致を確認し、未記録の利用者差分がないことを確認した。
+  snapshotは実装commitへ取り込むため撤去した。再開時はHEADとremote branchの一致、working treeの状態を確認する。
+  source / tests / dependencies / CI / fixturesはindependent verifier完了後に変更せず、今回の追加差分はこの再開記録だけである。
+- task 8を再開する場合はPR作成の明示依頼を受け、実PR番号でふりかえりを記録する。
+  欠陥件数はself-review=5 / review=2 / CI=1 / merge後=0、計8。規約どおりchangeを最終commitでcloseし、
+  active change 0のgateと影響するchecksを実行する。実PR、close後gateは未実行。Windows / DrvFSは保証対象外。
 
 ## 初回文書作成時の証跡（74ae330）
 

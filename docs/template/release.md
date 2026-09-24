@@ -64,7 +64,7 @@ Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する
 task check
 task openspec:validate
 ls -A openspec/changes/   # .gitkeep のみであること
-task skills:check         # 陳腐化点検（乖離の対応要否は人判断・据え置き可）
+task skills:check -- --source "$PWD" --base "$(git rev-parse HEAD)"  # commit済みsnapshotの陳腐化点検
 ```
 
 加えて、extras の導入手順検証線 `extras-smoke.yml`（workflow_dispatch 専用・

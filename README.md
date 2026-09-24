@@ -53,8 +53,8 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task doctor` | 環境診断（`-- --online` で到達性 / `-- --github` で gh 文脈 opt-in） |
 | `task rename -- <module> [--apply]` | パッケージ改名 |
 | `task skills:links` / `task skills:verify` | skill symlink 再生成 / offline 整合検証 |
-| `task skills:check` / `task skills:update` | remote 更新確認 / preview（`-- --apply` で適用） |
-| `task skills:lock-local` | first-party skill lock preview（`-- --apply` で適用） |
+| `task skills:check` / `task skills:update` | `--source` / `--base` を指定して上流確認。updateは `--candidate` 必須、`--apply` で適用 |
+| `task skills:repin` / `task skills:adopt-local` / `task skills:migrate` | 指名再固定 / 本文保持local化 / v1→v2移行（独立候補clone必須） |
 | `task mcp:setup` | `.mcp.json` / `.codex/config.toml` を `.env` から生成 |
 | `task audit:node` | `npm audit --audit-level=high` を明示的にオンライン実行 |
 | `task security` | gitleaks（在席時）＋ pip-audit / bandit ゲート（CI audit ジョブと同一範囲） |
@@ -64,9 +64,10 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 
 ## Skillの手動更新
 
-同梱Skillはそのまま利用できる。上流確認は `task skills:check`、更新previewは
-`task skills:update`、適用は `task skills:update -- --apply`。隔離した作業コピーで
-更新と `task skills:verify` / `task check` を確認し、通常PRでレビューする。
+同梱Skillはそのまま利用できる。`task skills:links` は現在checkoutのlinkを修復し、
+`task skills:verify` はnetworkなしで検証する。local本文の内容lock更新は不要で、構造・identity・legal検証は維持する。
+上流更新は元repositoryと完全な開始commit、`git clone --no-local` で作った独立候補を指定する。
+[公開操作・隔離更新手順](docs/template/skill-maintenance.md)に従い、適用成功、offline検証、`task check`、差分レビュー後に通常PRへ進む。
 更新PR自動化の提供は終了した。既存の利用環境は先に
 [手動更新・自動化撤去の手順](docs/guide.md#7-skillの手動更新と旧自動化の撤去)に従って停止・棚卸しを行う。
 
