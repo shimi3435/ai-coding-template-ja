@@ -96,8 +96,8 @@ function integer(value: unknown, label: string): number {
 
 async function apiJson(runner: GhRunner, endpoint: string, paginate = false): Promise<unknown> {
   const args = paginate
-    ? ["api", "--method", "GET", "--paginate", "--slurp", endpoint]
-    : ["api", "--method", "GET", endpoint];
+    ? ["api", "--hostname", "github.com", "--method", "GET", "--paginate", "--slurp", endpoint]
+    : ["api", "--hostname", "github.com", "--method", "GET", endpoint];
   let result: GhRunnerResult;
   try {
     result = await runner(args);

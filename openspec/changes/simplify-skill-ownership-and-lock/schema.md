@@ -1,7 +1,7 @@
 # source / lock schema v2
 
-文書種別: データ仕様リファレンス。通常操作はschemaVersion 2だけを受理する。
-v1は [公開操作](skill-maintenance.md) のskills:migrateで一度だけ変換する。
+文書種別: データ仕様リファレンス。以下は実装予定のinterfaceであり、現行v1 fileをこの文書作成で変更しない。
+R1、R2、R5、R7の詳細を定義する。
 
 ## 文書と共通規則
 
@@ -12,8 +12,7 @@ remoteが0件ならlockのskillsは空配列でよい。sourceも空配列を許
 JSON object内の重複keyも拒否し、後勝ちで承認情報を解釈しない。
 
 nameは空でないNFCの単一路径要素で、ASCII case-foldによる衝突を拒否する。
-repositoryはgithub.com上の公開repositoryの `owner/name` とし、小文字へ正規化する。
-取得hostはgithub.comに固定し、GH_HOST等の外部環境によって変更しない。
+repositoryはgithub.com上の公開repositoryの `owner/name` とし、小文字へ正規化する。取得hostはgithub.comに固定し、host fieldは追加しない。
 targetは `.agents/skills/<name>` の完全一致を要求する。任意配置先は追加しない。
 pathは相対POSIX形式とし、絶対path、NUL、backslash、空segment、`.`、`..`、非NFCを拒否する。
 SHA-256は小文字64桁、Git SHAは小文字40桁とする。SHA-256 Git repositoryへの対応は対象外である。
@@ -57,7 +56,7 @@ tag refでは `tagObjectSha` も必須、移行由来では `legacyRef` を任�
 origin.legalMappingsは元の `{sourcePath, targetPath, expectedSha256}` を保持する。
 localのlegalMappingsはそのtargetPathを `.agents/skills/<name>/` からのrepository相対pathへ変換したものとする。
 originは元配布物の出典であり、local本文hash・現本文のverified状態・自動更新条件は持たせない。
-adopt-local / migrateの変換は外部由来originを削除しない。人がmetadataごと書き換える場合の出典保持はレビューの責務である。
+本changeの変換は外部由来originを削除しない。人がmetadataごと書き換える場合の出典保持はレビューの責務である。
 
 ### plugin
 
@@ -85,7 +84,7 @@ local / plugin entry、orphan entry、remote sourceに対応しないentryは拒
 source / lock / 実体の完全一致は、offline verifyと配布可能な最終状態の条件である。
 各文書の型・field・上限検査と、完成状態の対応検査を分離する。
 隔離更新操作（update / repin / adopt-local / migrate）は操作別の前提を検査し、最後に全体のoffline verifyを必須とする。
-update / repinで許可する中間状態は次のとおりである。linksはこの遷移を適用せず、[公開操作](skill-maintenance.md)のlink修復契約に従う。
+update / repinで許可する中間状態は次のとおりである。linksはこの遷移を適用せず、interfaces.mdのlink修復契約に従う。
 
 | 操作 | 許容する差分 | 適用前の検査 | 適用後の検査 |
 | --- | --- | --- | --- |
@@ -99,7 +98,7 @@ license変更とlegalMappingsの追加・削除・sourcePath / targetPath変更�
 通常updateの再承認は同じmappingのexpectedSha256変更だけであり、licenseやmapping構造の変更は拒否する。
 redistribution: allowedは変更前後とも必須とする。
 repinは指定名以外の欠落lockや出典・policy・legal変更を修復しない。複数の中間状態を無条件にまとめて承認しない。
-adopt-localが許容する本文差分とmigrateのv1入力は、[公開操作](skill-maintenance.md)で限定した別の前提であり、
+adopt-localが許容する本文差分とmigrateのv1入力は、それぞれR5 / R7で限定した別の前提であり、
 source / lock / legal不一致の一般的な許可ではない。
 
 ## canonical: skill-tree-v1
@@ -112,11 +111,3 @@ SHA-256への入力は、ASCII文字列 `skill-tree-v1` にNUL byte（0x00）を
 各fileのpath長（u64）、UTF-8 path、実行bit（1 byte: 0 / 1）、本文長（u64）、本文bytesの連結とする。
 本文の改行・Unicode・空白を正規化しない。modeは実行bitを検証し、所有者や全POSIX permissionの一致は保証しない。
 配置modeは非実行file 0644、実行file 0755とする。
-
-## 共通のSkill構造検証
-
-remote / localとも、rootの通常file `SKILL.md` を必須とする。UTF-8で復号でき、YAML frontmatterが
-mappingであり、nameが宣言名と一致し、descriptionが空白だけではない文字列でなければならない。
-重複keyとaliasを拒否する。BOM、CRLF、追加metadata key、nested SKILL.mdの併存は受理するが、
-nestedだけのSKILL.mdではroot要件を満たさない。取得、local化、移行でもこの検査を省略しない。
-local本文の編集はこの構造とlegalを保持する限り内容lock更新を要求しない。

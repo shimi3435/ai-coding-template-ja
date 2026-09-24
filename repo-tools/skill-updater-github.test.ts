@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import test from "node:test";
 import {
   observeRemoteCohort,
@@ -18,6 +19,45 @@ import {
   source,
   transcript,
 } from "./skill-updater-github-test-fixture.ts";
+
+test("GitHub acquisition pins every API request to github.com despite GH_HOST", () => {
+  const script = `
+    import assert from "node:assert/strict";
+    import { observeRemoteCohort } from ${JSON.stringify(new URL("./skill-updater/index.ts", import.meta.url).href)};
+    import { commit, source, transcript } from ${JSON.stringify(new URL("./skill-updater-github-test-fixture.ts", import.meta.url).href)};
+    assert.equal(process.env.GH_HOST, "enterprise.invalid");
+    const previous = "a".repeat(40);
+    const tag = "d".repeat(40);
+    const compare = "repos/owner/repo/compare/" + previous + "..." + commit;
+    const fake = transcript({
+      [compare]: { status: "ahead" },
+      "repos/owner/repo/git/ref/tags/v1": { object: { type: "tag", sha: tag } },
+      ["repos/owner/repo/git/tags/" + tag]: { sha: tag, object: { type: "commit", sha: commit } },
+    });
+    const { legalMappings, ...identity } = source();
+    const lock = {
+      ...identity, resolvedCommit: previous, verification: "unknown",
+      treeHash: "0".repeat(64), fileCount: 2, byteCount: 100,
+      legalFiles: legalMappings.map(({ expectedSha256, ...mapping }) => ({ ...mapping, sha256: expectedSha256 })),
+    };
+    for (const ref of [{ branch: "main" }, { tag: "v1" }, { commit }]) {
+      const result = await observeRemoteCohort([source(ref)], "branch" in ref ? [lock] : [], fake.runner);
+      assert.equal(result.resolvedCommit, commit);
+      assert.equal(result.entries[0].tree.fileCount, 2);
+    }
+    for (const endpoint of ["repos/owner/repo", compare, "repos/owner/repo/git/ref/heads/main",
+      "repos/owner/repo/git/ref/tags/v1", "repos/owner/repo/git/tags/" + tag,
+      "repos/owner/repo/commits/" + commit, "repos/owner/repo/git/trees/" + commit + "?recursive=1"]) {
+      assert.ok(fake.calls.includes(endpoint), endpoint);
+    }
+    assert.equal(fake.calls.filter((endpoint) => endpoint.includes("/git/blobs/")).length, 6);
+  `;
+  execFileSync(process.execPath, ["--input-type=module", "--eval", script], {
+    env: { ...process.env, GH_HOST: "enterprise.invalid" },
+    timeout: 30_000,
+    stdio: "pipe",
+  });
+});
 
 test("GitHub observation resolves one immutable public cohort without executing fetched files", async () => {
   const fake = transcript();

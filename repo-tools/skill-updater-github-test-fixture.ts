@@ -76,6 +76,9 @@ export function transcript(overrides: Record<string, unknown> = {}): {
   };
   const calls: string[] = [];
   const runner: GhRunner = async (args) => {
+    assert.equal(args[0], "api");
+    assert.equal(args.filter((argument) => argument === "--hostname").length, 1);
+    assert.equal(args[args.indexOf("--hostname") + 1], "github.com");
     const endpoint = args.find((argument) => argument.startsWith("repos/"));
     assert.ok(endpoint, `endpoint missing: ${args.join(" ")}`);
     calls.push(endpoint);

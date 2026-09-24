@@ -1,6 +1,7 @@
 # 公開操作と手順
 
-文書種別: 公開interfaceリファレンス／ランブック。metadataの正本は [schema v2](skill-metadata-v2.md)。
+文書種別: 公開interfaceリファレンス／実装後のランブック設計。
+以下の新引数・commandは**未実装**であり、現行CLIの使い方として実行しない。
 
 ## CLI
 
@@ -21,10 +22,10 @@ entrypointは `node repo-tools/entrypoint.mjs <command> [options]`。
 `skills:migrate` は通常v2 decoderと分離した移行処理だけを動的に読み込む。
 通常CLIは旧形式を受理・自動変換しない。
 
-### 共通入力
+remote取得はgithub.com上の公開repositoryだけを対象とする。全 `gh api` 呼出は
+`--hostname github.com` を明示し、GH_HOST等で取得先を切り替えない。
 
-remote取得はgithub.com上の公開repositoryだけを対象とする。全 `gh api` 呼出で
-`--hostname github.com` を明示し、GH_HOST等の既定host設定には依存しない。
+### 共通入力
 
 - verify: `--root <repository>`。省略時だけ現在repositoryを読む。
 - check: `--source <repository> --base <full-commit-sha>`。
@@ -38,7 +39,7 @@ remote取得はgithub.com上の公開repositoryだけを対象とする。全 `g
 - preview結果をapplyの恒久tokenとして保存しない。applyは入力と上流を再検証する。
   branch追跡のpreview後に新しいfast-forward commitが現れた場合、applyは新commitを検査して採用できる。
   厳密に同じcommitを承認したい場合はrepinの指定SHAを使う。
-- 隔離更新操作の書込み前に完成状態のverifyを一律適用しない。skill-metadata-v2.md「完成状態と操作前の中間状態」に従い、
+- 隔離更新操作の書込み前に完成状態のverifyを一律適用しない。schema.md「完成状態と操作前の中間状態」に従い、
   当該操作が許容する差分だけを検証する。適用後の全体verifyは必須である。
 
 ### repin
@@ -52,7 +53,7 @@ repinでその対象名と固定先を承認する。legalMappingsはhash変更�
 通常updateは同じmappingの承認hash変更だけを許し、licenseまたはmapping構造の変更は拒否する。
 tag削除後は別refまたはcommit固定へ明示的に切り替える。
 
-repinは旧固定先からの履歴連続性・旧tag同一性を要求せず、skill-metadata-v2.mdで限定した対象名の出典・legal policy遷移を許可する。
+repinは旧固定先からの履歴連続性・旧tag同一性を要求せず、schema.mdで限定した対象名の出典・legal policy遷移を許可する。
 承認SHAとの一致、旧本文・旧legalの旧lock一致、取得前上限、integrity、新sourceのlegal承認、配置先検査は必須とする。
 redistribution: allowedは維持する。lockの手編集は承認手順に含めない。
 新しいsubtreeとlegalMappingsから最終treeを構成し、旧mappingだけに由来する配置fileは引き継がない。
@@ -65,7 +66,7 @@ repinは名前指定したSkillだけを変更する。他のSkillの固定先�
 ### adopt-local / migrate
 
 adopt-localは `--name <remote-skill>` 必須。本文差分は明示切替で許容し、legal差分は許容しない。
-adopt-local / migrateとも[共通のSkill構造検証](skill-metadata-v2.md#共通のskill構造検証)を省略せず、不正なSKILL.mdを自動修復しない。
+adopt-local / migrateともR2のSkill構造・identity検証を省略せず、不正なSKILL.mdを自動修復しない。
 migrateは `--localize <remote-skill>` を複数回指定できるが、同名重複は拒否する。
 v2入力にlocalize指定を併用しない。v2のlocal化はadopt-localを使う。
 
@@ -101,7 +102,7 @@ repin / adopt-localの未知名は拒否し、migrateはremote 0件でも必要�
 同じcommitだけでは無変更と判定しない。linksはremote 0件でもlocalのlinkを検査・修復する。
 一つのcohortが失敗すれば操作全体をfailedとし、成功部分だけをPRへ進めない。
 
-## 隔離更新の実行順序
+## 隔離更新の手順書に実装する順序
 
 対象はupdate / repin / adopt-local / migrateである。linksの修復は現在checkoutで `task skills:links` を実行する。
 WSL Ubuntuでは元repository・候補clone・双方のGit metadataをLinux filesystemに置く。
@@ -120,43 +121,4 @@ WSL Ubuntuでは元repository・候補clone・双方のGit metadataをLinux file
 9. 失敗後に再実行する場合は新しい候補を作り、手順3からやり直す。破棄は利用者が対象pathを確認して行う。
 
 各段階は直前の成功を条件とする。失敗時に後続へ進む `;` 連結や、失敗を隠す `|| true` を
-手順書に用いない。candidateの存在や部分的なoffline成功だけを更新操作全体の成功証拠としない。
-
-### 実行例（Bash）
-
-以下をscriptとして保存し、独立した元repositoryの絶対path、新規候補の絶対path、操作名、
-操作固有引数を順に渡す。例えば `bash maintain.sh /path/source /path/new-candidate skills:update`。
-repinでは後ろに `--name <name> --commit <full-sha>` と必要なref承認値を渡す。
-元がlinked worktreeの場合は、まず `git clone --no-local` で独立した元repositoryを用意する。
-Node.js 24とPython >=3.14がPATHにあり、Taskとuvが利用できることを前提とする。
-
-```bash
-set -eu
-skill_source="$1"
-skill_candidate="$2"
-skill_operation="$3"
-shift 3
-skill_base="$(git -C "$skill_source" rev-parse HEAD)"
-test ! -e "$skill_candidate"
-git clone --no-local -- "$skill_source" "$skill_candidate"
-git -C "$skill_candidate" checkout --detach "$skill_base"
-cd "$skill_candidate"
-uv sync --locked
-npm ci --ignore-scripts
-export PATH="$skill_candidate/.venv/bin:$PATH"
-task "$skill_operation" -- --source "$skill_source" --base "$skill_base" --candidate "$skill_candidate" "$@"
-printf 'previewを確認し、applyする場合だけ APPLY を入力: '
-read -r skill_confirmation
-test "$skill_confirmation" = APPLY
-task "$skill_operation" -- --source "$skill_source" --base "$skill_base" --candidate "$skill_candidate" "$@" --apply
-task skills:verify
-task check
-git diff --check
-git diff --stat
-git diff
-```
-
-scriptがexit 0になった後も、差分の対象とlegalを人がレビューする。失敗時はそこで停止し、
-後続のcommit / push / PRを実行しない。成功後に通常branchを作り、検証済み差分をcommitする。
-`git remote -v` で確認してoriginを意図したGitHub repositoryへ変更してからpushし、通常のPRを作成する。
-公開先やbranch名をこのscriptで決めたり、認証情報を引数へ埋め込んだりしない。
+実装後の手順書に用いない。candidateの存在や部分的なoffline成功だけを更新操作全体の成功証拠としない。
