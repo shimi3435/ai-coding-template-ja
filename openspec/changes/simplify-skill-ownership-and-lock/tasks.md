@@ -5,7 +5,7 @@
 1. **最初のCI parity**: Node.js 24 / npmとPython >=3.14、locked依存で現行 `task check` を確認する。
    最初の環境依存vertical slice（task 2）で実clone境界とoffline verifyを接続し、CIと同じcheckを全実装完了前に実行する。
 2. **停止・再計画条件**: 2026-09-23の利用者指示で実装を明示承認済み。2026-09-24の「pushまでお願いします」でcommit / pushも承認済み。
-   PR作成・change closeは今回のpush対象に含めず、task 8を未完了のまま保持する。
+   2026-09-25のPR作成依頼により、PR #81とtask 8のpre-merge closeまで進める。mergeは実行しない。
    実装時の仕様判断、material expansion、review / infrastructure blockerはAGENTS.mdのOSWF-5とworkflowに従い、
    完了済みcheckboxを保持して停止する。未実行・失敗を完了へ読み替えない。
 3. **一時artifact cleanup**: fixture clone、故障注入用file、raw logはrepository外またはgitignore済み領域だけに置く。
@@ -187,22 +187,18 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/simplify-skill-ownership-and-lock`
-- [ ] 実装: workflow所定のふりかえりを記録し、実装PRのmerge前にこのchangeをcloseする。
-- [ ] 検証: 全checkboxと受け入れ条件を確認し、close後の `task openspec:validate` と影響入力の必要checkを実行する。
+- [x] 実装: workflow所定のふりかえりを記録し、実装PRのmerge前にこのchangeをcloseする。
+- [x] 検証: 全checkboxと受け入れ条件を確認し、close後の `task openspec:validate` と影響入力の必要checkを実行する。
 
 - 一時artifact cleanup: volt / WSLの専用fixture source・候補・持込みruntime・cacheを成功後に削除した。利用者repositoryのHEAD / index / branchは保持した。
 
-- 現在の再開位置（実装後）: task 1–7の14 checkboxを完了。task 8の2 checkboxは未完了。
-  実装・指定検証は完了し、残るのはPR番号付きふりかえりと最終commitでのclose、close後gateである。
-  `gh pr view docs/issue-76-skill-ownership-lock --json number,url,state,headRefName` はPRなしを返した。
-- 2026-09-24の利用者指示「pushまでお願いします」に基づき、検証済み実装と本証跡をcommitし、
-  `origin`の `docs/issue-76-skill-ownership-lock` へ通常pushする。PR作成・change close・mergeは実行しない。
-  commit前に累積ownership snapshotの53 pathsと全digestの一致を確認し、未記録の利用者差分がないことを確認した。
-  snapshotは実装commitへ取り込むため撤去した。再開時はHEADとremote branchの一致、working treeの状態を確認する。
-  source / tests / dependencies / CI / fixturesはindependent verifier完了後に変更せず、今回の追加差分はこの再開記録だけである。
-- task 8を再開する場合はPR作成の明示依頼を受け、実PR番号でふりかえりを記録する。
-  欠陥件数はself-review=5 / review=2 / CI=1 / merge後=0、計8。規約どおりchangeを最終commitでcloseし、
-  active change 0のgateと影響するchecksを実行する。実PR、close後gateは未実行。Windows / DrvFSは保証対象外。
+- 完了証跡（2026-09-25、source commit `3fa68d6e957350b424bd97f380cc87c812e45967` + ふりかえり / close差分、fresh実行）:
+  - 利用者のPR作成依頼に従い、PR #81を作成した。mainへのmergeは実施していない。
+  - close前のstrict target validateと `task openspec:validate` は成功。task 1–7、独立review / verifier、全受け入れ条件の証跡を確認した。
+  - `docs/template/retrospectives.md`へPR #81と逃した欠陥8件（self-review=5 / review=2 / CI=1 / merge後=0）を記録した。
+  - change directoryをactive treeから除去した状態で `task openspec:validate` はactive change 0 / exit 0、`task check` はNode 241 / Python 176 tests成功、`git diff --check`成功。
+  - 全16 checkboxを完了したこの証跡をbranch履歴に保存した後、最終commitで同じchange directoryを除去する。close後に変わる通常check入力はなく、同じ削除状態のgreen evidenceを再利用できる。実装 / tests / dependency / CIに追加変更はない。
+  - Windows / DrvFSは保証対象外。PRのmergeとGitHub側のCI結果は、このローカル検証成功に含めない。
 
 ## 初回文書作成時の証跡（74ae330）
 
