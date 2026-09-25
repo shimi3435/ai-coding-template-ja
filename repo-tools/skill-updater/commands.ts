@@ -1,406 +1,88 @@
-import { spawnSync } from "node:child_process";
-import { buildLocalLockPlan, buildRemoteUpdatePlan, classifyRemoteCohort, cohortKey, type RemotePlanStep, type RemoteUpdatePlan } from "./planner.ts";
-import { createGhRunner, observeRemoteCohort, type GhRunner, type RemoteCohortObservation } from "./github.ts";
-import { applyLocalLockPlan, applyRemoteUpdatePlan, RemoteRefreshFailure } from "./transaction.ts";
-import {
-  readInstalledTree,
-  readLocalObservations,
-  readRepositorySkillState,
-  readVendoredSkillNames,
-  verifyInstalledState,
-  type RepositorySkillState,
-} from "./repository.ts";
-import { sameSourceRefVariant } from "./types.ts";
-import { utf8Compare } from "./canonical.ts";
-import type { RemoteLock, RemoteSource } from "./types.ts";
-
-export type SkillCommandName = "skills:links" | "skills:verify" | "skills:check" | "skills:update" | "skills:lock-local";
-export type MachineStatus =
-  | "up-to-date" | "update-available" | "no-content-change" | "applied" | "unchanged"
-  | "rolled-back" | "failed" | "unknown" | "not-attempted";
-
-export type CohortReport = Readonly<{
-  key: string;
-  status: MachineStatus;
-  names: readonly string[];
-  resolvedCommit?: string;
-  diff?: readonly Readonly<{ name: string; beforeTreeHash: string | null; afterTreeHash: string }>[];
-  expectedBeforeLockDigest?: string;
-  candidateAfterLockDigest?: string;
-  candidateAfterLock?: unknown;
-}>;
-
-export type CommandReport = Readonly<{
-  schemaVersion: 1;
-  command: SkillCommandName;
-  status: MachineStatus;
-  cohorts: readonly CohortReport[];
-  warnings: readonly string[];
-  errors: readonly string[];
-  exitCode: 0 | 1 | 3;
-}>;
-
-export type SkillCommandResult = Readonly<{
-  exitCode: 0 | 1 | 3;
-  stdout: string;
-  stderr: string;
-  report: CommandReport;
-}>;
-
-export type SkillCommandContext = Readonly<{
-  repositoryRoot: string;
-  ghRunner?: GhRunner;
-}>;
-
-function report(
-  command: SkillCommandName,
-  status: MachineStatus,
-  cohorts: CommandReport["cohorts"],
-  warnings: readonly string[],
-  errors: readonly string[],
-  exitCode: 0 | 1 | 3,
-): CommandReport {
-  return {
-    schemaVersion: 1,
-    command,
-    status,
-    cohorts: [...cohorts]
-      .map((cohort) => ({ ...cohort, names: [...cohort.names].sort(utf8Compare) }))
-      .sort((left, right) => utf8Compare(left.key, right.key)),
-    warnings: [...warnings].sort(utf8Compare),
-    errors: [...errors].sort(utf8Compare),
-    exitCode,
-  };
-}
-
-function render(result: CommandReport, json: boolean): SkillCommandResult {
-  if (json) return { exitCode: result.exitCode, stdout: `${JSON.stringify(result)}\n`, stderr: "", report: result };
-  const lines = [
-    `[${result.status}] ${result.command}`,
-    ...result.cohorts.flatMap((cohort) => [
-      `[${cohort.status}] ${cohort.key}: ${cohort.names.join(", ")}`,
-      ...(cohort.resolvedCommit === undefined ? [] : [`  commit: ${cohort.resolvedCommit}`]),
-      ...(cohort.diff === undefined ? [] : cohort.diff.map((item) =>
-        `  diff: ${item.name} ${item.beforeTreeHash ?? "absent"} -> ${item.afterTreeHash}`)),
-      ...(cohort.expectedBeforeLockDigest === undefined ? [] : [`  expected-before-lock: ${cohort.expectedBeforeLockDigest}`]),
-      ...(cohort.candidateAfterLockDigest === undefined ? [] : [`  candidate-after-lock: ${cohort.candidateAfterLockDigest}`]),
-      ...(cohort.candidateAfterLock === undefined ? [] : [`  planned-lock: ${JSON.stringify(cohort.candidateAfterLock)}`]),
-    ]),
-    ...result.warnings.map((warning) => `[WARN] ${warning}`),
-  ];
-  const stderr = result.errors.map((error) => `[FAIL] ${error}`).join("\n");
-  return {
-    exitCode: result.exitCode,
-    stdout: `${lines.join("\n")}\n`,
-    stderr: stderr.length === 0 ? "" : `${stderr}\n`,
-    report: result,
-  };
-}
-
-function planCohort(step: RemotePlanStep, status: MachineStatus = step.status): CohortReport {
-  return {
-    key: step.key,
-    status,
-    names: step.names,
-    resolvedCommit: step.resolvedCommit,
-    diff: [...step.candidateTrees]
-      .map(([name, tree]) => ({
-        name,
-        beforeTreeHash: step.expectedTargetDigests.get(name) ?? null,
-        afterTreeHash: tree.treeHash,
-      }))
-      .sort((left, right) => utf8Compare(left.name, right.name)),
-    expectedBeforeLockDigest: step.expectedBeforeLockDigest,
-    candidateAfterLockDigest: step.candidateAfterLockDigest,
-    candidateAfterLock: JSON.parse(step.candidateAfterLockBytes) as unknown,
-  };
-}
-
-function parseOptions(command: SkillCommandName, args: readonly string[]): {
-  json: boolean;
-  apply: boolean;
-  failOnUpdate: boolean;
-} {
-  const allowed = new Set(["--json"]);
-  if (command === "skills:check") allowed.add("--fail-on-update");
-  if (command === "skills:update" || command === "skills:lock-local") allowed.add("--apply");
-  const unknown = args.filter((argument) => !allowed.has(argument));
-  if (unknown.length > 0 || new Set(args).size !== args.length) {
-    throw new Error(`unknown or conflicting options: ${unknown.join(", ") || args.join(", ")}`);
+import { resolve } from "node:path";
+import { createGhRunner, redactCredentialText, type GhRunner } from "./github.ts";
+import { preflightIsolation } from "./isolation.ts";
+import { applyCandidate } from "./apply.ts";
+import { readCommittedSnapshot, verifyRepository } from "./repository.ts";
+import { readSnapshotTrees, adoptLocal, verifySnapshotLinks } from "./ownership.ts";
+import { decodeSourcesJson, decodeLockJson, validateRefName } from "./schema.ts";
+import { planRemoteMaintenance, type MaintenanceChange, type MaintenancePlan } from "./planner.ts";
+import { repairLinks } from "./links.ts";
+export type SkillCommandName = "skills:verify"|"skills:links"|"skills:check"|"skills:update"|"skills:repin"|"skills:adopt-local"|"skills:migrate"|"skills:lock-local";
+export type CommandReport = Readonly<{schemaVersion:2;command:string;status:"unchanged"|"planned"|"applied"|"failed";changes:readonly MaintenanceChange[];warnings:readonly string[];errors:readonly string[]}>;
+export type SkillCommandContext = Readonly<{repositoryRoot:string;ghRunner?:GhRunner}>;
+export type SkillCommandResult = Readonly<{exitCode:number;stdout:string;stderr:string;report:CommandReport}>;
+function options(command:SkillCommandName,args:readonly string[]):Map<string,string[]> {
+  const common=["--json"];
+  const flags=new Set(["--json","--apply","--fail-on-update","--pin-commit"]);
+  const isolated=["skills:update","skills:repin","skills:adopt-local","skills:migrate"].includes(command);
+  const allowed=new Set([...common,...(command==="skills:verify"?["--root"]:[]),...(command==="skills:check"?["--source","--base","--fail-on-update"]:[]),...(isolated?["--source","--base","--candidate","--apply"]:[]),...(command==="skills:repin"?["--name","--commit","--branch","--tag","--pin-commit","--tag-object"]:[]),...(command==="skills:adopt-local"?["--name"]:[]),...(command==="skills:migrate"?["--localize"]:[])]);
+  const result=new Map<string,string[]>();
+  for(let i=0;i<args.length;i++) {
+    const key=args[i]!;
+    if(!allowed.has(key) || (result.has(key) && key!=="--localize"))throw new Error(`unknown or conflicting options: ${key}`);
+    const value=flags.has(key)?"true":args[++i];
+    if(!value || value.startsWith("--"))throw new Error(`引数値欠落: ${key}`);
+    result.set(key,[...(result.get(key)??[]),value]);
   }
-  return { json: args.includes("--json"), apply: args.includes("--apply"), failOnUpdate: args.includes("--fail-on-update") };
+  const required=[...(isolated?["--source","--base","--candidate"]:command==="skills:check"?["--source","--base"]:[]),...(command==="skills:repin"?["--name","--commit"]:command==="skills:adopt-local"?["--name"]:[])];
+  if(required.some(key=>!result.has(key)))throw new Error(`必須引数: ${required.join(" ")}`);
+  if(["--branch","--tag","--pin-commit"].filter(key=>result.has(key)).length>1)throw new Error("ref切替引数は相互排他です");
+  for(const key of ["--base","--commit","--tag-object"])if(result.has(key) && !/^[0-9a-f]{40}$/.test(result.get(key)![0]!))throw new Error(`${key}は完全SHAが必要です`);
+  return result;
 }
-
-function groupRemoteSources(sources: readonly RemoteSource[]): Map<string, RemoteSource[]> {
-  const groups = new Map<string, RemoteSource[]>();
-  for (const source of sources) {
-    const key = cohortKey(source.repository, source.ref);
-    groups.set(key, [...(groups.get(key) ?? []), source]);
-  }
-  return groups;
-}
-
-function historyLocksForGroup(group: readonly RemoteSource[], locks: readonly RemoteLock[]): readonly RemoteLock[] {
-  const byName = new Map(locks.map((lock) => [lock.name, lock]));
-  return group.flatMap((source) => {
-    const lock = byName.get(source.name);
-    if (lock === undefined) return [];
-    if (!sameSourceRefVariant(lock.ref, source.ref)) {
-      throw new Error(`ref variant変更はv1で自動移行できません: ${source.name}`);
-    }
-    if (lock.repository !== source.repository) return [];
-    return [lock];
-  });
-}
-
-type RemoteObservationCollection = Readonly<{
-  state: RepositorySkillState;
-  sources: readonly RemoteSource[];
-  locks: readonly RemoteLock[];
-  groups: ReadonlyMap<string, readonly RemoteSource[]>;
-  observations: readonly RemoteCohortObservation[];
-  errorByKey: ReadonlyMap<string, string>;
-}>;
-
-async function collectRemoteObservations(context: SkillCommandContext): Promise<RemoteObservationCollection> {
-  const state = readRepositorySkillState(context.repositoryRoot);
-  const sources = state.sources.skills.filter((entry) => entry.ownership === "remote");
-  const locks = state.lock.skills.filter((entry): entry is RemoteLock => entry.ownership === "remote");
-  const groups = groupRemoteSources(sources);
-  const runner = context.ghRunner ?? createGhRunner();
-  const observations: RemoteCohortObservation[] = [];
-  const errorByKey = new Map<string, string>();
-  for (const key of [...groups.keys()].sort(utf8Compare)) {
-    const group = groups.get(key)!;
-    try {
-      observations.push(await observeRemoteCohort(
-        group,
-        historyLocksForGroup(group, locks),
-        runner,
-      ));
-    } catch (error: unknown) {
-      errorByKey.set(key, error instanceof Error ? error.message : String(error));
-    }
-  }
-  return Object.freeze({ state, sources, locks, groups, observations, errorByKey });
-}
-
-type RemoteClassificationCollection = Readonly<{
-  installedTrees: ReadonlyMap<string, ReturnType<typeof readInstalledTree>>;
-  failure?: CommandReport;
-}>;
-
-function classifyRemoteCollection(
-  command: "skills:check" | "skills:update",
-  context: SkillCommandContext,
-  collection: RemoteObservationCollection,
-): RemoteClassificationCollection {
-  const observationByKey = new Map(collection.observations.map((observation) => [
-    cohortKey(observation.repository, observation.ref),
-    observation,
-  ]));
-  const installedTrees = new Map<string, ReturnType<typeof readInstalledTree>>();
-  const cohorts: CohortReport[] = [];
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  for (const key of [...collection.groups.keys()].sort(utf8Compare)) {
-    const group = collection.groups.get(key)!;
-    const observed = observationByKey.get(key);
-    const observationError = collection.errorByKey.get(key);
-    if (observationError !== undefined || observed === undefined) {
-      cohorts.push({ key, status: "failed", names: group.map((source) => source.name).sort(utf8Compare) });
-      errors.push(`${key}: ${observationError ?? "cohort observation欠落"}`);
-      continue;
-    }
-    try {
-      for (const source of group) {
-        const lock = collection.locks.find((entry) => entry.name === source.name);
-        if (lock !== undefined) installedTrees.set(source.name, readInstalledTree(context.repositoryRoot, lock.target, lock.name));
-      }
-      const classification = classifyRemoteCohort({
-        sources: group,
-        lock: collection.state.lock,
-        installedTrees,
-        observation: observed,
-      });
-      cohorts.push({
-        key,
-        status: classification.status,
-        names: group.map((source) => source.name).sort(utf8Compare),
-        resolvedCommit: observed.resolvedCommit,
-      });
-      warnings.push(...observed.warnings);
-    } catch (error: unknown) {
-      cohorts.push({ key, status: "failed", names: group.map((source) => source.name).sort(utf8Compare) });
-      errors.push(`${key}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  return errors.length === 0
-    ? { installedTrees }
-    : { installedTrees, failure: report(command, "failed", cohorts, warnings, errors, 1) };
-}
-
-function buildPlanFromRemoteObservations(
-  collection: RemoteObservationCollection,
-  installedTrees: ReadonlyMap<string, ReturnType<typeof readInstalledTree>>,
-): RemoteUpdatePlan {
-  return buildRemoteUpdatePlan({
-    sources: collection.state.sources,
-    sourcesBytes: collection.state.sourcesBytes,
-    lock: collection.state.lock,
-    initialLockBytes: collection.state.lockBytes,
-    installedTrees,
-    observations: collection.observations,
-  });
-}
-
-async function inspectRemote(
-  command: "skills:check" | "skills:update",
-  context: SkillCommandContext,
-  failOnUpdate: boolean,
-): Promise<CommandReport> {
-  const collection = await collectRemoteObservations(context);
-  const classification = classifyRemoteCollection(command, context, collection);
-  if (classification.failure !== undefined) return classification.failure;
-  const plan = buildPlanFromRemoteObservations(collection, classification.installedTrees);
-  const cohorts = plan.steps.map((step) => planCohort(step));
-  const hasUpdate = plan.steps.some((step) => step.status === "update-available");
-  const hasNoContent = plan.steps.some((step) => step.status === "no-content-change");
-  const status = hasUpdate ? "update-available" : hasNoContent ? "no-content-change" : "up-to-date";
-  return report(command, status, cohorts, plan.warnings, [], failOnUpdate && hasUpdate ? 3 : 0);
-}
-
-type RemotePlanPreparation = Readonly<{ plan?: RemoteUpdatePlan; failure?: CommandReport }>;
-
-async function createRemotePlan(context: SkillCommandContext): Promise<RemotePlanPreparation> {
-  const collection = await collectRemoteObservations(context);
-  const classification = classifyRemoteCollection("skills:update", context, collection);
-  if (classification.failure !== undefined) return { failure: classification.failure };
-  return { plan: buildPlanFromRemoteObservations(collection, classification.installedTrees) };
-}
-
-export async function runSkillCommand(
-  command: SkillCommandName,
-  args: readonly string[],
-  context: SkillCommandContext,
-): Promise<SkillCommandResult> {
-  let options: ReturnType<typeof parseOptions>;
+export async function runSkillCommand(command:SkillCommandName,args:readonly string[],context:SkillCommandContext):Promise<SkillCommandResult> {
+  let report:CommandReport={schemaVersion:2,command,status:"unchanged",changes:[],warnings:[],errors:[]};let exitCode=0;let approvalPreview="";
   try {
-    options = parseOptions(command, args);
-  } catch (error: unknown) {
-    const failure = report(command, "failed", [], [], [error instanceof Error ? error.message : String(error)], 1);
-    return render(failure, args.includes("--json"));
-  }
-  try {
-    if (command === "skills:links") {
-      const state = readRepositorySkillState(context.repositoryRoot);
-      const declared = state.sources.skills
-        .filter((entry) => entry.ownership !== "plugin")
-        .map((entry) => entry.name)
-        .sort(utf8Compare);
-      const installed = readVendoredSkillNames(context.repositoryRoot);
-      const declaredSet = new Set(declared);
-      const installedSet = new Set(installed);
-      const undeclared = installed.filter((name) => !declaredSet.has(name));
-      const missing = declared.filter((name) => !installedSet.has(name));
-      if (undeclared.length > 0 || missing.length > 0) {
-        throw new Error(`vendored skill declaration不一致: undeclared=${undeclared.join(",")} missing=${missing.join(",")}`);
-      }
-      if (declared.length === 0) {
-        return render(report(command, "unchanged", [], [], [], 0), options.json);
-      }
-      const executed = spawnSync("bash", ["scripts/setup-skills.sh", ...declared.flatMap((name) => ["--skill", name])], {
-        cwd: context.repositoryRoot,
-        encoding: "utf8",
-      });
-      if (executed.status !== 0) {
-        return render(report(command, "failed", [], [], [executed.stderr.trim() || `links exit ${String(executed.status)}`], 1), options.json);
-      }
-      const changed = !executed.stdout.includes("変更なし");
-      const cohorts = state.sources.skills.filter((source) => source.ownership !== "plugin").map((source) => ({
-        key: `${source.name}|${source.ownership}`,
-        status: (changed ? "applied" : "unchanged") as MachineStatus,
-        names: [source.target],
-      }));
-      return render(report(command, changed ? "applied" : "unchanged", cohorts, [], [], 0), options.json);
-    }
-    if (command === "skills:verify") {
-      const state = readRepositorySkillState(context.repositoryRoot);
-      const errors = verifyInstalledState(context.repositoryRoot, state);
-      return render(report(command, errors.length === 0 ? "up-to-date" : "failed", [], [], errors, errors.length === 0 ? 0 : 1), options.json);
-    }
-    if (command === "skills:lock-local") {
-      const state = readRepositorySkillState(context.repositoryRoot);
-      const plan = buildLocalLockPlan({
-        sources: state.sources,
-        sourcesBytes: state.sourcesBytes,
-        lock: state.lock,
-        initialLockBytes: state.lockBytes,
-        observations: readLocalObservations(context.repositoryRoot, state.sources),
-      });
-      if (options.apply) {
-        const result = await applyLocalLockPlan(plan, {
-          repositoryRoot: context.repositoryRoot,
-          refresh: async () => {
-            const fresh = readRepositorySkillState(context.repositoryRoot);
-            return buildLocalLockPlan({
-              sources: fresh.sources,
-              sourcesBytes: fresh.sourcesBytes,
-              lock: fresh.lock,
-              initialLockBytes: fresh.lockBytes,
-              observations: readLocalObservations(context.repositoryRoot, fresh.sources),
-            });
-          },
-        });
-        return render(report(command, result.status, [], [], result.errors, result.status === "applied" || result.status === "unchanged" ? 0 : 1), options.json);
-      }
-      return render(report(command, plan.status, [], [], [], 0), options.json);
-    }
-    if (command === "skills:update" && options.apply) {
-      const runner = context.ghRunner ?? createGhRunner();
-      const preparation = await createRemotePlan({ ...context, ghRunner: runner });
-      if (preparation.failure !== undefined) return render(preparation.failure, options.json);
-      const plan = preparation.plan!;
-      const refreshState: { failure?: CommandReport } = {};
-      const result = await applyRemoteUpdatePlan(plan, {
-        repositoryRoot: context.repositoryRoot,
-        refreshAll: async () => {
-          const refreshed = await createRemotePlan({ ...context, ghRunner: runner });
-          if (refreshed.failure !== undefined) {
-            refreshState.failure = refreshed.failure;
-            throw new RemoteRefreshFailure({
-              steps: refreshed.failure.cohorts.map((cohort) => ({ key: cohort.key, status: cohort.status })),
-              errors: refreshed.failure.errors,
-              warnings: refreshed.failure.warnings,
-            });
+    if(command==="skills:lock-local")throw new Error("skills:lock-localは撤去済みです。local本文はGitとレビューで管理し、skills:verifyを実行してください");
+    const parsed=options(command,args);const get=(key:string)=>parsed.get(key)?.[0];const root=resolve(context.repositoryRoot);
+    if(command==="skills:verify") {
+      const errors=verifyRepository(get("--root")?resolve(root,get("--root")!):root);if(errors.length)throw new Error(errors.join("; "));
+    } else if(command==="skills:links") {
+      const changed=repairLinks(root);
+      report={...report,status:changed.length?"applied":"unchanged",changes:changed.map(name=>({name,beforeCommit:null,afterCommit:null,beforeOwnership:null,afterOwnership:null}))};
+    } else {
+      const source=resolve(root,get("--source")!);const base=get("--base")!;
+      const isolated=command==="skills:check"?undefined:preflightIsolation({source,base,candidate:resolve(root,get("--candidate")!)});
+      const snapshot=readCommittedSnapshot(source,base);let plan:MaintenancePlan;
+      if(command==="skills:migrate") {
+        const {planMigration}=await import("./migration/index.ts");plan=planMigration(snapshot,parsed.get("--localize")??[]);
+      } else {
+        let sources=decodeSourcesJson(snapshot.readFile(".agents/skills/skills.sources.json"));const lock=decodeLockJson(snapshot.readFile(".agents/skills/skills.lock.json"));
+        const trees=readSnapshotTrees(snapshot,sources);
+        if(command==="skills:adopt-local") {
+          verifySnapshotLinks(snapshot,sources);plan=adoptLocal({sources,lock,installedTrees:trees},get("--name")!);
+        } else {
+          let approval;
+          if(command==="skills:repin") {
+            const selected=sources.skills.find(s=>s.name===get("--name"));
+            if(!selected || selected.ownership!=="remote")throw new Error("repin対象remote不明");
+            const ref=get("--branch")?{branch:validateRefName(get("--branch"))}:get("--tag")?{tag:validateRefName(get("--tag"))}:get("--pin-commit")?{commit:get("--commit")!}:selected.ref;
+            if(("tag" in ref)!==parsed.has("--tag-object"))throw new Error("tagObjectShaはtagだけに必須です");
+            sources={...sources,skills:sources.skills.map(s=>s.name===selected.name?{...selected,ref}:s)};
+            approval={name:selected.name,commit:get("--commit")!,...(get("--tag-object")?{tagObjectSha:get("--tag-object")!}:{})};
           }
-          return refreshed.plan!;
-        },
-        refreshStep: async (step) => {
-          const state = readRepositorySkillState(context.repositoryRoot);
-          const group = state.sources.skills.filter(
-            (entry): entry is RemoteSource => entry.ownership === "remote" && cohortKey(entry.repository, entry.ref) === step.key,
-          );
-          const locks = state.lock.skills.filter(
-            (entry): entry is RemoteLock => entry.ownership === "remote" && group.some((source) => source.name === entry.name),
-          );
-          return observeRemoteCohort(group, historyLocksForGroup(group, locks), runner);
-        },
-      });
-      if (refreshState.failure !== undefined) return render(refreshState.failure, options.json);
-      const resultByKey = new Map(result.steps.map((step) => [step.key, step.status]));
-      const cohorts = plan.steps.map((step) => planCohort(step, resultByKey.get(step.key) ?? "not-attempted"));
-      return render(report(
-        command,
-        result.status,
-        cohorts,
-        result.warnings ?? plan.warnings,
-        result.errors,
-        result.status === "applied" || result.status === "unchanged" || result.status === "no-content-change" ? 0 : 1,
-      ), options.json);
+          plan=await planRemoteMaintenance({sources,lock,installedTrees:trees},context.ghRunner??createGhRunner(),approval);
+        }
+      }
+      const changed = plan.changes.length > 0 || plan.metadataChanged === true;
+      if (command === "skills:repin") {
+        const observed = plan.lock.skills.find(s => s.name === get("--name"))!;
+        approvalPreview = `approved commit: ${get("--commit")}\nobserved commit: ${observed.resolvedCommit}\n`;
+        if (observed.tagObjectSha) approvalPreview += `approved tag object: ${get("--tag-object")}\nobserved tag object: ${observed.tagObjectSha}\n`;
+      }
+      report={...report,status:changed?"planned":"unchanged",changes:plan.changes,warnings:plan.warnings};
+      if(parsed.has("--apply")) {
+        if(changed)applyCandidate(isolated!,plan);
+        else {const errors=verifyRepository(isolated!.candidate);if(errors.length)throw new Error(errors.join("; "));}
+        report={...report,status:changed?"applied":"unchanged"};
+      }
+      if(command==="skills:check" && parsed.has("--fail-on-update") && plan.changes.length)exitCode=3;
     }
-    return render(await inspectRemote(command, context, options.failOnUpdate), options.json);
-  } catch (error: unknown) {
-    return render(report(command, "failed", [], [], [error instanceof Error ? error.message : String(error)], 1), options.json);
+  } catch(error) {
+    report={...report,status:"failed",changes:[],errors:[redactCredentialText(error instanceof Error?error.message:String(error))]};exitCode=1;
   }
+  const json=args.includes("--json");
+  const stdout=json?`${JSON.stringify(report,null,2)}\n`:`[${report.status}] ${command}\n${report.status === "failed" ? "" : approvalPreview}${report.changes.map(change=>JSON.stringify(change)).join("\n")}${report.changes.length?"\n":""}`;
+  const stderr=[...report.warnings,...report.errors].map(text=>`${text}\n`).join("");
+  return {report,exitCode,stdout,stderr};
 }

@@ -27,3 +27,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-09-15 align-offline-ci-check（PR #72）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— 通常CIとrename-smokeを共通offline gateへ統一し、両状態の破損検出とGitHub CI成功を確認
 - 2026-09-20 remove-skill-update-pr-automation（PR #79）: 逃した欠陥 3 件（self-review=0 / review=3 / CI=0 / merge後=0）— close後のadversarial reviewで現行CI説明の旧機能残存、ADR-0011の現行効力表示の不整合、PR番号未反映のclose contract違反を検出
 - 2026-09-22 remove-node-installer（PR #80）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— 自前Node installerを撤去し、独立review・別verifier・Standards/Specの追加reviewでblockerなし
+- 2026-09-25 simplify-skill-ownership-and-lock（PR #81）: 逃した欠陥 9 件（self-review=5 / review=3 / CI=1 / merge後=0）— github.com取得host固定・metadata境界・空移行・repin表示・取得前拒否・tracked legal照合を修正し、Ubuntu / WSL検証と独立verifierを通過

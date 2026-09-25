@@ -6,7 +6,6 @@ import test from "node:test";
 import {
   decodeSourcesJson,
   readInstalledTree,
-  readLocalObservations,
   sha256,
 } from "./skill-updater/index.ts";
 import { writeSkillRepository } from "./skill-updater-test-fixture.ts";
@@ -99,27 +98,29 @@ test("readInstalledTree accepts directory depth 32 and rejects depth 33", () => 
   );
 });
 
-test("local observations reuse one repository legal source across skills", () => {
-  const repository = createSkillUpdaterTestRoot("skill-shared-legal-");
-  const legal = Buffer.from("shared license\n");
-  writeFileSync(join(repository, "LICENSE"), legal);
-  for (const name of ["one", "two"]) {
-    const target = join(repository, ".agents", "skills", name);
-    mkdirSync(target, { recursive: true });
-    writeFileSync(join(target, "SKILL.md"), `---\nname: ${name}\ndescription: ${name}\n---\n`);
-  }
-  spawnSync("git", ["init", "-q"], { cwd: repository });
-  spawnSync("git", ["add", "LICENSE"], { cwd: repository });
-  const sources = decodeSourcesJson(JSON.stringify({ schemaVersion: 1, skills: ["one", "two"].map((name) => ({
-    name, ownership: "local", license: "MIT", redistribution: "allowed",
-    target: `.agents/skills/${name}`,
-    legalMappings: [{ sourcePath: "LICENSE", expectedSha256: sha256(legal) }],
-  })) }));
+import { readCommittedSnapshot } from "./skill-updater/repository.ts";
+for (const failure of ["depth", "entries"]) test(`committed Skill traversal rejects ${failure} overflow before returning a tree`, () => {
+  const root = writeSkillRepository();
+  const target = join(root, ".agents/skills/local-skill");
+  const paths = failure === "depth" ? [Array(33).fill("d").join("/")] : Array.from({length:100}, (_,i) => `dir${i}/a/b/c`);
+  for (const path of paths) { mkdirSync(join(target,path), {recursive:true});writeFileSync(join(target,path,"file"),"x"); }
+  assert.equal(spawnSync("git",["add","."],{cwd:root}).status,0);
+  assert.equal(spawnSync("git",["-c","user.name=Fixture","-c","user.email=fixture@example.invalid","commit","-qm","traversal"],{cwd:root}).status,0);
+  const base=spawnSync("git",["rev-parse","HEAD"],{cwd:root,encoding:"utf8"}).stdout.trim();
+  assert.throws(()=>readCommittedSnapshot(root,base).readTree(".agents/skills/local-skill","local-skill"), /depth|entry/);
+});
 
-  const observations = readLocalObservations(repository, sources);
-
-  assert.deepEqual(observations.map((entry) => entry.legalFiles), [
-    [{ sourcePath: "LICENSE", sha256: sha256(legal) }],
-    [{ sourcePath: "LICENSE", sha256: sha256(legal) }],
-  ]);
+import { readFileSync } from "node:fs";
+import { verifyRepository } from "./skill-updater/repository.ts";
+test("local legal tracked check treats wildcard filenames literally", () => {
+  const root = writeSkillRepository();
+  const legal = readFileSync(join(root,"LICENSE"));
+  writeFileSync(join(root,"LIC*"),legal);
+  const path = join(root,".agents/skills/skills.sources.json");
+  const sources = JSON.parse(readFileSync(path,"utf8"));
+  sources.skills[0].legalMappings[0].path="LIC*";
+  writeFileSync(path,JSON.stringify(sources));
+  assert.ok(verifyRepository(root).some(error=>error.includes("legal")));
+  assert.equal(spawnSync("git",["--literal-pathspecs","add","--","LIC*"],{cwd:root}).status,0);
+  assert.deepEqual(verifyRepository(root),[]);
 });

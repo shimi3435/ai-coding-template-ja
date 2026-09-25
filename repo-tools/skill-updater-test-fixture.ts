@@ -49,25 +49,15 @@ export function writeSkillRepository(staleLock = false): string {
   spawnSync("git", ["add", "LICENSE"], { cwd: root });
   const legalHash = sha256(Buffer.from("MIT license\n"));
   const sources = decodeSourcesJson(JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     skills: [{
       name: "local-skill", ownership: "local", license: "MIT", redistribution: "allowed",
       target: ".agents/skills/local-skill",
-      legalMappings: [{ sourcePath: "LICENSE", expectedSha256: legalHash }],
+      legalMappings: [{ path: "LICENSE", expectedSha256: legalHash }],
     }],
   }));
   const tree = readInstalledTree(root, ".agents/skills/local-skill", "local-skill");
-  const lock = decodeLockJson(JSON.stringify({
-    schemaVersion: 1,
-    skills: [{
-      name: "local-skill", ownership: "local", license: "MIT", redistribution: "allowed",
-      target: ".agents/skills/local-skill",
-      treeHash: staleLock ? "f".repeat(64) : tree.treeHash,
-      fileCount: tree.fileCount,
-      byteCount: tree.byteCount,
-      legalFiles: [{ sourcePath: "LICENSE", sha256: legalHash }],
-    }],
-  }), sources);
+  const lock = decodeLockJson(JSON.stringify({ schemaVersion: 2, skills: [] }), sources);
   writeFileSync(join(root, ".agents", "skills", "skills.sources.json"), serializeSources(sources));
   writeFileSync(join(root, ".agents", "skills", "skills.lock.json"), serializeLock(lock));
   for (const linkRoot of [".claude/skills", ".codex/skills"]) {

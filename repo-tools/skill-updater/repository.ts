@@ -1,34 +1,13 @@
 import { closeSync, constants, fstatSync, lstatSync, opendirSync, openSync, readFileSync, readlinkSync, readdirSync, readSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { canonicalizeTree, utf8Compare, validateCanonicalPath, type CanonicalTree, type TreeFile } from "./canonical.ts";
-import { validateInstalledTraversalPath } from "./installed-path.ts";
-import { resourceLimits, sameLegalFiles, sha256, validateSkillLimits } from "./legal.ts";
+import { validateInstalledTraversalPath, validateInstalledFilePaths } from "./installed-path.ts";
+import { resourceLimits, sha256, validateSkillLimits } from "./legal.ts";
 import { parseSkillMetadata } from "./metadata.ts";
-import { decodeLockJson, decodeSourcesJson, validateLockStructure } from "./schema.ts";
-import { sameSourceRef } from "./types.ts";
-import type { LocalObservation } from "./planner.ts";
-import type { LockDocument, SourcesDocument } from "./types.ts";
-
-export type RepositorySkillState = Readonly<{
-  sourcesBytes: string;
-  lockBytes: string;
-  sources: SourcesDocument;
-  lock: LockDocument;
-}>;
-
-export function readRepositorySkillState(repositoryRoot: string): RepositorySkillState {
-  const sourcesBytes = readFileSync(join(repositoryRoot, ".agents", "skills", "skills.sources.json"), "utf8");
-  const lockBytes = readFileSync(join(repositoryRoot, ".agents", "skills", "skills.lock.json"), "utf8");
-  const sources = decodeSourcesJson(sourcesBytes);
-  const lock = decodeLockJson(lockBytes);
-  validateLockStructure(lock, sources);
-  return { sourcesBytes, lockBytes, sources, lock };
-}
 
 export function readVendoredSkillNames(repositoryRoot: string): readonly string[] {
   return readdirSync(join(repositoryRoot, ".agents", "skills"), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
     .map((entry) => entry.name)
     .sort(utf8Compare);
 }
@@ -137,158 +116,90 @@ export function readInstalledTree(repositoryRoot: string, target: string, expect
 }
 
 function isTrackedPath(repositoryRoot: string, path: string): boolean {
-  const tracked = spawnSync("git", ["ls-files", "--error-unmatch", "--", path], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "ignore", "ignore"],
-  });
-  return tracked.status === 0;
-}
-
-export function readLocalObservations(
-  repositoryRoot: string,
-  sources: SourcesDocument,
-): readonly LocalObservation[] {
-  const legalCache = new Map<string, Readonly<{
-    content: Buffer;
-    tracked: boolean;
-    regular: boolean;
-    sha256?: string;
-    identity?: string;
-    size?: number;
-  }>>();
-  return sources.skills
-    .filter((entry) => entry.ownership === "local")
-    .map((source) => {
-      const tree = readInstalledTree(repositoryRoot, source.target, source.name);
-      const seen = new Set<string>();
-      const legalFiles = source.legalMappings.map((mapping) => {
-        validateCanonicalPath(mapping.sourcePath);
-        if (seen.has(mapping.sourcePath)) throw new Error(`local legal source重複: ${mapping.sourcePath}`);
-        seen.add(mapping.sourcePath);
-        let legal = legalCache.get(mapping.sourcePath);
-        if (legal === undefined) {
-          const absolute = join(repositoryRoot, ...mapping.sourcePath.split("/"));
-          let regular = false;
-          let content: Buffer<ArrayBufferLike> = Buffer.alloc(0);
-          try {
-            const stat = lstatSync(absolute);
-            regular = stat.isFile() && !stat.isSymbolicLink();
-            if (regular) {
-              const snapshot = readBoundedRegularFile(absolute, mapping.sourcePath);
-              content = snapshot.content;
-              legal = Object.freeze({
-                content,
-                tracked: isTrackedPath(repositoryRoot, mapping.sourcePath),
-                regular,
-                sha256: snapshot.sha256,
-                identity: snapshot.identity,
-                size: snapshot.size,
-              });
-            }
-          } catch (error: unknown) {
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-          }
-          legal ??= Object.freeze({ content, tracked: isTrackedPath(repositoryRoot, mapping.sourcePath), regular });
-          legalCache.set(mapping.sourcePath, legal);
-        }
-        if (!legal.tracked || !legal.regular || legal.sha256 === undefined) {
-          throw new Error(`local legal sourceはtracked regular fileが必要です: ${mapping.sourcePath}`);
-        }
-        if (legal.sha256 !== mapping.expectedSha256) throw new Error(`local legal hash不一致: ${mapping.sourcePath}`);
-        return { sourcePath: mapping.sourcePath, sha256: legal.sha256 };
-      }).sort((left, right) => utf8Compare(left.sourcePath, right.sourcePath));
-      return { name: source.name, tree, legalFiles };
-    });
-}
-
-export function verifyInstalledState(repositoryRoot: string, state: RepositorySkillState): readonly string[] {
-  const errors: string[] = [];
-  const lockByName = new Map(state.lock.skills.map((entry) => [entry.name, entry]));
-  const sourceNames = new Set(state.sources.skills.map((entry) => entry.name));
-  for (const lock of state.lock.skills) {
-    if (!sourceNames.has(lock.name)) errors.push(`${lock.name}: lockだけに存在するorphan entry`);
-  }
-  for (const source of state.sources.skills) {
-    const lock = lockByName.get(source.name);
-    if (lock === undefined) {
-      errors.push(`${source.name}: lock entry欠落`);
-      continue;
-    }
-    if (
-      source.ownership !== lock.ownership ||
-      source.license !== lock.license ||
-      source.redistribution !== lock.redistribution
-    ) {
-      errors.push(`${source.name}: sources / lock policy不一致`);
-    }
-    if (
-      source.ownership === "remote" && lock.ownership === "remote" &&
-      (source.repository !== lock.repository || !sameSourceRef(source.ref, lock.ref))
-    ) {
-      errors.push(`${source.name}: sources / lock provenance不一致`);
-    }
-    if (
-      source.ownership === "plugin" && lock.ownership === "plugin" &&
-      source.manager !== lock.manager
-    ) {
-      errors.push(`${source.name}: sources / lock manager不一致`);
-    }
-    if (source.ownership === "plugin") continue;
-    if (lock.ownership === "plugin") {
-      errors.push(`${source.name}: ownership不一致`);
-      continue;
-    }
-    try {
-      const tree = readInstalledTree(repositoryRoot, source.target, source.name);
-      if (tree.treeHash !== lock.treeHash || tree.fileCount !== lock.fileCount || tree.byteCount !== lock.byteCount) {
-        errors.push(`${source.name}: installed treeがlockと不一致`);
-      }
-      if (source.ownership === "remote" && lock.ownership === "remote") {
-        const reviewedLegal = source.legalMappings.map((mapping) => ({
-          sourcePath: mapping.sourcePath,
-          targetPath: mapping.targetPath,
-          sha256: mapping.expectedSha256,
-        }));
-        if (!sameLegalFiles(lock.legalFiles, reviewedLegal)) {
-          errors.push(`${source.name}: reviewed legal mappingsがlockと不一致`);
-        }
-        const installedByPath = new Map(tree.files.map((file) => [file.path, file]));
-        const actualLegal = lock.legalFiles.map((file) => {
-          const installed = installedByPath.get(file.targetPath);
-          if (installed === undefined) throw new Error(`legal targetがinstalled treeにありません: ${file.targetPath}`);
-          return { ...file, sha256: sha256(installed.content) };
-        });
-        if (!sameLegalFiles(lock.legalFiles, actualLegal)) errors.push(`${source.name}: legal filesがlockと不一致`);
-      }
-    } catch (error: unknown) {
-      errors.push(`${source.name}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
   try {
-    const local = readLocalObservations(repositoryRoot, state.sources);
-    for (const observation of local) {
-      const lock = lockByName.get(observation.name);
-      if (lock?.ownership !== "local" || !sameLegalFiles(lock.legalFiles, observation.legalFiles)) {
-        errors.push(`${observation.name}: repository-level legal filesがlockと不一致`);
-      }
-    }
-  } catch (error: unknown) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    const tracked = readonlyGit(repositoryRoot, ["--literal-pathspecs", "ls-files", "--error-unmatch", "-z", "--", path]);
+    return tracked.equals(Buffer.from(`${path}\0`));
+  } catch {
+    return false;
   }
-  for (const source of state.sources.skills.filter((entry) => entry.ownership !== "plugin")) {
-    const expected = `../../.agents/skills/${source.name}`;
-    for (const root of [".claude/skills", ".codex/skills"]) {
-      const path = join(repositoryRoot, ...root.split("/"), source.name);
-      try {
-        const stat = lstatSync(path);
-        if (!stat.isSymbolicLink() || readlinkSync(path) !== expected) {
-          errors.push(`${root}/${source.name}: symlink不一致`);
+}
+
+// 隔離操作は固定commitを読み、通常検証は現在checkoutを読む。
+import { readonlyGit, assertSafeParents } from "./isolation.ts";
+import { decodeSourcesJson as decodeV2Sources, decodeLockJson as decodeV2Lock } from "./schema.ts";
+import { validateSkillTree } from "./metadata.ts";
+import type { SourcesDocument as V2Sources, LockDocument as V2Lock } from "./types.ts";
+
+export type CommittedEntry = Readonly<{ path: string; mode: string; sha: string }>;
+export type CommittedSnapshot = Readonly<{
+  root: string; base: string; entries: ReadonlyMap<string, CommittedEntry>;
+  readFile: (path: string) => Buffer;
+  readTree: (target: string, name: string) => CanonicalTree;
+}>;
+export function readCommittedSnapshot(root: string, base: string): CommittedSnapshot {
+  if (!/^[0-9a-f]{40}$/.test(base)) throw new Error("完全な開始commit SHAが必要です");
+  if (readonlyGit(root,["rev-parse",`${base}^{commit}`]).toString().trim()!==base) throw new Error("開始commitが一致しません");
+  const raw=readonlyGit(root,["ls-tree","-rz","--full-tree",base]);
+  const text=new TextDecoder("utf-8",{fatal:true}).decode(raw);
+  const entries=new Map<string,CommittedEntry>();
+  for (const record of text.split("\0").filter(Boolean)) {
+    const match=/^(\d{6}) (?:blob|commit) ([0-9a-f]{40})\t([\s\S]+)$/.exec(record);
+    if (!match) throw new Error("Git tree entry不正");
+    entries.set(match[3]!,{path:match[3]!,mode:match[1]!,sha:match[2]!});
+  }
+  const readFile=(path:string):Buffer=>{
+    validateCanonicalPath(path); const entry=entries.get(path);
+    if (!entry || !["100644","100755"].includes(entry.mode)) throw new Error(`tracked regular fileが必要です: ${path}`);
+    const size=Number(readonlyGit(root,["cat-file","-s",entry.sha]).toString().trim());
+    if (!Number.isSafeInteger(size) || size<0 || size>resourceLimits.singleFileBytes) throw new Error("snapshot file上限超過");
+    return readonlyGit(root,["cat-file","blob",entry.sha]);
+  };
+  const readTree=(target:string,name:string):CanonicalTree=>{
+    validateCanonicalPath(target); const files:TreeFile[]=[];
+    validateInstalledFilePaths([...entries.keys()].filter(p=>p.startsWith(`${target}/`)).map(p=>p.slice(target.length+1)));
+    for (const entry of entries.values()) if (entry.path.startsWith(`${target}/`)) {
+      const path=entry.path.slice(target.length+1); validateInstalledTraversalPath(path);
+      files.push({path,executable:entry.mode==="100755",content:readFile(entry.path)});
+      validateSkillLimits(files);
+    }
+    return validateSkillTree(files,name);
+  };
+  return {root,base,entries,readFile,readTree};
+}
+export function readRepositorySkillState(root: string): Readonly<{ sources:V2Sources; lock:V2Lock }> {
+  const read=(name:string):Buffer=>{
+    const absolute=join(root,".agents/skills",name); assertSafeParents(root,absolute);
+    return readBoundedRegularFile(absolute,name).content;
+  };
+  return {sources:decodeV2Sources(read("skills.sources.json")),lock:decodeV2Lock(read("skills.lock.json"))};
+}
+export function verifyRepository(root: string): readonly string[] {
+  const errors:string[]=[];
+  try {
+    const state=readRepositorySkillState(root);
+    decodeV2Lock(JSON.stringify(state.lock),state.sources);
+    const declared=new Set(state.sources.skills.filter(s=>s.ownership!=="plugin").map(s=>s.name));
+    for (const name of readVendoredSkillNames(root)) if (!declared.has(name)) throw new Error(`未宣言Skill: ${name}`);
+    for (const source of state.sources.skills) {
+      if (source.ownership==="plugin") continue;
+      assertSafeParents(root,join(root,source.target,"SKILL.md"));
+      const tree=readInstalledTree(root,source.target,source.name);
+      if (source.ownership==="remote") {
+        const lock=state.lock.skills.find(l=>l.name===source.name)!;
+        if (tree.treeHash!==lock.treeHash || tree.fileCount!==lock.fileCount || tree.byteCount!==lock.byteCount) throw new Error(`remote tree / lock不一致: ${source.name}`);
+        for (const legal of source.legalMappings) {
+          const file=tree.files.find(f=>f.path===legal.targetPath);
+          if (!file || sha256(file.content)!==legal.expectedSha256) throw new Error(`remote legal不一致: ${source.name}`);
         }
-      } catch {
-        errors.push(`${root}/${source.name}: symlink欠落`);
+      } else for (const legal of source.legalMappings) {
+        const absolute=join(root,legal.path); assertSafeParents(root,absolute);
+        if (!isTrackedPath(root,legal.path) || readBoundedRegularFile(absolute,legal.path).sha256!==legal.expectedSha256) throw new Error(`local legal不一致: ${source.name}`);
+      }
+      for (const linkRoot of [".claude/skills",".codex/skills"]) {
+        const path=join(root,linkRoot,source.name); assertSafeParents(root,path);
+        if (!lstatSync(path).isSymbolicLink() || readlinkSync(path)!==`../../.agents/skills/${source.name}`) throw new Error(`link不一致: ${source.name}`);
       }
     }
-  }
+  } catch(error) { errors.push(error instanceof Error ? error.message : String(error)); }
   return errors;
 }

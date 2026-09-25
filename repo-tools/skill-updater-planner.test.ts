@@ -1,190 +1,78 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  buildLocalLockPlan,
-  buildRemoteUpdatePlan,
-  canonicalizeTree,
-  decodeLockJson,
-  decodeSourcesJson,
-  serializeLock,
-  sha256,
-  type LocalObservation,
-  type RemoteCohortObservation,
-} from "./skill-updater/index.ts";
+import { canonicalizeTree } from "./skill-updater/canonical.ts";
+import { sha256 } from "./skill-updater/legal.ts";
+import { planRemoteMaintenance } from "./skill-updater/planner.ts";
+import { observeRemoteCohort } from "./skill-updater/github.ts";
+import { source as remoteFixtureSource, transcript as remoteTranscript, commit as observedCommit } from "./skill-updater-github-test-fixture.ts";
+import type { RemoteSource as V2RemoteSource, RemoteLock as V2RemoteLock } from "./skill-updater/types.ts";
 
-const commitA = "a".repeat(40);
-const commitB = "b".repeat(40);
-const licenseHash = sha256(Buffer.from("license"));
+async function v2Fixture() {
+  const source:V2RemoteSource={...remoteFixtureSource(),redistribution:"allowed",ref:{branch:"main"}};
+  const observation=await observeRemoteCohort([source],[],remoteTranscript().runner);
+  const tree=observation.entries[0]!.tree;
+  const {legalMappings:_,...identity}=source;
+  const lock:V2RemoteLock={...identity,resolvedCommit:"a".repeat(40),verification:"verified",treeHash:tree.treeHash,fileCount:tree.fileCount,byteCount:tree.byteCount,legalFiles:observation.entries[0]!.legalFiles};
+  return {source,lock,tree};
+}
+test("v2 updates the pinned commit even when content is identical",async()=>{
+  const f=await v2Fixture();
+  const fake=remoteTranscript({[`repos/owner/repo/compare/${f.lock.resolvedCommit}...${observedCommit}`]:{status:"ahead"}});
+  const result=await planRemoteMaintenance({sources:{schemaVersion:2,skills:[f.source]},lock:{schemaVersion:2,skills:[f.lock]},installedTrees:new Map([[f.source.name,f.tree]])},fake.runner);
+  assert.equal(result.lock.skills[0]?.resolvedCommit,observedCommit);
+  assert.equal(result.lock.skills[0]?.treeHash,f.tree.treeHash);
+  assert.equal(result.changes.length,1);
+});
 
-function remoteSource(name: string, repository: string): Record<string, unknown> {
-  return {
-    name, ownership: "remote", license: "MIT", redistribution: "allowed",
-    target: `.agents/skills/${name}`, repository, ref: { branch: "main" },
-    subtree: { path: `skills/${name}` },
-    legalMappings: [{ sourcePath: "LICENSE", targetPath: "LICENSE", expectedSha256: licenseHash }],
+import { skill as fixtureSkill, skillBlobSha as fixtureSkillSha, license as fixtureLicense, licenseBlobSha as fixtureLicenseSha } from "./skill-updater-github-test-fixture.ts";
+for(const kind of ["license","sourcePath","targetPath","notice-add","notice-remove"]) test(`named repin applies same-commit ${kind} changes and normal update refuses them`,async()=>{
+  const f=await v2Fixture();
+  let oldSource=f.source; let oldLock={...f.lock,resolvedCommit:observedCommit}; let oldTree=f.tree;
+  if(kind==="notice-remove") {
+    oldSource={...oldSource,legalMappings:[...oldSource.legalMappings,{...oldSource.legalMappings[0]!,sourcePath:"NOTICE",targetPath:"NOTICE"}]};
+    oldTree=canonicalizeTree([...oldTree.files,{path:"NOTICE",executable:false,content:fixtureLicense}]);
+    oldLock={...oldLock,treeHash:oldTree.treeHash,fileCount:oldTree.fileCount,byteCount:oldTree.byteCount,legalFiles:[...oldLock.legalFiles,{sourcePath:"NOTICE",targetPath:"NOTICE",sha256:sha256(fixtureLicense)}]};
+  }
+  const next={...oldSource,
+    ...(kind==="license"?{license:"Apache-2.0"}:{}),
+    legalMappings:kind==="notice-add" ? [...oldSource.legalMappings,{...oldSource.legalMappings[0]!,sourcePath:"NOTICE",targetPath:"NOTICE"}]:kind==="notice-remove" ? oldSource.legalMappings.filter(m=>m.targetPath!=="NOTICE"):oldSource.legalMappings.map(m=>({...m,...(kind==="sourcePath"?{sourcePath:"legal/LICENSE"}:{}),...(kind==="targetPath"?{targetPath:"legal/LICENSE"}:{})})),
   };
-}
-
-function remoteLock(name: string, repository: string, tree: ReturnType<typeof observedTree>): Record<string, unknown> {
-  return {
-    name, ownership: "remote", license: "MIT", redistribution: "allowed",
-    target: `.agents/skills/${name}`, repository, ref: { branch: "main" },
-    resolvedCommit: commitA, verification: "verified", treeHash: tree.treeHash,
-    fileCount: tree.fileCount, byteCount: tree.byteCount,
-    legalFiles: [{ sourcePath: "LICENSE", targetPath: "LICENSE", sha256: licenseHash }],
-  };
-}
-
-function observedTree(name: string, content: string) {
-  return canonicalizeTree([
-    { path: "SKILL.md", executable: false, content: Buffer.from(content) },
-    { path: "LICENSE", executable: false, content: Buffer.from("license") },
-  ]);
-}
-
-function observation(repository: string, name: string, tree: ReturnType<typeof observedTree>): RemoteCohortObservation {
-  return {
-    repository, ref: { branch: "main" }, resolvedCommit: commitB, verification: "verified", warnings: [],
-    entries: [{
-      name,
-      metadata: { name, description: `${name} skill` },
-      tree,
-      legalFiles: [{ sourcePath: "LICENSE", targetPath: "LICENSE", sha256: licenseHash }],
-    }],
-  };
-}
-
-test("[H6] remote plan chains independent cohort lock bytes in deterministic order", () => {
-  const oldAlpha = observedTree("alpha", "old-a");
-  const oldZulu = observedTree("zulu", "old-z");
-  const newAlpha = observedTree("alpha", "new-a");
-  const newZulu = observedTree("zulu", "new-z");
-  const sources = decodeSourcesJson(JSON.stringify({
-    schemaVersion: 1,
-    skills: [remoteSource("zulu", "z/repo"), remoteSource("alpha", "a/repo")],
-  }));
-  const lock = decodeLockJson(JSON.stringify({
-    schemaVersion: 1,
-    skills: [remoteLock("zulu", "z/repo", oldZulu), remoteLock("alpha", "a/repo", oldAlpha)],
-  }), sources);
-  const initialLockBytes = serializeLock(lock);
-
-  const plan = buildRemoteUpdatePlan({
-    sources,
-    lock,
-    initialLockBytes,
-    installedTrees: new Map([["alpha", oldAlpha], ["zulu", oldZulu]]),
-    observations: [observation("z/repo", "zulu", newZulu), observation("a/repo", "alpha", newAlpha)],
-  });
-
-  assert.deepEqual(plan.steps.map((step) => step.key), ["a/repo|branch:main", "z/repo|branch:main"]);
-  assert.equal(plan.steps[0]?.expectedBeforeLockBytes, initialLockBytes);
-  assert.equal(plan.steps[0]?.candidateAfterLockBytes, plan.steps[1]?.expectedBeforeLockBytes);
-  assert.equal(plan.steps[1]?.candidateAfterLockBytes, plan.candidateLockBytes);
-  assert.deepEqual(plan.steps.map((step) => step.status), ["update-available", "update-available"]);
+  const input={sources:{schemaVersion:2 as const,skills:[next]},lock:{schemaVersion:2 as const,skills:[oldLock]},installedTrees:new Map([[f.source.name,oldTree]])};
+  const fake=remoteTranscript({[`repos/owner/repo/git/trees/${observedCommit}?recursive=1`]:{truncated:false,tree:[
+    {path:"skills/demo/SKILL.md",mode:"100644",type:"blob",sha:fixtureSkillSha,size:fixtureSkill.length},
+    ...next.legalMappings.map(m=>({path:m.sourcePath,mode:"100644",type:"blob",sha:fixtureLicenseSha,size:fixtureLicense.length})),
+  ]}});
+  await assert.rejects(planRemoteMaintenance(input,fake.runner),/policy|mapping/); assert.equal(fake.calls.length,0);
+  const planned=await planRemoteMaintenance(input,fake.runner,{name:"demo",commit:observedCommit});
+  assert.equal(planned.changes.length,1);
+  assert.equal(planned.lock.skills[0]?.license,next.license);
+  assert.deepEqual(planned.lock.skills[0]?.legalFiles.map(f=>f.targetPath),next.legalMappings.map(m=>m.targetPath).sort());
+  if(kind==="targetPath") { assert.equal(planned.trees.get("demo")?.files.some(f=>f.path==="LICENSE"),false); assert.equal(planned.changes[0]?.beforeLegalMappings!==undefined,true); }
+  if(kind==="notice-remove") assert.equal(planned.trees.get("demo")?.files.some(f=>f.path==="NOTICE"),false);
+  if(kind==="license") assert.equal(planned.changes[0]?.beforeLicense,"MIT");
 });
 
-test("[H11] remote plan preserves lock bytes when only the resolved commit moves", () => {
-  const tree = observedTree("alpha", "same");
-  const sources = decodeSourcesJson(JSON.stringify({ schemaVersion: 1, skills: [remoteSource("alpha", "a/repo")] }));
-  const lock = decodeLockJson(JSON.stringify({ schemaVersion: 1, skills: [remoteLock("alpha", "a/repo", tree)] }), sources);
-  const initialLockBytes = serializeLock(lock);
-  const plan = buildRemoteUpdatePlan({
-    sources, lock, initialLockBytes,
-    installedTrees: new Map([["alpha", tree]]),
-    observations: [observation("a/repo", "alpha", tree)],
-  });
-
-  assert.equal(plan.steps[0]?.status, "no-content-change");
-  assert.equal(plan.candidateLockBytes, initialLockBytes);
+test("repin cannot bypass old body, legal, policy or unrelated declarations",async()=>{
+  const f=await v2Fixture(); const fake=remoteTranscript();
+  const input={sources:{schemaVersion:2 as const,skills:[f.source]},lock:{schemaVersion:2 as const,skills:[f.lock]},installedTrees:new Map([["demo",canonicalizeTree(f.tree.files.map(file=>file.path==="LICENSE"?{...file,content:Buffer.from("edited")}:file))]])};
+  await assert.rejects(planRemoteMaintenance(input,fake.runner,{name:"demo",commit:observedCommit}),/旧本文|旧legal/);
+  assert.equal(fake.calls.length,0);
+  const other={...f.source,name:"other",target:".agents/skills/other"};
+  await assert.rejects(planRemoteMaintenance({...input,sources:{schemaVersion:2,skills:[f.source,other]},installedTrees:new Map([["demo",f.tree]])},fake.runner,{name:"demo",commit:observedCommit}),/lock欠落/);
+  await assert.rejects(planRemoteMaintenance({...input,sources:JSON.parse(JSON.stringify({schemaVersion:2,skills:[{...f.source,redistribution:"blocked"}]}))},fake.runner,{name:"demo",commit:observedCommit}),/allowed/);
 });
 
-test("[H5] same repository and ref entries form one cohort step", () => {
-  const alpha = observedTree("alpha", "new-a");
-  const beta = observedTree("beta", "new-b");
-  const oldAlpha = observedTree("alpha", "old-a");
-  const oldBeta = observedTree("beta", "old-b");
-  const sources = decodeSourcesJson(JSON.stringify({ schemaVersion: 1, skills: [
-    remoteSource("alpha", "shared/repo"), remoteSource("beta", "shared/repo"),
-  ] }));
-  const lock = decodeLockJson(JSON.stringify({ schemaVersion: 1, skills: [
-    remoteLock("alpha", "shared/repo", oldAlpha), remoteLock("beta", "shared/repo", oldBeta),
-  ] }), sources);
-  const plan = buildRemoteUpdatePlan({
-    sources,
-    lock,
-    initialLockBytes: serializeLock(lock),
-    installedTrees: new Map([["alpha", oldAlpha], ["beta", oldBeta]]),
-    observations: [{
-      repository: "shared/repo", ref: { branch: "main" }, resolvedCommit: commitB,
-      verification: "verified", warnings: [], entries: [
-        observation("shared/repo", "alpha", alpha).entries[0]!,
-        observation("shared/repo", "beta", beta).entries[0]!,
-      ],
-    }],
-  });
-
-  assert.equal(plan.steps.length, 1);
-  assert.deepEqual(plan.steps[0]?.names, ["alpha", "beta"]);
+test("v2 legal hash reapproval verifies old bytes against the old lock and fetched bytes against the new source",async()=>{
+  const f=await v2Fixture(); const next={...f.source,legalMappings:f.source.legalMappings.map(m=>({...m,expectedSha256:"f".repeat(64)}))};
+  const fake=remoteTranscript();
+  await assert.rejects(planRemoteMaintenance({sources:{schemaVersion:2,skills:[next]},lock:{schemaVersion:2,skills:[{...f.lock,resolvedCommit:observedCommit}]},installedTrees:new Map([["demo",f.tree]])},fake.runner),/legal hash/);
+  assert.ok(fake.calls.some(c=>c.includes("/git/blobs/")));
 });
 
-test("remote plan updates lock provenance when source declaration changes", () => {
-  const tree = observedTree("alpha", "same");
-  const source = remoteSource("alpha", "new/repo");
-  const sources = decodeSourcesJson(JSON.stringify({ schemaVersion: 1, skills: [source] }));
-  const legacySource = decodeSourcesJson(JSON.stringify({
-    schemaVersion: 1,
-    skills: [remoteSource("alpha", "old/repo")],
-  }));
-  const lock = decodeLockJson(JSON.stringify({
-    schemaVersion: 1,
-    skills: [remoteLock("alpha", "old/repo", tree)],
-  }), legacySource);
-  const initialLockBytes = serializeLock(lock);
-  const plan = buildRemoteUpdatePlan({
-    sources,
-    lock,
-    initialLockBytes,
-    installedTrees: new Map([["alpha", tree]]),
-    observations: [observation("new/repo", "alpha", tree)],
-  });
-  const candidate = decodeLockJson(plan.candidateLockBytes, sources);
-  const candidateEntry = candidate.skills[0];
-
-  assert.equal(plan.steps[0]?.status, "update-available");
-  assert.equal(candidateEntry?.ownership === "remote" ? candidateEntry.repository : undefined, "new/repo");
-});
-
-test("local lock plan updates every local entry in one candidate lock", () => {
-  const oldTree = observedTree("unused", "old");
-  const alpha = observedTree("alpha", "alpha");
-  const beta = observedTree("beta", "beta");
-  const localSource = (name: string) => ({
-    name, ownership: "local", license: "MIT", redistribution: "allowed",
-    target: `.agents/skills/${name}`,
-    legalMappings: [{ sourcePath: "LICENSE", expectedSha256: licenseHash }],
-  });
-  const localLock = (name: string) => ({
-    name, ownership: "local", license: "MIT", redistribution: "allowed",
-    target: `.agents/skills/${name}`, treeHash: oldTree.treeHash,
-    fileCount: oldTree.fileCount, byteCount: oldTree.byteCount,
-    legalFiles: [{ sourcePath: "LICENSE", sha256: licenseHash }],
-  });
-  const sources = decodeSourcesJson(JSON.stringify({ schemaVersion: 1, skills: [localSource("alpha"), localSource("beta")] }));
-  const lock = decodeLockJson(JSON.stringify({ schemaVersion: 1, skills: [localLock("alpha"), localLock("beta")] }), sources);
-  const initialLockBytes = serializeLock(lock);
-  const observations: LocalObservation[] = [
-    { name: "alpha", tree: alpha, legalFiles: [{ sourcePath: "LICENSE", sha256: licenseHash }] },
-    { name: "beta", tree: beta, legalFiles: [{ sourcePath: "LICENSE", sha256: licenseHash }] },
-  ];
-
-  const plan = buildLocalLockPlan({ sources, lock, initialLockBytes, observations });
-  const candidate = decodeLockJson(plan.candidateLockBytes, sources);
-  const alphaLock = candidate.skills.find((entry) => entry.name === "alpha");
-  const betaLock = candidate.skills.find((entry) => entry.name === "beta");
-  assert.equal(plan.status, "update-available");
-  assert.equal(alphaLock?.ownership, "local");
-  assert.equal(betaLock?.ownership, "local");
-  assert.equal(alphaLock?.ownership === "local" ? alphaLock.treeHash : undefined, alpha.treeHash);
-  assert.equal(betaLock?.ownership === "local" ? betaLock.treeHash : undefined, beta.treeHash);
+test("v2 valid unchanged state yields no changes while new remote produces a lock",async()=>{
+  const f=await v2Fixture();
+  const existing=await planRemoteMaintenance({sources:{schemaVersion:2,skills:[f.source]},lock:{schemaVersion:2,skills:[{...f.lock,resolvedCommit:observedCommit}]},installedTrees:new Map([["demo",f.tree]])},remoteTranscript().runner);
+  assert.deepEqual(existing.changes,[]);
+  const fresh=await planRemoteMaintenance({sources:{schemaVersion:2,skills:[f.source]},lock:{schemaVersion:2,skills:[]},installedTrees:new Map()},remoteTranscript().runner);
+  assert.equal(fresh.lock.skills.length,1);assert.equal(fresh.changes[0]?.beforeCommit,null);
 });

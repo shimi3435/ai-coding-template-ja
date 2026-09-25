@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { canonicalizeTree, utf8Compare, validateCanonicalPath, type CanonicalTree, type TreeFile } from "./canonical.ts";
-import type { LocalLegalFile, RemoteLegalFile } from "./types.ts";
+import type { RemoteLegalFile } from "./types.ts";
+
+type LocalLegalFile = Readonly<{ sourcePath: string; sha256: string }>;
 
 const mebibyte = 1_048_576;
 export const resourceLimits = Object.freeze({

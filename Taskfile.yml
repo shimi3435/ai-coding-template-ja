@@ -205,14 +205,24 @@ tasks:
       - node repo-tools/entrypoint.mjs skills:check {{.CLI_ARGS}}
 
   skills:update:
-    desc: remote skill 更新を preview（既定）または明示 --apply で transaction 適用
+    desc: remote skill 更新を preview（既定）または検査済み独立cloneへ明示 --apply
     cmds:
       - node repo-tools/entrypoint.mjs skills:update {{.CLI_ARGS}}
 
-  skills:lock-local:
-    desc: first-party skill lock を preview（既定）または明示 --apply で一括更新
+  skills:repin:
+    desc: 指名remoteの取得元・固定SHA・legal policyを明示承認して独立cloneへ適用
     cmds:
-      - node repo-tools/entrypoint.mjs skills:lock-local {{.CLI_ARGS}}
+      - node repo-tools/entrypoint.mjs skills:repin {{.CLI_ARGS}}
+
+  skills:adopt-local:
+    desc: 指名remoteを本文・出典・legal保持でlocal化（独立clone必須）
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:adopt-local {{.CLI_ARGS}}
+
+  skills:migrate:
+    desc: v1 metadataを固定commit・本文保持でv2へoffline移行（独立clone必須）
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:migrate {{.CLI_ARGS}}
 
   security:
     desc: |

@@ -44,10 +44,10 @@ pathはrepository root基準。`*` / `**` は明示的な集合表記であり�
 | --- | --- | --- | --- | --- |
 | `pyproject.toml`, `uv.lock`, `.python-version`, `src/ai_coding_template_ja/`, `tests/test_smoke.py`の開発基盤部分 | M: Python >=3.14の再現可能な研究環境、lint/type/test | uv、dev group、ruff/basedpyright/pytest、rename | setupで導入、checkで実行、doctorで基盤診断 | 保持。fresh/rename後のsetup/check/doctorを#51で回帰検証 |
 | 同じ`pyproject.toml`のresearch/notebook/experiment extras、`data/.gitkeep`, `results/.gitkeep`, `configs/README.md` | O: 数値処理・notebook・実験追跡は用途別 | 全体uv.lock、notebook task、extras-smoke | extrasは通常setupで導入しない。未使用は通常check/doctor失敗にしない | 既存opt-in維持。#51は共有lockを巻き込まない。最終導線#62 |
-| `repo-tools/entrypoint.mjs`, `repo-tools/runtime.ts`, `.node-version`, `package.json`, `package-lock.json`, `tsconfig.json` | M: #57 offline整合・local lock更新を動かすNode.js 24 / npm基盤 | native TypeScript、node:test、typescript、semver、yaml、Python version probe | setup/checkでpreflight、setupでnpm ci、doctorでruntime診断 | Node/npm保持。#51でruntime/lock/runner安全契約を保持。版数形式の別課題#50は本監査で修正しない |
+| `repo-tools/entrypoint.mjs`, `repo-tools/runtime.ts`, `.node-version`, `package.json`, `package-lock.json`, `tsconfig.json` | M: #76 offline整合・local構造 / legal検証を動かすNode.js 24 / npm基盤 | native TypeScript、node:test、typescript、semver、yaml、Python version probe | setup/checkでpreflight、setupでnpm ci、doctorでruntime診断 | Node/npm保持。#51でruntime/lock/runner安全契約を保持。版数形式の別課題#50は本監査で修正しない |
 | `repo-tools/cli.ts`のruntime/check-contracts/#57分岐 | M: 人とagentの共通入口。手動更新の実行自体はO | runtime、repository-contracts、skill-updater/index | 通常checkから共有分岐を利用 | #51で#64分岐だけを分離可能にする。既存共有コマンド回帰検証 |
 | `repo-tools/repository-contracts.ts`, `repo-tools/repository-contracts.test.ts` | M/O/T混在: runtime/lock安全性=M、同梱#64整合=O、release固定値/履歴=T | Taskfile、package/lock、workflow、CLI、README/guide/safety、release.md | 現在checkが全責務を無条件要求。doctorはこのvalidatorを呼ばない | #51が入力と責務を分離。集約entrypointを可能な限り維持。prune状態と破損状態の例示検証 |
-| `repo-tools/skill-updater/`全体、`repo-tools/skill-updater-*.test.ts`, `repo-tools/skill-updater-{github-test-fixture,test-fixture,test-temp}.ts`, `repo-tools/fixtures/skill-updater/` | offline検証・リンク・local lockはM、upstream手動更新はO | canonical/schema/legal/repository、planner/transaction、gh経由remote取得 | checkはverifyとoffline testsのみ。更新は明示操作。doctorはlinks/lockを助言診断 | #57として全体保持。#51の#64 pruneで削除しない。#65 Change 2は必要な最小拡張だけ |
+| `repo-tools/skill-updater/`全体、`repo-tools/skill-updater-*.test.ts`, `repo-tools/skill-updater-{github-test-fixture,test-fixture,test-temp}.ts`, `repo-tools/fixtures/skill-updater/` | offline検証・リンク・local構造 / legal検証はM、upstream手動更新はO | canonical/schema/legal/repository、planner/isolation/apply、gh経由remote取得 | checkはverifyとoffline testsのみ。更新は明示操作。doctorはlinks/lockを助言診断 | #57として全体保持。#51の#64 pruneで削除しない。#65 Change 2は必要な最小拡張だけ |
 | `repo-tools/skill-update-automation/`全体 | O: 明示更新をPRレビューへつなぎ、復旧を支援 | #57の型/実行結果、GitHub adapter、candidate/publish/finalize/recovery、model/workflow/smoke | setup/checkでhost導入しない。同梱testsはoffline。実host smokeは別の人起点操作 | #51が専用subtreeと外側参照を一体prune。利用する場合は既存権限・外部write・復旧契約を保持 |
 | `repo-tools/entrypoint.test.ts`, `repo-tools/runtime-preflight.test.ts` | M: runtime拒否と公開実行入口の回帰防止 | entrypoint/runtime、Python/Node fixture | 通常checkとCIで実行 | #51で保持。#64を除去しても実行 |
 | `scripts/bootstrap.sh`のpreflight/setup、`tests/test_bootstrap.py` | M: 変更前runtime検査と初期導入 | task setup、uv、Node/npm、設定/Skillリンク用script | onboarding入口。通常checkが実installerを起動する設計ではない | 保持。fixtureで変更前拒否を検証。#51は下流成立を確認 |
@@ -55,9 +55,9 @@ pathはrepository root基準。`*` / `**` は明示的な集合表記であり�
 | `scripts/doctor.py` | M: read-onlyで通常環境を診断する | runtime/lock、Skillリンク、OpenSpec gateとの共有helper | defaultは接続なし。gh未導入等WARN、任意機能不在は失敗理由にしない | #51はprune後も診断可能にする。#65はcaveman診断から任意Genshijinへ、#66はarchive検証のhelper責務を整える |
 | `scripts/rename-package.py`, `tests/test_rename_package.py` | M: コピー先固有のpackage名で開発開始できる | src/pyproject/uv.lock、固定されたlive文書の置換対象 | 明示renameのみ実変更、適用後uv sync。通常checkはfixture検証 | 保持。#51がrename→pruneの成立を検証 |
 | `scripts/prune-template-docs.py`, `tests/test_smoke.py`のprune部分 | O: 不要な保守情報を明示除去する | 固定`docs/template/`、不可侵`docs/adr/`/TEMPLATE_VERSION | default dry-run。現在は削除自体成功しても通常check失敗 | #51が参照・tests・専用検証も整合させる。template pruneと#64 pruneを分ける |
-| `.agents/skills/skills.sources.json`, `.agents/skills/skills.lock.json`, 各Skillの`LICENSE`, root `LICENSE` | M: 配布物の出所・固定版・再配布権限を検証できる | installed tree hash、legal mappings、remote/local ownership | `skills:verify`はoffline必須。local変更後lock更新。host不要 | #51は保護、#65のSkill選別/移行時にcatalogとlegalを整合。license不整合を負例検証 |
+| `.agents/skills/skills.sources.json`, `.agents/skills/skills.lock.json`, 各Skillの`LICENSE`, root `LICENSE` | M: 配布物の出所・固定版・再配布権限を検証できる | installed tree hash、legal mappings、remote/local ownership | `skills:verify`はoffline必須。local本文変更にlock更新不要。host不要 | #51は保護、#65のSkill選別/移行時にcatalogとlegalを整合。license不整合を負例検証 |
 | `.agents/skills/{grilling,grill-with-docs,code-review,diagnosing-bugs,domain-modeling,tdd}/` | M: 仕様明確化・設計・検証をrepository単独で運用する共通Skills | sources/lock/legal、各hostリンク、policy | 同梱検証必須。各Skill呼出は作業に応じる。host自体を通常setupへ要求しない | #65 Change 1で保持。code-reviewの未同梱setup前提は既存入力/導線/最小補助を比較し、ownershipもauthoringで決定 |
-| `.agents/skills/{spec-holes,self-review,verify-change,execute-openspec-change}/` | M: 仕様の穴、差分review、未検証の非完了扱い、直接実行を担う | workflow、root policy、local lock | offline testsとlock検証。実agent acceptanceは別 | #65 Change 1で簡素化。executorのarchive-ready handoffは#66、最終実hostは#47 |
+| `.agents/skills/{spec-holes,self-review,verify-change,execute-openspec-change}/` | M: 仕様の穴、差分review、未検証の非完了扱い、直接実行を担う | workflow、root policy、local構造 / legal検証 | offline testsと構造 / legal検証。実agent acceptanceは別 | #65 Change 1で簡素化。executorのarchive-ready handoffは#66、最終実hostは#47 |
 | `.agents/skills/grill-me/`, `.agents/skills/caveman/`, `docs/optional/caveman-hook.md` | O: 重複する対話補助/スタイル機能。v2では置換対象 | catalog/legal、各hostリンク、live文書、doctor、fixtures | 同梱中はoffline検証。hookは任意 | grill-meは#65 Change 1で除去。cavemanはChange 3まで保持し、Genshijin提供と一緒に撤去 |
 | `.claude/skills/*`, `.codex/skills/*`, `scripts/setup-skills.sh`, `tests/test_setup_skills.py` | M: 同じSkill実体を両hostへ提示し、リンク不整合を検出 | `.agents/skills/`、#57 links/verify | bootstrap/明示skills:linksで整合。doctorは助言、verifyがhard gate | #51/#65で保持。削除Skillだけリンクを除去し、dangling link/衝突を検証 |
 | `CONTEXT.md`, `AGENTS.md`, `CLAUDE.md`, `docs/agents/workflow.md`, `docs/agents/safety.md` | MのpolicyとO/Tの詳細が混在: 可搬な作業・安全契約が価値 | AGENTSは作業方針、CONTEXTは用語定義、CLAUDEはhost補足、workflow/Skills | 通常checkでlive contract検証。保守文書の不在を失敗にしない移行が必要 | #65 Change 1はowner整理と意味のあるreview参照名、#51は#64専用説明のprune、#66は通常archive/保守close分離 |
@@ -73,14 +73,14 @@ pathはrepository root基準。`*` / `**` は明示的な集合表記であり�
 | 将来のGenshijin専用vendor subtree・project-owned adapter・操作入口（現行treeには未実装） | O: 有効化は任意。ただし提供とcaveman移行はv2必須 | #51の検証/prune境界、必要な場合だけ#57最小拡張 | fresh clone無効、同梱中offline integrity、通常setup/check/doctorでhost不要 | #65 Change 3が具体path/host/version/解除を所有。Change 2条件付き。#64統合は別判断、実host最終受け入れ#47 |
 
 補足: `.gitignore`はMのsecret・生成物・研究データ保護を所有する。#64 prune時も、Node dependencies、
-#57 transaction state、`.env`と生成MCP設定の除外を保持する（#51）。root `LICENSE`はlocal Skillのlegal sourceでもあり、
+旧#57 transaction stateの残存物保護、`.env`と生成MCP設定の除外を保持する（#51）。root `LICENSE`はlocal Skillのlegal sourceでもあり、
 保守文書と一緒に削除しない。Taskfile自体の混在責務は次節に入口ごとに示す。
 `AGENTS.md`冒頭の「CONTEXT.md」という括弧表記と、実ファイルの用語定義/方針の分担には不整合がある。
 #65 Change 1のowner整理時に解消し、端末のglobal policyとの重複だけを理由にrepositoryの規則を削除しない。
 
 ## 全public task
 
-Taskfileの全29入口を列挙する。分類は入口の責務であり、Mでも毎回の実行を強制する意味ではない。
+Taskfileの入口を列挙する。分類は入口の責務であり、Mでも毎回の実行を強制する意味ではない。
 依存・検証は上のファイル別行と対応する。修復ownerは原則#51、Skill整理は#65、archiveは#66、文書導線は#62。
 
 | public task | 分類・価値 / 依存 | 通常経路・移行と検証 / owner |
@@ -106,8 +106,8 @@ Taskfileの全29入口を列挙する。分類は入口の責務であり、Mで
 | `skills:links` | M: 共通Skillリンク / #57,setup-skills.sh | offline、両hostリンク検証 / #51/#65 |
 | `skills:verify` | M: source/lock/tree/legal/links整合 / #57 | 同梱中のOも検証、#64除去後も保持 / #51/#65 |
 | `skills:check` | O: upstream更新有無の手動確認 / #57,gh,network | 通常setup/check/doctorでは呼ばない。下流でも入口を保持 / #51 |
-| `skills:update` | O: upstream手動preview/apply / #57,gh,transaction | 明示apply、失敗rollback、通常checkはremote取得しない / #51保持、#65条件付き最小拡張 |
-| `skills:lock-local` | M: 下流のlocal Skill編集を固定 / #57 | offline preview/明示apply、remote ownershipを混同しない / #51/#65 |
+| `skills:update` | O: upstream手動preview/apply / #57,gh,独立clone | 候補への明示apply、失敗時は新cloneで再実行、通常checkはremote取得しない / #51保持、#65条件付き最小拡張 |
+| `skills:repin` / `skills:adopt-local` / `skills:migrate` | O: 明示再固定 / 本文保持local化 / v1移行 / #76 | sourceと開始commit・独立候補を指定。通常CIにnetworkを持ち込まない |
 | `security` | M: secret/依存/SAST / gitleaks,pip-audit,bandit | online依存監査は明示実行。残存基盤の検証をpruneしない / #51 |
 | `nb:strip` | O: notebook出力除去 / nbstripout | 未導入/対象なしno-op。overlayと一体で扱う / #51保持、#62導線 |
 | `nb:sync` | O: notebookペア同期 / jupytext | 未導入/対象なしno-op / #51保持、#62導線 |
@@ -156,9 +156,9 @@ Taskfileの全29入口を列挙する。分類は入口の責務であり、Mで
 | typecheckを保持 | `tsconfig.json`の`repo-tools/**/*.ts` / `**/*.mjs` | broad include自体は削除subtreeの不存在を要求しない。残存importをtscで検出し、残した共有sourceを引き続き検査 |
 | 混在文書を編集 | `README.md`, `docs/guide.md`, `docs/agents/safety.md` | #64有効化・復旧・human smokeの専用説明/参照とpermission markersを除去または専用ownerへ移す。README/guide/safety全体は保持。#57の手動更新と一般的な外部write安全境界を残す |
 | 保守履歴を保持 | `docs/template/retrospectives.md`などの#64履歴 | #64 pruneだけでは削除しない。現在機能の有無を履歴文字列で判定しない。保守文書pruneは独立操作 |
-| #57を保持 | `repo-tools/skill-updater/`全体と関連top-level tests/fixtures、`scripts/setup-skills.sh`、catalog/lock/license/links | #64→#57の依存を切る。#57から#64への逆importは現行にない。commands/planner/transaction/github/schema/legal/canonical等を保守専用と誤分類しない |
+| #57を保持 | `repo-tools/skill-updater/`全体と関連top-level tests/fixtures、`scripts/setup-skills.sh`、catalog/lock/license/links | #64→#57の依存を切る。#57から#64への逆importは現行にない。commands/planner/isolation/apply/github/schema/legal/canonical等を保守専用と誤分類しない |
 | Node基盤を保持 | entrypoint/runtime、package/lock/tsconfig、Node/Python version宣言 | #64削除を依存削除の理由にしない。yaml/semverは#57でも利用する。共有index exportを一括削除しない |
-| local stateを保護 | `.agents/skills/.skill-updater-txn/`とそのgitignore、下流の変更 | #57 transaction/rollback用。#64専用cacheと取り違えない。中断状態や不明な利用者差分は検出・報告し、無断cleanupしない |
+| local stateを保護 | `.agents/skills/.skill-updater-txn/`とそのgitignore、下流の変更 | #76でtransaction機構を撤去した後も、旧状態や不明な利用者差分を無断cleanupしない |
 
 ### 同梱・無効・欠落の扱い
 
@@ -211,7 +211,7 @@ receipt欠落/不一致、移動済みrepository、複数cloneの競合は自動
 
 1. fresh、rename後、template文書prune後、#64 prune後、両方prune後で通常setup/check/doctorが成立する。
 2. template文書が残っていても下流の通常checkはrelease-readyや特定versionを要求しない。保守者が明示的に専用検証を実行できる。
-3. #57 verify、links、local lock preview/apply、手動check/updateの入口が残る。remote操作はfake ghで検証でき、通常checkに認証/ネットワーク不要。
+3. #76 verify、links、手動check/update/repin/adopt-local/migrateの入口を提供する。remote操作はfake ghで検証でき、通常checkに認証/ネットワーク不要。
 4. 同梱#64の破損と部分削除は検出する。正常prune後だけ専用tests/routesを外す。必須Skillのlock/license不一致は引き続き失敗する。
 5. previewは無変更、applyは対象限定、再実行と部分失敗は仕様どおり。repository外pathと対象外の利用者差分を保護する。
 6. template pruneと#64 pruneは独立であり、GitHub resourceやhost登録の無断削除を行わない。

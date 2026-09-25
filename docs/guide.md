@@ -219,50 +219,18 @@ repository内の撤去処理はGitHub上のPR、branch、artifact、設定を自
 
 Node.js 24、npm、Python >=3.14、uv、Task、公開GitHubを読める `gh` を用意する。
 元の作業コピーにある未コミット差分は保持し、更新用の新しいbranchとpathを選ぶ。
-以下の固定例が既に存在する場合は別名に置き換える。既存directoryを上書きしない。
+既存directoryを上書きしない。
 
-1. 元repositoryで最新baseを取得し、更新用worktreeを作る。
+1. [公開操作・隔離更新手順](template/skill-maintenance.md)に従い、完全な開始commitと独立候補cloneを用意する。
+2. Node.js 24 / Python >=3.14、locked dependencyでpreviewし、取得元・固定SHA・legalを確認する。
+3. 明示applyが成功した候補だけでoffline verify、`task check`、差分レビューを行う。
+4. すべて成功した後に、push先を確認して通常PRへ進む。失敗候補は診断用に残し、新しいcloneから再実行する。
 
-   ```bash
-   git fetch origin main
-   git worktree add -b chore/manual-skill-update ../manual-skill-update origin/main
-   cd ../manual-skill-update
-   ```
-
-2. 更新用worktreeだけでruntimeとlocked dependencyを準備し、現状を検証する。
-
-   ```bash
-   node repo-tools/entrypoint.mjs runtime-preflight
-   npm ci --ignore-scripts
-   uv sync --locked
-   task skills:verify
-   ```
-
-3. 上流の状態と更新previewを確認する。これらのコマンドは公開GitHubを読み取る。
-
-   ```bash
-   task skills:check
-   task skills:update
-   ```
-
-4. previewのcommit、差分、source / lock、LICENSE / NOTICEを確認後、同じworktreeへ適用して検証する。
-
-   ```bash
-   task skills:update -- --apply
-   task skills:verify
-   task check
-   git diff --stat
-   git diff
-   ```
-
-5. 検証成功と差分reviewの後、通常のcommit / push / PR手順へ進む。
-   取得前の件数・byte上限、特殊file、integrity、legal不一致、履歴変更などで失敗した場合は止める。
-   失敗したコピーを元の作業コピーやPRへ持ち込まず、必要な調査情報と利用者変更を保全する。
-   LICENSE / NOTICEの承認hash変更や移動タグ・履歴変更のrepinは、人が内容を確認して別途判断する。
-
-worktreeはOSのセキュリティsandboxではない。取得前の上限検査は、通信全体の厳密な転送量制限を意味しない。
-source / lock形式、first-partyの `task skills:lock-local`、transaction / rollbackは現行契約のままであり、
-後続のSkill管理縮小・lock移行とは分けて扱う。
+候補は `git clone --no-local` で作り、linked worktree / shared objectを使わない。
+元の未コミット変更は取得しない。元repository、候補、双方のGit metadataをWSLのLinux filesystemに置く。
+Windows / DrvFSは保証対象外で、独立cloneはOS sandboxではない。
+local本文の内容lockは廃止したが、SKILL.mdの構造・identity・legal・link検証は維持する。
+v1移行、指名repin、外部由来local化、legal再承認の使い分けも上記リファレンスを参照する。
 
 ## 8. 詰まったとき
 

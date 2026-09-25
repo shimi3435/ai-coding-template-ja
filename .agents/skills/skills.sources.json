@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "skills": [
     {
       "name": "caveman",
@@ -93,7 +93,7 @@
       "target": ".agents/skills/execute-openspec-change",
       "legalMappings": [
         {
-          "sourcePath": "LICENSE",
+          "path": "LICENSE",
           "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
@@ -169,7 +169,7 @@
       "target": ".agents/skills/self-review",
       "legalMappings": [
         {
-          "sourcePath": "LICENSE",
+          "path": "LICENSE",
           "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
@@ -182,7 +182,7 @@
       "target": ".agents/skills/spec-holes",
       "legalMappings": [
         {
-          "sourcePath": "LICENSE",
+          "path": "LICENSE",
           "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]
@@ -216,7 +216,7 @@
       "target": ".agents/skills/verify-change",
       "legalMappings": [
         {
-          "sourcePath": "LICENSE",
+          "path": "LICENSE",
           "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
         }
       ]

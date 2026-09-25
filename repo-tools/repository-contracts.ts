@@ -206,7 +206,7 @@ export function validateRepositoryContracts(): readonly string[] {
   if (missingNpmRoutes.length > 0) {
     throw new Error(`${taskfilePath}: npm 公開入口が不足しています: ${missingNpmRoutes.join(", ")}`);
   }
-  const requiredSkillRoutes = ["skills:links:", "skills:verify:", "skills:check:", "skills:update:", "skills:lock-local:"];
+  const requiredSkillRoutes = ["skills:links:", "skills:verify:", "skills:check:", "skills:update:", "skills:repin:", "skills:adopt-local:", "skills:migrate:"];
   const missingSkillRoutes = requiredSkillRoutes.filter((route) => !taskfileText.includes(route));
   if (missingSkillRoutes.length > 0) {
     throw new Error(`${taskfilePath}: skill updater routesが不足しています: ${missingSkillRoutes.join(", ")}`);

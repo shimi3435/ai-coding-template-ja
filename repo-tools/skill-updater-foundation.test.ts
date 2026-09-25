@@ -3,15 +3,9 @@ import test from "node:test";
 import {
   addRemoteLegalFiles,
   canonicalizeTree,
-  decodeLockJson,
-  decodeSourcesJson,
   parseSkillMetadata,
-  selectHighestSemverTag,
-  serializeLock,
-  serializeSources,
   sha256,
   validateLocalLegalFiles,
-  validateSemverRange,
   validateSkillLimits,
   validateCanonicalPath,
 } from "./skill-updater/index.ts";
@@ -335,21 +329,10 @@ test("resource limits accept exact boundary and reject one byte over", () => {
   );
 });
 
-test("SemVer adapter uses npm range and prerelease behavior", () => {
+test("legacy migration validates the declared SemVer range without selecting tags", () => {
   assert.equal(validateSemverRange("^1.0.0"), "^1.0.0");
   assert.throws(() => validateSemverRange("not a range"));
-  assert.deepEqual(
-    selectHighestSemverTag("^1.0.0", [
-      { tag: "v1.3.0-beta.1", commit: "a".repeat(40) },
-      { tag: "v1.2.0", commit: "b".repeat(40) },
-    ]),
-    { tag: "v1.2.0", version: "1.2.0", commit: "b".repeat(40) },
-  );
-  assert.deepEqual(
-    selectHighestSemverTag("^1.0.0", [
-      ...Array.from({ length: 500 }, (_, index) => ({ tag: `invalid-${index}`, commit: "a".repeat(40) })),
-      { tag: "v1.2.0", commit: "b".repeat(40) },
-    ]),
-    { tag: "v1.2.0", version: "1.2.0", commit: "b".repeat(40) },
-  );
 });
+
+import { decodeLockJson, decodeSourcesJson, serializeLock, serializeSources } from "./skill-updater/migration/schema-v1.ts";
+import { validateSemverRange } from "./skill-updater/migration/semver-policy-v1.ts";
