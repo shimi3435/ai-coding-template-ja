@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { detectAndValidateRuntimes } from "./runtime.ts";
-import { validateRepositoryContracts } from "./repository-contracts.ts";
 import type { SkillCommandName } from "./skill-updater/index.ts";
 
 function usage(): never {
@@ -18,6 +17,7 @@ try {
     console.log(`[OK] npm ${versions.npm}`);
     console.log(`[OK] Python ${versions.python}`);
   } else if (command === "check-contracts") {
+    const { validateRepositoryContracts } = await import("./repository-contracts.ts");
     for (const contract of validateRepositoryContracts()) {
       console.log(`[OK] ${contract}`);
     }

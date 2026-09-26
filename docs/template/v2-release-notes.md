@@ -1,5 +1,16 @@
 # v2 release notes
 
+## Breaking: repository parser の受理契約
+
+[Issue #77](https://github.com/shimi3435/ai-coding-template-ja/issues/77)により、exact dependency version と
+Taskfile の構文解析を既存の `semver` / `yaml` へ委譲した。依存 version の各 core 要素は
+`9007199254740991` 以下、全体は256文字以下を要求する。prerelease / build metadata は引き続き許可する。
+
+Taskfile の構文エラー・重複キー・未対応 YAML / task 形式は拒否する。必須入口は説明文・コメントではなく、
+解析後の task key と command の完全一致で検査する。check の必須2コマンドは `cmds` の直接 string に置く。
+変更前から使われている標準 Taskfile はそのまま通るが、下流で記述を変更した場合は
+[repository contracts の受理仕様](repository-contracts.md)に合わせて修正する。
+
 ## Breaking: 自前Node installerの撤去
 
 [Issue #52](https://github.com/shimi3435/ai-coding-template-ja/issues/52)により、

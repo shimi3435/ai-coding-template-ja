@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { parse as parseSemver } from "semver";
+import { validateRepositoryTaskfile } from "./repository-taskfile.ts";
 
 type PackageManifest = {
   private?: boolean;
@@ -56,50 +58,12 @@ function readJson<T>(path: string): T {
   }
 }
 
-function indentation(line: string): number {
-  return line.length - line.trimStart().length;
-}
-
-function yamlBlock(lines: readonly string[], header: string, indent: number): readonly string[] {
-  const exact = `${" ".repeat(indent)}${header}:`;
-  const index = lines.findIndex((line) => line === exact);
-  if (index < 0) throw new Error(`YAML field がありません: ${header}`);
-  let end = index + 1;
-  while (end < lines.length && (lines[end]!.trim().length === 0 || indentation(lines[end]!) > indent)) end += 1;
-  return lines.slice(index + 1, end);
-}
-
-function validIdentifiers(value: string, rejectNumericLeadingZero: boolean): boolean {
-  if (value.length === 0) {
-    return false;
-  }
-  return value.split(".").every((identifier) => {
-    if (!/^[0-9A-Za-z-]+$/.test(identifier)) {
-      return false;
-    }
-    return !(
-      rejectNumericLeadingZero &&
-      /^\d+$/.test(identifier) &&
-      identifier.length > 1 &&
-      identifier.startsWith("0")
-    );
-  });
-}
-
 function isExactSemver(version: string): boolean {
-  const plus = version.indexOf("+");
-  if (plus !== -1) {
-    if (version.indexOf("+", plus + 1) !== -1 || !validIdentifiers(version.slice(plus + 1), false)) {
-      return false;
-    }
-  }
-  const withoutBuild = plus === -1 ? version : version.slice(0, plus);
-  const dash = withoutBuild.indexOf("-");
-  if (dash !== -1 && !validIdentifiers(withoutBuild.slice(dash + 1), true)) {
-    return false;
-  }
-  const core = dash === -1 ? withoutBuild : withoutBuild.slice(0, dash);
-  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(core);
+  const parsed = parseSemver(version);
+  if (parsed === null) return false;
+  // semver.version は build metadata を含まず、prefix や空白も正規化する。
+  const canonical = parsed.version + (parsed.build.length > 0 ? `+${parsed.build.join(".")}` : "");
+  return canonical === version;
 }
 
 function readRepoToolsSources(directory: string): readonly string[] {
@@ -201,27 +165,11 @@ export function validateRepositoryContracts(): readonly string[] {
 
   const taskfilePath = join(repositoryRoot, "Taskfile.yml");
   const taskfileText = readFileSync(taskfilePath, "utf8");
-  const requiredNpmRoutes = ["npm ci --ignore-scripts", "npm audit --audit-level=high"];
-  const missingNpmRoutes = requiredNpmRoutes.filter((route) => !taskfileText.includes(route));
-  if (missingNpmRoutes.length > 0) {
-    throw new Error(`${taskfilePath}: npm 公開入口が不足しています: ${missingNpmRoutes.join(", ")}`);
-  }
-  const requiredSkillRoutes = ["skills:links:", "skills:verify:", "skills:check:", "skills:update:", "skills:repin:", "skills:adopt-local:", "skills:migrate:"];
-  const missingSkillRoutes = requiredSkillRoutes.filter((route) => !taskfileText.includes(route));
-  if (missingSkillRoutes.length > 0) {
-    throw new Error(`${taskfilePath}: skill updater routesが不足しています: ${missingSkillRoutes.join(", ")}`);
-  }
-  const requiredCheckRoutes = ["node repo-tools/entrypoint.mjs skills:verify", "node --test repo-tools/*.test.ts"];
-  let checkTask = "";
+  let taskCommands: readonly string[];
   try {
-    checkTask = yamlBlock(taskfileText.split("\n"), "check", 2).join("\n");
-  } catch {
-    throw new Error(`${taskfilePath}: task check が必要です`);
-  }
-  for (const route of requiredCheckRoutes) {
-    if (!checkTask.includes(route)) {
-      throw new Error(`${taskfilePath}: task check に ${route} が必要です`);
-    }
+    taskCommands = validateRepositoryTaskfile(taskfileText);
+  } catch (error: unknown) {
+    throw new Error(`${taskfilePath}: ${error instanceof Error ? error.message : String(error)}`);
   }
   const legacySkillPaths = [
     join(repositoryRoot, "scripts", "skills-upstream-check.py"),
@@ -232,17 +180,6 @@ export function validateRepositoryContracts(): readonly string[] {
     throw new Error(`legacy skill checkerが残っています: ${remainingLegacyPaths.join(", ")}`);
   }
 
-  const taskCommands: string[] = [];
-  let insideCommands = false;
-  for (const line of taskfileText.split("\n")) {
-    if (/^  \S.*:\s*$/.test(line)) {
-      insideCommands = false;
-    } else if (line === "    cmds:") {
-      insideCommands = true;
-    } else if (insideCommands && !line.trimStart().startsWith("#")) {
-      taskCommands.push(line);
-    }
-  }
   const withoutComments = (text: string): string =>
     text
       .split("\n")
@@ -256,7 +193,7 @@ export function validateRepositoryContracts(): readonly string[] {
 
   const publicRoutes = [
     JSON.stringify(manifest.scripts ?? {}),
-    taskCommands.join("\n"),
+    ...taskCommands,
     ...workflowSources.map(withoutComments),
     withoutComments(readFileSync(join(repositoryRoot, "scripts/bootstrap.sh"), "utf8")),
     ...repoToolsSources,
