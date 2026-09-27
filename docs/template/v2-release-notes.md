@@ -8,6 +8,10 @@ Taskfile の構文解析を既存の `semver` / `yaml` へ委譲した。依存 
 
 Taskfile の構文エラー・重複キー・未対応 YAML / task 形式は拒否する。必須入口は説明文・コメントではなく、
 解析後の task key と command の完全一致で検査する。check の必須2コマンドは `cmds` の直接 string に置く。
+root は `version` / `tasks`、check は `desc` / `cmds` に限定し、その他の task / command も許可キーを
+限定する。補助 field の shell 実行や check 全体の skip / 失敗抑止を拒否する。`vars` は string 値だけを許可する。
+CI は Task から独立した先行検査を実行し、ローカル最終検証も
+`node repo-tools/entrypoint.mjs check-contracts && task check` に変更する。
 変更前から使われている標準 Taskfile はそのまま通るが、下流で記述を変更した場合は
 [repository contracts の受理仕様](repository-contracts.md)に合わせて修正する。
 

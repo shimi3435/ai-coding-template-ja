@@ -77,7 +77,11 @@ def test_ci_runs_the_shared_offline_gate_after_pinned_setup_and_rename() -> None
             preparation.append(
                 "uv run python scripts/rename-package.py ci_rename_smoke --apply"
             )
-        assert commands == [*preparation, "task check"]
+        assert commands == [
+            *preparation,
+            "node repo-tools/entrypoint.mjs check-contracts",
+            "task check",
+        ]
 
         task_setup = re.search(
             r"^      - uses: go-task/setup-task@([0-9a-f]{40})[^\n]*\n"

@@ -43,14 +43,20 @@ The checker MUST validate required routes and forbidden runners using parsed tas
 
 tasks と各 task は mapping。task 本体の string / array / cmd 省略形は拒否する。cmds は欠損可で、存在する場合
 sequence とする。項目は空でない string、cmd string object、task string object のみとし、後二者は排他的とする。
-未対応の command 形式を黙って無視しない。補助設定の全 schema、参照先 task の解決は検証しない。
+未対応の command 形式を黙って無視しない。許可する key は root が version / tasks、check task が
+desc / cmds、その他の task が desc / cmds / silent / vars、cmd object が cmd / silent、task 呼出 object が
+task / silent / vars だけとする。未知 key は false / null / 空の値でも拒否する。desc は string、silent は
+boolean、vars は文字列名から string 値への mapping とし、空の値は許可するが空白だけの名前は拒否する。
+vars の sh / ref object、array、非string値は拒否する。参照先 task の解決、文字列内の template 展開は検証しない。
 
 skills:links、skills:verify、skills:check、skills:update、skills:repin、skills:adopt-local、skills:migrate の
 task key を要求する。check.cmds の直接 string に `node repo-tools/entrypoint.mjs skills:verify` と
 `node --test repo-tools/*.test.ts` を要求する。trim 後に完全一致する独立項目のみを数え、cmd object / task 呼出
 では代用できない。npm ci --ignore-scripts と npm audit --audit-level=high は、全 task の直接 string または
 cmd string の trim 後完全一致で要求する。task 名は固定しない。説明文・YAMLコメントは数えない。
-既存の禁止 runner pattern は全 task の直接 string / cmd string に適用する。shell の解釈はしない。
+既存の禁止 runner pattern は全 task の直接 string / cmd string に適用する。補助 field の shell 実行は
+許可リストで拒否する。shell / template の解釈はしない。成功表示は
+`forbidden Node runners in static command text: none` とし、実行時の全コマンド不在を保証しない。
 
 #### Scenario: Required commands appear only in prose
 - **WHEN** required commands occur only in descriptions, comments, echo statements, or inside a longer shell block
@@ -67,3 +73,31 @@ cmd string の trim 後完全一致で要求する。task 名は固定しない�
 #### Scenario: Repeated read-only validation
 - **WHEN** the same valid or invalid repository is checked twice
 - **THEN** both results agree and its input files are unchanged
+
+#### Scenario: Executable auxiliary fields and task suppression
+- **WHEN** if / status / preconditions / sources / generates / platforms / run / ignore_error / includes or another unlisted key occurs at a restricted location
+- **THEN** the checker rejects it even if its value is false, null, or empty, without executing any auxiliary shell
+
+### Requirement: Independent gate before Task execution
+The CI and local final validation MUST invoke check-contracts independently before task check and stop when it fails.
+
+CI の check / rename-smoke job は依存導入後（rename-smoke は改名後）に独立 step として
+`node repo-tools/entrypoint.mjs check-contracts` を実行し、成功した場合だけ次の step の `task check` を実行する。
+両 step と job に skip 条件・continue-on-error を追加しない。ローカル最終検証は
+`node repo-tools/entrypoint.mjs check-contracts && task check` とする。新しい wrapper は追加しない。
+Taskfile を自分自身の検査の起動元として信用しない。Task が gate 全体を skip / 成功扱いにする設定は
+対象外にせず拒否する。任意の shell 内容や外部環境による故意の迂回を保証する sandbox ではない。
+Task 3.51.1 の実動作で、単独なら skip / auxiliary shell を実行する負例が先行検査で停止し、
+正常な fixture が実際に後続 Task コマンドを実行することを確認する。
+
+#### Scenario: Skipped check cannot bypass independent validation
+- **WHEN** check contains if: "exit 1" or status: ["true"]
+- **THEN** independent validation fails before task check is invoked, even though Task alone would exit successfully
+
+#### Scenario: Allowed Taskfile reaches the real runner
+- **WHEN** the independent checker accepts the fixture
+- **THEN** Task 3.51.1 executes its check commands and propagates a command failure
+
+#### Scenario: Hosted CI remains a merge condition
+- **WHEN** a pull request is created for the corrected branch
+- **THEN** hosted CI must succeed before merge; local evidence is not reported as hosted CI success

@@ -16,7 +16,7 @@ Issue #77。#75 / #76 が merge された main `41dc839d05dc8134f1f7509f38fb14cb
 ## Impact
 
 変更対象は repository contracts、その CLI import 境界、公開 CLI を通したテスト、仕様文書である。
-dependency / lockfile、Taskfile の実行内容、Skill frontmatter parser、workflow の文字列検査、runtime
+dependency / lockfile、Taskfile の実行内容、Skill frontmatter parser、workflow の禁止 runner 文字列検査、runtime
 判定（#50）は変更しない。廃止済み automation / SemVer 範囲選択を復活させない。
 この変更には CLI の受理挙動と CI gate の変更があるため、AGENTS.md OSWF-5 に従う。
 
@@ -24,4 +24,12 @@ dependency / lockfile、Taskfile の実行内容、Skill frontmatter parser、wo
 
 `specs/repository-contracts/spec.md` の全要件と `spec-holes.md` の検証対応を満たし、focused validation、
 最新入力の `task check`、独立 review / verifier が成功する。未検証を完了としない。
-利用者は対話で設計と実装・検証への移行を承認済み。commit / push / PR / merge は今回の依頼に含まない。
+利用者は対話で設計と実装・検証への移行を承認済み。commit / push は後続の明示依頼で承認済み。
+PR / merge は依頼に含まない。
+
+## Cycle 2 の修正範囲
+
+補助設定による gate skip と shell 実行の迂回を閉じるため、Taskfile の最小許可リストを仕様化する。
+CI check / rename-smoke に独立 contract step を追加し、ローカル最終検証も同じ順序にする。
+静的検査の成功表示、利用ガイド、agent workflow の最終検証手順、回帰 tests を整合させる。
+Taskfile の実行内容そのもの、dependency / lockfile、runtime 文法は変更しない。

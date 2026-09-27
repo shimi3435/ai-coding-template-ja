@@ -17,8 +17,8 @@ automation parser と SemVer range selector は base に存在せず、置換対
 ## module 境界
 
 `repository-contracts.ts` は I/O と既存検査の orchestration を維持する。
-`repository-taskfile.ts` は YAML 構文解析と Taskfile policy を分離した関数で処理し、全 command と
-check の直接文字列を返す。AST でコメントと実データを区別し、alias の展開や shell / task graph の解釈をしない。
+`repository-taskfile.ts` は YAML 構文解析と Taskfile policy を分離した関数で処理し、check の直接文字列を検査した後、
+全 command を返す。AST でコメントと実データを区別し、alias の展開や shell / task graph の解釈をしない。
 SemVer の薄い正規形検査は既存ファイル内に置き、他 runtime の共通化を持ち込まない。
 CLI は contract module を check-contracts 分岐で遅延 import する。既存の runtime-preflight は
 dependency 未導入時にも起動できる境界を維持し、runtime の受理文法は変更しない。
@@ -27,10 +27,11 @@ dependency 未導入時にも起動できる境界を維持し、runtime の受�
 
 受理文法は spec delta と spec-holes に定義する。Taskfile の root / tasks / 各 task は mapping とする。
 task の cmds は存在する場合 sequence で、欠損は空として扱う。必須 check の欠損・空は必要コマンド不在で失敗する。
-cmd / task object は排他的な一方の文字列を持ち、空白のみの command / task 名、未知 command 形式、
-cmd と task の同時指定、defer 等との混在を拒否する。silent 等の補助フィールドは Task に委ねる。
-検査対象外の task / root 設定は保持し、Task schema 全体・動的テンプレート・includes・deps graph・shell の
-到達可能性・失敗伝播は保証しない。これらに新たな禁止規則や解析機構を追加しない。
+cmd / task object は排他的な一方の文字列を持ち、空白のみの command / task 名を拒否する。
+cycle 2 では補助設定を無条件に許可する旧方針を廃止し、root / task / command の許可 key を spec に固定する。
+許可した desc / silent / vars の型だけを小さく検査し、Task schema 全体を追跡しない。
+check の skip / cache / platform / error suppression、root の継承設定、includes、補助 shell 実行を拒否する。
+変数展開・shell の意味解析は対象外とし、成功表示も静的な command text の検査に限定する。
 必須コマンドの一致は YAML scalar の値に対する trim 後の一致であり、引用符や block style に依存しない。
 複数行の途中に埋め込まれた文字列、echo、shell comment は一致しない。
 
@@ -50,3 +51,13 @@ SemVer、YAML parse、Task policy の順に red / green を確認する。Node 2
 ## Open Questions
 
 なし。未対応入力は明示拒否または上記スコープ外として定義済み。
+
+## Cycle 2: 敵対的 review 後の再計画
+
+80e83c4 に対する外部 review の P1 2件を実機で再現した。Taskfile の補助 field を対象外にした境界と、
+Task 内でのみ contract checker を起動する構造が原因である。利用者は grilling で許可リスト、静的表示、
+CI / ローカルの独立先行検査を承認した。元の完了 checkbox と証跡は cycle 1 の記録として保存する。
+CI の両 job の直列順序を既存 Python contract test で検証し、Task 3.51.1 の実行境界を Node CLI fixture
+で検証する。fake node / npx は marker を書くだけとし、外部取得を行わない。Task 本体は fake にしない。
+初回の環境依存 slice で既存 baseline と real Task tests を確認する。hosted CI は PR 作成後の merge 条件であり、
+未実行のまま green と扱わない。前 cycle と別の reviewer / verifier で OSWF-5 の順序を実施する。

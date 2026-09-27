@@ -210,7 +210,7 @@ export function validateRepositoryContracts(): readonly string[] {
     `TEMPLATE_VERSION ${templateVersion}`,
     "prepare-v2-release handoff",
     "native network access: none",
-    "forbidden Node runners: none",
+    "forbidden Node runners in static command text: none",
     "skill updater routes",
     "legacy skill checker: absent",
   ];

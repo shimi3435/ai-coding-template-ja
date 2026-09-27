@@ -134,6 +134,16 @@ change を拡張しない。独立価値があれば別 Issue / change 候補の
 
 ### Validation cadence と reusable green evidence
 
+本テンプレートのローカル最終検証では、依存導入後に次のコマンドを使用する。本書の最終
+`task check` は、この独立先行検査を含めて実行する。先行検査に失敗したら Task を起動しない。
+
+```bash
+node repo-tools/entrypoint.mjs check-contracts && task check
+```
+
+CI の `check` / 改名後の `rename-smoke` も同じ順序を独立 step で守る。Taskfile 自身の検査起動を
+Taskfile に依存させない。ローカル完了後も、merge 前に PR の hosted CI 成功を確認する。
+
 各 fix 中は対象に近い focused validation を実行する。review 収束後、最新入力で `task check` を実行する。
 focused validation が構造上非該当の場合だけ N/A 理由で完了できる。環境制約または失敗による未実行は
 完了にできない。

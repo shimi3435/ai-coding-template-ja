@@ -45,14 +45,31 @@
 | 2 | 境界値 | 該当 | 各必須 command は1項目あればよい。空文字 / 空白のみの項目は拒否 | 1: spec に記載 |
 | 3 | 重複・衝突 | 該当 | cmd と task の同時指定は拒否。同じ command の反復は許可 | 1: spec に記載 |
 | 4 | 順序 | 該当 | 存在検査は task / command の順序に依存しない。実行順序の保証はしない | 1 / 2: task graph は対象外 |
-| 5 | 型・形式不正 | 該当 | 省略形 / 非string / 未対応 cmds を拒否。補助設定の全 schema は検証しない | 1 / 2: spec と design に記載 |
+| 5 | 型・形式不正 | 該当 | 省略形 / 非string / 未対応 cmds を拒否。各 mapping の許可キー以外は値に関係なく拒否。desc は string、silent は boolean、vars は string 値のみ | 1 / 2: spec と design に記載 |
 | 6 | エラー経路 | 該当 | 必須入口の不足 / 禁止 runner / 不正構造を Taskfile 診断で拒否 | 1: spec に記載 |
 | 7 | 冪等性・再実行 | 該当 | 実行せず静的に検査する。繰返しで入力を変更しない | 1: spec に記載 |
 | 8 | 時刻・タイムゾーン | 非該当 | 判定は時刻 / TZ を参照しない | — |
 | 9 | 文字列 | 該当 | 必須入口は trim 後の完全一致。description / YAML comment / echo / 埋込は不可 | 1: spec に記載 |
-| 10 | 数値 | 該当 | 数値 command / task 名は拒否。補助 option の数値意味は Task に委譲 | 1 / 2: 全 schema は対象外 |
+| 10 | 数値 | 該当 | 数値 command / task 名は拒否。desc / silent / vars の非対応型を拒否。version の意味は Task に委譲 | 1 / 2: 全 schema は対象外 |
 | 11 | 巨大入力・リソース枯渇 | 非該当 | input 上限は R2 と同じ。task 呼出を辿らず再帰実行しない | — |
-| 12 | 状態遷移の未定義パス | 非該当 | shell / task 実行はしない。動的設定、includes、deps、到達可能性は対象外 | 2: design に明記 |
+| 12 | 状態遷移の未定義パス | 非該当 | shell / task 実行はしない。補助実行、includes、deps、check の skip 設定を拒否。テンプレート展開・shell 意味・task graph は対象外 | 2: design に明記 |
+
+## R4: Independent gate before Task execution
+
+| # | 分類 | 判断 | 穴の内容と解決 | 潰し方 |
+| --- | --- | --- | --- | --- |
+| 1 | 空・ゼロ長・None | 該当 | 未知キーは null / false / 空配列でも拒否。vars の空文字値と空 mapping は許可、空白名は拒否 | 1: R3 / R4 に記載 |
+| 2 | 境界値 | 該当 | check / rename-smoke の両方に独立 step が必要 | 1: CI 順序 test |
+| 3 | 重複・衝突 | 該当 | task check 内の検査で独立先行検査を代替しない | 1: CI 順序 test |
+| 4 | 順序 | 該当 | locked install、rename（該当時）、独立検査、task check の順に実行 | 1: CI 順序 test |
+| 5 | 型・形式不正 | 該当 | 許可 profile 外の入力は Task 起動前に非ゼロ終了 | 1: CLI / real Task tests |
+| 6 | エラー経路 | 該当 | checker 失敗なら Task 未実行。Task コマンド失敗も最終結果へ伝播 | 1: real Task tests |
+| 7 | 冪等性・再実行 | 該当 | 毎回独立検査を実行。Task 側のキャッシュで代替しない | 1: workflow / local 手順 |
+| 8 | 時刻・タイムゾーン | 非該当 | gate 順序は時計・TZ に依存しない | — |
+| 9 | 文字列 | 該当 | 成功表示は static command text に限定。テンプレート展開と任意 shell の意味は対象外 | 1: CLI 出力 test |
+| 10 | 数値 | 該当 | checker / Task の非ゼロ exit を成功扱いしない | 1: real Task tests |
+| 11 | 巨大入力・リソース枯渇 | 非該当 | R2 の resource 境界を維持 | — |
+| 12 | 状態遷移の未定義パス | 該当 | local 完了と hosted CI 成功を分離。PR の hosted CI 成功前は merge-ready としない | 1: tasks 証跡 |
 
 ## 検証対応
 
@@ -64,10 +81,13 @@
 | R2 空・複数・構文・型・重複・tag・directive | CLI 負例 | repository-taskfile.test.ts の YAML invalid inputs | 関係ない nested field の重複も対象 |
 | R2 quote / flow / indentation / BOM / CRLF / shell 記号 | CLI 正例 | repository-taskfile.test.ts の equivalent YAML | library AST と policy の境界 |
 | R2 anchor / alias / merge | CLI 負例 | repository-taskfile.test.ts の unsupported YAML constructs | scalar 中の同じ記号は正例 |
-| R3 欠損・空・型・3形式・衝突 | CLI 例示 | repository-taskfile.test.ts の task command forms | 補助 option schema は対象外 |
+| R3 欠損・空・型・3形式・衝突 | CLI 例示 | repository-taskfile.test.ts の task command forms | 許可リストと補助値の型も対象 |
 | R3 必須入口の誤通過 | CLI 負例 | repository-taskfile.test.ts の required routes | prose / comment / echo / 埋込 / task / cmd object |
 | R3 禁止 runner / 順序 | CLI 例示 | repository-taskfile.test.ts の forbidden runners / reordered tasks | 文字列と cmd 本文を走査 |
 | R1 / R2 / R3 エラー・再実行・無書込 | CLI 例示 | repository-taskfile.test.ts の repeated read-only validation | status / diagnostic / bytes を比較 |
 | 全体 | 実動作 / project gate | task check と実 repository check-contracts | Node 24 / Python 3.14 |
 | 既存 startup 契約 | 既存 CLI 回帰 test | runtime-preflight.test.ts の runs before Node dependencies are installed | package import 遮断下で既存入口を検証 |
 | 対象外事項 | 未検証 | 任意サイズ・深度の resource 保証、Task schema 全体、shell 実行意味、runtime #50 | 明示的スコープ外 |
+| R3 許可キー・補助型・未知値 | CLI 正負例 | repository-taskfile-policy.test.ts | auxiliary shell / skip を拒否 |
+| R4 独立停止・実行・失敗伝播 | real Task 3.51.1 | repository-taskfile-gate.test.ts | marker で未実行も確認 |
+| R4 CI 順序 | Python contract test | test_runtime_foundation_contract.py | 両 job の順序と抑止設定不在 |

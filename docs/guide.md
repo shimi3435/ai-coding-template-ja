@@ -103,7 +103,14 @@ bootstrapの引数契約:
 初めて OpenSpec change を切るときの最小手順は [docs/agents/workflow.md](agents/workflow.md) の
 「初めての change（quickstart）」節を参照。
 
-通常 CI の `check` と改名後の `rename-smoke` も、ローカルと同じ `task check` を実行する。
+依存導入後の最終検証は、Taskfile の検査を Task から独立して先に実行する。
+
+```bash
+node repo-tools/entrypoint.mjs check-contracts && task check
+```
+
+通常 CI の `check` と改名後の `rename-smoke` も、独立した先行 step で `check-contracts` を実行し、
+成功した場合だけ `task check` へ進む。Task 自体が skip されても検査を省略できないようにする。
 検証一覧の正は [Taskfile.yml](../Taskfile.yml) の `check`。Skill の source / lock / 実体 / legal /
 symlink の整合、top-level Node tests、TypeScript、Python checks を検証する。
 CI は固定版 Task と locked dependencies を事前導入し、検証段階では導入や外部 host・認証を要求しない。

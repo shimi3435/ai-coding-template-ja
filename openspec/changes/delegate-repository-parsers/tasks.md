@@ -2,7 +2,7 @@
 
 ## Execution Constraints
 
-1. 最初の CI parity: Node.js 24 / npm、Python 3.14、locked dependencies を用意し、最初の実装前に `task check` を実行する。実装完了後へ先送りしない。
+1. 最初の CI parity: Node.js 24 / npm、Python 3.14、locked dependencies を用意し、各 cycle の最初の実装前に `node repo-tools/entrypoint.mjs check-contracts && task check` を実行する。実装完了後へ先送りしない。
 2. 停止・再計画: AGENTS.md / OSWF-5 の停止条件に従う。仕様拡張、必須検証失敗、verifier blocker を完了にしない。
 3. 一時 artifact cleanup: fixture は test の cleanup で削除し、生 log / probe は repository 外へ置く。元 worktree の未追跡文書を変更しない。
 
@@ -46,7 +46,7 @@
 - iteration 1 focused validation（fresh / source 41dc839 + 最新差分）: `node --test repo-tools/runtime-preflight.test.ts repo-tools/entrypoint.test.ts repo-tools/repository-contracts.test.ts repo-tools/repository-taskfile.test.ts` は137 tests成功、`npm run typecheck` と `git diff --check` は exit 0。
 - iteration 1 independent diff review（fresh / 同 source）: blocker なし。CLI 遅延 import と直接依存、OpenSpec を確認。`node --test --test-name-pattern='runs before Node dependencies' repo-tools/runtime-preflight.test.ts` は1 test成功、`git diff --check` exit 0。
 
-### 5. 最終検証と引渡し
+### 5. Cycle 1 の最終検証と引渡し
 - 成果: 最新入力の project checks と別 agent による verifier の成功。
 - 依存: 4。
 - 対象: `openspec/changes/delegate-repository-parsers/tasks.md`
@@ -57,6 +57,39 @@
 - 未検証: 合意済み対象外の Task schema 全体、shell 実行意味、任意サイズ・深度の resource 保証、runtime #50。GitHub hosted CI / WSL 実機は今回未実行。必須ローカル検証の未実行・失敗はなし。
 - 完了状態: task 1–5 の実装・検証が完了。元 worktree の未追跡文書は開始時と同じ SHA-256。利用者が専用ブランチへの commit / push を承認した。pre-merge close / PR / merge は未実施で、仕様・検証記録をレビュー用に保持する。
 - commit 前検証（fresh / source 41dc839 + staging 差分）: test fixture の末尾空行を除去し、`uv run --no-sync pre-commit run`、`task check`（Node 330 / Python 176 tests）、OpenSpec strict / gate はすべて exit 0。機能変更はなく、独立 review / verifier 後の意味上の実装差分はない。
+
+### 6. Cycle 2: 補助実行と skip の拒否
+- 成果: 許可リスト、補助値の型、限定した成功表示、CLI 回帰 tests。
+- 依存: 5。
+- 対象: `repo-tools/repository-taskfile.ts`, `repo-tools/repository-contracts.ts`, `repo-tools/repository-taskfile-policy.test.ts`, `repo-tools/repository-taskfile.test.ts`
+- [x] 実装: P1 の RED を確認し、合意した許可リストを実装する。
+- [x] 検証: focused CLI tests と typecheck を成功させる。
+
+- 証跡（fresh / source 80e83c4 + task 6 差分）: 新規 CLI tests は旧実装で RED。`node --test repo-tools/repository-contracts.test.ts repo-tools/repository-taskfile.test.ts repo-tools/repository-taskfile-policy.test.ts` は181 tests成功、`npm run typecheck` exit 0。
+
+### 7. Cycle 2: CI と最終検証手順の独立化
+- 成果: CI の独立先行検査、ローカル最終検証の明示、恒久仕様の更新。
+- 依存: 6。
+- 対象: `.github/workflows/ci.yml`, `tests/test_runtime_foundation_contract.py`, `repo-tools/repository-taskfile-gate.test.ts`, `docs/guide.md`, `docs/agents/workflow.md`, `docs/template/repository-contracts.md`, `docs/template/v2-release-notes.md`
+- [x] 実装: 独立先行 step と文書を更新し、CI順序の回帰 test を追加する。
+- [x] 検証: CI順序 test、real Task gate tests、OpenSpec validation を成功させる。
+
+- 証跡（fresh / source 80e83c4 + task 6–7 差分）: CI順序 test は独立 step 追加前に RED、追加後 `uv run --no-sync pytest tests/test_runtime_foundation_contract.py -q` は5 tests成功。`node --test repo-tools/repository-taskfile-gate.test.ts` は10 tests成功（real Task 3.51.1、skip と補助 shell の単独再現・先行拒否・正常実行・失敗伝播）。`npm run typecheck`、OpenSpec strict / gate、`git diff --check` exit 0。
+
+### 8. Cycle 2: review と最終検証
+- 成果: self-review、独立 review の収束、project checks、前 cycle と別 verifier。
+- 依存: 7。
+- 対象: `openspec/changes/delegate-repository-parsers/tasks.md`
+- [x] 実装: self-review と独立 review を行い finding を収束させる。
+- [x] 検証: `node repo-tools/entrypoint.mjs check-contracts && task check`、OpenSpec、別 verifier を成功させる。
+- baseline（fresh / source 80e83c4）: `node repo-tools/entrypoint.mjs check-contracts && task check` exit 0（Node 330 / Python 176 tests）。
+- self-review（fresh / source 80e83c4 + cycle 2 差分）: 許可リストと補助値の型、CLI caller、CI順序、公開 seam tests、spec-holes 対応、tracked / untracked 差分を照合。設計文書の返値説明を実装に合わせ修正。追加の仕様判断なし。
+- initial independent review（fresh / source 80e83c4 + cycle 2 差分）: 前 cycle と別 reviewer、blocker なし、修正 iteration 0。`node --test repo-tools/repository-taskfile-policy.test.ts repo-tools/repository-taskfile-gate.test.ts` は70 tests成功、`git diff --check` exit 0。全変更15ファイルを確認。
+- project checks（fresh / source 80e83c4 + cycle 2 差分）: `node repo-tools/entrypoint.mjs check-contracts && task check` exit 0（Node 400 / Python 176 tests、TypeScript / ruff / basedpyright 成功）。`openspec validate delegate-repository-parsers --strict --no-interactive`、`task openspec:validate`、`git diff --check` exit 0。全変更ファイルの `uv run --no-sync pre-commit run --files ...` も exit 0、修正なし。
+- independent verifier（前 cycle および initial reviewer と別 agent / source 80e83c4 + cycle 2 差分）: verified、blocker なし。fresh の `node --test repo-tools/repository-taskfile*.test.ts repo-tools/repository-contracts.test.ts` は191 tests、`uv run --no-sync pytest tests/test_runtime_foundation_contract.py -q` は5 tests成功。公開 `check-contracts` と `git diff --check` も成功。最新 project checks は実装・テスト・CI・依存入力が不変であることを確認し green evidence を再利用。
+- 完了状態: task 6–8 の実装・ローカル検証が完了。元 worktree の未追跡文書は開始時の SHA-256 と一致。既存の commit / push 依頼に従って専用ブランチへ記録する。PR / merge / change close は未実施。
+- Cycle 2 承認: 利用者の「おｋ」。base は `80e83c40ae60f96470a416f59493f08fb86a222b`。開始時 worktree clean、active change 1件。
+- 未実行の hosted CI は PR 作成後の merge 条件として残す。ローカル完了と merge-ready を区別する。
 
 ## 実行情報
 

@@ -49,10 +49,27 @@ resource 保証はこの検査の対象外とする。
 - `cmds` は欠損を許可する。存在する場合は sequence とし、空配列は許可する。ただし必須入口の不足は別途拒否する。
 - `cmds` の各項目は、空白だけでない string、`cmd` に同様の string を持つ object、`task` に同様の task 名を持つ object の3形式。
 - `cmd` と `task` の同時指定、`defer` および未対応形式の項目は拒否する。
-- `desc`、`silent`、`vars` 等の補助設定の意味・schema 全体は Task に委ねる。
+
+許可キーは以下に限定する。未知キーは `false` / `null` / 空の値でも拒否する。
+
+| 場所 | 許可キー |
+| --- | --- |
+| root | `version`, `tasks` |
+| `tasks.check` | `desc`, `cmds` |
+| その他の task | `desc`, `cmds`, `silent`, `vars` |
+| `cmd` object | `cmd`, `silent` |
+| `task` 呼出 object | `task`, `silent`, `vars` |
+
+`desc` は string、`silent` は boolean、`vars` は空白だけでない文字列名から string 値への mapping とする。
+空の `vars` と空文字値は許可する。`sh` / `ref` object、array、非string値は拒否する。
+`if`、`status`、`preconditions` による補助実行、`sources` / `generates` によるキャッシュ、`platforms`、
+`run`、`ignore_error`、`includes`、`deps`、root の `env` / `vars` 等は許可しない。
+必須 `check` 全体の非実行化・失敗抑止も拒否の対象である。
 
 全 task の直接 string / `cmd` 本文に、既存の禁止 Node runner pattern を適用する。
-YAMLコメント・説明文・`task` 呼出の引数データは shell command として数えない。
+YAMLコメント・説明文・静的な `vars` のデータは shell command として数えない。
+成功表示 `forbidden Node runners in static command text: none` は静的本文の検査結果であり、
+テンプレート展開後を含む全実行コマンドの不在を保証しない。
 
 ## 必須入口
 
@@ -74,9 +91,23 @@ YAMLコメント・説明文・`task` 呼出の引数データは shell command 
 
 ## 検査の境界
 
-この仕様は Task の全機能の代替 schema ではない。補助設定、動的テンプレート、includes、deps の参照先、
-task graph、shell の到達可能性・失敗伝播を検証しない。必須 command の存在を、その実行成功の保証として扱わない。
-実行の成否は実際の `task check` で検証する。
+この仕様は Task の全機能の代替 schema ではない。許可リスト外の設定を拒否した上で、文字列内の
+動的テンプレート、task 呼出の参照先、task graph、任意 shell の到達可能性・意味は検証しない。
+必須 command の存在を、その実行成功の保証として扱わない。外部環境や任意 shell の故意の迂回を
+防ぐ sandbox でもない。
+
+## 独立した先行検査
+
+依存導入後、ローカル最終検証は次の順に実行する。前半が失敗した場合、Task を起動しない。
+
+```bash
+node repo-tools/entrypoint.mjs check-contracts && task check
+```
+
+CI の `check` / `rename-smoke` も、locked dependencies 導入後（改名 job は改名後）に独立した
+`check-contracts` step を置き、成功した場合だけ次の `task check` step へ進む。両 step と job に
+skip 条件・`continue-on-error` を置かない。Taskfile 自身の検査起動を Taskfile に依存させない。
+ローカル検証成功だけで merge-ready とせず、PR の hosted CI 成功を merge 条件とする。
 
 Skill frontmatter は既存の `skill-updater/metadata.ts`、旧 metadata 移行の range 検証は既存の
 `skill-updater/migration/semver-policy-v1.ts` が所有する。いずれも既に library へ委譲されており、本変更では
