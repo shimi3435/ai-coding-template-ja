@@ -36,10 +36,10 @@ jobs:
         run: uv sync --locked
       - name: Install Node dependencies (locked, no lifecycle scripts)
         run: npm ci --ignore-scripts
-      - name: Repository contracts (independent of Task)
-        run: node repo-tools/entrypoint.mjs check-contracts
-      - name: Offline checks (shared with local development)
-        run: task check
+      - name: Canonical offline gate (shared with local development)
+        run: ./scripts/check.sh
+      - name: Pinned Task regression probes
+        run: node --test repo-tools/integration/repository-taskfile-gate.test.ts
 
   rename-smoke:
     name: rename-smoke (改名後にフル check 相当)
@@ -66,10 +66,10 @@ jobs:
         run: npm ci --ignore-scripts
       - name: rename (apply・使い捨て名)
         run: uv run python scripts/rename-package.py ci_rename_smoke --apply
-      - name: Repository contracts (independent of Task)
-        run: node repo-tools/entrypoint.mjs check-contracts
-      - name: Offline checks (shared with local development)
-        run: task check
+      - name: Canonical offline gate (shared with local development)
+        run: ./scripts/check.sh
+      - name: Pinned Task regression probes
+        run: node --test repo-tools/integration/repository-taskfile-gate.test.ts
 
   security:
     name: security (gitleaks)

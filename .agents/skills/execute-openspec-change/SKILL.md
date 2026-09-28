@@ -125,7 +125,7 @@ task ごとに次を行う。
 1. self-review。
 2. initial independent review。
 3. blocker finding の fix → focused validation → diff review を最大3 iterations。
-4. 最新入力の `task check`。
+4. 最新入力の `./scripts/check.sh`。
 5. initial reviewer と別の独立 verifier。
 
 3 iterations 後の未解決 blocker、同一役割・task の agent 連続2回失敗、同じ環境・command・入力で

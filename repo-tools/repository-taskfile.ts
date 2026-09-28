@@ -1,4 +1,5 @@
 import { isAlias, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
+import { validateTaskTemplate } from "./repository-taskfile-templates.ts";
 
 const coreTags = new Set(["map", "seq", "str", "null", "bool", "int", "float"].map(name => `tag:yaml.org,2002:${name}`));
 
@@ -46,16 +47,6 @@ function validateOptions(mapping: YAMLMap, allowed: readonly string[], path: str
     const value = mapping.get(field, true);
     if (!isScalar(value) || typeof value.value !== type) throw new Error(`${path}.${field} は ${type} が必要です`);
   }
-  if (mapping.has("vars")) {
-    const vars = mapping.get("vars", true);
-    if (!isMap(vars)) throw new Error(`${path}.vars は mapping が必要です`);
-    for (const { key, value } of vars.items) {
-      const name = commandString(key, `${path}.vars name`);
-      if (!isScalar(value) || typeof value.value !== "string") {
-        throw new Error(`${path}.vars.${name} は string が必要です`);
-      }
-    }
-  }
 }
 
 function validateTaskPolicy(root: YAMLMap): readonly string[] {
@@ -69,7 +60,7 @@ function validateTaskPolicy(root: YAMLMap): readonly string[] {
     if (!isMap(task) || task.has("cmd")) {
       throw new Error(`tasks.${name} は mapping 形式が必要です（コマンドは cmds に記載し、省略形は使えません）`);
     }
-    validateOptions(task, name === "check" ? ["desc", "cmds"] : ["desc", "cmds", "silent", "vars"], `tasks.${name}`);
+    validateOptions(task, name === "check" ? ["desc", "cmds"] : ["desc", "cmds", "silent"], `tasks.${name}`);
     if (!task.has("cmds")) continue;
     const cmds = task.get("cmds", true);
     if (!isSeq(cmds)) throw new Error(`tasks.${name}.cmds は sequence が必要です`);
@@ -77,12 +68,14 @@ function validateTaskPolicy(root: YAMLMap): readonly string[] {
       const path = `tasks.${name}.cmds[${index}]`;
       if (isScalar(item)) {
         const command = commandString(item, path);
+        validateTaskTemplate(command, name, path);
         commands.push(command);
         if (name === "check") directCheckCommands.push(command.trim());
       } else if (isMap(item) && item.has("cmd") !== item.has("task") && !item.has("defer")) {
         const field = item.has("cmd") ? "cmd" : "task";
-        validateOptions(item, field === "cmd" ? ["cmd", "silent"] : ["task", "silent", "vars"], path);
+        validateOptions(item, field === "cmd" ? ["cmd", "silent"] : ["task", "silent"], path);
         const value = commandString(item.get(field, true), `${path}.${field}`);
+        validateTaskTemplate(value, name, `${path}.${field}`, field === "task");
         if (field === "cmd") commands.push(value);
       } else {
         throw new Error(`${path} は string / cmd object / task object のいずれかが必要です`);

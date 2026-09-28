@@ -79,8 +79,8 @@ def test_ci_runs_the_shared_offline_gate_after_pinned_setup_and_rename() -> None
             )
         assert commands == [
             *preparation,
-            "node repo-tools/entrypoint.mjs check-contracts",
-            "task check",
+            "./scripts/check.sh",
+            "node --test repo-tools/integration/repository-taskfile-gate.test.ts",
         ]
 
         task_setup = re.search(
@@ -94,7 +94,7 @@ def test_ci_runs_the_shared_offline_gate_after_pinned_setup_and_rename() -> None
             "a00fbb05ce67b35648be3c78cbc9fd85354c757e",
             "3.51.1",
         )
-        assert task_setup.end() < job.index("run: task check")
+        assert task_setup.end() < job.index("run: ./scripts/check.sh")
 
 
 def test_existing_audit_job_runs_the_explicit_online_node_audit() -> None:

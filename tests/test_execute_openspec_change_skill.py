@@ -291,7 +291,7 @@ def test_review_and_stop_boundaries_reference_canonical_requirements() -> None:
             "focused validation",
             "initial independent review",
             "最大3 iterations",
-            "最新入力の `task check`",
+            "最新入力の `./scripts/check.sh`",
             "独立 verifier",
         ),
     )

@@ -2,7 +2,7 @@
 
 ## Execution Constraints
 
-1. 最初の CI parity: Node.js 24 / npm、Python 3.14、locked dependencies を用意し、各 cycle の最初の実装前に `node repo-tools/entrypoint.mjs check-contracts && task check` を実行する。実装完了後へ先送りしない。
+1. 最初の CI parity: Node.js 24 / npm、Python 3.14、locked dependencies を用意し、各 cycle の最初の実装前に正式 gate を実行する（script 導入前の baseline は `node repo-tools/entrypoint.mjs check-contracts && task check`、導入後は `./scripts/check.sh`）。実装完了後へ先送りしない。
 2. 停止・再計画: AGENTS.md / OSWF-5 の停止条件に従う。仕様拡張、必須検証失敗、verifier blocker を完了にしない。
 3. 一時 artifact cleanup: fixture は test の cleanup で削除し、生 log / probe は repository 外へ置く。元 worktree の未追跡文書を変更しない。
 
@@ -90,6 +90,50 @@
 - 完了状態: task 6–8 の実装・ローカル検証が完了。元 worktree の未追跡文書は開始時の SHA-256 と一致。既存の commit / push 依頼に従って専用ブランチへ記録する。PR / merge / change close は未実施。
 - Cycle 2 承認: 利用者の「おｋ」。base は `80e83c40ae60f96470a416f59493f08fb86a222b`。開始時 worktree clean、active change 1件。
 - 未実行の hosted CI は PR 作成後の merge 条件として残す。ローカル完了と merge-ready を区別する。
+
+### 9. Cycle 3: vars と任意 template の拒否
+- 成果: CLI_ARGS の10組以外を評価前に拒否する policy。
+- 依存: 8。
+- 対象: `repo-tools/repository-taskfile.ts`, `repo-tools/repository-taskfile-templates.ts`, `repo-tools/repository-taskfile-policy.test.ts`, `repo-tools/repository-taskfile.test.ts`, `repo-tools/repository-taskfile-templates.test.ts`
+- [x] 実装: 回帰 RED 後、vars を禁止し template 例外を限定する。
+- [x] 検証: focused Node tests、typecheck、実 repository の checker を成功させる。
+
+- 証跡（fresh / source c5ec849 + task 9 差分）: template 回帰は旧実装で RED。focused template / policy / YAML tests、`npm run typecheck`、実 repository `check-contracts` は成功。
+
+### 10. Cycle 3: 正式 gate と Task tests の分離
+- 成果: scripts/check.sh と CI の共通入口、通常 tests の exact pin 撤去。
+- 依存: 9。
+- 対象: `scripts/check.sh`, `Taskfile.yml`, `.github/workflows/ci.yml`, `repo-tools/repository-taskfile-gate.test.ts`, `repo-tools/integration/repository-taskfile-gate.test.ts`, `tests/test_runtime_foundation_contract.py`, `tests/test_taskfile.py`
+- [x] 実装: script と公開 seam tests を追加し、CI / 隔離 check を移行する。
+- [x] 検証: script 実動作、固定版 CI probes、Python CI順序 tests を成功させる。
+
+- 証跡（fresh / source c5ec849 + task 9–10 差分）: script 不在と CI 旧順序の RED 後、通常 gate / CI専用の19 tests、Python CI / Taskfile の16 tests、typecheck が成功。通常 tests の Task exact assertion は CI専用へ移動。
+
+### 11. Cycle 3: SoT と入口案内の統一
+- 成果: local / Agent の最終判定を正式 script に統一する。
+- 依存: 10。
+- 対象: `AGENTS.md`, `CONTEXT.md`, `README.md`, `scripts/bootstrap.sh`, `scripts/rename-package.py`, `.agents/skills/execute-openspec-change/SKILL.md`, `.agents/skills/verify-change/SKILL.md`, `docs/agents/workflow.md`, `docs/guide.md`, `docs/template/repository-contracts.md`, `docs/template/v2-release-notes.md`, `docs/template/skill-maintenance.md`, `docs/template/release.md`, `tests/test_review_convergence_contract.py`, `tests/test_execute_openspec_change_skill.py`, `tests/test_project_gate_contract.py`
+- [x] 実装: SoT / 現行ガイド / local skill と回帰 tests を更新する。
+- [x] 検証: 文書 contract tests、skills:verify、OpenSpec validation を成功させる。
+
+- 証跡（fresh / source c5ec849 + task 9–11 差分）: 新規入口案内 tests は旧文書で RED。文書 / review / executor contract の39 tests、`skills:verify`、OpenSpec strict / gate は成功。local skills の編集で source / lock の更新は不要。
+
+### 12. Cycle 3: review と引渡し
+- 成果: 独立 review / verifier、正式 gate、commit / push。
+- 依存: 11。
+- 対象: `openspec/changes/delegate-repository-parsers/tasks.md`
+- [x] 実装: self-review と独立 review の finding を収束させる。
+- [x] 検証: 最新 ./scripts/check.sh、CI probes、OpenSpec、別 verifier を成功させる。
+- baseline（fresh / source c5ec849）: `node repo-tools/entrypoint.mjs check-contracts && task check` exit 0、Node 400 / Python 176 tests。preflight は active change 1件、artifacts / spec-holes / 依存順を確認、対象 dirty overlap なし。
+- self-review（fresh / source c5ec849 + cycle 3 差分）: template / vars の拒否、CLI_ARGS の10組、script の root / 引数 / 終了伝播、CI順序と通常 glob、SoT / 現行ガイド / local skills を照合。任意 shell と外部入力は合意した対象外。初期文書の旧入口説明を修正し、focused Node tests、Python 55 tests、typecheck、全差分の pre-commit、sh -n、diff check が成功。元 worktree の未追跡文書 SHA-256 は不変。
+- initial independent review / iteration 1（source c5ec849 + cycle 3 差分）: rename-package.py の apply 成功案内が旧 `task check` を示す P2 を検出。project gate contract の対象へ追加して RED を確認し、案内を正式 script に修正。現行手順の統一に含まれる修正で仕様拡張なし。
+- iteration 1 focused / diff review（fresh / source c5ec849 + cycle 3 差分）: `pytest tests/test_project_gate_contract.py tests/test_smoke.py -q --no-cov` は44 tests、`pytest tests/test_rename_package.py -q --no-cov` は1 test成功。変更ファイルの pre-commit 成功。独立 diff reviewer は13 testsを実行して blocker なし、iteration 1 収束。
+- project checks（fresh / source c5ec849 + cycle 3 差分）: `./scripts/check.sh` exit 0（Node 450 / Python 188 tests、TypeScript / ruff / basedpyright 成功）。CI専用 `node --test repo-tools/integration/repository-taskfile-gate.test.ts` は11 tests成功。`task check:isolated` はネットワーク・OpenSpec CLI なしで正式 gate を実行し exit 0（Node 450 / Python 188）。OpenSpec strict / gate と diff check も成功。hosted CI の結果ではない。
+- verifier 起動: 初回は利用上限による infrastructure failure で結果なし。利用者の再開依頼後、同じ verifier を再実行する。未検証を成功扱いしない。
+- independent verifier（fresh / source c5ec849 + cycle 3 差分）: 前 cycle および initial reviewer と別 agent が再開後に verified、blocker なし。focused Node 214 tests、Python contract 56 tests、公開 checker、sh -n、diff check 成功。正式 gate / isolated gate の Node 450 / Python 188 は source・tests・CI・依存・環境の入力不変を確認して green evidence を再利用。実装変更なし。
+- 完了状態: task 9–12 の実装・ローカル検証が完了。全変更の pre-commit 成功。利用者承認済みの専用ブランチへの commit / push を行う。PR / merge / change close は未実施。
+- 承認: 利用者「OK」。source c5ec849、開始時 worktree clean、active change 1件。過去の完了 checkbox は保持する。
+- hosted CI は PR 作成後に確認する。PR / merge / close は本 cycle に含まない。
 
 ## 実行情報
 

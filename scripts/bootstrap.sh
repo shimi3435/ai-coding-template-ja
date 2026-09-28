@@ -199,7 +199,7 @@ fi
 if command -v task >/dev/null 2>&1 && command -v uv >/dev/null 2>&1; then
   info "task setup を実行します（npm ci --ignore-scripts + uv sync + pre-commit install）..."
   task setup
-  info "完了。次に: task check / task doctor"
+  info "完了。次に: ./scripts/check.sh / task doctor"
 else
   warn "task または uv が無いため task setup を自動実行できません。"
   warn "導入後に手動で実行してください: task setup"

@@ -114,7 +114,7 @@ WSL Ubuntuでは元repository・候補clone・双方のGit metadataをLinux file
 4. 候補内でlocked dependencyを準備する。Skill本体のscriptを実行しない。
 5. 元repository・開始SHA・候補を指定してpreviewし、適用する操作と対象を確認する。
 6. 同じ引数と明示承認値でapplyする。失敗・中断時はここで停止し、候補を診断用に残す。
-7. 成功候補でoffline verifyと `task check` を実行し、許可された差分だけであることをレビューする。
+7. 成功候補でoffline verifyと `./scripts/check.sh` を実行し、許可された差分だけであることをレビューする。
 8. 検証した最終差分だけをcommitし、push先を確認して標準Git / ghで通常PRを作る。
    cloneのoriginがローカル元repositoryを指したままpushしない。自動PRやmanaged branchは作らない。
 9. 失敗後に再実行する場合は新しい候補を作り、手順3からやり直す。破棄は利用者が対象pathを確認して行う。
@@ -150,7 +150,7 @@ read -r skill_confirmation
 test "$skill_confirmation" = APPLY
 task "$skill_operation" -- --source "$skill_source" --base "$skill_base" --candidate "$skill_candidate" "$@" --apply
 task skills:verify
-task check
+./scripts/check.sh
 git diff --check
 git diff --stat
 git diff

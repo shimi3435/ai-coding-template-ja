@@ -5,7 +5,7 @@
 ## Language
 
 **コア層**:
-新規プロジェクト作成直後に `task check` と `task doctor` が通り、エージェントが安全に作業を始められる最小実用セット。常に有効。
+新規プロジェクト作成直後に `./scripts/check.sh` と `task doctor` が通り、エージェントが安全に作業を始められる最小実用セット。常に有効。
 _Avoid_: 標準セット, 基本機能
 
 **オプション層**:
@@ -21,7 +21,7 @@ vendoring した SKILL.md の正本。`.agents/skills/` に置き、Claude Code 
 _Avoid_: スキル本体, オリジナル
 
 **green（doctor / check が通る状態）**:
-`task doctor` と `task check` がともに exit 0 の状態を指す。`task doctor` では FAIL（機械コアの破損）がゼロであること（WARN・INFO は green を壊さない。到達性チェックは既定で行わず、作成直後・CI・オフラインでも green になる）。`task check` では Node contracts、TypeScript typecheck、Node test、ruff、basedpyright、pytest が全て通ること。
+`task doctor` と `./scripts/check.sh` がともに exit 0 の状態を指す。`task doctor` では FAIL（機械コアの破損）がゼロであること（WARN・INFO は green を壊さない。到達性チェックは既定で行わず、作成直後・CI・オフラインでも green になる）。`./scripts/check.sh` では Node contracts、TypeScript typecheck、Node test、ruff、basedpyright、pytest が全て通ること。
 _Avoid_: 成功, パス, OK
 
 **恒久成果**:

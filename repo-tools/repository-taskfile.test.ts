@@ -49,7 +49,7 @@ for (const [name, transform] of Object.entries<(source: string) => string>({
     data.tasks.check.cmds.reverse();
     return JSON.stringify(data);
   },
-  "command objects and task calls": source => source + '  extra:\n    cmds:\n      - cmd: echo safe\n        silent: true\n      - task: skills:verify\n        vars: { MESSAGE: "npx in data" }\n',
+  "command objects and task calls": source => source + '  extra:\n    cmds:\n      - cmd: echo safe\n        silent: true\n      - task: skills:verify\n        silent: false\n',
   "npm command objects": source => source.replace("- npm ci --ignore-scripts", "- cmd: npm ci --ignore-scripts").replace("- npm audit --audit-level=high", "- cmd: npm audit --audit-level=high"),
   "forbidden words only in YAML comments and descriptions": source => source + '  extra:\n    desc: "npx only in prose"\n    cmds:\n      # npx only in a comment\n      - echo safe # npx only in a comment\n',
 })) {

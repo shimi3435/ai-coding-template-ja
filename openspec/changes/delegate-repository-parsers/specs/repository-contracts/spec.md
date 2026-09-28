@@ -43,11 +43,20 @@ The checker MUST validate required routes and forbidden runners using parsed tas
 
 tasks と各 task は mapping。task 本体の string / array / cmd 省略形は拒否する。cmds は欠損可で、存在する場合
 sequence とする。項目は空でない string、cmd string object、task string object のみとし、後二者は排他的とする。
-未対応の command 形式を黙って無視しない。許可する key は root が version / tasks、check task が
-desc / cmds、その他の task が desc / cmds / silent / vars、cmd object が cmd / silent、task 呼出 object が
-task / silent / vars だけとする。未知 key は false / null / 空の値でも拒否する。desc は string、silent は
-boolean、vars は文字列名から string 値への mapping とし、空の値は許可するが空白だけの名前は拒否する。
-vars の sh / ref object、array、非string値は拒否する。参照先 task の解決、文字列内の template 展開は検証しない。
+未対応の command 形式を黙って無視しない。許可 key は root が version / tasks、check task が desc / cmds、
+その他の task が desc / cmds / silent、cmd object が cmd / silent、task 呼出 object が task / silent だけとする。
+未知 key は false / null / 空の値でも拒否する。desc は string、silent は boolean とする。vars は全て禁止する。
+command と task 呼出名に任意の Task template を許可しない。解析後の文字列に `{{` があれば拒否するが、
+次の task 名と command 全文の組だけは、末尾1回の `{{.CLI_ARGS}}` を許可する（前後空白は trim する）。
+
+- doctor: `uv run --no-sync python scripts/doctor.py {{.CLI_ARGS}}`
+- rename: `uv run python scripts/rename-package.py {{.CLI_ARGS}}`
+- skills:links / skills:verify / skills:check / skills:update / skills:repin / skills:adopt-local / skills:migrate:
+  `node repo-tools/entrypoint.mjs <同じ task 名> {{.CLI_ARGS}}`
+- prune-template-docs: `uv run --no-sync python scripts/prune-template-docs.py {{.CLI_ARGS}}`
+
+string と cmd object の本文には同じ条件を適用する。task 呼出名の template は例外なく拒否する。
+追加の例外は policy 変更として扱う。説明文中の template 記号は実行対象でないため許可する。
 
 skills:links、skills:verify、skills:check、skills:update、skills:repin、skills:adopt-local、skills:migrate の
 task key を要求する。check.cmds の直接 string に `node repo-tools/entrypoint.mjs skills:verify` と
@@ -55,7 +64,7 @@ task key を要求する。check.cmds の直接 string に `node repo-tools/entr
 では代用できない。npm ci --ignore-scripts と npm audit --audit-level=high は、全 task の直接 string または
 cmd string の trim 後完全一致で要求する。task 名は固定しない。説明文・YAMLコメントは数えない。
 既存の禁止 runner pattern は全 task の直接 string / cmd string に適用する。補助 field の shell 実行は
-許可リストで拒否する。shell / template の解釈はしない。成功表示は
+許可リストで拒否する。許可しない template は評価せず拒否する。任意 shell の解釈はしない。成功表示は
 `forbidden Node runners in static command text: none` とし、実行時の全コマンド不在を保証しない。
 
 #### Scenario: Required commands appear only in prose
@@ -81,14 +90,15 @@ cmd string の trim 後完全一致で要求する。task 名は固定しない�
 ### Requirement: Independent gate before Task execution
 The CI and local final validation MUST invoke check-contracts independently before task check and stop when it fails.
 
-CI の check / rename-smoke job は依存導入後（rename-smoke は改名後）に独立 step として
-`node repo-tools/entrypoint.mjs check-contracts` を実行し、成功した場合だけ次の step の `task check` を実行する。
-両 step と job に skip 条件・continue-on-error を追加しない。ローカル最終検証は
-`node repo-tools/entrypoint.mjs check-contracts && task check` とする。新しい wrapper は追加しない。
-Taskfile を自分自身の検査の起動元として信用しない。Task が gate 全体を skip / 成功扱いにする設定は
-対象外にせず拒否する。任意の shell 内容や外部環境による故意の迂回を保証する sandbox ではない。
-Task 3.51.1 の実動作で、単独なら skip / auxiliary shell を実行する負例が先行検査で停止し、
-正常な fixture が実際に後続 Task コマンドを実行することを確認する。
+正式な project gate は実行可能な `scripts/check.sh` とする。引数は受け付けず、指定時は診断して非ゼロ終了する。
+script の配置先を基準に repository root へ移動し、`node repo-tools/entrypoint.mjs check-contracts` を実行する。
+成功した場合だけ `task check` を起動し、その終了コードを伝播する。依存導入・自動修正・外部通信を追加しない。
+CI の check / rename-smoke job は依存導入後（rename-smoke は改名後）に `./scripts/check.sh` を実行する。
+gate step と job に skip 条件・continue-on-error を追加しない。AGENTS / README / CONTEXT / bootstrap の案内、
+現行手順と関連 local skill の完了判定を同じ入口に統一する。task check 単独は内部品質処理であり最終判定に使わない。
+Taskfile を自分自身の検査の起動元として信用しない。Task が gate 全体を skip / 成功扱いにする設定は拒否する。
+Task の vars / 任意 template による合成を閉じるが、shell の文字列連結・eval・外部環境・CLI_ARGS 入力の
+安全性を証明する sandbox ではない。成功表示は静的 command 本文の検査結果に限定する。
 
 #### Scenario: Skipped check cannot bypass independent validation
 - **WHEN** check contains if: "exit 1" or status: ["true"]
@@ -96,8 +106,33 @@ Task 3.51.1 の実動作で、単独なら skip / auxiliary shell を実行す�
 
 #### Scenario: Allowed Taskfile reaches the real runner
 - **WHEN** the independent checker accepts the fixture
-- **THEN** Task 3.51.1 executes its check commands and propagates a command failure
+- **THEN** the installed Task executes its check commands and propagates a command failure
 
 #### Scenario: Hosted CI remains a merge condition
 - **WHEN** a pull request is created for the corrected branch
 - **THEN** hosted CI must succeed before merge; local evidence is not reported as hosted CI success
+
+#### Scenario: Canonical invocation from another directory
+- **WHEN** the script is invoked from a subdirectory or unrelated current directory
+- **THEN** it validates the repository containing the script, without using the caller directory
+
+#### Scenario: Unexpected arguments
+- **WHEN** an argument is supplied to scripts/check.sh
+- **THEN** it fails before invoking Node or Task
+
+### Requirement: Local Task compatibility without exact pin
+The ordinary project gate MUST verify real Task execution without requiring a local exact Task version.
+
+通常 Node tests は独立拒否、正常実行、失敗伝播を確認し、Task version の完全一致を要求しない。
+旧 if / status / auxiliary shell のバージョン依存の再現は、通常の top-level Node test glob に入らない
+`repo-tools/integration/repository-taskfile-gate.test.ts` へ分離する。CI check / rename-smoke は正式 gate 成功後に
+この test を明示実行する。CI の Task 3.51.1 pin は既存 Python contract test で保証する。
+ローカルの新しい最低版や exact pin は導入しない。
+
+#### Scenario: Ordinary local validation
+- **WHEN** an installed compatible Task runs the ordinary project gate
+- **THEN** validation does not fail merely because its version differs from the CI pin
+
+#### Scenario: Pinned CI regression probes
+- **WHEN** CI runs after pinned setup and the canonical gate
+- **THEN** it explicitly executes the version-dependent regression probes outside the ordinary test glob

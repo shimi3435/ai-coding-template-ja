@@ -56,18 +56,36 @@ resource 保証はこの検査の対象外とする。
 | --- | --- |
 | root | `version`, `tasks` |
 | `tasks.check` | `desc`, `cmds` |
-| その他の task | `desc`, `cmds`, `silent`, `vars` |
+| その他の task | `desc`, `cmds`, `silent` |
 | `cmd` object | `cmd`, `silent` |
-| `task` 呼出 object | `task`, `silent`, `vars` |
+| `task` 呼出 object | `task`, `silent` |
 
-`desc` は string、`silent` は boolean、`vars` は空白だけでない文字列名から string 値への mapping とする。
-空の `vars` と空文字値は許可する。`sh` / `ref` object、array、非string値は拒否する。
+`desc` は string、`silent` は boolean とする。`vars` は空の mapping / string 値を含め全て拒否する。
+command と task 呼出名に `{{` が含まれる場合、Task template として評価せず拒否する。
+ただし command の前後空白を除いた全文が次の組と一致する場合だけ、末尾1回の `{{.CLI_ARGS}}` を許可する。
+string と cmd object の本文に同じ条件を適用する。task 呼出名には例外を設けない。
+
+| task 名 | 許可する command 全文 |
+| --- | --- |
+| `doctor` | `uv run --no-sync python scripts/doctor.py {{.CLI_ARGS}}` |
+| `rename` | `uv run python scripts/rename-package.py {{.CLI_ARGS}}` |
+| `skills:links` | `node repo-tools/entrypoint.mjs skills:links {{.CLI_ARGS}}` |
+| `skills:verify` | `node repo-tools/entrypoint.mjs skills:verify {{.CLI_ARGS}}` |
+| `skills:check` | `node repo-tools/entrypoint.mjs skills:check {{.CLI_ARGS}}` |
+| `skills:update` | `node repo-tools/entrypoint.mjs skills:update {{.CLI_ARGS}}` |
+| `skills:repin` | `node repo-tools/entrypoint.mjs skills:repin {{.CLI_ARGS}}` |
+| `skills:adopt-local` | `node repo-tools/entrypoint.mjs skills:adopt-local {{.CLI_ARGS}}` |
+| `skills:migrate` | `node repo-tools/entrypoint.mjs skills:migrate {{.CLI_ARGS}}` |
+| `prune-template-docs` | `uv run --no-sync python scripts/prune-template-docs.py {{.CLI_ARGS}}` |
+
+追加の例外には policy の更新が必要である。説明文中の template 記号は実行対象でないため許可する。
+
 `if`、`status`、`preconditions` による補助実行、`sources` / `generates` によるキャッシュ、`platforms`、
 `run`、`ignore_error`、`includes`、`deps`、root の `env` / `vars` 等は許可しない。
 必須 `check` 全体の非実行化・失敗抑止も拒否の対象である。
 
 全 task の直接 string / `cmd` 本文に、既存の禁止 Node runner pattern を適用する。
-YAMLコメント・説明文・静的な `vars` のデータは shell command として数えない。
+YAMLコメント・説明文は shell command として数えない。
 成功表示 `forbidden Node runners in static command text: none` は静的本文の検査結果であり、
 テンプレート展開後を含む全実行コマンドの不在を保証しない。
 
@@ -91,22 +109,29 @@ YAMLコメント・説明文・静的な `vars` のデータは shell command �
 
 ## 検査の境界
 
-この仕様は Task の全機能の代替 schema ではない。許可リスト外の設定を拒否した上で、文字列内の
-動的テンプレート、task 呼出の参照先、task graph、任意 shell の到達可能性・意味は検証しない。
+この仕様は Task の全機能の代替 schema ではない。許可リスト外の設定と template を拒否した上で、
+task 呼出の参照先、task graph、任意 shell の到達可能性・意味は検証しない。
 必須 command の存在を、その実行成功の保証として扱わない。外部環境や任意 shell の故意の迂回を
 防ぐ sandbox でもない。
 
 ## 独立した先行検査
 
-依存導入後、ローカル最終検証は次の順に実行する。前半が失敗した場合、Task を起動しない。
+依存導入後、ローカル最終検証は次の入口を実行する。内部の先行検査が失敗した場合、Task を起動しない。
 
 ```bash
-node repo-tools/entrypoint.mjs check-contracts && task check
+./scripts/check.sh
 ```
 
-CI の `check` / `rename-smoke` も、locked dependencies 導入後（改名 job は改名後）に独立した
-`check-contracts` step を置き、成功した場合だけ次の `task check` step へ進む。両 step と job に
-skip 条件・`continue-on-error` を置かない。Taskfile 自身の検査起動を Taskfile に依存させない。
+正式入口 `scripts/check.sh` は引数なし専用で、引数があれば実行前に非ゼロ終了する。script の配置先から
+repository root を特定するため、別 cwd からの呼出でも同じ repository を検証する。依存導入・自動修正はしない。
+内部で `node repo-tools/entrypoint.mjs check-contracts` が成功した場合だけ `task check` を実行し、終了コードを伝播する。
+`task check` 単独の成功は完了判定に使わない。
+
+CI の `check` / `rename-smoke` も locked dependencies 導入後（改名 job は改名後）に同じ script を呼ぶ。
+gate step と job に skip 条件・`continue-on-error` を置かない。Taskfile 自身の検査起動を Taskfile に依存させない。
+Task はローカル exact pin を要求せず、通常 tests は独立拒否・正常実行・失敗伝播を確認する。
+バージョン依存の旧挙動再現は、CI の Task 3.51.1 固定環境で正式 gate の後に
+`node --test repo-tools/integration/repository-taskfile-gate.test.ts` を明示実行する。
 ローカル検証成功だけで merge-ready とせず、PR の hosted CI 成功を merge 条件とする。
 
 Skill frontmatter は既存の `skill-updater/metadata.ts`、旧 metadata 移行の range 検証は既存の

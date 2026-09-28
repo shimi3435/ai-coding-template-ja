@@ -69,13 +69,22 @@ for (const [scope, options] of [
   });
 }
 for (const [scope, options] of [
-  ["check", { desc: "" }], ["extra", { desc: "説明", silent: false, vars: {} }],
-  ["extra", { vars: { EMPTY: "", TEXT: "npx data", TEMPLATE: "{{.OTHER}}" } }],
-  ["command", { silent: true }], ["call", { silent: false, vars: { TEXT: "npx data" } }],
+  ["check", { desc: "" }], ["extra", { desc: "説明", silent: false }],
+  ["command", { silent: true }], ["call", { silent: false }],
 ] satisfies [string, Mapping][]) {
   test(`check-contracts accepts static options: ${scope} ${JSON.stringify(options)}`, () => {
     const result = checkOptions(scope, options);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /forbidden Node runners in static command text: none/);
   });
+}
+
+for (const scope of ["extra", "call"]) {
+  for (const vars of [{}, { TEXT: "safe" }, { EMPTY: "" }]) {
+    test(`check-contracts rejects all static vars: ${scope} ${JSON.stringify(vars)}`, () => {
+      const result = checkOptions(scope, { vars });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /vars/);
+    });
+  }
 }
