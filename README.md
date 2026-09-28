@@ -1,7 +1,7 @@
 # ai-coding-template-ja
 
 研究者が AI コーディングを安全に始める開発基盤を提供する、日本語対応の研究用 Python
-プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。作成直後に `task check` /
+プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。作成直後に `./scripts/check.sh` /
 `task doctor` が green になる最小実用セットに、必要なものだけ opt-in で足していく。
 
 必須ランタイムは Node.js 24 LTS、npm、Python 3.14 以上。リポジトリの既定は
@@ -29,13 +29,13 @@
    ```
 
    配布名（`my-research-project`）は module 名から自動導出されます。
-4. `task check` と `task doctor` が green になることを確認
+4. `./scripts/check.sh` と `task doctor` が green になることを確認
 
 ## 2 回目以降
 
 ```bash
 task setup     # npm ci --ignore-scripts ＋ uv sync --inexact ＋ pre-commit install
-task check     # Node contracts / TypeScript / Node test ＋既存 Python checks
+./scripts/check.sh # Node contracts / TypeScript / Node test ＋既存 Python checks
 task doctor    # 環境診断（read-only・FAIL ゼロで green）
 ```
 
@@ -46,8 +46,8 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task setup` | `npm ci --ignore-scripts` ＋ Python inexact sync（導入済み extras を保持）＋ pre-commit hooks |
 | `task setup:node` | lock 済み Node dependency を `npm ci --ignore-scripts` で導入 |
 | `task setup:research` ほか | extras を加算導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
-| `task check` | 品質チェック一式 |
-| `task check:isolated` | OpenSpec CLI / ネットワークなしの隔離環境で `task check` を検証 |
+| `./scripts/check.sh` | 品質チェック一式 |
+| `task check:isolated` | OpenSpec CLI / ネットワークなしの隔離環境で正式 gate を検証 |
 | `task fix` | ruff format ＋ ruff check --fix |
 | `task test` / `task lint` / `task typecheck` | 個別実行 |
 | `task doctor` | 環境診断（`-- --online` で到達性 / `-- --github` で gh 文脈 opt-in） |
@@ -67,7 +67,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 同梱Skillはそのまま利用できる。`task skills:links` は現在checkoutのlinkを修復し、
 `task skills:verify` はnetworkなしで検証する。local本文の内容lock更新は不要で、構造・identity・legal検証は維持する。
 上流更新は元repositoryと完全な開始commit、`git clone --no-local` で作った独立候補を指定する。
-[公開操作・隔離更新手順](docs/template/skill-maintenance.md)に従い、適用成功、offline検証、`task check`、差分レビュー後に通常PRへ進む。
+[公開操作・隔離更新手順](docs/template/skill-maintenance.md)に従い、適用成功、offline検証、`./scripts/check.sh`、差分レビュー後に通常PRへ進む。
 更新PR自動化の提供は終了した。既存の利用環境は先に
 [手動更新・自動化撤去の手順](docs/guide.md#7-skillの手動更新と旧自動化の撤去)に従って停止・棚卸しを行う。
 
@@ -82,9 +82,9 @@ inexact sync により、導入済み extras を削除しない。
   `.python-version` は `3.14`。Node.js は TypeScript ESM の `repo-tools` を直接実行する管理プレーン。
 - **Python 開発基盤**: uv / pyproject.toml / uv.lock。
 - **品質チェック**: ruff（format + lint）/ basedpyright（basic）/ pytest / pytest-cov を
-  `task check` に集約。軽量 pre-commit（ruff ＋ ファイル系 ＋ detect-private-key）。
+  `./scripts/check.sh` に集約。軽量 pre-commit（ruff ＋ ファイル系 ＋ detect-private-key）。
 - **管理 CLI とタスクランナー**: TypeScript ESM の `repo-tools` を Node.js 24 で直接実行し、
-  Taskfile を人間と AI の共通公開入口にする。bootstrap.sh（Ubuntu）/ doctor.py（環境診断）/
+  通常操作は Taskfile、最終検証は `./scripts/check.sh` を人間と AI の共通公開入口にする。bootstrap.sh（Ubuntu）/ doctor.py（環境診断）/
   rename-package.py（改名）を同梱。
 - **CI**（GitHub Actions）: check（`npm ci --ignore-scripts` / Node contracts / TypeScript / Node test /
   既存 Python checks）＋ rename-smoke ＋ security（gitleaks）＋ audit（pip-audit / bandit）。

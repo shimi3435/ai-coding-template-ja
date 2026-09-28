@@ -194,7 +194,7 @@ def main() -> int:
             "`rm -rf .venv && uv sync` を手動で試してください。"
         )
         return result.returncode
-    print("完了。task check で green を確認してください。")
+    print("完了。./scripts/check.sh で green を確認してください。")
     return 0
 
 

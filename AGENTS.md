@@ -74,7 +74,7 @@ design、tasks、workflow、skills は OSWF-5 を参照して列挙を複製し�
 - build / CI
 - 削除 / migration
 
-該当時は self-review、initial independent review、finding 修正、最新入力の `task check`、initial reviewer と
+該当時は self-review、initial independent review、finding 修正、最新入力の `./scripts/check.sh`、initial reviewer と
 別の独立 verifier の順に実行する。finding 修正は fix、focused validation、diff review を一組として
 最大3 iterations。verifier blocker は soft stop し、利用者承認後の新 cycle で fix、独立 review、
 project checks、前 cycle と別の verifier を実行する。同一役割・task の agent が連続2回失敗した場合、
@@ -92,7 +92,7 @@ project checks、前 cycle と別の verifier を実行する。同一役割・t
 
 ## Validation
 - 変更後は対象に近いテストを実行する。
-- 少なくとも `task check` の実行可否を確認する。
+- 最終完了判定には `./scripts/check.sh` の成功を要求する。`task check` 単独の成功で代替しない。
 - 実行できなかったコマンドは理由を明記する。
 
 ## Safety

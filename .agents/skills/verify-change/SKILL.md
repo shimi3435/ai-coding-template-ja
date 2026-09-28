@@ -1,7 +1,7 @@
 ---
 name: verify-change
 description: >
-  Verify that a change actually works, not just that tests pass: reuse or run task check,
+  Verify that a change actually works, not just that tests pass: reuse or run ./scripts/check.sh,
   run tests close to the change individually, and where possible exercise the
   changed code for real (REPL / script / task doctor). Report anything that
   could not be verified as unverified, with reasons. Use after completing a
@@ -19,7 +19,7 @@ description: >
 
 ## Reusable green evidence
 
-`task check` を含む各検証 command について、直前の green evidence と現在状態の入力同一性を
+`./scripts/check.sh` を含む各検証 command について、直前の green evidence と現在状態の入力同一性を
 command 単位で確認する。evidence は次を含む。
 
 - 実行 command と exit 0。
@@ -44,10 +44,10 @@ focused validation と代替静的検証が構造上非該当の場合だけ、N
 
 ## 手順（4 段）
 
-1. **`task check`（必須ゲート）**: 上記 identity を満たす reusable green evidence があれば結果を確認して
+1. **`./scripts/check.sh`（必須ゲート）**: 上記 identity を満たす reusable green evidence があれば結果を確認して
    再利用し、なければ lint / format / typecheck / test の一式を回す。
 2. **変更対象に近いテストの個別実行**: 例 `uv run pytest tests/test_xxx.py -q`。
-   `task check` 全体が green でも個別に実行する（変更に対応するテストが存在しない
+   `./scripts/check.sh` 全体が green でも個別に実行する（変更に対応するテストが存在しない
    ことを見逃さないため。無ければその旨を報告する）。
 3. **可能なら実動作確認**: 変更した対象を実際に叩き、出力を目視する。
    - 関数: REPL や `uv run python -c "..."` で代表入力を与えて出力を見る。

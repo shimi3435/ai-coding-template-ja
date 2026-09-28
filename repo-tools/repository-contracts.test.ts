@@ -1,92 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import test, { afterEach } from "node:test";
-
-const cli = new URL("./cli.ts", import.meta.url);
-const temporaryRepositories = new Set<string>();
-
-function temporaryRepository(prefix: string): string {
-  const repository = mkdtempSync(join(tmpdir(), prefix));
-  temporaryRepositories.add(repository);
-  return repository;
-}
-
-afterEach(() => {
-  for (const repository of temporaryRepositories) rmSync(repository, { recursive: true, force: true });
-  temporaryRepositories.clear();
-});
-
-function writeValidRepository(): string {
-  const repository = temporaryRepository("repo-contracts-");
-  mkdirSync(join(repository, ".github", "workflows"), { recursive: true });
-  mkdirSync(join(repository, "scripts"));
-  mkdirSync(join(repository, "repo-tools"));
-  mkdirSync(join(repository, "docs", "template"), { recursive: true });
-  writeFileSync(
-    join(repository, "package.json"),
-    JSON.stringify({
-      private: true,
-      scripts: { check: "node repo-tools/cli.ts check-contracts" },
-      devDependencies: { typescript: "7.0.2" },
-    }),
-    "utf8",
-  );
-  writeFileSync(join(repository, "package-lock.json"), '{"lockfileVersion":3}', "utf8");
-  writeFileSync(join(repository, "TEMPLATE_VERSION"), "1.0.0\n", "utf8");
-  writeFileSync(join(repository, ".gitignore"), "/node_modules/\n", "utf8");
-  writeFileSync(
-    join(repository, "Taskfile.yml"),
-    [
-      'version: "3"',
-      "tasks:",
-      "  setup:node:",
-      "    cmds:",
-      "      - npm ci --ignore-scripts",
-      "  audit:node:",
-      "    cmds:",
-      "      - npm audit --audit-level=high",
-      "  skills:links:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:links",
-      "  skills:verify:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:verify",
-      "  skills:check:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:check",
-      "  skills:update:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:update",
-      "  skills:repin:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:repin",
-      "  skills:adopt-local:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:adopt-local",
-      "  skills:migrate:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:migrate",
-      "  check:",
-      "    cmds:",
-      "      - node repo-tools/entrypoint.mjs skills:verify",
-      "      - node --test repo-tools/*.test.ts",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-  writeFileSync(join(repository, ".github", "workflows", "ci.yml"), "name: CI\n", "utf8");
-  writeFileSync(join(repository, "scripts", "bootstrap.sh"), "#!/bin/sh\n", "utf8");
-  writeFileSync(join(repository, "repo-tools", "cli.ts"), "// fixture\n", "utf8");
-  writeFileSync(
-    join(repository, "docs", "template", "release.md"),
-    "prepare-v2-release: Node.js 24 / Python >=3.14 / TEMPLATE_VERSION=2.0.0\n",
-    "utf8",
-  );
-  return repository;
-}
+import test from "node:test";
+import { cli, temporaryRepository, writeValidRepository } from "./repository-contracts-test-fixture.ts";
 
 test("check-contracts accepts the tracked exact dependency and release ownership contract", () => {
   const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
@@ -381,8 +298,20 @@ test("property: exact semver forms pass and range forms fail in every dependency
     "1.2.3-alpha.1",
     "1.2.3+build.7",
     "1.2.3-alpha.1+build.7",
+    "1.2.3+build.01",
+    "1.2.3-rc.1+build.01",
+    "9007199254740990.0.0",
+    "0.9007199254740990.0",
+    "0.0.9007199254740990",
+    "9007199254740991.0.0",
+    "0.9007199254740991.0",
+    "0.0.9007199254740991",
+    "1.2.3-9007199254740992",
+    `1.2.3+${"a".repeat(249)}`,
+    `1.2.3+${"a".repeat(250)}`,
   ];
   const rejectedVersions = [
+    "",
     "^1.2.3",
     "~1.2.3",
     ">=1.2.3",
@@ -399,6 +328,16 @@ test("property: exact semver forms pass and range forms fail in every dependency
     "1.2.3-",
     "1.2.3+..",
     "1.2.3+",
+    "v1.2.3",
+    "=1.2.3",
+    " 1.2.3",
+    "1.2.3 ",
+    "1.2.3\n",
+    "1.2.3+日本語",
+    "9007199254740992.0.0",
+    "0.9007199254740992.0",
+    "0.0.9007199254740992",
+    `1.2.3+${"a".repeat(251)}`,
   ];
 
   for (const field of dependencyFields) {
@@ -434,6 +373,18 @@ test("property: exact semver forms pass and range forms fail in every dependency
     }
   }
 });
+
+for (const value of [null, false, 7, [], {}]) {
+  test(`check-contracts rejects nonstring dependency versions: ${JSON.stringify(value)}`, () => {
+    for (const field of ["dependencies", "devDependencies"]) {
+      const repository = writeValidRepository();
+      writeFileSync(join(repository, "package.json"), JSON.stringify({ private: true, [field]: { sample: value } }));
+      const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /sample.*string version/);
+    }
+  });
+}
 
 test("npm ci --ignore-scripts --offline rejects a tracked package and lock mismatch", () => {
   const repository = temporaryRepository("npm-ci-lock-mismatch-");

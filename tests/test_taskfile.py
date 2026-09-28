@@ -120,7 +120,7 @@ def test_isolated_task_specifies_a_real_offline_nested_check() -> None:
         assert root in body
     assert "env -i" in body
     assert 'PATH="$bin"' in body
-    assert "task check" in body
+    assert "exec ./scripts/check.sh" in body
     assert "command -v openspec" in body
     assert "command -v npx" in body
     legacy_token = "g" + "sd"

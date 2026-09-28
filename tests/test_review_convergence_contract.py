@@ -85,7 +85,7 @@ def test_high_risk_topology_has_no_redundant_final_reviewer() -> None:
             "self-review（cycle の先頭に1回）",
             "initial independent review",
             "fix → focused validation → diff review（最大3 iterations）",
-            "最新入力の `task check`",
+            "最新入力の `./scripts/check.sh`",
             "initial reviewer と別の独立 verifier",
         ),
     )

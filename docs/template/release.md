@@ -46,7 +46,7 @@ Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する
 以下を**全て満たすまでリリースしない**（1 つでも red / 不一致なら tag を打たず、
 先に解消する）。
 
-1. `task check` が green。
+1. `./scripts/check.sh` が green。
 2. `task openspec:validate` が green（engine 必須のゲート。CI の `openspec-validate`
    ジョブでも同じ gate が走る）。
 3. `openspec/changes/` が `.gitkeep` のみ（pre-merge close 規約の帰結。規約本文は
@@ -61,7 +61,7 @@ Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する
      （ネットワーク不通等）は未実施であることを認識した上で人が判断する。
 
 ```bash
-task check
+./scripts/check.sh
 task openspec:validate
 ls -A openspec/changes/   # .gitkeep のみであること
 task skills:check -- --source "$PWD" --base "$(git rev-parse HEAD)"  # commit済みsnapshotの陳腐化点検

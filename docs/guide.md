@@ -33,9 +33,9 @@
 
 コア層を使う上でのメンタルモデルは 3 つ:
 
-- **task が共通入口**: 人間も AI エージェントも同じ task コマンドを叩く。何があるかは
-  README のタスク表が正。人間と AI で手順が分岐しないことが再現性の土台になる。
-- **green の意味**: `task check`（品質チェック一式）が通り、`task doctor`（環境診断）が
+- **人間と AI の共通入口**: 通常操作は task、最終検証は `./scripts/check.sh` を使う。
+  公開コマンドは README のタスク表が正。人間と AI で手順を分岐させない。
+- **green の意味**: `./scripts/check.sh`（品質チェック一式）が通り、`task doctor`（環境診断）が
   FAIL ゼロであること。この 2 つが「壊れていない」の定義で、以後のすべての変更の基準線になる。
 - **単一の正（SoT）**: エージェントの作業方針は [AGENTS.md](../AGENTS.md) が唯一の正。
   他のエージェント設定ファイルは薄い参照に留まる。方針の重複記載を作らないことで、
@@ -88,7 +88,7 @@ bootstrapの引数契約:
 
 日々の回し方は次の型に収まる（各コマンドの定義は README のタスク表が正）。
 
-- **書く → `task fix` → `task check`**: fix は自動で直せるもの（整形・自明な lint 指摘）を
+- **書く → `task fix` → `./scripts/check.sh`**: fix は自動で直せるもの（整形・自明な lint 指摘）を
   直し、check は整形・lint・型・テストを一括で検査する。check が通る状態を細かく保つほど、
   赤が出たときの容疑範囲が狭くなる。
 - **pre-commit は最後の網**: コミット時に軽量チェックが自動で走る。ブロックされたら大半は
@@ -103,7 +103,14 @@ bootstrapの引数契約:
 初めて OpenSpec change を切るときの最小手順は [docs/agents/workflow.md](agents/workflow.md) の
 「初めての change（quickstart）」節を参照。
 
-通常 CI の `check` と改名後の `rename-smoke` も、ローカルと同じ `task check` を実行する。
+依存導入後の最終検証は、Taskfile の検査を Task から独立して先に実行する。
+
+```bash
+./scripts/check.sh
+```
+
+通常 CI の `check` と改名後の `rename-smoke` も同じ script を呼ぶ。内部で独立 `check-contracts` を実行し、
+成功した場合だけ `task check` へ進む。Task 自体が skip されても検査を省略できないようにする。
 検証一覧の正は [Taskfile.yml](../Taskfile.yml) の `check`。Skill の source / lock / 実体 / legal /
 symlink の整合、top-level Node tests、TypeScript、Python checks を検証する。
 CI は固定版 Task と locked dependencies を事前導入し、検証段階では導入や外部 host・認証を要求しない。
@@ -223,7 +230,7 @@ Node.js 24、npm、Python >=3.14、uv、Task、公開GitHubを読める `gh` を
 
 1. [公開操作・隔離更新手順](template/skill-maintenance.md)に従い、完全な開始commitと独立候補cloneを用意する。
 2. Node.js 24 / Python >=3.14、locked dependencyでpreviewし、取得元・固定SHA・legalを確認する。
-3. 明示applyが成功した候補だけでoffline verify、`task check`、差分レビューを行う。
+3. 明示applyが成功した候補だけでoffline verify、`./scripts/check.sh`、差分レビューを行う。
 4. すべて成功した後に、push先を確認して通常PRへ進む。失敗候補は診断用に残し、新しいcloneから再実行する。
 
 候補は `git clone --no-local` で作り、linked worktree / shared objectを使わない。

@@ -110,7 +110,7 @@ OSWF-5 の高リスク条件に該当する change は、次の順序で実行�
 1. self-review（cycle の先頭に1回）。
 2. initial independent review。
 3. fix → focused validation → diff review（最大3 iterations）。
-4. 最新入力の `task check`。
+4. 最新入力の `./scripts/check.sh`。
 5. initial reviewer と別の独立 verifier。
 
 高リスク条件に該当しない change は self-review、適用可能な focused validation、通常の final checks で
@@ -134,7 +134,17 @@ change を拡張しない。独立価値があれば別 Issue / change 候補の
 
 ### Validation cadence と reusable green evidence
 
-各 fix 中は対象に近い focused validation を実行する。review 収束後、最新入力で `task check` を実行する。
+本テンプレートの正式な project gate は次のコマンドである。依存導入後に実行する。
+script が Task から独立した先行検査を実行し、失敗したら Task を起動しない。
+
+```bash
+./scripts/check.sh
+```
+
+CI の `check` / 改名後の `rename-smoke` も同じ script を呼ぶ。Taskfile 自身の検査起動を
+Taskfile に依存させない。ローカル完了後も、merge 前に PR の hosted CI 成功を確認する。
+
+各 fix 中は対象に近い focused validation を実行する。review 収束後、最新入力で `./scripts/check.sh` を実行する。
 focused validation が構造上非該当の場合だけ N/A 理由で完了できる。環境制約または失敗による未実行は
 完了にできない。
 
@@ -189,10 +199,10 @@ main は各 material task の成果を検証してから `tasks.md` を更新す
 
 ### pre-merge close 後の検証
 
-close 前に strict target validate、`task openspec:validate`、`task check`、必要な verifier を完了する。
+close 前に strict target validate、`task openspec:validate`、`./scripts/check.sh`、必要な verifier を完了する。
 retrospective と tasks 更新後は、変更入力に影響する command だけを再実行する。change directory 削除後、
 `task openspec:validate` で active change 0 / green を確認する。削除した artifacts が通常 CI の入力でないと
-確認でき、入力同一性を証明できる場合だけ `task check` evidence を再利用する。
+確認でき、入力同一性を証明できる場合だけ `./scripts/check.sh` evidence を再利用する。
 
 ## OpenSpec engine と Markdown fallback（ADR-0010）
 
@@ -225,7 +235,7 @@ CLI がない場合も固定ディレクトリから Markdown files を読み、
 4. 独立出荷可能な成果を別 changes に分割し、一体成果の詳細 task と依存を `tasks.md` に書く。
 5. `tasks.md` の依存完了済み先頭未完了 task から実装・検証し、checkbox を更新する。
 6. 全 requirements / scenarios / `spec-holes` を実装と検証へ対応付け、`task openspec:validate` と
-   `task check` を実行する。
+   `./scripts/check.sh` を実行する。
 7. テンプレート自身ではマージ前の最終コミットで change directory を削除し、active change 0 を検証する。
 
 ## change close 時の軽量ふりかえり（テンプレート自身の運用）

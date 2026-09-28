@@ -122,7 +122,7 @@ tasks:
               exit 1
             fi
             cd "$REPOSITORY"
-            exec task check
+            exec ./scripts/check.sh
           '
 
   audit:node:
