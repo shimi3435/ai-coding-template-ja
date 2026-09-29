@@ -31,6 +31,8 @@ class _VersionInfo(NamedTuple):
     major: int
     minor: int
     micro: int
+    releaselevel: str = "final"
+    serial: int = 0
 
 
 def test_default_package_importable() -> None:
@@ -96,6 +98,9 @@ def test_doctor_checks_python_default_declaration_separately_from_minimum_runtim
         "version_info",
         _VersionInfo(*running),
     )
+    monkeypatch.setattr(
+        doctor.sys, "version", ".".join(map(str, running)) + " (fixture)"
+    )
     (tmp_path / ".python-version").write_text("3.14\n", encoding="utf-8")
     diag = doctor.Diagnostics()
 
@@ -114,6 +119,7 @@ def test_doctor_rejects_non_default_python_declaration(
         "version_info",
         _VersionInfo(3, 15, 1),
     )
+    monkeypatch.setattr(doctor.sys, "version", "3.15.1 (fixture)")
     (tmp_path / ".python-version").write_text("3.15\n", encoding="utf-8")
     diag = doctor.Diagnostics()
 
@@ -246,7 +252,7 @@ def test_doctor_rejects_node_outside_major_24(
     monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/present")
     monkeypatch.setattr(
         doctor,
-        "_run",
+        "_run_runtime",
         lambda cmd: (0, "v22.18.0" if cmd == ["node", "--version"] else "10.9.3"),
     )
     diag = doctor.Diagnostics()
@@ -273,7 +279,7 @@ def test_doctor_accepts_node_24_and_npm_without_npx(
         ("node", "--version"): (0, "v24.11.1"),
         ("npm", "--version"): (0, "11.6.2"),
     }
-    monkeypatch.setattr(doctor, "_run", lambda cmd: versions[tuple(cmd)])
+    monkeypatch.setattr(doctor, "_run_runtime", lambda cmd: versions[tuple(cmd)])
     diag = doctor.Diagnostics()
 
     doctor.check_node_runtime(diag)

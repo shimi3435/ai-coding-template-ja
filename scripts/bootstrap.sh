@@ -52,26 +52,51 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 ASSUME_YES="${ASSUME_YES:-0}"
 
+VERSION_PATTERN='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+
+read_runtime_output() {
+  local captured
+  # read preserves trailing newlines and reports embedded NUL instead of dropping it.
+  # The final marker carries command status without mixing stderr into stdout.
+  if IFS= read -r -d '' captured < <(
+    if "$1" --version; then printf '\0010'; else printf '\0011'; fi
+  ); then
+    RUNTIME_OUTPUT="${captured} [NUL in version output]"
+    return 1
+  fi
+  RUNTIME_OUTPUT="${captured%$'\001'?}"
+  [[ "$captured" == *$'\0010' ]] || return 1
+  if [[ "$RUNTIME_OUTPUT" == *$'\r\n' ]]; then
+    RUNTIME_OUTPUT="${RUNTIME_OUTPUT%$'\r\n'}"
+  elif [[ "$RUNTIME_OUTPUT" == *$'\n' ]]; then
+    RUNTIME_OUTPUT="${RUNTIME_OUTPUT%$'\n'}"
+  fi
+}
+
+decimal_less_than() {
+  # Compare canonical decimal strings without shell integer overflow.
+  [[ ${#1} -lt ${#2} || ( ${#1} -eq ${#2} && "$1" < "$2" ) ]]
+}
+
 python_preflight() {
-  local python_output python_version python_major python_minor
+  local python_output python_major python_minor
 
   if ! command -v python3 >/dev/null 2>&1; then
     error "Python >=3.14 が見つかりません。"
     return 1
   fi
-  if ! python_output="$(python3 --version 2>&1)"; then
-    error "Python version command が失敗しました: $python_output"
+  if ! read_runtime_output python3; then
+    error "Python version command が失敗しました: $RUNTIME_OUTPUT"
     return 1
   fi
-  python_version="${python_output#Python }"
-  if [[ ! "$python_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+.-][0-9A-Za-z.-]+)?$ ]]; then
+  python_output="$RUNTIME_OUTPUT"
+  if [[ ! "$python_output" =~ ^Python\ $VERSION_PATTERN$ ]]; then
     error "Python version 出力を解釈できません: $python_output"
     return 1
   fi
-  python_major="${python_version%%.*}"
-  python_minor="${python_version#*.}"
-  python_minor="${python_minor%%.*}"
-  if [ "$python_major" -lt 3 ] || { [ "$python_major" -eq 3 ] && [ "$python_minor" -lt 14 ]; }; then
+  python_major="${BASH_REMATCH[1]}"
+  python_minor="${BASH_REMATCH[2]}"
+  if decimal_less_than "$python_major" 3 || { [[ "$python_major" == 3 ]] && decimal_less_than "$python_minor" 14; }; then
     error "Python >=3.14 が必要です（検出: $python_output）。"
     return 1
   fi
@@ -85,7 +110,7 @@ node_runtime_error() {
 }
 
 runtime_preflight() {
-  local node_output npm_output node_version node_major
+  local node_output npm_output node_major
 
   if ! command -v node >/dev/null 2>&1; then
     node_runtime_error "Node.js 24 が見つかりません。"
@@ -95,25 +120,26 @@ runtime_preflight() {
     node_runtime_error "npm が見つかりません。"
     return 1
   fi
-  if ! node_output="$(node --version 2>&1)"; then
-    node_runtime_error "Node.js version command が失敗しました: $node_output"
+  if ! read_runtime_output node; then
+    node_runtime_error "Node.js version command が失敗しました: $RUNTIME_OUTPUT"
     return 1
   fi
-  if ! npm_output="$(npm --version 2>&1)"; then
-    node_runtime_error "npm version command が失敗しました: $npm_output"
+  node_output="$RUNTIME_OUTPUT"
+  if ! read_runtime_output npm; then
+    node_runtime_error "npm version command が失敗しました: $RUNTIME_OUTPUT"
     return 1
   fi
-  node_version="${node_output#v}"
-  if [[ ! "$node_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+.-][0-9A-Za-z.-]+)?$ ]]; then
+  npm_output="$RUNTIME_OUTPUT"
+  if [[ ! "$node_output" =~ ^v$VERSION_PATTERN$ ]]; then
     node_runtime_error "Node.js version 出力を解釈できません: $node_output"
     return 1
   fi
-  if [[ ! "$npm_output" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+.-][0-9A-Za-z.-]+)?$ ]]; then
+  node_major="${BASH_REMATCH[1]}"
+  if [[ ! "$npm_output" =~ ^$VERSION_PATTERN$ ]]; then
     node_runtime_error "npm version 出力を解釈できません: $npm_output"
     return 1
   fi
-  node_major="${node_version%%.*}"
-  if [ "$node_major" -ne 24 ]; then
+  if [[ "$node_major" != 24 ]]; then
     node_runtime_error "Node.js 24 が必要です（検出: $node_output）。"
     return 1
   fi

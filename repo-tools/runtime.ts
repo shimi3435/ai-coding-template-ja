@@ -14,15 +14,21 @@ type CommandError = Error & {
 };
 
 function systemCommandRunner(command: string, args: readonly string[]): string {
-  return execFileSync(command, args, { encoding: "utf8" }).trim();
+  return execFileSync(command, args, { encoding: "utf8", stdio: "pipe" }).replace(/\r?\n$/, "");
 }
 
-function versionTuple(version: string, label: string): [number, number, number] {
-  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)$/);
-  if (match === null) {
+function versionTuple(version: string, label: string, prefix: string): [string, string, string] {
+  const body = version.startsWith(prefix) ? version.slice(prefix.length) : "";
+  const match = body.match(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/);
+  if (match === null || match[0] !== body) {
     throw new Error(`${label} version を解析できません: ${version}`);
   }
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return [match[1], match[2], match[3]];
+}
+
+// Canonical decimal strings compare without integer overflow or precision loss.
+function decimalLessThan(left: string, right: string): boolean {
+  return left.length < right.length || (left.length === right.length && left < right);
 }
 
 function runtimeCommandError(label: string, error: unknown): Error {
@@ -45,8 +51,8 @@ export function detectAndValidateRuntimes(
   } catch (error: unknown) {
     throw runtimeCommandError("Node.js", error);
   }
-  const [nodeMajor] = versionTuple(node, "Node.js");
-  if (nodeMajor !== 24) {
+  const [nodeMajor] = versionTuple(node, "Node.js", "v");
+  if (nodeMajor !== "24") {
     throw new Error(`Node.js 24 が必要です（検出: ${node}）`);
   }
 
@@ -55,16 +61,16 @@ export function detectAndValidateRuntimes(
   } catch (error: unknown) {
     throw runtimeCommandError("npm", error);
   }
-  versionTuple(npm, "npm");
+  versionTuple(npm, "npm", "");
 
   try {
     pythonOutput = run("python3", ["--version"]);
   } catch (error: unknown) {
     throw runtimeCommandError("Python", error);
   }
-  const python = pythonOutput.replace(/^Python\s+/, "");
-  const [pythonMajor, pythonMinor] = versionTuple(python, "Python");
-  if (pythonMajor < 3 || (pythonMajor === 3 && pythonMinor < 14)) {
+  const [pythonMajor, pythonMinor] = versionTuple(pythonOutput, "Python", "Python ");
+  const python = pythonOutput.slice("Python ".length);
+  if (decimalLessThan(pythonMajor, "3") || (pythonMajor === "3" && decimalLessThan(pythonMinor, "14"))) {
     throw new Error(`Python >=3.14 が必要です（検出: ${python}）`);
   }
 
