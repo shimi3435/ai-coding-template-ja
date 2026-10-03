@@ -53,4 +53,3 @@ The three entrypoints MUST retain their runtime ownership and verify applicable 
 - **WHEN** normal offline project checks run
 - **THEN** bootstrap shared cases cover C and C.utf8, and cover en_US.UTF-8 when available
 - **AND** an unavailable en_US.UTF-8 is reported as an optional locale-test skip without requiring OS package installation
-- **AND** the current correction cycle requires a successful non-C collation run using a privately generated locale

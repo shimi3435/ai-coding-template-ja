@@ -99,6 +99,17 @@
 - Project checks: `LOCPATH=<一時locale dir> ./scripts/check.sh` exit 0（Node 580 tests / Python 655 tests、skipなし、format / lint / typecheck / contracts / skills verify）。`openspec validate unify-runtime-version-validation --strict --no-interactive` と `task openspec:validate` も成功。source commitはCycle 2 Evidence参照、fresh実行。
 - 独立verifier: 前cycleとは別の `runtime_verifier_cycle2_retry` がPASS、blockerなし。`LOCPATH=<一時locale dir> uv run --no-sync pytest tests/test_runtime_contract.py tests/test_bootstrap.py -q --no-cov` は514 passed（skipなし）、`node --test --test-reporter=dot repo-tools/runtime-contract.test.ts repo-tools/runtime-preflight.test.ts` は144件成功。`env -u LOCPATH uv run --no-sync pytest tests/test_runtime_contract.py -k 'bootstrap and unicode' -q --no-cov -rs` は6 passed / 3 skippedで、en_US未導入時だけ理由付きskipを確認。OpenSpec strict validate / `git diff --check` も成功。以上はfresh実行、source commitはCycle 2 Evidence参照。全体gateは上記の最新成功証跡を再利用し、必須受入条件の未検証なし。
 
+### 8. 再レビュー後の検証証跡の整理
+- 成果: 今回限りの非C locale検証条件を恒久specへ持ち込まず、designとCycle 2 Evidenceに保持する。
+- 依存: 7。
+- 対象:
+  - `openspec/changes/unify-runtime-version-validation/specs/runtime-validation/spec.md`
+  - `openspec/changes/unify-runtime-version-validation/tasks.md`
+- [x] 実装: APPROVE後の非blocker P3に対応し、specの時限的な1行を削除する。
+- [x] 検証: self-review、OpenSpec validate、`./scripts/check.sh` を実行する。
+- self-review: runtimeの恒久契約・実装・テストは変更せず、既存の非C locale検証条件と成功証跡がdesign / tasksに残ることを確認した。文書の配置整理のみのため、新たなOSWF-5独立review / verifierは非該当。
+- 証跡: `openspec validate unify-runtime-version-validation --strict --no-interactive`、`task openspec:validate`、`git diff --check`、`./scripts/check.sh` は成功（Node 580 passed、Python 529 passed / 126 skipped）。source commitは `eba24aef552bb2d458ba6087046177e23d9aa73b`、今回の文書差分を含むfresh実行。通常環境のen_US.UTF-8未導入により追加locale分だけskipした。非C localeの成功証跡はTask 7に保持する。
+
 ## Evidence
 - 基点: `9904295c8f26cef4de1c30de79341912b889e8f5`。記載する検証は特記以外fresh実行。
 - Context7: Node.js 24 child_process execFileSyncのstdout戻り値、非0時例外、stdio pipeを確認。
