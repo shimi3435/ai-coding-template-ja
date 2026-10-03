@@ -46,3 +46,32 @@ for (const item of fixture.cases) {
     }
   });
 }
+
+for (const [command, label] of [["node", "Node.js"], ["npm", "npm"], ["python3", "Python"]]) {
+  for (const failure of ["missing", "not-executable"] as const) {
+    test(`runtime spawn failure: ${command} ${failure}`, async () => {
+      const directory = await mkdtemp(join(tmpdir(), "runtime-spawn-failure-"));
+      try {
+        for (const [name, version] of Object.entries({
+          node: "v24.1.0", npm: "11.6.2", python3: "Python 3.14.0",
+        })) {
+          if (name === command && failure === "missing") continue;
+          const path = join(directory, name);
+          await writeFile(path, `#!/bin/sh\nprintf '%s\\n' '${version}'\n`);
+          await chmod(path, name === command ? 0o644 : 0o755);
+        }
+        // Keep the CLI runnable while preventing fallback to any host executable.
+        const result = spawnSync(process.execPath, [entrypoint.pathname, "runtime-preflight"], {
+          encoding: "utf8", env: { ...process.env, PATH: directory },
+        });
+        assert.equal(result.error, undefined);
+        assert.equal(result.status, 1, result.stdout + result.stderr);
+        const diagnosis = failure === "missing"
+          ? "executable が見つかりません" : "version command が失敗しました";
+        assert.ok(result.stderr.includes(`${label} ${diagnosis}`), result.stderr);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+}

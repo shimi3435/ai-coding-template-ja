@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import NamedTuple, NotRequired, TypedDict
@@ -28,6 +30,35 @@ class RuntimeCase(TypedDict):
 CASES: list[RuntimeCase] = json.loads(
     (REPO_ROOT / "tests/fixtures/runtime_versions.json").read_text(encoding="utf-8")
 )["cases"]
+
+
+@pytest.fixture(scope="session", params=["C", "C.utf8", "en_US.UTF-8"])
+def runtime_locale(request: pytest.FixtureRequest) -> str:
+    """非C localeは在席時だけ検証し、追加のOS packageを要求しない。"""
+    name: str = request.param
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import locale\ntry: locale.setlocale(locale.LC_ALL, '')\n"
+            "except locale.Error: raise SystemExit(77)",
+        ],
+        env={**os.environ, "LC_ALL": name},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode == 77 and name == "en_US.UTF-8":
+        pytest.skip("en_US.UTF-8未導入: 非C localeの追加検証は未実施")
+    assert probe.returncode == 0, probe.stderr
+    return name
+
+
+def _bootstrap_env(directory: Path, home: Path) -> dict[str, str]:
+    environment = {"PATH": str(directory), "HOME": str(home)}
+    if "LOCPATH" in os.environ:
+        environment["LOCPATH"] = os.environ["LOCPATH"]
+    return environment
 
 
 def _write_command(path: Path, stdout: str, stderr: str = "", status: int = 0) -> None:
@@ -61,17 +92,56 @@ def _runtime_path(tmp_path: Path, case: RuntimeCase) -> Path:
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case["id"])
-def test_bootstrap_shared_runtime_contract(tmp_path: Path, case: RuntimeCase) -> None:
+def test_bootstrap_shared_runtime_contract(
+    tmp_path: Path, case: RuntimeCase, runtime_locale: str
+) -> None:
     directory = _runtime_path(tmp_path, case)
     result = subprocess.run(
         ["/bin/bash", str(REPO_ROOT / "scripts/bootstrap.sh")],
-        env={"PATH": str(directory), "HOME": str(tmp_path), "LC_ALL": "C"},
+        env={**_bootstrap_env(directory, tmp_path), "LC_ALL": runtime_locale},
         input="",
         text=True,
         capture_output=True,
         check=False,
     )
     assert (result.returncode == 0) == case["accepted"], result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("locale_variable", ["LC_ALL", "LANG"])
+def test_bootstrap_preserves_locale_for_runtimes_and_setup(
+    tmp_path: Path, runtime_locale: str, locale_variable: str
+) -> None:
+    case = next(case for case in CASES if case["id"] == "node-plain")
+    directory = _runtime_path(tmp_path, case)
+    _write_command(directory / "task", "Task fixture\n")
+    trace = tmp_path / "locale-trace"
+    commands = {"node", "npm", "python3", "uv", "task"}
+    for name in commands:
+        command = directory / name
+        lines = command.read_text().splitlines(keepends=True)
+        lines.insert(
+            1,
+            f"printf '%s|%s|%s\\n' {name} \"${{LC_ALL-unset}}\" "
+            f'"${{LANG-unset}}" >> {shlex.quote(str(trace))}\n',
+        )
+        command.write_text("".join(lines), encoding="utf-8")
+    result = subprocess.run(
+        ["/bin/bash", str(REPO_ROOT / "scripts/bootstrap.sh")],
+        env={**_bootstrap_env(directory, tmp_path), locale_variable: runtime_locale},
+        input="",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    records = [line.split("|") for line in trace.read_text().splitlines()]
+    assert {row[0] for row in records} == commands
+    expected = (
+        [runtime_locale, "unset"]
+        if locale_variable == "LC_ALL"
+        else ["unset", runtime_locale]
+    )
+    assert all(row[1:] == expected for row in records), records
 
 
 def _load_doctor() -> ModuleType:

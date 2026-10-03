@@ -13,6 +13,11 @@ The runtime validators MUST accept only canonical ASCII three-integer final vers
 - **THEN** validation fails
 - **AND** only zero or one terminal LF or CRLF is permitted
 
+#### Scenario: Caller locale
+- **WHEN** the caller uses C, C.utf8 or an available non-C collation locale
+- **THEN** ASCII version acceptance and numeric comparison remain identical
+- **AND** runtime subprocesses and subsequent setup retain the caller locale
+
 ### Requirement: Runtime command results
 The command-based validators MUST require exit zero and validate raw stdout independently of stderr.
 
@@ -38,3 +43,14 @@ The three entrypoints MUST retain their runtime ownership and verify applicable 
 - **WHEN** normal offline project checks run
 - **THEN** Bash, TypeScript and Python consume shared expected acceptance cases through their applicable public seams
 - **AND** fixture access does not depend on OpenSpec change directories or Git history
+
+#### Scenario: Permanent spawn failure regression
+- **WHEN** node, npm or python3 is absent or lacks execute permission on an isolated PATH
+- **THEN** a CLI started using the real Node absolute path fails runtime validation
+- **AND** the existing exit-127 command regression remains separate
+
+#### Scenario: Locale regression availability
+- **WHEN** normal offline project checks run
+- **THEN** bootstrap shared cases cover C and C.utf8, and cover en_US.UTF-8 when available
+- **AND** an unavailable en_US.UTF-8 is reported as an optional locale-test skip without requiring OS package installation
+- **AND** the current correction cycle requires a successful non-C collation run using a privately generated locale

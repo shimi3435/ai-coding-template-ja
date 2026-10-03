@@ -52,7 +52,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 ASSUME_YES="${ASSUME_YES:-0}"
 
-VERSION_PATTERN='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+VERSION_PATTERN='(0|[123456789][0123456789]*)\.(0|[123456789][0123456789]*)\.(0|[123456789][0123456789]*)'
 
 read_runtime_output() {
   local captured
@@ -75,6 +75,7 @@ read_runtime_output() {
 
 decimal_less_than() {
   # Compare canonical decimal strings without shell integer overflow.
+  local LC_ALL=C
   [[ ${#1} -lt ${#2} || ( ${#1} -eq ${#2} && "$1" < "$2" ) ]]
 }
 
