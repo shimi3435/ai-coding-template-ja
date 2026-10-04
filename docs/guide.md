@@ -65,6 +65,18 @@ bootstrapはNodeを導入しない。Node.js 24 LTSとnpmが必要であり、Py
 Node / npmが未導入、不適合、またはversion検査に失敗した場合は、原因と復旧案内をstderrへ出し、
 uv導入や `task setup` より前に終了コード1で停止する。
 
+runtimeのversion判定はbootstrap、doctor、CLI preflightで次の契約を共有する。
+
+- Node.jsは `vX.Y.Z`（Xは24）、npmは `X.Y.Z`、Pythonコマンドは `Python X.Y.Z`（3.14以上）。
+  各数値はASCII数字で、0以外の先頭ゼロを認めない。npmに追加の最低版は設けない。
+- 正式版のみ受理する。alpha・beta・RC・`+build`などの付加情報付きversionは拒否する。
+- versionコマンドは終了コード0を必須とし、標準出力だけを判定する。標準エラーの警告は合否に影響しない。
+  末尾LFまたはCRLFは1つまで許容する。改行なしも受理し、前後空白や追加行は拒否する。
+- bootstrapとCLIはPATH上の `python3` を検査する。doctorは自身を実行中のPythonを検査するため、
+  異なるPython環境を参照していれば結果が異なる。`.python-version` の既定宣言は引き続き `3.14` とする。
+
+各言語の実装は、[共通runtime fixture](../tests/fixtures/runtime_versions.json)を使った通常のofflineテストで照合する。
+
 1. [Node.js公式導入ページ](https://nodejs.org/en/download)で **24 LTSとnpm** を選んで手動導入する。
    既に要件を満たす環境がある場合は再導入しない。
 2. 使用するshellのPATHを確認し、`node --version` と `npm --version` がその環境を参照することを確認する。

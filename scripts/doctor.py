@@ -81,6 +81,22 @@ def _run(cmd: list[str], timeout: int = 60) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
+def _run_runtime(cmd: list[str]) -> tuple[int, str]:
+    """versionのstdoutを空白・改行変換なしで取得し、末尾改行1つだけ除く。"""
+    try:
+        proc = subprocess.run(cmd, capture_output=True, cwd=REPO_ROOT, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return 1, str(exc)
+    output = proc.stdout.decode("utf-8", errors="replace")
+    if proc.returncode != 0:
+        return proc.returncode, output + proc.stderr.decode("utf-8", errors="replace")
+    if output.endswith("\r\n"):
+        output = output[:-2]
+    elif output.endswith("\n"):
+        output = output[:-1]
+    return 0, output
+
+
 def check_python(diag: Diagnostics) -> None:
     version_file = REPO_ROOT / ".python-version"
     if not version_file.exists():
@@ -100,7 +116,14 @@ def check_python(diag: Diagnostics) -> None:
         sys.version_info.minor,
         sys.version_info.micro,
     )
-    if running[:2] < (3, 14):
+    version = f"{running[0]}.{running[1]}.{running[2]}"
+    # version_info provides numeric fields; the banner prefix also exposes local
+    # build suffixes which releaselevel alone does not represent.
+    if sys.version_info.releaselevel != "final" or not sys.version.startswith(
+        version + " "
+    ):
+        diag.fail_(f"Python 正式版 X.Y.Z が必要です（検出: {sys.version}）")
+    elif running[:2] < (3, 14):
         diag.fail_(
             "Python >=3.14 が必要です"
             f"（検出: {running[0]}.{running[1]}.{running[2]}）。"
@@ -207,27 +230,27 @@ def check_node_runtime(diag: Diagnostics) -> None:
         diag.fail_("npm が見つかりません。Node.js 24 に付属する npm を導入してください")
         return
 
-    rc, node_output = _run(["node", "--version"])
+    rc, node_output = _run_runtime(["node", "--version"])
     if rc != 0:
         diag.fail_(f"Node.js version command が失敗しました: {node_output}")
         return
     match = re.fullmatch(
-        r"v(?P<major>[0-9]+)\.[0-9]+\.[0-9]+(?:[+.-][0-9A-Za-z.-]+)?",
+        r"v(?P<major>0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)",
         node_output,
     )
     if match is None:
         diag.fail_(f"Node.js version 出力を解釈できません: {node_output}")
         return
-    if int(match.group("major")) != 24:
+    if match.group("major") != "24":
         diag.fail_(f"Node.js 24 が必要です（検出: {node_output}）")
         return
 
-    rc, npm_output = _run(["npm", "--version"])
+    rc, npm_output = _run_runtime(["npm", "--version"])
     if rc != 0:
         diag.fail_(f"npm version command が失敗しました: {npm_output}")
         return
     if (
-        re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[+.-][0-9A-Za-z.-]+)?", npm_output)
+        re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", npm_output)
         is None
     ):
         diag.fail_(f"npm version 出力を解釈できません: {npm_output}")

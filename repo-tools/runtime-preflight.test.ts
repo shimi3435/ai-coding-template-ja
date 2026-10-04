@@ -35,7 +35,7 @@ async function runtimePath(versions: {
   } else {
     await writeCommand(directory, "npm", "npm unavailable", 127);
   }
-  await writeCommand(directory, "python3", versions.python);
+  await writeCommand(directory, "python3", `Python ${versions.python}`);
   return `${directory}:${process.env.PATH ?? ""}`;
 }
 
