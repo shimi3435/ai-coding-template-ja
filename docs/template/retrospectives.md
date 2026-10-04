@@ -29,3 +29,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-09-22 remove-node-installer（PR #80）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— 自前Node installerを撤去し、独立review・別verifier・Standards/Specの追加reviewでblockerなし
 - 2026-09-25 simplify-skill-ownership-and-lock（PR #81）: 逃した欠陥 9 件（self-review=5 / review=3 / CI=1 / merge後=0）— github.com取得host固定・metadata境界・空移行・repin表示・取得前拒否・tracked legal照合を修正し、Ubuntu / WSL検証と独立verifierを通過
 - 2026-09-28 delegate-repository-parsers（PR #83）: 逃した欠陥 6 件（self-review=1 / review=5 / CI=0 / merge後=0）— self-review=ローカル project check で startup dependency 回帰、review=check skip・補助 shell・static vars 合成・正式入口の案内漏れ・ローカル Task exact pin を検出（rename 案内は正式入口の伝播漏れとして重複除外）
+- 2026-10-04 update-virtualenv-audit（PR #86）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— virtualenvと必要なpython-discoveryだけを更新し、コア監査・locked環境・独立review / verifier・hosted CI成功を確認
