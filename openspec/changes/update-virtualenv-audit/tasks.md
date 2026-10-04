@@ -25,7 +25,8 @@
   - `openspec/changes/update-virtualenv-audit/`
 - [x] 実装: self-reviewと独立reviewを完了する。
 - 独立review: virtualenv_review PASS、blockerなし。全record比較で他273 package不変を確認。freshの `uv lock --check`、`uv pip check`（48 package互換）、OpenSpec strict validate、virtualenv作成・activate probe、`git diff --check` 成功。source commitはEvidence参照。
-- [ ] 検証: 全体check・OpenSpec validate・別verifierを完了し、PRのhosted CIを確認する。
+- [x] 検証: 全体check・OpenSpec validate・別verifierを完了し、PRのhosted CIを確認する。
+- hosted CI: PR #86、source commit 3ee735b、run 37183033024の全5 jobsが成功（fresh）。
 - Project checks: reviewer後の最新入力で `./scripts/check.sh` 成功（Node 450 / Python 188）、OpenSpec strict validate / `task openspec:validate` 成功。fresh実行、source commitはEvidence参照。
 - 独立verifier: virtualenv_verifier PASS、blockerなし。freshの `uv lock --check`、`uv pip check`、全lock比較、installed metadata照合、taskfile / OpenSpec workflow / smokeのfocused tests 56 passed、OpenSpec両gateとdiff check成功。全体check・監査は上記の最新証跡を再利用。source commitはEvidence参照。hosted CIはPR作成後に確認する。
 
@@ -35,8 +36,9 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/update-virtualenv-audit/`
-- [ ] 実装: ふりかえりとclose準備を完了する。
-- [ ] 検証: close前の必須検証と通常CI入力の独立性を確認する。
+- [x] 実装: ふりかえりとclose準備を完了する。
+- [x] 検証: close前の必須検証と通常CI入力の独立性を確認する。
+- 証跡: retrospective追記後の `uv run --no-sync pytest tests/test_tool_neutral_documentation_contract.py -q --no-cov` は13 passed。OpenSpec strict validate / task openspec:validate / git diff --check成功（fresh、source commit 3ee735bと文書差分）。独立verifierがchange四文書の通常CI入力からの独立を確認しており、全体checkはTask 2のgreen証跡を再利用する。
 - close後のactive change 0とhosted CI結果、merge結果はPRとGit履歴に記録する。
 
 ## Evidence
