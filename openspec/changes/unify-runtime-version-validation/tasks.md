@@ -132,7 +132,8 @@
   - `openspec/changes/unify-runtime-version-validation/`
 - [x] 実装: 先行PRのmerge済みmainを取り込み、self-reviewと独立reviewを完了する。
 - 独立review: runtime_cycle3_review PASS、blockerなし。`LOCPATH=<一時locale dir> uv run --no-sync pytest tests/test_bootstrap_runtime_path.py tests/test_bootstrap.py tests/test_runtime_contract.py -q --no-cov` は523 passed / skipなし、`git diff --check` 成功（fresh、source commit 56b3ea6e64f3682258b58268dfa76b56d44402fbとruntime差分）。相対PATHと空白を含むpath、function未実行、setup前停止、serial記述の整合を確認した。
-- [ ] 検証: 最新入力の全体check、OpenSpec validate、前cycleと別verifier、hosted CIを確認する。
+- [x] 検証: 最新入力の全体check、OpenSpec validate、前cycleと別verifier、hosted CIを確認する。
+- hosted CI: source commit 24093856b60fe260f01428ca12a7427bd8792aea、PR #85のrun 37197412003で全5 jobs成功（fresh）。
 - Project checks: `LOCPATH=<一時locale dir> ./scripts/check.sh` はNode 580 / Python 664 passed、skipなし。OpenSpec strict validate / task openspec:validateも成功（fresh、source commit 56b3ea6e64f3682258b58268dfa76b56d44402fbとruntime差分）。
 - 独立verifier: 前cycleと別のruntime_cycle3_verifierがPASS、blockerなし。freshのlocale付きfocused Python 523 passed / skipなし、CLI focused Node 144成功、strict validate / task openspec:validate / diff check / bash -n成功。source commitは上記Project checksと同じ。全体checkは最新green証跡を再利用。hosted CIはpush後に確認する。
 - 先行PR: #86は独立review / verifier、コア監査、全体check、close後hosted CI全5 jobs成功を経てmerge済み（main 7aa286f02184beac36bd67f44136e66210cd0878）。このmainを通常mergeし、`uv sync --locked` でvirtualenv 21.7.13 / python-discovery 1.6.0を同期した。
@@ -143,8 +144,9 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/unify-runtime-version-validation/`
-- [ ] 実装: ふりかえりを記録し、close可能性を確認する。
-- [ ] 検証: close前の必須検証と削除対象の入力影響を確認し、close後の再検証方針を確定する。
+- [x] 実装: ふりかえりを記録し、close可能性を確認する。
+- [x] 検証: close前の必須検証と削除対象の入力影響を確認し、close後の再検証方針を確定する。
+- 証跡: `uv run --no-sync pytest tests/test_tool_neutral_documentation_contract.py -q --no-cov` は13 passed。OpenSpec strict validate / task openspec:validate / git diff --check成功（fresh、source commit 24093856b60fe260f01428ca12a7427bd8792aeaとretrospective・tasks差分）。close後のfull checkとhosted CIは削除commitのPR本文へ記録する。
 - close後検証方針: 独立verifierによりtool-neutral documentation testが全tracked filesを読むことを確認した。active changeも通常CI入力に含まれるため、削除・staging後に全体checkをfresh実行し、証跡をPRへ記録する。ふりかえり追記後には同testをfocused実行する。
 - close後はこのtasks自体が削除されるため、active change 0のvalidationと最終hosted CI結果をPRへ記録する。
 
