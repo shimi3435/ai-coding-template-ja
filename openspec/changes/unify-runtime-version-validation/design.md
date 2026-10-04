@@ -15,7 +15,7 @@ versionコマンドは終了0を必須とし、stdoutだけを解析する。std
 コマンド不在、非0、spawn失敗は診断して停止する。doctorのruntime取得だけはraw stdoutを保持し、
 他の助言コマンドの既存の結合出力・整形を変えない。Bashは末尾改行やNULを消す取得方法を避ける。
 
-doctorはsys.version_infoの数値とreleaselevel / serialを参照して正式版のみ許容する。
+doctorはsys.version_infoの数値とreleaselevel == "final"を参照して正式版のみ許容する。serialは受理条件に使わない。
 sys.versionの先頭versionが数値3要素と一致することも確認し、releaselevelに現れない付加情報を拒否する。
 sys.versionのコンパイラ情報をversion suffixとみなさない。Pythonコマンド出力の文法テストを
 doctorの実プロセス検査へ偽装しない。共通fixtureに構造化version_infoを併記できるケースだけ、
@@ -39,6 +39,9 @@ Cycle 2ではbootstrap共通fixtureをC / C.utf8と利用可能なen_US.UTF-8で
 LC_ALL指定とLANGだけの指定の両方で、runtimeコマンド・uv・taskに元のlocaleが渡ることを検証する。
 CLIは実Nodeの絶対pathで起動し、PATHをfixtureだけに限定して各runtimeの実不在・実行権限なしを検証する。
 既存のexit 127は起動済みprocessの失敗として別途保持する。
+
+Cycle 3ではbootstrapのnode / npm / python3をtype -PでPATHから解決し、相対pathは作業directoryを基準に絶対pathへ変換して実行する。同名のexport済みfunctionは検査対象にしない。PATH上の実行ファイルがない場合は既存の不在診断で停止する。実行可能なwrapperやsymlinkは引き続き許容する。
+3 runtimeそれぞれについて、正常function＋実行ファイル不在、正常function＋不適合な実行ファイルを拒否し、失敗function＋適合する実行ファイルを受理する。functionが呼び出されないことと失敗時のsetup未実行も恒久テストで確認する。
 
 ## spec-holes
 以下は要件ごとの12分類の監査結果。未解決判断はない。
@@ -81,15 +84,17 @@ CLIは実Nodeの絶対pathで起動し、PATHをfixtureだけに限定して各r
 | --- | --- | --- | --- |
 | 1 | 空・ゼロ長・None | 該当 | .python-version欠落は既存どおり不合格。doctor回帰。 |
 | 2 | 境界値 | 該当 | 共通の構造化Python境界値でdoctorも検証する。共通python-info。 |
-| 3 | 重複・衝突 | 該当 | PATHのPythonとdoctor自身は別対象として保持。doctor source test。 |
+| 3 | 重複・衝突 | 該当 | PATHのPythonとdoctor自身は別対象として保持。doctor source test。同名のexport済みfunctionを無視し、3 runtime × 3状態のPATH ownershipテストで確認。 |
 | 4 | 順序 | 非該当 | fixture順は期待合否に影響しない。 |
 | 5 | 型・形式不正 | 該当 | doctorはOS提供のversion_infoを使う。存在しない構造化値の型保証は対象外。 |
 | 6 | エラー経路 | 該当 | 各入口の失敗を成功へ置換しない。共通・既存。 |
 | 7 | 冪等性・再実行 | 該当 | fixtureはread-only、テスト用PATHは一時領域へ隔離しcleanupする。localeは比較関数内だけ固定し、runtime / setupのLC_ALL・LANG継承を検証する。 |
 | 8 | 時刻・タイムゾーン | 非該当 | 時刻を扱わない。 |
 | 9 | 文字列 | 該当 | doctorのreleaselevelがfinal以外なら拒否。alpha/beta/candidate共通fixture。 |
-| 10 | 数値 | 該当 | Pythonの数値3要素とreleaselevel / serialを保持して検査。共通python-info。 |
+| 10 | 数値 | 該当 | Pythonの数値3要素とreleaselevelで検査する。serialはfixture構造に保持するが受理条件ではない。共通python-info。 |
 | 11 | 巨大入力・リソース枯渇 | 非該当 | sys.version_infoはOSの固定構造。fixtureのサイズ最適化は対象外。 |
 | 12 | 状態遷移 | 該当 | .python-version=3.14宣言と実行Pythonの最低版判定は別に維持。既存doctor test。 |
 
 Cycle 2の12分類再監査: R1の文字列・数値、R2のエラー経路、R3の再実行を上記へ更新した。残る各分類の判断は維持し、未解決判断はない。
+
+Cycle 3の12分類再監査: R3の衝突・数値を更新した。R2の不在診断と導入前停止はPATH解決失敗にも適用する。相対PATH、空白を含むpath、wrapper / symlinkは既存の実行ファイル契約を維持する。他の分類の判断は維持し、未解決判断はない。

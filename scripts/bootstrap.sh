@@ -54,6 +54,14 @@ ASSUME_YES="${ASSUME_YES:-0}"
 
 VERSION_PATTERN='(0|[123456789][0123456789]*)\.(0|[123456789][0123456789]*)\.(0|[123456789][0123456789]*)'
 
+runtime_executable() {
+  local executable
+  executable="$(type -P "$1")" || return 1
+  # Relative PATH entries must still execute a pathname, never a shell function.
+  [[ "$executable" == /* ]] || executable="$PWD/$executable"
+  printf '%s\n' "$executable"
+}
+
 read_runtime_output() {
   local captured
   # read preserves trailing newlines and reports embedded NUL instead of dropping it.
@@ -80,13 +88,13 @@ decimal_less_than() {
 }
 
 python_preflight() {
-  local python_output python_major python_minor
+  local python_path python_output python_major python_minor
 
-  if ! command -v python3 >/dev/null 2>&1; then
+  if ! python_path="$(runtime_executable python3)"; then
     error "Python >=3.14 が見つかりません。"
     return 1
   fi
-  if ! read_runtime_output python3; then
+  if ! read_runtime_output "$python_path"; then
     error "Python version command が失敗しました: $RUNTIME_OUTPUT"
     return 1
   fi
@@ -111,22 +119,22 @@ node_runtime_error() {
 }
 
 runtime_preflight() {
-  local node_output npm_output node_major
+  local node_path npm_path node_output npm_output node_major
 
-  if ! command -v node >/dev/null 2>&1; then
+  if ! node_path="$(runtime_executable node)"; then
     node_runtime_error "Node.js 24 が見つかりません。"
     return 1
   fi
-  if ! command -v npm >/dev/null 2>&1; then
+  if ! npm_path="$(runtime_executable npm)"; then
     node_runtime_error "npm が見つかりません。"
     return 1
   fi
-  if ! read_runtime_output node; then
+  if ! read_runtime_output "$node_path"; then
     node_runtime_error "Node.js version command が失敗しました: $RUNTIME_OUTPUT"
     return 1
   fi
   node_output="$RUNTIME_OUTPUT"
-  if ! read_runtime_output npm; then
+  if ! read_runtime_output "$npm_path"; then
     node_runtime_error "npm version command が失敗しました: $RUNTIME_OUTPUT"
     return 1
   fi

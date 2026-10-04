@@ -39,6 +39,12 @@ The three entrypoints MUST retain their runtime ownership and verify applicable 
 - **WHEN** doctor validates Python
 - **THEN** it validates its own sys.version_info, rejects non-final releases, and retains the separate .python-version declaration check
 
+#### Scenario: Exported shell functions
+- **WHEN** an exported shell function shadows node, npm or python3 during bootstrap
+- **THEN** bootstrap validates only the executable resolved from PATH and never invokes the same-named function
+- **AND** a missing or incompatible executable fails even when the function reports a supported version
+- **AND** a compatible executable succeeds even when the function would fail
+
 #### Scenario: Cross-entrypoint regression
 - **WHEN** normal offline project checks run
 - **THEN** Bash, TypeScript and Python consume shared expected acceptance cases through their applicable public seams

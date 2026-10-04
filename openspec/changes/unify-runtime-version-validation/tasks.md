@@ -110,6 +110,49 @@
 - self-review: runtimeの恒久契約・実装・テストは変更せず、既存の非C locale検証条件と成功証跡がdesign / tasksに残ることを確認した。文書の配置整理のみのため、新たなOSWF-5独立review / verifierは非該当。
 - 証跡: `openspec validate unify-runtime-version-validation --strict --no-interactive`、`task openspec:validate`、`git diff --check`、`./scripts/check.sh` は成功（Node 580 passed、Python 529 passed / 126 skipped）。source commitは `eba24aef552bb2d458ba6087046177e23d9aa73b`、今回の文書差分を含むfresh実行。通常環境のen_US.UTF-8未導入により追加locale分だけskipした。非C localeの成功証跡はTask 7に保持する。
 
+### 9. Cycle 3: PATH ownershipの修正
+- 成果: bootstrapがexport済みfunctionを無視しPATHの実行ファイルだけを検査する。doctorのserial記述を実装に合わせる。
+- 依存: 8。
+- 対象:
+  - `scripts/bootstrap.sh`
+  - `tests/test_bootstrap_runtime_path.py`
+  - `openspec/changes/unify-runtime-version-validation/`
+- [x] 実装: 9ケースのRED確認後にPATH解決と設計記述を修正する。
+- [x] 検証: focused testsと最初のCI parityを確認する。
+- 証跡: `uv run --no-sync pytest tests/test_bootstrap_runtime_path.py -q --no-cov` で修正前9 failedを確認。修正後の同fileとtest_bootstrap / test_runtime_contractのfocused testsは397 passed / 126 skipped。`./scripts/check.sh` はNode 580 / Python 538 passed、追加en_US locale分126 skippedで成功。Node 24 / Python 3.14でfresh実行、source commitはCycle 3 Evidence参照。
+
+### 10. Cycle 3: 依存修正の取り込みと最終検証
+- 成果: 独立PRのvirtualenv修正をmainから取り込み、review / verifierとhosted CIを成功させる。
+- 依存: 9。
+- 対象:
+  - `uv.lock`
+  - `docs/template/retrospectives.md`
+  - `scripts/bootstrap.sh`
+  - `tests/test_bootstrap_runtime_path.py`
+  - `openspec/changes/unify-runtime-version-validation/`
+- [x] 実装: 先行PRのmerge済みmainを取り込み、self-reviewと独立reviewを完了する。
+- 独立review: runtime_cycle3_review PASS、blockerなし。`LOCPATH=<一時locale dir> uv run --no-sync pytest tests/test_bootstrap_runtime_path.py tests/test_bootstrap.py tests/test_runtime_contract.py -q --no-cov` は523 passed / skipなし、`git diff --check` 成功（fresh、source commit 56b3ea6e64f3682258b58268dfa76b56d44402fbとruntime差分）。相対PATHと空白を含むpath、function未実行、setup前停止、serial記述の整合を確認した。
+- [ ] 検証: 最新入力の全体check、OpenSpec validate、前cycleと別verifier、hosted CIを確認する。
+- Project checks: `LOCPATH=<一時locale dir> ./scripts/check.sh` はNode 580 / Python 664 passed、skipなし。OpenSpec strict validate / task openspec:validateも成功（fresh、source commit 56b3ea6e64f3682258b58268dfa76b56d44402fbとruntime差分）。
+- 独立verifier: 前cycleと別のruntime_cycle3_verifierがPASS、blockerなし。freshのlocale付きfocused Python 523 passed / skipなし、CLI focused Node 144成功、strict validate / task openspec:validate / diff check / bash -n成功。source commitは上記Project checksと同じ。全体checkは最新green証跡を再利用。hosted CIはpush後に確認する。
+- 先行PR: #86は独立review / verifier、コア監査、全体check、close後hosted CI全5 jobs成功を経てmerge済み（main 7aa286f02184beac36bd67f44136e66210cd0878）。このmainを通常mergeし、`uv sync --locked` でvirtualenv 21.7.13 / python-discovery 1.6.0を同期した。
+
+### 11. Cycle 3: PR #85の出荷準備
+- 成果: PR番号付きふりかえりと最終commitでのchange close、close後のvalidationとhosted CI成功。
+- 依存: 10。
+- 対象:
+  - `docs/template/retrospectives.md`
+  - `openspec/changes/unify-runtime-version-validation/`
+- [ ] 実装: ふりかえりを記録し、close可能性を確認する。
+- [ ] 検証: close前の必須検証と削除対象の入力影響を確認し、close後の再検証方針を確定する。
+- close後検証方針: 独立verifierによりtool-neutral documentation testが全tracked filesを読むことを確認した。active changeも通常CI入力に含まれるため、削除・staging後に全体checkをfresh実行し、証跡をPRへ記録する。ふりかえり追記後には同testをfocused実行する。
+- close後はこのtasks自体が削除されるため、active change 0のvalidationと最終hosted CI結果をPRへ記録する。
+
+## Cycle 3 Evidence
+- 基点: `a3c9ca7f13d0eec33ed40ff1c8103dcde0244114`。開始時worktreeはclean、active changeは本件のみ。過去taskのcheckboxを保持し、新cycleはTasks 9–11で管理する。
+- 利用者はgrillingでPATH実体のみの検査と9ケース、serialの文書修正、virtualenvの独立PR・先行merge、main取り込み後の検証・closeを承認した。
+- Context7のGNU Bash公式資料でtype -PのPATH検索とshell functionの優先順位を確認した。
+
 ## Evidence
 - 基点: `9904295c8f26cef4de1c30de79341912b889e8f5`。記載する検証は特記以外fresh実行。
 - Context7: Node.js 24 child_process execFileSyncのstdout戻り値、非0時例外、stdio pipeを確認。
@@ -126,3 +169,5 @@
 
 - Cycle 2 self-review: 全差分、locale probeの限定skip、呼出元locale継承、PATH fallback防止、実不在とEACCESの診断、12分類対応を確認。blockerなし。`git diff --check` 成功。
 - 出荷方針: 利用者の明示依頼に基づき、Task 7の検証後に修正をcommitし、既存branchへ通常pushする。commit / pushの実行結果はGit履歴とremote一致で確認する。
+
+- Cycle 3 self-review: 全差分と9ケースを確認し、絶対pathでの呼び出し、相対PATH・空白を含むpath、function未実行、失敗時setup未実行、serial記述の整合を確認。locale付きfocused testsは523 passed / skipなし、`ruff check` / `ruff format --check` / `git diff --check` 成功（fresh、runtime source基点はCycle 3 Evidence参照）。
