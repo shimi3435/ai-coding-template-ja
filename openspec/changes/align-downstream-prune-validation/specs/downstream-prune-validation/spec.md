@@ -1,0 +1,137 @@
+## ADDED Requirements
+
+### Requirement: DPV-1 下流共通の品質検証
+システムは SHALL、`./scripts/check.sh` と内部の `task check` を下流共通の検証として提供し、テンプレート保守文書の内容・特定 release 版・到達不能な Git 履歴に依存させない。
+
+Node.js 24 / npm、Python >=3.14、既存 runtime / dependency / Taskfile 契約、remote / legal / links の
+offline 検証を維持する。`TEMPLATE_VERSION` の存在と既存の単一行 SemVer 形式を検証し、
+特定値を要求しない。自作 Skill の内容 hash lock を復活させない。
+通常検証に未使用 host・認証・ネットワークを要求しない。setup の既存の dependency 取得は別である。
+下流向け3リファレンスは design の移設先に保持する。
+
+#### Scenario: Fresh と rename 後の通常開発
+- **WHEN** 必要な runtime を準備し、fresh repository または rename 後で通常 setup と正式 gate と doctor を実行する
+- **THEN** 必須検証が成立し、保守文書の内容検証を通常 gate に混入させない
+
+#### Scenario: Prune 後と別の由来版
+- **WHEN** 完全除去構成で、`TEMPLATE_VERSION` が既存形式を満たす別の版である
+- **THEN** 正式 gate は削除済み保守資産も特定 release 値も要求しない
+
+#### Scenario: 保持した機能の破損
+- **WHEN** remote lock、legal、link、runtime、dependency または必須共通文書に不整合がある
+- **THEN** 該当検証が非ゼロ終了し、prune 済みを理由に省略しない
+
+### Requirement: DPV-2 保守検証の明示分離
+システムは SHALL、保守専用の release・履歴・出荷契約を `task check:template` に分離し、テンプレート CI で通常 gate とともに実行する。
+
+保守専用テストは通常テストの自動収集外とし、混在する共通テストは維持する。
+共通側から保守側への import を残さない。保守者は同じ二つの入口をローカルで実行できる。
+保守 gate の不在や内容エラーを条件付き skip 成功にしてはならない。
+historical records の書換え、版更新、release-ready 判断は本 change の対象外とする。
+
+#### Scenario: 同梱状態の保守検査
+- **WHEN** 同梱構成で保守者が `task check:template` を実行する
+- **THEN** release handoff、履歴と出荷契約、prune 統合検証を実行し、失敗を伝播する
+
+#### Scenario: CI とローカルの対応
+- **WHEN** テンプレート CI とローカル保守検証を比較する
+- **THEN** 共通 gate と明示保守 gate がそれぞれ同じ検証範囲を持ち、prune smoke は保守 gate を再帰実行しない
+
+#### Scenario: 分離後も共通検証を維持
+- **WHEN** 過去 ADR の検査だけを保守側へ移す
+- **THEN** 現行 policy・公開 interface・安全性・下流リンクの回帰検査は通常側に残る
+
+### Requirement: DPV-3 構成に基づく完全除去の判定
+システムは SHALL、現在の固定対象・専用項目・live references から同梱・完全除去・不整合を判定し、完了記録ファイルや repository の名称から状態を推測しない。
+
+固定必須 path と file type、共有区画・task・workflow を検査する。内容 hash は判定に使わない。
+通常 gate と prune は不整合を非ゼロ終了にする。doctor は同じ状態を報告し、
+不整合は既存の機械コア破損に相当する FAIL、完全除去は正常な状態として扱う。
+説明文の path と負例 fixture は live execution reference と区別する。
+
+#### Scenario: 部分欠落と型破損
+- **WHEN** 必須文書一つだけの欠落、空文書、残存専用 task、空ディレクトリ、dangling symlink または壊れた共有区画がある
+- **THEN** 不整合として拒否し、保守検証を黙って省略しない
+
+#### Scenario: 操作記録なしの完全除去
+- **WHEN** 固定対象と専用項目・live references がすべて除去され、下流必須資産が残っている
+- **THEN** 手動除去でも完全除去と認め、通常 gate を実行できる
+
+#### Scenario: 正常な再実行
+- **WHEN** Git / HEAD / repository root の前提を満たす完全除去構成で prune を再実行する
+- **THEN** 直前の削除差分が未コミットでも read-only の整合確認後に no-op 成功する
+
+#### Scenario: 旧文書だけの prune
+- **WHEN** 文書だけを削除した旧構成で、保守コードや呼出設定が残る
+- **THEN** 不整合として停止し、復元後の再試行を案内する
+
+### Requirement: DPV-4 固定範囲の read-only preview
+システムは SHALL、既存の `task prune-template-docs` を既定の read-only preview とし、削除・書換え・保持対象と適用可否を表示する。
+
+対象は design の固定削除・編集対象に限定する。`--apply` なしで変更しない。
+preview は一時ファイル、Git index、host 設定、network、dependency install に副作用を持たない。
+Git 未導入・管理外でも読める計画は表示するが、差分保護未確認を明示して非ゼロ終了する。
+不正引数・重複引数は非ゼロ、help は変更なしで成功とする。cwd に依存しない。
+
+#### Scenario: 正常な preview
+- **WHEN** 同梱構成で引数なしの prune を実行する
+- **THEN** 安定順の削除予定と共有編集差分を表示し、file bytes・mode・Git index を変更しない
+
+#### Scenario: 適用できない preview
+- **WHEN** Git がない、対象内差分がある、または構成が不整合である
+- **THEN** 可能な範囲の予定と blocker を示して非ゼロ終了し、何も変更しない
+
+#### Scenario: 公開入口の互換
+- **WHEN** 既存 task または Python script を別 cwd から呼び出す
+- **THEN** script の repository を対象とし、同じ引数契約・結果を提供する
+
+### Requirement: DPV-5 Git と対象範囲による変更保護
+システムは SHALL、prune の書込み前に全対象の Git 所有状態・path 安全性・共有編集範囲を検査し、対象外差分を保持する。
+
+実変更は Git top-level と一致する working tree、HEAD、対象の追跡済み・差分なしを要求する。
+同梱状態で対象が未追跡、ignored、staged、unstaged、conflict、rename または mode change の場合は
+変更前に停止する。対象内の symlink、特殊 file、submodule、入れ子 Git と外部到達 path を拒否する。
+完全除去の read-only no-op は DPV-3 に従う。
+Git status の表示だけを信頼せず、対象の実体・mode と HEAD / index の一致も確認する。
+共有ファイルの対象外部分は bytes を保持し、範囲が曖昧なら全体の変更前に停止する。
+
+#### Scenario: 対象内の利用者作業
+- **WHEN** 削除・書換え対象に未コミット変更や追加ファイルがある
+- **THEN** ignored ファイルも含めて検出し、全変更を開始せず停止する
+
+#### Scenario: 対象外差分とコミット済みカスタマイズ
+- **WHEN** 対象外に差分があり、対象内のカスタマイズはコミット済みで編集範囲を一意に決められる
+- **THEN** preview に対象の変更を表示し、明示 apply では対象だけを変更する
+
+#### Scenario: 曖昧な共有設定
+- **WHEN** 重複 task key、重複区画、片側 marker、構文不正、区画外の専用実行参照がある
+- **THEN** テンプレート版による上書きを行わず、変更前に停止する
+
+#### Scenario: 危険な path と文字列
+- **WHEN** 対象内に外部向けまたは dangling symlink 等がある、あるいは空白・改行・Unicode を含む path がある
+- **THEN** 危険な file type は拒否し、通常 path の bytes を変形せず安全に判定・表示する
+
+### Requirement: DPV-6 失敗時の停止と対象限定の復旧
+システムは SHALL、全件 preflight 後の明示 apply でのみ変更し、適用後の完全除去検査が成功した場合だけ成功を返す。
+
+共有編集、固定削除の順に実行する。書込み直前の変化を検出したら停止する。
+I/O エラーや部分失敗は非ゼロ終了し、自動 rollback、stash、commit、全体 reset / clean をしない。
+捕捉可能な失敗では変更済み・失敗・未処理対象と復旧基準 commit を表示する。
+複数ファイルの原子性と非協調 process への完全排他は保証対象外とする。
+GitHub の PR / Issue / branch 削除と host 登録解除は行わない。
+
+#### Scenario: 正常適用
+- **WHEN** 同梱構成が全事前検査を満たし、明示 apply が成功する
+- **THEN** 専用資産・呼出だけを除去し、完全除去を再検査して成功する
+
+#### Scenario: 途中の I/O 失敗
+- **WHEN** 一部の共有編集または削除後に処理が失敗する
+- **THEN** 非ゼロ終了し、対象限定の復旧手順を表示して停止する
+
+#### Scenario: 中断後の再試行
+- **WHEN** kill や通常エラー後に prune を再実行する
+- **THEN** 残存構成が不整合なら拒否し、完全除去なら no-op 成功する
+
+#### Scenario: 復旧後の実行
+- **WHEN** 利用者が失敗後の作業を保護し、開始時 commit から対象だけを復元して再実行する
+- **THEN** 同じ事前検査を行い、対象外差分を保持したまま適用できる
