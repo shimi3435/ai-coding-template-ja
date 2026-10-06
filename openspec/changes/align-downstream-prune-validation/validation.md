@@ -11,7 +11,7 @@
 | V02 | DPV-1,2,3,6 | preview → apply → 正式 gate → doctor → 再apply。その後 prune 差分を commit した状態でも gate と再apply。setup 再実行も確認する |
 | V03 | DPV-1 | 単一行の有効な別版は受理、欠落・空・複数行・既存形式外は拒否。版の値自体は prune 前後不変 |
 | V04 | DPV-1 | prune 前後それぞれで remote 本文/lock、legal、Skill link の破損を検出。local 本文は構造・legal を保つ変更なら内容 lock を要求しない |
-| V05 | DPV-2 | 同梱側の保守 gate 欠落・内容不正は拒否、完全除去後の gate 不在は正常。通常 gate が保守意味検証を行わず、通常 collection に M16〜M18 が含まれないこと |
+| V05 | DPV-2 | 同梱側の保守 gate 欠落・内容不正は拒否、完全除去後の gate 不在は正常。通常 gate は保守意味検証を行わず、通常 collection に M16〜M18 を混入させない。residual contract は M03 / M08 の exact path token だけを許可し、他の旧名称残存は拒否 |
 | V06 | DPV-3 | design §3.1 の D / M / S / K 全行を使用し、M01〜M19 の各1件欠落・空・誤型を拒否。R01〜R06 の許可所在外の直接参照、旧文書だけの prune は拒否。手動の完全除去は受理 |
 | V07 | DPV-4 | 引数なし・help の bytes / mode / index 無変更、Git 不在 preview の計画表示と非ゼロ、未知・重複引数、別 cwd、安定した表示順 |
 | V08 | DPV-5 | 対象内 staged / unstaged / conflict / rename / mode 差分、untracked / ignored を各々拒否。assume-unchanged / skip-worktree で隠れた実体差分も拒否。対象外の同種差分は保持。共有ファイル区画外の未コミット変更も拒否 |
@@ -29,6 +29,21 @@ V01/V02/V14 は実コマンドの disposable repository smoke、V06〜V13/V16 �
 fixture と失敗注入、V03〜V05/V15 は focused tests と実 gate の組合せを使う。
 固定 path ごとの欠落ケースはパラメータ化する。I/O 中心なので Hypothesis を必須にしない。
 純粋な区画編集については、区画外不変・同じ入力で同じ plan の property を追加できる。
+
+## V05 / V15: residual contract と close 順序
+
+Task 1 で design §2 の限定変更を実装し、次の正例・負例を確認する。
+
+- active change の manifest と実装の固定定義にある M03 / M08 の exact path token を許可する。
+  token の両端について、入力端と列挙した区切り文字をパラメータ化する。
+- basename だけ、別 prefix / suffix、旧名称単独・旧機能案内・呼出は拒否する。
+  許可 token と不許可の旧名称を同じ行・同じファイルに混在させても拒否する。
+- 新しい追跡ファイル名や symlink target には本文の token 例外を適用しない。
+  既存の歴史ファイル allowlist を増やさず、OpenSpec 全体や特定文書の除外を導入しない。
+- 現行 policy と撤去済み公開操作の回帰検証を通常側に残す。
+  保守側に移す residual contract の成功だけで専用実行参照検査の成功を代用しない。
+- Task 5 では本 change が存在する checkout で正式 gate と保守 gate を成功させる。
+  close 後だけ成功する状態は未完了とし、Task 6 へ進めない。
 
 ## V06: manifest を基準にした欠落検証
 
@@ -68,6 +83,34 @@ V15 では prune 後の全 R01〜R06 に対し同じ検査を行い、専用 wor
 相対 import / Markdown link、`./` / `..`、percent-encoded Markdown path、prefix が似た別 path、
 通常 tests の executable import を対にして、path 解決規則の一致も確認する。
 動的参照を含む fixture では外部 command が実行されないことと、完全な依存解消を保証する文言が出ないことを確認する。
+
+## V06 / V11: effective cwd と未対応入力
+
+以下は K05 の R01 / R03 と C 規則のケースに接続する。cwd エラーは `unsupported-cwd` とする。
+
+- R03 の workflow / job / step に `scripts` を個別指定し、
+  `python ../template-maintenance/tests/test_release_contract.py` を検出する。
+  全設定を同時指定する場合も、step > job > workflow の優先順位を確認する。
+  下位の `docs` と上位の `scripts` を連結して解決しない。
+- 設定なしでは root 基準を使い、R01 の literal `dir: scripts` でも同じ参照を検出する。
+  対照として cwd を fixture の `docs/reference` にすると、同じ引数は
+  `docs/template-maintenance/...` へ解決され、専用参照には該当しない。
+- R01 の各 task は自身の dir を使用し、呼出元の dir を継承しない。
+  R03 の `uses` / filter / `with` の path に run の cwd を適用しない。
+- cwd の省略、空・null・非 string、変数・式、外部 path、欠落 directory、symlink を対にする。
+  不正な下位 field が上位で上書きされても拒否する。空白・Unicode を含む有効な cwd は保持する。
+- `cd scripts && python ../template-maintenance/tests/test_release_contract.py`、
+  `pushd` / `popd`、関数・subshell 内の移動、literal な `bash -c` 内の移動は拒否する。
+  comment・echo 引数・JSON payload の同名文字列は誤検出しない。
+- R04 の scripts 直下で、design §3.2 の2種類の root 初期化を LF / CRLF の各々で受理する。
+  現行4 script の初期化がこの条件を満たすことも確認し、ファイル名だけの許可を作らない。
+  scripts 直下の別名 source でも同じ2行を受理し、元の名前でも構文を変えれば拒否する。
+  初期化後に専用呼出を加えれば `detected`、前後に別の移動を加えれば `unsupported-cwd` とする。
+  変数・移動先の変更、2行間への代入挿入、重複、関数 / subshell 内、子 directory の同形、
+  他 surface の同形を対照として拒否する。K05 内の payload 自体は再解析・実行しない。
+- cwd エラーは同梱 / 完全除去のどちらでも gate / doctor / preview / apply が拒否し、
+  source の位置と理由を示す。対象・対象外 bytes / mode / Git index が不変であることを確認する。
+  root への fallback、変数の実行評価、対象の部分削除が起きないことを確認する。
 
 ## V15: 履歴リンクの修正範囲
 

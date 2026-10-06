@@ -32,6 +32,10 @@ offline 検証を維持する。`TEMPLATE_VERSION` の存在と既存の単一�
 historical records の過去の判断・本文の改変、版更新、release-ready 判断は対象外とする。
 下流文書の移設に伴う link target だけの修正は [design](../../design.md) §2 の許可表に限って認め、
 本文・見出し・表示名・fragment と destination 外の bytes を保持する。
+tool-neutral residual contract は design §2 の固定規則に従い、M03 / M08 の exact path token
+だけを追加で許可する。同じ本文の他の旧名称残存と撤去済み公開操作の拒否は維持し、
+OpenSpec / ファイル全体の新しい除外を作らない。Task 1 で契約変更を検証し、
+active change を残した状態で Task 5 の gate を成功させてから close する。
 
 #### Scenario: 同梱状態の保守検査
 - **WHEN** 同梱構成で保守者が `task check:template` を実行する
@@ -53,6 +57,10 @@ historical records の過去の判断・本文の改変、版更新、release-re
 - **WHEN** 下流向け3文書を移設する
 - **THEN** design §2 の許可表にある destination だけを変更し、履歴の他の bytes を保持して新しいリンクを解決できる
 
+#### Scenario: 歴史 path の限定許可と active change の検証
+- **WHEN** active change の manifest または実装の固定定義に M03 / M08 の exact path token がある
+- **THEN** residual contract は当該 token だけを許可し、同じファイルの他の旧名称残存は拒否する。gate 成功のために change を先に削除しない
+
 ### Requirement: DPV-3 構成に基づく完全除去の判定
 システムは SHALL、現在の固定対象・専用項目・live references から同梱・完全除去・不整合を判定し、完了記録ファイルや repository の名称から状態を推測しない。
 
@@ -66,6 +74,13 @@ historical records の過去の判断・本文の改変、版更新、release-re
 負例は K05 の JSON に集約し、通常 test code / import を一括除外しない。
 対応範囲外の動的 task / path / wrapper / surface の検出は保証しない。
 成功を任意コードの依存解消保証と表現してはならない。
+R01 の task `dir` と R03 の `step > job defaults > workflow defaults > repository root` を
+design §3.2 の effective cwd として反映し、直接コマンドの相対 path を解決する。
+cwd field が不正・動的・解決不能なら root にフォールバックせず拒否する。
+C が認識する shell 本文の `cd` / `pushd` / `popd` は、design §3.2 の R04 に限定した
+固定 root 初期化2構文だけを例外として、それ以外は未対応として変更前に拒否する。
+例外は該当する2行にだけ適用し、同じ source の他の移動や専用参照を検査から外さない。
+R01〜R06 は維持し、変数・任意 wrapper・呼出元 cwd の追跡へ保証を拡張しない。
 
 #### Scenario: 部分欠落と型破損
 - **WHEN** M01〜M19 のいずれか1件の欠落、空文書、残存専用 task、空ディレクトリ、dangling symlink または壊れた共有区画がある
@@ -94,6 +109,18 @@ historical records の過去の判断・本文の改変、版更新、release-re
 #### Scenario: 動的参照の保証限界
 - **WHEN** 実行先が変数や文字列結合で動的に生成され、対応する直接参照構文には現れない
 - **THEN** 実行して解決せず、検査結果を指定 surface と対応構文の保証だけとして報告する
+
+#### Scenario: 静的 cwd を反映した直接参照
+- **WHEN** workflow の effective cwd または Taskfile の task dir が `scripts` で、直接コマンドが `python ../template-maintenance/tests/test_release_contract.py` である
+- **THEN** 専用参照として拒否する。設定の上書き優先順位を適用し、同じ引数が専用資産以外へ解決される場合は専用参照と誤認しない
+
+#### Scenario: cwd の解決不能と shell 内移動
+- **WHEN** cwd field が不正・動的・解決不能であるか、検査対象の shell 本文に未対応の cwd 変更がある
+- **THEN** source の位置と未対応理由を示して非ゼロ終了し、参照なしと判定せず、prune 対象・対象外・index を変更しない
+
+#### Scenario: 既存 shell 入口の root 初期化
+- **WHEN** R04 の scripts 直下の source が、design §3.2 の固定 root 初期化2構文のいずれかを規定の条件で含む
+- **THEN** 初期化2行は受理し、後続コマンドを root 基準で検査する。同じ source への専用参照・別の移動の追加、または例外の条件を満たさない形は拒否する
 
 ### Requirement: DPV-4 固定範囲の read-only preview
 システムは SHALL、既存の `task prune-template-docs` を既定の read-only preview とし、削除・書換え・保持対象と適用可否を表示する。
