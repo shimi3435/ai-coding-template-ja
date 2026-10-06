@@ -26,8 +26,12 @@ offline 検証を維持する。`TEMPLATE_VERSION` の存在と既存の単一�
 
 保守専用テストは通常テストの自動収集外とし、混在する共通テストは維持する。
 共通側から保守側への import を残さない。保守者は同じ二つの入口をローカルで実行できる。
-保守 gate の不在や内容エラーを条件付き skip 成功にしてはならない。
-historical records の書換え、版更新、release-ready 判断は本 change の対象外とする。
+同梱状態として検証する場合、保守 gate の不在や内容エラーを条件付き skip 成功にしてはならない。
+完全除去では保守 gate / task / 専用 workflow の不在を正常とし、通常 gate から呼び出さない。
+完全除去の条件を満たさない gate の欠落は DPV-3 の不整合として拒否する。
+historical records の過去の判断・本文の改変、版更新、release-ready 判断は対象外とする。
+下流文書の移設に伴う link target だけの修正は [design](../../design.md) §2 の許可表に限って認め、
+本文・見出し・表示名・fragment と destination 外の bytes を保持する。
 
 #### Scenario: 同梱状態の保守検査
 - **WHEN** 同梱構成で保守者が `task check:template` を実行する
@@ -41,16 +45,30 @@ historical records の書換え、版更新、release-ready 判断は本 change 
 - **WHEN** 過去 ADR の検査だけを保守側へ移す
 - **THEN** 現行 policy・公開 interface・安全性・下流リンクの回帰検査は通常側に残る
 
+#### Scenario: 完全除去後の専用 gate 不在
+- **WHEN** manifest に従って完全除去され、専用 task と workflow が存在しない
+- **THEN** 通常 gate はその不在をエラーにせず、専用 gate の代替成功を捏造せずに共通検証を実行する
+
+#### Scenario: 履歴リンクの移設
+- **WHEN** 下流向け3文書を移設する
+- **THEN** design §2 の許可表にある destination だけを変更し、履歴の他の bytes を保持して新しいリンクを解決できる
+
 ### Requirement: DPV-3 構成に基づく完全除去の判定
 システムは SHALL、現在の固定対象・専用項目・live references から同梱・完全除去・不整合を判定し、完了記録ファイルや repository の名称から状態を推測しない。
 
-固定必須 path と file type、共有区画・task・workflow を検査する。内容 hash は判定に使わない。
+固定必須集合は design §3.1 の D01〜D04 / M01〜M19 / S01〜S03 / K01〜K08 とし、
+各行の path / expected type / 必須性 / prune 時の扱いを検査する。
+現存 tree から必須集合を生成せず、内容 hash は判定に使わない。
 通常 gate と prune は不整合を非ゼロ終了にする。doctor は同じ状態を報告し、
 不整合は既存の機械コア破損に相当する FAIL、完全除去は正常な状態として扱う。
-説明文の path と負例 fixture は live execution reference と区別する。
+直接参照の検出は design §3.2 の R01〜R06 と C / P / J / M 構文規則に限定する。
+説明文の path / 名称、comment、単なるデータと実行参照を区別する。
+負例は K05 の JSON に集約し、通常 test code / import を一括除外しない。
+対応範囲外の動的 task / path / wrapper / surface の検出は保証しない。
+成功を任意コードの依存解消保証と表現してはならない。
 
 #### Scenario: 部分欠落と型破損
-- **WHEN** 必須文書一つだけの欠落、空文書、残存専用 task、空ディレクトリ、dangling symlink または壊れた共有区画がある
+- **WHEN** M01〜M19 のいずれか1件の欠落、空文書、残存専用 task、空ディレクトリ、dangling symlink または壊れた共有区画がある
 - **THEN** 不整合として拒否し、保守検証を黙って省略しない
 
 #### Scenario: 操作記録なしの完全除去
@@ -65,10 +83,22 @@ historical records の書換え、版更新、release-ready 判断は本 change 
 - **WHEN** 文書だけを削除した旧構成で、保守コードや呼出設定が残る
 - **THEN** 不整合として停止し、復元後の再試行を案内する
 
+#### Scenario: Surface ごとの直接参照
+- **WHEN** R01〜R06 の保持する surface に、C / P / J / M で検出する専用参照が許可所在の外に残る
+- **THEN** 対象を削除する前に不整合として拒否し、surface ID / source path / 位置を報告する
+
+#### Scenario: 説明と負例データ
+- **WHEN** 専用 path / task 名が通常 prose・path だけの code span・K05 の JSON payload にだけ存在する
+- **THEN** live reference に数えず、通常 test の実行コードに同じ参照を配置した負例は検出する
+
+#### Scenario: 動的参照の保証限界
+- **WHEN** 実行先が変数や文字列結合で動的に生成され、対応する直接参照構文には現れない
+- **THEN** 実行して解決せず、検査結果を指定 surface と対応構文の保証だけとして報告する
+
 ### Requirement: DPV-4 固定範囲の read-only preview
 システムは SHALL、既存の `task prune-template-docs` を既定の read-only preview とし、削除・書換え・保持対象と適用可否を表示する。
 
-対象は design の固定削除・編集対象に限定する。`--apply` なしで変更しない。
+対象は design §3.1 の固定削除・編集対象に限定する。`--apply` なしで変更しない。
 preview は一時ファイル、Git index、host 設定、network、dependency install に副作用を持たない。
 Git 未導入・管理外でも読める計画は表示するが、差分保護未確認を明示して非ゼロ終了する。
 不正引数・重複引数は非ゼロ、help は変更なしで成功とする。cwd に依存しない。

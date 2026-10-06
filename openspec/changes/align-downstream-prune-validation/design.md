@@ -53,12 +53,31 @@ README の変更は入口・リンク・削除範囲の説明に限定する。
 
 混在するファイルはテスト単位で分ける。現行 policy、公開入口、安全性、下流文書リンク、
 撤去済み公開操作の拒否等の回帰テストは通常側に残す。
-保守検証の実体は `template-maintenance/` に置き、専用 task が明示選択する。
+保守検証の実体は §3.1 の M16〜M18 の3ファイルに固定し、既存 pytest で明示実行する。
 保守テストは通常側の fixture を利用できるが、逆向きの import は禁止する。
 
 `docs/agents/workflow.md` 内のテンプレート限定の retrospective 手順は保守文書へ移す。
 archive / close の既定動作や executor 手順は変更しない。#66 が所有する設計を先行実装しない。
 既存 historical records の本文や過去の判断を現行方針で上書きしない。
+
+### 履歴文書の不変条件
+
+「historical records は書き換えない」とは、過去の判断・記述内容を現行方針で改変しないことをいう。
+上表の3文書の移設に限り、既存の Markdown link / reference definition の destination を、
+同じ参照対象の新しい相対 path に置き換える機械的修正を許可する。
+link label、title、fragment、本文、見出し、過去のコマンド、空白・改行を含む destination 外の bytes は保持する。
+外部 URL の書換えや内容修正、リンク切れを口実とする追記・整理はこの例外に含めない。
+
+現在の履歴集合 M01〜M15 にある該当リンクは、M15 の次の1件である。
+
+| 文書 | 表示名 | 修正前 destination | 修正後 destination |
+| --- | --- | --- | --- |
+| `docs/template/v2-release-notes.md` | repository contracts の受理仕様 | `repository-contracts.md` | `../reference/repository-contracts.md` |
+
+この1件以外の履歴本文の bytes は本移設で変えない。追加の該当リンクが判明した場合は、
+編集前に同じ移設先3文書への参照であることを確認し、本表と V15 を更新する。
+close 時の policy が要求する retrospective の新しい1行は別の既存義務であり、
+過去行の変更を許可しない。V15 はリンク移設差分と close の追記差分を分けて確認する。
 
 ## 3. prune の対象と保持境界
 
@@ -92,18 +111,185 @@ Markdown では HTML comment を使う。重複、片側欠落、入れ子、順
 Taskfile は task key と対応する source 範囲を特定して編集し、重複 key や曖昧な範囲は拒否する。
 対象外部分の bytes、改行、コメント、順序を保持する。
 
+### 3.1 固定資産 manifest（規範）
+
+以下は本 change 完了後の manifest の全件であり、現存ディレクトリの走査結果から必須集合を作らない。
+`regular` は symlink でない空でない通常ファイル、`directory` は symlink でないディレクトリである。
+「必須」は同梱状態での必須性を表す。M / D の欠落は1件でも同梱状態不成立となる。
+K は下流に残る資産であり、完全除去でも必須である。一般の共通資産の検証は既存の担当を維持する。
+
+| ID | path | expected type | 同梱状態で必須 | prune 時の扱い |
+| --- | --- | --- | --- | --- |
+| D01 | `docs/template/` | directory | はい | subtree 全削除 |
+| D02 | `docs/template/adr/` | directory | はい | D01 とともに削除 |
+| D03 | `template-maintenance/` | directory | はい | subtree 全削除 |
+| D04 | `template-maintenance/tests/` | directory | はい | D03 とともに削除 |
+| M01 | `docs/template/adr/0001-skill-distribution-vendoring.md` | regular | はい | 削除 |
+| M02 | `docs/template/adr/0002-mcp-remote-default-node-not-core.md` | regular | はい | 削除 |
+| M03 | `docs/template/adr/0003-openspec-gsd-boundary.md` | regular | はい | 削除 |
+| M04 | `docs/template/adr/0004-github-mcp-optional-gh-cli-core.md` | regular | はい | 削除 |
+| M05 | `docs/template/adr/0005-template-update-not-propagated.md` | regular | はい | 削除 |
+| M06 | `docs/template/adr/0006-template-meta-docs-isolated.md` | regular | はい | 削除 |
+| M07 | `docs/template/adr/0007-downstream-usage-guide-sot-boundary.md` | regular | はい | 削除 |
+| M08 | `docs/template/adr/0008-adaptive-openspec-gsd-execution-boundary.md` | regular | はい | 削除 |
+| M09 | `docs/template/adr/0009-proportional-agent-workflow-evidence-economy.md` | regular | はい | 削除 |
+| M10 | `docs/template/adr/0010-openspec-direct-execution.md` | regular | はい | 削除 |
+| M11 | `docs/template/adr/0011-v2-distribution-boundaries.md` | regular | はい | 削除 |
+| M12 | `docs/template/release.md` | regular | はい | 削除 |
+| M13 | `docs/template/retrospectives.md` | regular | はい | 削除 |
+| M14 | `docs/template/v2-boundary-audit.md` | regular | はい | 削除 |
+| M15 | `docs/template/v2-release-notes.md` | regular | はい | 削除 |
+| M16 | `template-maintenance/tests/test_release_contract.py` | regular | はい | 削除 |
+| M17 | `template-maintenance/tests/test_history_contract.py` | regular | はい | 削除 |
+| M18 | `template-maintenance/tests/test_prune_integration.py` | regular | はい | 削除 |
+| M19 | `.github/workflows/template-maintenance.yml` | regular | はい | 単独ファイル削除 |
+| S01 | `Taskfile.yml` | regular / `tasks.check:template` mapping が1件 | はい | 専用 task だけ除去、ファイル保持 |
+| S02 | `README.md` | regular / 専用 marker pair が1組 | はい | 専用区画だけ除去、ファイル保持 |
+| S03 | `docs/agents/workflow.md` | regular / 専用 marker pair が1組 | はい | 専用区画だけ除去、ファイル保持 |
+| K01 | `docs/reference/repository-contracts.md` | regular | はい | 保持 |
+| K02 | `docs/reference/skill-maintenance.md` | regular | はい | 保持 |
+| K03 | `docs/reference/skill-metadata-v2.md` | regular | はい | 保持 |
+| K04 | `docs/reference/prune-template-assets.md` | regular | はい | 保持 |
+| K05 | `tests/fixtures/template_prune/references.json` | regular / JSON データ | はい | 保持 |
+| K06 | `scripts/prune-template-docs.py` | regular | はい | 保持 |
+| K07 | `docs/adr/` | directory | はい | subtree 保持 |
+| K08 | `TEMPLATE_VERSION` | regular / 既存の単一行版形式 | はい | bytes 不変で保持 |
+
+M01〜M15 の15文書を必須とし、ADR を glob や「最新のものだけ」で選択しない。
+M16 は release handoff・版固定、M17 は ADR・履歴・出荷契約、M18 は使い捨て repository の
+統合検証を担当する。S01 は既存 pytest でこの3ファイルを明示実行する。追加 runner は作らない。
+補助コード・fixture をテンプレート保守側へ追加する場合は、追加前に本表と実装側の固定定義、
+欠落テストを同時更新する。現在必須とする補助ファイルはない。
+
+削除 subtree 内の利用者が追加した通常ファイルは必須集合へ自動追加しない。
+同梱判定では追加自体を破損とせず、apply では追跡済み・変更なしのものを含め全件 preview して削除する。
+未追跡・ignored・危険な file type は従来の preflight で拒否する。
+`docs/template/` の下流向け旧3文書は移設後の manifest に含めず、K01〜K03 を正とする。
+固定削除対象外の asset を marker・拡張子・名前の類似から自動的に削除対象へ加えない。
+
+### 3.2 直接参照の検査契約（規範）
+
+`live reference` と「専用実行参照」は、本節の surface / 構文で検出する参照だけを指す。
+任意コードの実行時依存を完全に解析する意味には使わない。検査はコード・コマンドを実行せずに行う。
+検査結果には surface ID、source path、位置、検出した task 名または参照先を含める。
+
+参照先集合は task 名 `check:template` と、D01 / D03 配下の path および M19 の exact path である。
+単語の部分一致で `check:template-extra` や `docs/template-example/` を拒否しない。
+引用・escape はその言語の literal として解釈するが、変数展開・評価・名前解決による実行はしない。
+path の `.` / `..` を字句的に解決して component 単位で比較し、実体の存在を比較条件にしない。
+ファイル操作・コマンド引数は repository root 基準、相対 import は import 元基準、
+Markdown リンクは文書の親基準とする。repository 内の絶対 path も同じ対象へ正規化する。
+repository 外の参照はこの prune 参照集合には含めず、既存の安全検査を代替しない。
+Unicode 正規化・case-fold はせず、Markdown の fragment / query は path 比較から除く。
+
+surface の path pattern は検査対象を選ぶ規則であり、manifest の必須集合を生成する glob ではない。
+列挙された directory 内で該当する現存ファイルは追跡状態にかかわらず検査する。
+symlink は追跡せず、該当 source が symlink / 読取不能 / 構文不正なら診断付きで拒否する。
+通常 tests は production code と同じ構文規則で検査し、ファイル名を理由に除外しない。
+
+| ID | 検査 surface | live とする構文 |
+| --- | --- | --- |
+| R01 | `Taskfile.yml` | `tasks.*.cmds[].task` の専用 task 名。string command と `cmd` 本文は下記 C 規則。`tasks.check:template` 自体の所在は S01 の構造検査 |
+| R02 | `package.json` の `scripts` 値 | command string を C 規則で検査。ほかの metadata field は対象外 |
+| R03 | `.github/workflows/` 直下の `.yml` / `.yaml` | `jobs.*.steps[].run` は C 規則。job / step の `uses` が `./` で始まる local path、job / step の `working-directory`、root / job の `defaults.run.working-directory`、step の `with.path` / `with.paths` / `with.cache-dependency-path`、`on.push` / `on.pull_request` の `paths` / `paths-ignore` の literal path |
+| R04 | `scripts/` 配下の `.sh` / `.py` | shell は C 規則、Python は P 規則。docstring・comment・単なる文字列代入は参照ではない |
+| R05 | `repo-tools/` 配下の `.ts` / `.mjs`、`tests/` 配下の `.py` | TypeScript / JavaScript は J 規則、Python は P 規則。Node tests と pytest の実行コード・import も対象 |
+| R06 | `README.md`、`AGENTS.md`、`CLAUDE.md`、`CONTEXT.md`、`docs/guide.md`、`docs/agents/`・`docs/reference/`・`docs/optional/` 配下の `.md`、`.agents/skills/` 直下各 Skill の `SKILL.md` | 下記 M 規則による command / link。通常の prose と path / task 名だけの code span は対象外 |
+
+R03 の path field は string または string sequence を対象とし、複数行の値は空行を除く各行を扱う。
+path filter は先頭 `!` を除き、参照先集合の root が literal prefix として現れる場合を検出する。
+`docs/template/**` は検出し、`**/*.md` のような汎用 glob の全展開はしない。
+`name`、`env`、任意の `with` field、GitHub expression を評価した値は本規則の対象外である。
+
+#### C: 直接コマンド
+
+shell の単純コマンドと literal argv sequence を対象とする。
+shell は改行・`;`・`&&`・`||`・pipe で区切られた単純コマンドを認識し、literal の引用と
+backslash-newline を処理する。先頭の literal 環境変数代入、`command` / `exec` を取り除いて判定する。
+function body 内に直接書かれた単純コマンドも検査するが、関数呼出や alias を展開して追跡しない。
+comment、here-document の payload、変数展開、command substitution の内容は検査しない。
+未対応の構文を「参照なしの実行保証」と表現しない。
+
+- executable の basename が `task` で、literal 引数の一つが exact `check:template` なら参照とする。
+- executable 自体が参照先 path、または `sh` / `bash` / `python` / `python3` /
+  `python3.14` / `node` / `pytest` / `uv` の literal 引数が参照先 path なら参照とする。
+  `uv run python ...`、`node --test ...`、`pytest ...` もこの規則に含む。
+- `sh -c` / `bash -c` の直後の literal 本文は同じ C 規則で検査する。
+  `python -c`、`node -e` 等の別言語の文字列内プログラムは評価・再解析しない。
+- `echo` / `printf` の表示引数、単なる prose 中の文字列をコマンド参照にしない。
+
+#### P / J: import・プロセス起動・ファイル読取り
+
+検査する callee / 構文を以下に限定する。標準 import の単純な alias は元の名に対応付けるが、
+代入による別名、user wrapper、反射、関数間のデータフローは追跡しない。
+
+| 規則 | 検出する構文 |
+| --- | --- |
+| P-import | `import` / `from ... import` の module 名を path 要素へ対応付けた参照、`importlib.import_module` の literal module 名、`importlib.util.spec_from_file_location` の第2引数の literal path |
+| P-command | `subprocess.run` / `Popen` / `call` / `check_call` / `check_output` の第1引数に直接置かれた literal list / tuple は C の argv 規則。literal string は shell 実行を指定した場合に C 規則。`os.system` の literal string も C 規則 |
+| P-read | `open` / `io.open` の第1引数と、`Path(...).read_text` / `read_bytes` の path 式。write-only の mode だけを指定する open は除く |
+| J-import | literal module specifier を持つ `import ... from` / side-effect `import` / `export ... from` / `require(...)` / `import(...)` |
+| J-command | `node:child_process` または `child_process` の `spawn` / `spawnSync` / `execFile` / `execFileSync` の直接 literal command と literal argv は C 規則。`exec` / `execSync` の literal string は C 規則 |
+| J-read | `node:fs` / `node:fs/promises` または prefix なしの同 API の `readFile` / `readFileSync` / `createReadStream` の第1引数 |
+
+path 式の対応範囲は literal string、`Path` / `PurePath`、`os.path.join` / `path.join` /
+`path.resolve` の literal 要素、および Python の `/` 連結とする。
+これらの先頭に `REPO_ROOT` / `ROOT` / `repositoryRoot` がある形は repository 相対の
+静的 path 表現として扱う。これ以外の変数の値を追跡しない。
+path を組み立てるだけの式、`exists` / `existsSync`、表示・assertion用の文字列は読取参照ではない。
+fixture のソース文字列を代入しただけでは import と解釈しないが、
+新しい負例は後述の JSON に集約し、通常 test file を blanket exclusion にしない。
+
+#### M: 共有文書
+
+- info string が空、`sh`、`bash`、`shell`、`console` の fenced code block は C 規則で検査する。
+  `console` の行頭 `$ ` は prompt として除く。インライン code span も C 規則で
+  完全な専用コマンドと認識できる場合は参照とする。
+- inline link / image、および reference-style link / image の定義先が local path の場合、
+  参照先集合に解決されれば参照とする。定義だけの link target も検査する。
+  escaped Markdown delimiter・山括弧で囲った destination・percent encoding を解釈し、
+  fragment-only と scheme を持つ外部 URL は対象外とする。destination は fragment / query を
+  分離してから percent decode し、字句的な path 解決を行う。
+- `template-maintenance/` のような path だけ、`check:template` のような task 名だけの
+  code span、HTML comment、通常 prose は参照にしない。
+  `text` / `json` 等、上記以外の code fence と raw HTML の href は対応範囲外である。
+  live な保守コマンドをこの除外形式に隠してはならない。
+
+#### 許可された所在・除外・保証限界
+
+同梱時に専用参照を置けるのは、削除する D01 / D03 / M19 と、S01 の task 本体、
+S02 / S03 の専用区画だけである。削除する subtree の内容は保守 gate の担当とし、
+残存参照検査は保持する surface を対象にする。同梱時も、それ以外の surface にある
+検出対象参照は不整合として拒否する。完全除去時はこの許可所在も存在してはならない。
+
+負例データは K05 の JSON 配列に集約する。空配列と重複 ID は拒否する。
+各 case は string の `id`、`surface`（R01〜R06）、`path`（surface 内の repository 相対 path）、
+`source`（ソース文字列）、`expected`（`detected` / `not-detected` / `invalid-syntax`）を持つ。
+R01〜R06 の各 surface に検出・非検出の両 case を要求し、各対応構文と構文拒否は V06 / V11 の
+パラメータ化したケースで確認する。
+JSON は import / 実行しないデータであり、その中のソースを再帰的に参照検査しない。
+テストは使い捨て repository の該当 surface に内容を配置してから実 scanner を呼び出す。
+既存の fixture 全体や通常 tests を除外する規則、利用者が自由に追加する skip comment / allowlist は作らない。
+
+動的に作った task 名・path、変数だけの argv、user wrapper、環境依存 cwd、列挙外 API /
+言語 / surface、実行時に生成した source の依存切れは検出保証外である。
+これらを動かして調べること、専用識別子の全文 grep を完全な代替検査とすることは禁止する。
+成功表示は「指定 surface の対応する直接参照がない」とし、任意コードの依存解消を保証しない。
+利用者による動的カスタマイズは、公開したこの限界を踏まえて別途確認する。
+
 ## 4. 状態判定
 
-判定は固定の必須 path 集合、file type、共有ファイルの専用項目、live references の整合で行う。
+判定は §3.1 の manifest、file type、共有ファイルの専用項目、§3.2 の直接参照の整合で行う。
 実装の固定対象定義は path / 種別 / 区画を列挙するだけとし、利用者が profile を選ぶ設定、
 本文 hash、実行 receipt、Git の過去 commit への参照は持たない。
-必須集合には残す保守文書を file 単位で列挙し、一部文書の欠落も検出する。
+必須集合は §3.1 の各行で固定し、current tree から推測しない。M01〜M19 の各1件欠落も検出する。
 新しい保守必須ファイルを追加する変更では、定義と対応 tests を同時に更新する。
 
 - **同梱**: 全必須保守資産と専用 task / workflow / 区画が揃い、型と参照が整合する。
   文書内容の正しさは保守 gate が検査する。
 - **完全除去**: 固定削除対象が存在せず、専用項目と live references が残っていない。
-  下流必須資産は保持されている。
+  S01〜S03 の共有ファイルと K01〜K08 を含む下流必須資産は保持されている。
+  専用 gate 自体の不在は正常であり、通常 gate は保守 gate を呼び出さない。
 - **不整合**: 上記のどちらでもない。欠落、空の必須文書、壊れた link、誤った file type、
   空ディレクトリだけの残存、共有設定の片側変更等を含む。
 

@@ -3,14 +3,14 @@
 ## Execution Constraints
 
 1. **最初の CI parity**: Task 1 の最初の環境依存 slice で Node.js 24 / npm、Python >=3.14 と既存 lock による fresh / rename の正式 gate を確認する。全実装完了まで延期しない。
-2. **停止・再計画条件**: 今回は OpenSpec 作成だけが承認されており、実装開始指示まで全 task を実行しない。開始後は AGENTS.md / workflow の停止・再計画規律に従い、仕様外拡張・必須検証失敗を完了扱いしない。
+2. **停止・再計画条件**: 今回はレビュー後の OpenSpec 6文書の修正・検証だけが承認されており、実装開始指示まで全 task を実行しない。開始後は AGENTS.md / workflow の停止・再計画規律に従い、仕様外拡張・必須検証失敗を完了扱いしない。
 3. **一時 artifact cleanup**: disposable repository・失敗注入用一時物は検証側が cleanup し、生 log や専用 state を追跡しない。close は全実装・検証・review 完了後だけとし、現在は change directory を保持する。
 
 ## Tasks
 
 ### 1. 共通検証と保守検証を分離する
 
-- 成果: DPV-1 / DPV-2 の入口、責務別テスト、下流文書移設、保守専用 CI を一体で導入する。
+- 成果: DPV-1 / DPV-2 の入口、M16〜M18 の pytest 3ファイル、下流文書移設、M19 の専用 CI と S01〜S03 を一体で導入する。
 - 依存: なし。
 - 対象:
   - `repo-tools/`
@@ -24,12 +24,12 @@
   - `docs/guide.md`
   - `README.md`
   - `CONTEXT.md`
-- [ ] 実装: 保守意味検証を分離し、共通検証・共有 fixture を維持する。移設と live links を整合させる。
-- [ ] 検証: V01 / V03 / V04 / V05 / V15 の該当部分、focused tests、最初の CI parity を実行する。
+- [ ] 実装: 保守意味検証を分離し、共通検証・共有 fixture を維持する。履歴は design §2 の link target だけ修正し、移設と live links を整合させる。
+- [ ] 検証: V01 / V03 / V04 / V05 / V15 の該当部分、履歴の許可差分比較、focused tests、最初の CI parity を実行する。
 
 ### 2. 構成判定と read-only preview を実装する
 
-- 成果: DPV-3 / DPV-4 の固定対象、同梱・完全除去・不整合、preview と診断を提供する。
+- 成果: design §3.1 の全行、§3.2 の R01〜R06 / C・P・J・M を実装し、DPV-3 / DPV-4 の状態・preview と保証限界を提供する。
 - 依存: 1。
 - 対象:
   - `repo-tools/`
@@ -39,8 +39,8 @@
   - `template-maintenance/`
   - `Taskfile.yml`
   - `docs/reference/prune-template-assets.md`
-- [ ] 実装: 状態判定を共通 gate・doctor・prune で整合させ、全入力を読む preview を提供する。
-- [ ] 検証: V06 / V07 / V09 / V10 / V16 の read-only 部分を実行し、通常 gate の部分欠落拒否を確認する。
+- [ ] 実装: 状態判定を共通 gate・doctor・prune で整合させ、全入力を読む preview を提供する。K05 の JSON 負例を通常 tests から読み込み、実行コードを検査除外しない。
+- [ ] 検証: V06 の manifest 各行と全 surface、V07 / V09 / V10 / V11 / V16 の read-only 部分を実行し、部分欠落・参照残存の拒否と説明・fixture の非検出を確認する。
 
 ### 3. 保護付き apply と途中失敗の復旧案内を実装する
 
@@ -69,7 +69,7 @@
   - `docs/template/release.md`
   - `README.md`
 - [ ] 実装: disposable smoke、offline / host 非依存、CI parity の検証入口と最小の利用案内を整える。
-- [ ] 検証: V01〜V16 を照合し、setup / rename / prune / 再setup / gate / doctor の実動作と負例を確認する。
+- [ ] 検証: V01〜V16 を照合し、setup / rename / prune / 再setup / gate / doctor の実動作と負例を確認する。V15 で残存する全 R01〜R06、履歴リンクの許可差分、完全除去後の gate 不在を確認する。
 
 ### 5. Review と最終 project checks を完了する
 
@@ -98,10 +98,10 @@
 - [ ] 実装: policy に従う retrospective を追記し、全 task 完了を確認して pre-merge close する。
 - [ ] 検証: active change 0 と cleanup 後の影響範囲の検証を確認する。通常 CI が削除した artifacts に依存しないことを確認する。
 
-## 文書作成時の状態と証跡
+## 初稿作成時の証跡
 
 - source commit: `b5a70047a294c7424c0c0398bd5eb434edb42b9a`。
-- 利用者の最新指示は「OpenSpec の作成まで、実装は行わない」である。全 task は未着手。
+- 初稿作成時の指示は「OpenSpec の作成まで、実装は行わない」であった。以下は初稿の証跡であり、改訂後の成功として再利用しない。全 task は未着手。
 - proposal / design / spec / spec-holes / validation の作成は実装 task 完了に数えない。
 - 実動作、V01〜V16、実装後の独立 review / verifier、hosted CI は未検証。
 - 文書検証（以下はすべて上記 source commit に文書差分を加えた入力での fresh 実行）:
@@ -125,3 +125,31 @@
     この worktree の依存環境は初期化せず、OpenSpec CLI と gate 実体を直接検証した。
 - 実装再開時は Node 24 / Python >=3.14 と locked dependency を準備し、
   最新 base と仕様の差分を確認する。ここでの文書検証を Task 1 の CI parity に流用しない。
+
+## レビュー対応後の文書検証
+
+- source commit: `0d655d98ac717970957c7b688968bd948477fef1` に本改訂の6文書差分を加えた入力。
+  以下は fresh 実行であり、初稿の green evidence は再利用していない。
+- 実装は未着手。全12 checkbox を未完了のまま保持する。
+- `openspec validate align-downstream-prune-validation --strict --no-interactive`:
+  exit 0、valid。
+- `/home/shimi3435/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14 -B scripts/openspec-validate-gate.py`:
+  exit 0、1 passed / 0 failed。
+- `python3 -` による一時的な読取監査: exit 0。
+  6 artifacts、6要件・26 scenarios、12分類×6要件、6 tasks・未完了 checkbox 12件、
+  実行制約3件、16検証ID、manifest 34行、文書内リンク・末尾空白を確認した。
+- `git diff --check`: exit 0。
+- self-review: レビューの3 blocker と DPV-2 の限定を6文書間で照合し、
+  manifest 全件・参照構文の保証限界・履歴の許可差分・検証対応を確認した。
+  実装後の独立 review / verifier と V01〜V16 は未検証であり、この確認で代用しない。
+- `task check`: exit 201。runtime-preflight が
+  `Node.js 24 が必要です（検出: v26.1.0）` で停止した。全体 gate の成功は未確認。
+- 既存契約との衝突（未解消）: Python 3.14 の `runpy.run_path` で
+  `tests/test_tool_neutral_documentation_contract.py` を読み込み、
+  `test_legacy_token_remains_only_in_exact_history_allowlist()` を直接実行した結果、exit 1。
+  manifest が歴史 ADR の exact path を列挙すると、既存の全追跡ファイル対象の旧名称検査が
+  本 change の `design.md` を違反とする。違反 path は同ファイル1件だった。
+  これは runtime の版不一致とは別の既存テスト失敗である。
+  必須 path の難読化、既存 allowlist の拡張、テスト変更による回避は行っていない。
+  本文書だけの修正範囲では未解消として記録し、再レビュー時に現行契約との扱いを判断する。
+  OpenSpec 形式検証の成功を全体 gate の成功や実装開始承認として扱わない。

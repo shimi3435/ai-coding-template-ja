@@ -27,6 +27,10 @@ Issue: https://github.com/shimi3435/ai-coding-template-ja/issues/51
   一回の明示操作で整合させる。削除・書換え対象は固定し、preview を既定にする。
 - 同梱・完全除去・不整合を現在のファイルと呼出設定から判定する。
   完了 receipt、利用者が切り替える profile、内容 hash lock は追加しない。
+- design §3.1 で保守文書15件・保守テスト3件・専用 workflow を含む全対象の
+  path / 型 / 必須性 / prune 時の扱いを固定する。欠落したファイルを現存 tree から推測しない。
+- 直接参照の surface と構文を design §3.2 で限定する。通常 tests も検査し、
+  負例は専用 JSON fixture に集約する。動的参照の完全検出は保証しない。
 - 適用は Git 管理下で対象が追跡済みの場合に限る。対象の未コミット差分、未追跡・ignored
   ファイル、危険な path、判別不能な共有設定を全変更の前に拒否する。
 - 途中失敗は非ゼロ終了し、部分変更を成功扱いしない。自動ロールバックは行わず、
@@ -54,7 +58,8 @@ offline 検証を維持する。新規 dependency や汎用 profile engine / plu
 #74 へ同梱中の offline 検証と repository 資産の除去境界を引き渡すが、
 Genshijin の取得・host 登録解除・caveman 撤去は実装しない。
 #73 の policy 全体整理、#66 の archive semantics、#62 の README 全体設計、
-#70 の版更新・release-ready 判定も対象外である。historical records は書き換えない。
+#70 の版更新・release-ready 判定も対象外である。historical records の過去の判断・本文は
+改変しない。下流文書の移設に伴う link target だけの機械的修正は、design §2 の許可表に従う。
 
 ## Acceptance Criteria
 
@@ -63,12 +68,17 @@ Genshijin の取得・host 登録解除・caveman 撤去は実装しない。
 - 保守検証は明示実行でき、テンプレート CI とローカルで同じ検証を実行できる。
 - remote lock 不一致、legal 不整合、link 破損を検出し、自作内容 lock を要求しない。
 - 部分欠落を完全除去と混同せず、dry-run 無変更、再実行、対象外差分保護、途中失敗を検証する。
+- manifest 各行と各参照 surface の負例を検証し、説明・JSON fixture を実行参照と誤認しない。
+- 移設に伴う履歴の変更が許可した link target だけであることと、新しいリンク解決を確認する。
 - 通常 offline 検証に未使用 host・認証・ネットワークを要求しない。
 - [validation.md](validation.md) の検証と、AGENTS.md OSWF-5 に従う実装後の review / verifier が成功する。
 
 ## Authorization and Status
 
-今回の承認は OpenSpec 文書作成までであり、実装開始は明示的に禁止されている。
+今回の承認はレビュー後の合意に基づく OpenSpec 6文書の修正・検証までであり、
+実装開始は明示的に禁止されている。
 本提案の作成・形式検証を、実装・実動作検証・change 完了の代わりにしない。
 実装 tasks は未着手のまま保持し、別途実装開始の指示を受けるまで実行しない。
-仕様上の未解決判断はない。12分類の監査と検証対応は [spec-holes.md](spec-holes.md) を参照する。
+レビューで指摘された manifest・直接参照・履歴リンクの判断を対話で確定し、仕様へ反映した。
+この合意と §3.1 / §3.2 の明文化を前提に、仕様上の未解決判断はない。
+12分類の再監査と検証対応は [spec-holes.md](spec-holes.md) を参照する。
