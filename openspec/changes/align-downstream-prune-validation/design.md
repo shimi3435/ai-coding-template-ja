@@ -210,7 +210,7 @@ symlink は追跡せず、該当 source が symlink / 読取不能 / 構文不�
 
 | ID | 検査 surface | live とする構文 |
 | --- | --- | --- |
-| R01 | `Taskfile.yml` | `tasks.*.cmds[].task` の専用 task 名。string command と `cmd` 本文は task の `dir` を反映した C 規則。`dir` 自体の専用 path も検出。`tasks.check:template` 自体の所在は S01 の構造検査 |
+| R01 | `Taskfile.yml` | canonical Taskfile 検証が成功した構造だけを対象とする。`tasks.*.cmds[].task` の専用 task 名、`cmds` 内の string / `cmd` 本文を C 規則で検査。`tasks.check:template` 自体の所在は S01 の構造検査 |
 | R02 | `package.json` の `scripts` 値 | command string を C 規則で検査。ほかの metadata field は対象外 |
 | R03 | `.github/workflows/` 直下の `.yml` / `.yaml` | `jobs.*.steps[].run` は effective cwd を反映した C 規則。job / step の `uses` が `./` で始まる local path、step の `working-directory`、root / job の `defaults.run.working-directory`、step の `with.path` / `with.paths` / `with.cache-dependency-path`、`on.push` / `on.pull_request` の `paths` / `paths-ignore` の literal path |
 | R04 | `scripts/` 配下の `.sh` / `.py` | shell は C 規則、Python は P 規則。docstring・comment・単なる文字列代入は参照ではない |
@@ -221,34 +221,36 @@ R03 の path field は string または string sequence を対象とし、複数
 path filter は先頭 `!` を除き、参照先集合の root が literal prefix として現れる場合を検出する。
 `docs/template/**` は検出し、`**/*.md` のような汎用 glob の全展開はしない。
 `name`、`env`、任意の `with` field、GitHub expression を評価した値は本規則の対象外である。
-ただし cwd field の式は以下の拒否規則に従い、対象外として黙って読み飛ばさない。
+cwd field の式は以下の解析範囲の規則に従い、未評価の範囲と理由を報告する。
 
-#### Effective cwd
+#### R01 の canonical validation と effective cwd
 
-- R03 の `run` は `step.working-directory > job.defaults.run.working-directory >
-  workflow.defaults.run.working-directory > repository root` の順で選択する。
-  下位の設定と path を連結せず、選択した literal の相対 path を repository root から解決する。
-  `uses` / path filter / `with` の path 判定へ `run` の cwd を流用しない。
-- R01 は root Taskfile の `tasks.*.dir` の literal を repository root から解決し、
-  省略時は repository root とする。task invocation は呼出元の cwd を別 task へ継承せず、
-  各 task 本体をその定義の cwd で検査する。include 先 Taskfile の展開・解析は保証対象外とする。
-- 設定 field の「省略」と空文字列 / null / 非 string は区別し、後者は不正として拒否する。
-  cwd field に変数・template / expression・shell 展開を含む場合は評価せず拒否する。
-  より具体的な設定で上書きされる field も検査し、不正な設定を隠さない。
-  repository 内の絶対 path は受理するが、外部へ解決される cwd は未対応として拒否する。
-  cwd の祖先を含む symlink・読取不能・非 directory・存在しない directory は拒否する。
-- R02 / R04 / R05 / R06 の C 規則は repository root を初期 cwd とする。
-  R04 / R05 の任意の呼出元・プロセスの cwd 変更・起動 API の cwd option は追跡しない。
-  これらの実行時 cwd は保証対象外であり、workflow から script 内へ状態を伝播する解析は行わない。
-  ただし C が直接検査する shell 本文の cwd 変更は下記の拒否規則に従う。
-- 直接コマンドの literal な相対 executable / 引数を effective cwd から解決する。
-  `sh -c` / `bash -c` の検査へ同じ cwd を引き渡す。cwd の解決に失敗した場合は、
-  surface ID / source path / 位置と未対応理由を報告し、root にフォールバックせず非ゼロ終了する。
-  通常 gate / doctor / preview / apply で同じ拒否を用い、prune の変更は開始しない。
+R01 は既存の `repo-tools/repository-taskfile.ts` の canonical validation を最初に実行し、
+成功した構造だけに prune 固有の参照検出を適用する。解析済み構造を内部で共有し、
+YAML / Taskfile の許可 key・型・template・必須 route 等の判定を scanner に複製しない。
+公開契約を拡張せず、`dir` / `includes` / `deps` / `defer` / `if` / `status` /
+`preconditions` 等、既存 validator が拒否する入力はそこで停止する。
+R01 の初期 cwd は repository root とし、各 task の `dir` の受理・解決は実装しない。
 
-優先順位の根拠は [GitHub Actions defaults](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/set-default-values-for-jobs)、
-task の directory の根拠は [Task schema](https://github.com/go-task/task/blob/main/website/src/latest/docs/reference/schema.md) とする。
-上記の未対応入力に対する拒否は、この scanner 自身の契約である。
+R03 の `run` は `step.working-directory > job.defaults.run.working-directory >
+workflow.defaults.run.working-directory > repository root` の順で選択する。
+選択した値が非空の literal path なら、下位設定と連結せず、repository root 基準で字句的に解決する。
+専用参照の比較に path の存在を要求せず、生成前・削除後の path も比較する。
+`uses` / path filter / `with` の path 判定へ `run` の cwd を流用しない。
+優先順位は [GitHub Actions defaults](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/set-default-values-for-jobs) に従う。
+
+cwd field の省略だけは下位設定へ進む。選択した field が式・変数・空・null・非 string 等で
+解決できない場合は cwd 不明とし、下位設定や root へフォールバックしない。
+上書きされた下位設定が動的であっても、それだけで選択済みの静的 cwd を未評価にしない。
+repository 外の cwd や既知の symlink 等で字句的な repository 相対解決を保証できない場合も
+cwd 不明とする。これは scanner の保証限界であり、新しい workflow schema / filesystem policy
+として拒否しない。既存 gate の独立した構文・安全性検証は維持する。
+
+R02 / R04 / R05 / R06 の C 規則は repository root を初期の検査基準とする。
+任意の呼出元・起動 API の cwd option・プロセスの cwd 変更を追跡する保証は追加しない。
+C が認識した shell 内移動は次節の単位で未評価とし、workflow から script 内へ状態を伝播しない。
+既知の cwd は literal な相対 executable / 引数の解決と `sh -c` / `bash -c` の検査へ渡す。
+不明な場合は相対 path を未評価とするが、cwd 非依存の task 名・絶対 path の検査は継続する。
 
 #### C: 直接コマンド
 
@@ -259,42 +261,22 @@ function body 内に直接書かれた単純コマンドも検査するが、関
 comment、here-document の payload、変数展開、command substitution の内容は検査しない。
 未対応の構文を「参照なしの実行保証」と表現しない。
 
-認識する単純コマンドの command word が `cd` / `pushd` / `popd` の場合は、
-次の固定 root 初期化だけを例外とし、それ以外は分岐・関数・subshell の実行有無を評価せず、
-shell 内の cwd 変更は未対応として拒否する。
-literal な移動先でも後続状態を追跡せず、設定側の `dir` / `working-directory` で cwd を指定する。
-comment / echo の引数 / JSON fixture の payload の同名文字列は command word と見なさない。
+C が `cd` / `pushd` / `popd` を command word として認識した場合、移動先が literal でも
+分岐・関数・subshell の cwd を追跡しない。当該 shell 単位全体の cwd 依存参照を未評価とする。
+単位は R01 の各 `cmds` string / `cmd` 値、R02 の各 script 値、R03 の各 `run` 値、
+R04 の各 `.sh` file、R06 の各 shell fence / command code span、P / J の各 shell command string
+である。再帰解析する literal な `sh -c` / `bash -c` 本文もその単位に含める。
+実行順序を解析しないため移動前の相対参照も含むが、別の task command・step・file へは波及させない。
+comment / echo 引数 / JSON payload 内の同名文字列は移動として認識しない。
 
-例外は R04 の repository 直下 `scripts/` に直接置かれた `.sh` source に限り、
-次のどちらかの連続2行が top-level の独立した文として1回だけ現れる場合に適用する。
-行終端の LF / CRLF は同じ形とするが、変数名・引用・引数・行内の bytes は以下の形に固定する。
-command substitution の一般解析や実行をせず、source の配置から親の親が repository root であることを確認する。
-
-POSIX 形（現行 `scripts/check.sh`）:
-
-```sh
-repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd -- "$repository_root"
-```
-
-Bash 形（現行 `scripts/bootstrap.sh`、`scripts/setup-skills.sh`、`scripts/setup-mcp.sh`）:
-
-```bash
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
-```
-
-この2行だけを既知の root 初期化として扱い、後続コマンドを root 基準で検査する。
-source 全体の除外や上記4ファイル名による無条件許可は行わない。root 初期化の前後に別の
-`cd` / `pushd` / `popd` があれば拒否し、後続の専用参照も通常どおり検出する。
-初期化2行の間への文の挿入、別の移動先、別変数からの代入、同じ初期化の重複、
-function / subshell / quoted payload 内への埋込み、`scripts/` の子 directory での同形は例外にしない。
-R01 / R02 / R03 / R05 / R06 の shell 本文にもこの例外を流用しない。
-ファイル名と内容 hash の固定を行わず、追加の root 算出形を受理する場合は仕様変更を必要とする。
+未評価にしても source 全体の検査は省略せず、以下の cwd 非依存の参照は検出し続ける。
+専用参照のない `cd src` と `make` の通常 script を、この解析限界だけで拒否してはならない。
+root 初期化の2構文、特定のファイル名・変数名に対する個別例外は設けない。
 
 - executable の basename が `task` で、literal 引数の一つが exact `check:template` なら参照とする。
 - executable 自体が参照先 path、または `sh` / `bash` / `python` / `python3` /
   `python3.14` / `node` / `pytest` / `uv` の literal 引数が参照先 path なら参照とする。
+  絶対 path は cwd 不明でも比較し、相対 path は cwd 既知の場合だけ比較する。
   `uv run python ...`、`node --test ...`、`pytest ...` もこの規則に含む。
 - `sh -c` / `bash -c` の直後の literal 本文は同じ C 規則で検査する。
   `python -c`、`node -e` 等の別言語の文字列内プログラムは評価・再解析しない。
@@ -346,8 +328,11 @@ S02 / S03 の専用区画だけである。削除する subtree の内容は保�
 
 負例データは K05 の JSON 配列に集約する。空配列と重複 ID は拒否する。
 各 case は string の `id`、`surface`（R01〜R06）、`path`（surface 内の repository 相対 path）、
-`source`（ソース文字列）、`expected`（`detected` / `not-detected` / `invalid-syntax` /
-`unsupported-cwd`）を持つ。`unsupported-cwd` は cwd の型・解決・shell 内移動による拒否を表す。
+`source`（ソース文字列）、`expected`（`detected` / `not-detected` / `invalid-syntax`）と、
+`coverage`（`evaluated` / `partial` / `not-run`）を持つ。`invalid-syntax` は canonical contract
+違反も含み、その場合の coverage は `not-run` とする。cwd による未評価は `partial` とし、
+`detected` と併存できる。`not-detected` / `partial` は未評価参照の不存在を意味しない。
+`evaluated` は列挙した構文の cwd 依存参照に未評価がないことだけを表し、列挙外の依存解析を保証しない。
 R01〜R06 の各 surface に検出・非検出の両 case を要求し、各対応構文と構文拒否は V06 / V11 の
 パラメータ化したケースで確認する。
 JSON は import / 実行しないデータであり、その中のソースを再帰的に参照検査しない。
@@ -357,10 +342,14 @@ JSON は import / 実行しないデータであり、その中のソースを�
 動的に作った task 名・path、変数だけの argv、user wrapper、呼出元由来の実行時 cwd、列挙外 API /
 言語 / surface、実行時に生成した source の依存切れは検出保証外である。
 これらを動かして調べること、専用識別子の全文 grep を完全な代替検査とすることは禁止する。
-成功表示は「指定 surface の対応する直接参照がない」とし、任意コードの依存解消を保証しない。
-利用者による動的カスタマイズは、公開したこの限界を踏まえて別途確認する。
-cwd field と C が認識した shell 内の cwd 変更は、固定 root 初期化の例外を除き、
-保証対象外の成功ではなく上記の明示拒否とする。
+構成状態とは別に、評価した範囲と未評価の source path / 位置 / surface ID / 理由を報告する。
+未評価がある場合の成功表示は「評価できた範囲に専用参照の検出なし。cwd 依存参照に未評価あり」
+とし、未評価を「参照なし」や不整合へ置き換えない。候補文字列の有無で未評価を隠さない。
+報告は通常 gate / doctor / preview / apply / 適用後検査 / no-op で共通とし、
+未評価だけでは非ゼロ終了・doctor の FAIL・apply blocker にしない。追加の force / 承認操作も要求しない。
+検出した専用参照、canonical contract 違反、資産の破損、Git・変更保護の失敗は引き続き拒否する。
+動的参照と同様、未評価先が実際に保守資産へ到達する可能性は残る。任意コードの依存解消を保証せず、
+利用者はこの限界を踏まえて別途確認する。解析限界を既存の独立した検証の skip に使わない。
 
 #### 実装規模の判断
 
@@ -369,6 +358,7 @@ R01〜R06 を維持する。設定だけへ絞ると通常 scripts / tests の�
 既存 dependency / 標準ライブラリの解析機構を優先する。新規 dependency、変数追跡、任意 wrapper、
 実行時解析、列挙外の shell / 言語構文は追加しない。Task 2 の最初に既存機構で対応する範囲と
 必要な限定処理を確認し、独自 parser が必要なら方式と検証対象を記録してから着手する。
+R01 の canonical validation を共有し、Taskfile の受理言語を scanner 側で拡張しない。
 これを口実に構文保証を黙って減らさず、仕様拡張・dependency 追加が必要なら停止・再計画する。
 
 ## 4. 状態判定
@@ -381,11 +371,14 @@ R01〜R06 を維持する。設定だけへ絞ると通常 scripts / tests の�
 
 - **同梱**: 全必須保守資産と専用 task / workflow / 区画が揃い、型と参照が整合する。
   文書内容の正しさは保守 gate が検査する。
-- **完全除去**: 固定削除対象が存在せず、専用項目と live references が残っていない。
+- **完全除去**: 固定削除対象と専用項目が存在せず、§3.2 の評価できた範囲に専用参照の検出がない。
   S01〜S03 の共有ファイルと K01〜K08 を含む下流必須資産は保持されている。
   専用 gate 自体の不在は正常であり、通常 gate は保守 gate を呼び出さない。
 - **不整合**: 上記のどちらでもない。欠落、空の必須文書、壊れた link、誤った file type、
   空ディレクトリだけの残存、共有設定の片側変更等を含む。
+
+未評価は構成状態と独立した解析範囲の情報であり、第4の構成状態にしない。
+同梱 / 完全除去と未評価は併存できる。完全除去を任意の実行時依存の不存在と解釈しない。
 
 一般の下流破損は共通 gate の該当検査が拒否する。完全除去によって共通検証を skip しない。
 操作記録がないため、手動で同じ最終構成にした状態も完全除去として受理する。
@@ -404,7 +397,8 @@ prune コマンドとしての Git / HEAD / repository root の確認は no-op �
 任意 path、force、profile、修復、復元の引数は追加しない。未知引数と `--apply` の重複は非ゼロで拒否する。
 対象 repository は script の配置場所から決定し、呼出 cwd に依存させない。
 
-preview は削除 path、共有ファイルの編集差分、保持対象、判定状態、適用 blocker を表示する。
+preview は削除 path、共有ファイルの編集差分、保持対象、判定状態、解析範囲、適用 blocker を表示する。
+未評価の参照範囲は blocker と分けて表示し、他の条件が成立すれば apply を許可する。
 書込み・一時ファイル・Git index 更新・dependency install・外部接続は行わない。
 成功 preview は exit 0、適用不能な構成・差分・Git 不在等を検出した preview は非ゼロとする。
 Git 不在でも読み取れる削除予定は表示し、差分保護が未確認であることを明記する。

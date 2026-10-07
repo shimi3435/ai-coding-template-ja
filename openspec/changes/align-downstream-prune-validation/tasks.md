@@ -39,8 +39,8 @@
   - `template-maintenance/`
   - `Taskfile.yml`
   - `docs/reference/prune-template-assets.md`
-- [ ] 実装: 先に既存解析機構と限定処理の方式を確認する。状態判定を共通 gate・doctor・prune で整合させ、effective cwd と未対応入力の拒否を実装する。K05 の JSON 負例を通常 tests から読み込み、実行コードを検査除外しない。
-- [ ] 検証: V06 の manifest 各行と全 surface、V07 / V09 / V10 / V11 / V16 の read-only 部分を実行する。cwd 優先順位・相対参照・固定 root 初期化2構文の限定許可・未対応移動の変更ゼロ、部分欠落・参照残存の拒否と説明・fixture の非検出を確認する。
+- [ ] 実装: R01 の canonical 検証と解析済み構造を共有し、受理契約を拡張しない。workflow の静的 cwd、構成状態と未評価範囲の別報告を各入口で整合させる。K05 の JSON 負例を通常 tests から読み込み、実行コードを一括除外しない。
+- [ ] 検証: V06 の manifest 各行と全 surface、V07 / V09 / V10 / V11 / V16 の read-only 部分を実行する。R01 の dir 拒否、workflow cwd 優先順位、未評価だけで FAIL にしないこと、cwd 非依存参照の検出継続と説明・fixture の非検出を確認する。
 
 ### 3. 保護付き apply と途中失敗の復旧案内を実装する
 
@@ -53,7 +53,7 @@
   - `template-maintenance/`
   - `docs/reference/prune-template-assets.md`
 - [ ] 実装: 全件 preflight 後だけ適用し、対象外 bytes を保持する。自動 rollback は追加しない。
-- [ ] 検証: V02 / V08〜V13 / V16 を実行する。正常 prune の未コミット再実行と部分失敗の再実行を区別する。
+- [ ] 検証: V02 / V08〜V13 / V16 を実行する。未評価ありでも他条件成立時は apply / 適用後検査 / no-op が成功し、通常 script が不変であることを確認する。正常 prune の未コミット再実行と部分失敗の再実行を区別する。
 
 ### 4. 実構成の acceptance と引き渡しを完了する
 
@@ -155,7 +155,10 @@
   Task 1 の未完了実装として扱う。この過去の失敗結果を成功へ書き換えない。
   OpenSpec 形式検証の成功を全体 gate の成功や実装開始承認として扱わない。
 
-## 第2回レビュー対応の状態と証跡
+## 第2回レビュー対応時の証跡（過去の仕様）
+
+以下は `20e06d1` までの仕様に対する証跡である。cwd の一律拒否と root 初期化例外は
+第3回レビュー後の合意で撤回した。過去の実行結果は保持し、現在の成功証跡として流用しない。
 
 - source commit: `d3178fe1a260d8df04e6adc50f6c0c3875dd0b05` に今回の6文書差分を加えた入力。
   以下は fresh 実行であり、過去の green evidence を再利用していない。
@@ -184,3 +187,29 @@
   `test_legacy_token_remains_only_in_exact_history_allowlist()` を直接実行: exit 1。
   違反は本 change の `design.md` 1件。これは契約変更が未実装であることによる失敗であり、
   修正判断は Task 1 に組み込まれている。テストの除外や先行 close による回避は行っていない。
+
+## 第3回レビュー対応の状態と証跡
+
+- source commit: `20e06d1d40193051e7ca1bf7228b548925665ca7` に今回の6文書差分を加えた入力。
+  以下は fresh 実行であり、前 cycle の成功証跡を流用していない。
+- 合意した修正: R01 は canonical validation 後の構造だけを検査し、Taskfile dir を受理しない。
+  workflow の静的 cwd 解決は維持する。cwd 解析限界と構成不正を分け、未評価だけで
+  gate / doctor / apply を失敗させない。固定 root 初期化2構文の例外は削除した。
+- 実装・実動作検証は未着手。全12 checkbox を未完了で保持する。
+- `openspec validate align-downstream-prune-validation --strict --no-interactive`: exit 0、valid。
+- `/home/shimi3435/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14 -B scripts/openspec-validate-gate.py`:
+  exit 0、1 passed / 0 failed。
+- `python3 -` による一時的な読取監査: exit 0。
+  6文書のみの変更、6要件・31 scenarios、12分類×6要件、6 tasks・未完了 checkbox 12件、
+  実行制約3件、16検証ID、manifest 34行、文書内リンク・末尾空白を確認した。
+  現行 design に旧 cwd 拒否状態・root 初期化コードブロックが残っていないことも確認した。
+- `git diff --check`: exit 0。
+- self-review: canonical validator の許可 key と6文書の差分を照合した。
+  workflow cwd 優先順位、shell 単位での未評価、cwd 非依存参照の検出継続、
+  構成状態と解析範囲の別報告、apply / no-op の成功条件を検証計画へ接続した。
+  実装後の独立 review / verifier、V01〜V16、hosted CI は未検証。
+- `task check`: exit 201。`Node.js 24 が必要です（検出: v26.1.0）` で停止。
+- Python 3.14 の `runpy.run_path` 経由で既存
+  `test_legacy_token_remains_only_in_exact_history_allowlist()` を直接実行: exit 1。
+  違反は本 change の `design.md` 1件。residual contract の限定変更は Task 1 に計画済みだが
+  未実装のため、現行テストの成功とは扱わない。実装・既存テスト・runtime は変更していない。

@@ -8,6 +8,8 @@ offline 検証を維持する。`TEMPLATE_VERSION` の存在と既存の単一�
 特定値を要求しない。自作 Skill の内容 hash lock を復活させない。
 通常検証に未使用 host・認証・ネットワークを要求しない。setup の既存の dependency 取得は別である。
 下流向け3リファレンスは design の移設先に保持する。
+Taskfile の公開受理契約は拡張しない。R01 の専用参照検出は既存 canonical validator の
+成功した構造だけを対象にし、`dir` 等の既存の未対応設定は canonical 検証で拒否する。
 
 #### Scenario: Fresh と rename 後の通常開発
 - **WHEN** 必要な runtime を準備し、fresh repository または rename 後で通常 setup と正式 gate と doctor を実行する
@@ -20,6 +22,10 @@ offline 検証を維持する。`TEMPLATE_VERSION` の存在と既存の単一�
 #### Scenario: 保持した機能の破損
 - **WHEN** remote lock、legal、link、runtime、dependency または必須共通文書に不整合がある
 - **THEN** 該当検証が非ゼロ終了し、prune 済みを理由に省略しない
+
+#### Scenario: canonical Taskfile 契約を維持
+- **WHEN** Taskfile に `dir: scripts` 等の既存 validator が許可しない設定を追加する
+- **THEN** canonical 検証で拒否し、prune scanner の有効入力として受理・再解釈しない。既存の受理構文では canonical 検証後に専用参照を検査する
 
 ### Requirement: DPV-2 保守検証の明示分離
 システムは SHALL、保守専用の release・履歴・出荷契約を `task check:template` に分離し、テンプレート CI で通常 gate とともに実行する。
@@ -74,12 +80,15 @@ active change を残した状態で Task 5 の gate を成功させてから clo
 負例は K05 の JSON に集約し、通常 test code / import を一括除外しない。
 対応範囲外の動的 task / path / wrapper / surface の検出は保証しない。
 成功を任意コードの依存解消保証と表現してはならない。
-R01 の task `dir` と R03 の `step > job defaults > workflow defaults > repository root` を
-design §3.2 の effective cwd として反映し、直接コマンドの相対 path を解決する。
-cwd field が不正・動的・解決不能なら root にフォールバックせず拒否する。
-C が認識する shell 本文の `cd` / `pushd` / `popd` は、design §3.2 の R04 に限定した
-固定 root 初期化2構文だけを例外として、それ以外は未対応として変更前に拒否する。
-例外は該当する2行にだけ適用し、同じ source の他の移動や専用参照を検査から外さない。
+R01 は canonical 検証後に root を初期基準とし、task `dir` の受理契約を追加しない。
+R03 は `step > job defaults > workflow defaults > repository root` の effective cwd を反映する。
+静的に解決できる cwd で直接コマンドの相対 path を解決する。解決不能な cwd や C が認識した
+`cd` / `pushd` / `popd` は design §3.2 の shell 単位で cwd 依存参照を未評価とし、root を仮定しない。
+固定 root 初期化・特定ファイルの例外を作らず、cwd 非依存の専用 task 名・絶対 path は検査し続ける。
+構成状態と解析範囲を分けて報告し、未評価だけでは通常 gate / doctor / preview / apply /
+適用後検査 / no-op を失敗させない。検出した専用参照や既存契約違反・破損・変更保護違反の拒否は維持する。
+完全除去とは固定資産・専用項目の不在と評価できた範囲での専用参照非検出であり、未評価と併存できる。
+未評価を「参照なし」へ置き換えず、解析範囲・理由を示して保証を限定する。
 R01〜R06 は維持し、変数・任意 wrapper・呼出元 cwd の追跡へ保証を拡張しない。
 
 #### Scenario: 部分欠落と型破損
@@ -111,16 +120,16 @@ R01〜R06 は維持し、変数・任意 wrapper・呼出元 cwd の追跡へ保
 - **THEN** 実行して解決せず、検査結果を指定 surface と対応構文の保証だけとして報告する
 
 #### Scenario: 静的 cwd を反映した直接参照
-- **WHEN** workflow の effective cwd または Taskfile の task dir が `scripts` で、直接コマンドが `python ../template-maintenance/tests/test_release_contract.py` である
+- **WHEN** workflow の effective cwd が `scripts` で、直接コマンドが `python ../template-maintenance/tests/test_release_contract.py` である
 - **THEN** 専用参照として拒否する。設定の上書き優先順位を適用し、同じ引数が専用資産以外へ解決される場合は専用参照と誤認しない
 
-#### Scenario: cwd の解決不能と shell 内移動
-- **WHEN** cwd field が不正・動的・解決不能であるか、検査対象の shell 本文に未対応の cwd 変更がある
-- **THEN** source の位置と未対応理由を示して非ゼロ終了し、参照なしと判定せず、prune 対象・対象外・index を変更しない
+#### Scenario: 通常 shell と動的 cwd の解析限界
+- **WHEN** 専用参照のない `cd src` と `make` の通常 script、または動的 cwd が存在し、他の構成・検証・Git・差分保護条件を満たす
+- **THEN** 未評価範囲と理由を報告し、それだけでは gate / doctor / preview / apply / 適用後検査 / no-op を失敗させない。apply は固定対象だけを変更し、その script は保持する
 
-#### Scenario: 既存 shell 入口の root 初期化
-- **WHEN** R04 の scripts 直下の source が、design §3.2 の固定 root 初期化2構文のいずれかを規定の条件で含む
-- **THEN** 初期化2行は受理し、後続コマンドを root 基準で検査する。同じ source への専用参照・別の移動の追加、または例外の条件を満たさない形は拒否する
+#### Scenario: 未評価と検出済み参照の併存
+- **WHEN** cwd 不明の shell 単位に、対応構文による `task check:template` または repository 内の専用資産の絶対 path 呼出がある
+- **THEN** その専用参照を検出して拒否し、未評価情報も報告する。他の単位の静的相対参照や canonical 契約違反も検査から外さない
 
 ### Requirement: DPV-4 固定範囲の read-only preview
 システムは SHALL、既存の `task prune-template-docs` を既定の read-only preview とし、削除・書換え・保持対象と適用可否を表示する。

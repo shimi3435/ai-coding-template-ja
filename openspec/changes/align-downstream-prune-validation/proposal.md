@@ -32,8 +32,9 @@ Issue: https://github.com/shimi3435/ai-coding-template-ja/issues/51
 - 直接参照の surface と構文を design §3.2 で限定する。通常 tests も検査し、
   負例は専用 JSON fixture に集約する。動的参照の完全検出は保証しない。
 - R01〜R06 の保守コストを受け入れ、解析範囲は列挙済み構文と静的 cwd 解決に限定する。
-  workflow / Taskfile の cwd を反映し、解決不能な cwd と未対応の shell 内移動は変更前に拒否する。
-  既存 shell 入口との互換は、design §3.2 の固定した2種類の root 初期化だけを許可して保つ。
+  R01 は既存 canonical Taskfile validation 成功後の構造だけを検査し、`dir` を新たに受理しない。
+  workflow の静的 cwd は反映する。解決不能な cwd と shell 内移動は未評価範囲として報告し、
+  それだけでは通常 gate・doctor・prune を失敗させない。root 初期化の個別例外は作らない。
 - 現行 tool-neutral residual contract は、歴史ADR 2件への exact path token だけを
   許可する契約へ変更する。ファイル全体の新しい検査除外は作らず、Task 1 で検証する。
 - 適用は Git 管理下で対象が追跡済みの場合に限る。対象の未コミット差分、未追跡・ignored
@@ -74,7 +75,8 @@ Genshijin の取得・host 登録解除・caveman 撤去は実装しない。
 - remote lock 不一致、legal 不整合、link 破損を検出し、自作内容 lock を要求しない。
 - 部分欠落を完全除去と混同せず、dry-run 無変更、再実行、対象外差分保護、途中失敗を検証する。
 - manifest 各行と各参照 surface の負例を検証し、説明・JSON fixture を実行参照と誤認しない。
-- cwd の優先順位と相対 path 解決を検証し、解決不能時に repository root を仮定して成功しない。
+- workflow cwd の優先順位と相対 path 解決を検証し、解決不能時は root を仮定せず未評価と報告する。
+  通常 script の `cd` だけでは FAIL にせず、検出済みの専用参照や既存契約違反は拒否する。
 - 移設に伴う履歴の変更が許可した link target だけであることと、新しいリンク解決を確認する。
 - 歴史ADRの exact path 参照は許可し、同じ文書内でも他の旧名称残存を拒否する。
   active change を削除する前に正式 gate と保守 gate が成功する。
@@ -90,7 +92,8 @@ Genshijin の取得・host 登録解除・caveman 撤去は実装しない。
 manifest・履歴リンクの判断に加え、再レビューで指摘された residual contract の変更を
 本 change の仕様へ含めた。現行テストの失敗を解消する実装は Task 1 の未完了作業であり、
 文書の形式検証だけで project gate の成功や実装完了を宣言しない。
-既存4 script の root 初期化と一律 `cd` 拒否の衝突は、利用者承認済みの2構文だけを
-許可する仕様で解決した。第2回レビューの契約衝突・cwd・解析範囲と、この追加判断を反映済みである。
+第3回レビュー後の合意に従い、Taskfile `dir` の受理、一律の cwd 解析不能による拒否、
+固定 root 初期化2構文の例外を撤回した。canonical 契約と scanner の責務を分け、
+構成状態と解析範囲を独立して報告する。未評価先の実行時依存の不存在は保証しない。
 仕様判断の確定と未実装・未検証は区別し、実装 tasks の完了や全体 gate の成功を意味しない。
 12分類の再監査と検証対応は [spec-holes.md](spec-holes.md) を参照する。
