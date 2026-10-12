@@ -7,6 +7,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEGACY_TOKEN = "g" + "sd"
 TEMPLATE_SLUG = "-".join(("ai", "coding", "template", "ja"))
@@ -27,6 +29,19 @@ ALLOWED_PATHS = {
     ),
     V2_NOTES,
 }
+PATH_TOKEN_DELIMITERS = rb"\x09-\x0d '" + b'"' + rb"`()\[\]<>,;"
+HISTORY_PATH_TOKEN = re.compile(
+    rb"(?<![^"
+    + PATH_TOKEN_DELIMITERS
+    + rb"])(?:"
+    + b"|".join(
+        re.escape(path.as_posix().encode())
+        for path in sorted(ALLOWED_PATHS - {V2_NOTES})
+    )
+    + rb")(?![^"
+    + PATH_TOKEN_DELIMITERS
+    + rb"])"
+)
 
 
 def _tracked_paths(root: Path = REPO_ROOT) -> list[Path]:
@@ -50,7 +65,7 @@ def _legacy_token_violations(paths: list[Path], root: Path = REPO_ROOT) -> list[
         if absolute.is_symlink():
             payload = os.fsencode(os.readlink(absolute))
         elif absolute.is_file():
-            payload = absolute.read_bytes()
+            payload = HISTORY_PATH_TOKEN.sub(b"", absolute.read_bytes())
         else:
             payload = b""
         text_match = TOKEN_BOUNDARY.search(payload)
@@ -108,56 +123,6 @@ def test_current_template_doc_surfaces_use_tool_neutral_meta_doc_wording() -> No
             assert fragment not in text, (path, fragment)
 
 
-def test_adr_0006_preserves_history_and_records_the_v2_current_state() -> None:
-    adr = (
-        REPO_ROOT / "docs/template/adr/0006-template-meta-docs-isolated.md"
-    ).read_text(encoding="utf-8")
-
-    assert "`grill.md` / `docs/grill/`" in adr
-    assert "> Status: Accepted." in adr
-    assert "> Amended by [ADR-0010](0010-openspec-direct-execution.md)." in adr
-    assert "## v2 現状" in adr
-    assert f"`docs/template/grill/{TEMPLATE_SLUG}.md` は削除済み" in adr
-    assert "テンプレ固有メタ文書" in adr
-
-
-def test_adr_0011_amends_retired_automation_and_preserves_history() -> None:
-    adr = (
-        REPO_ROOT / "docs/template/adr/0011-v2-distribution-boundaries.md"
-    ).read_text(encoding="utf-8")
-    header, body = adr.split("## 文脈", maxsplit=1)
-    assert "> Status: Accepted" in header
-    assert "> Amended in part by" in header
-    for issue in (71, 75):
-        assert f"https://github.com/shimi3435/{TEMPLATE_SLUG}/issues/{issue}" in header
-    assert "downstream optional / opt-in / prune方針" in header
-    assert "#64へのplugin更新PR統合案" in header
-    assert "撤回" in header
-    assert "他の責務境界を一括で失効させない" in header
-    assert "../../guide.md#7-skillの手動更新と旧自動化の撤去" in header
-    assert "#64のPR自動化は別の任意機能" in body
-    assert "既定無効・明示opt-in・専用資産prune可能" in body
-
-
-def test_v2_notes_document_breaking_removal_and_direct_migration() -> None:
-    notes = (REPO_ROOT / V2_NOTES).read_text(encoding="utf-8")
-
-    for interface in (
-        "openspec_" + LEGACY_TOKEN + "_handoff",
-        "openspec-" + LEGACY_TOKEN + "-handoff-smoke.py",
-        "openspec:" + LEGACY_TOKEN + "-handoff:smoke",
-    ):
-        assert interface in notes
-    assert "互換 shim なし" in notes
-    assert "OpenSpec 直接実行" in notes
-    assert "`tasks.md`" in notes
-    assert "execute-openspec-change" in notes
-
-
-def test_legacy_token_remains_only_in_exact_history_allowlist() -> None:
-    assert _legacy_token_violations(_tracked_paths()) == []
-
-
 def test_repository_scan_detects_tracked_violation_and_ignores_untracked(
     tmp_path: Path,
 ) -> None:
@@ -197,45 +162,12 @@ def test_residual_scan_rejects_legacy_token_in_broken_symlink_payload(
     assert _legacy_token_violations([relative], root=tmp_path) == [relative.as_posix()]
 
 
-def test_v2_notes_preserve_removed_integration_retrospective_history() -> None:
-    notes = (REPO_ROOT / V2_NOTES).read_text(encoding="utf-8")
-    retrospectives = (REPO_ROOT / "docs/template/retrospectives.md").read_text(
-        encoding="utf-8"
-    )
-    workflow = (REPO_ROOT / "docs/agents/workflow.md").read_text(encoding="utf-8")
-    closed_change_id = "externalize-" + LEGACY_TOKEN + "-from-core"
-
-    for pull_request, defect_count in (
-        ("PR #40", "逃した欠陥 1 件"),
-        ("PR #41", "逃した欠陥 6 件"),
-        ("PR #53", "逃した欠陥 27 件"),
-    ):
-        assert pull_request in notes
-        assert defect_count in notes
-    assert f"{closed_change_id}（PR #53）: 逃した欠陥 27 件" in notes
-    pointer_line = next(
-        line for line in retrospectives.splitlines() if "PR #53" in line
-    )
-    assert "[v2 release notes](v2-release-notes.md)" in pointer_line
-    assert closed_change_id not in retrospectives
-    assert "change ID 自体が retired legacy token を含み" in workflow
-    assert (
-        "`docs/template/retrospectives.md` に置くと最終 "
-        "residual allowlist に違反する場合だけ" in workflow
-    )
-    assert "固定形式の本体を exact history allowlist" in workflow
-    assert "archive pointer" in workflow
-    assert "この例外は既存 allowlist を拡張せず" in workflow
-    assert "両条件を満たさない change の保存先を変更しない" in workflow
-
-
 def test_primary_documentation_links_resolve() -> None:
     link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
     for relative in (
         Path("README.md"),
         Path("docs/guide.md"),
         Path("docs/agents/workflow.md"),
-        V2_NOTES,
     ):
         source = REPO_ROOT / relative
         for raw_target in link_pattern.findall(source.read_text(encoding="utf-8")):
@@ -244,3 +176,61 @@ def test_primary_documentation_links_resolve() -> None:
                 continue
             resolved = (source.parent / target).resolve()
             assert resolved.exists(), f"{relative}: broken link {raw_target}"
+
+
+@pytest.mark.parametrize("path", sorted(ALLOWED_PATHS - {V2_NOTES}))
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "",
+        " ",
+        "\t",
+        "\n",
+        "\r",
+        "\v",
+        "\f",
+        "'",
+        '"',
+        "`",
+        "(",
+        ")",
+        "[",
+        "]",
+        "<",
+        ">",
+        ",",
+        ";",
+    ],
+)
+def test_residual_accepts_only_exact_history_path_tokens(
+    tmp_path: Path, path: Path, boundary: str
+) -> None:
+    source = Path("manifest.txt")
+    (tmp_path / source).write_text(boundary + path.as_posix() + boundary)
+    assert _legacy_token_violations([source], tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "variant", ["basename", "prefix", "suffix", "standalone", "mixed", "unicode-space"]
+)
+def test_residual_rejects_other_legacy_bytes(tmp_path: Path, variant: str) -> None:
+    path = sorted(ALLOWED_PATHS - {V2_NOTES})[0]
+    payloads = {
+        "basename": path.name,
+        "prefix": "other/" + path.as_posix(),
+        "suffix": path.as_posix() + ".bak",
+        "standalone": LEGACY_TOKEN,
+        "mixed": path.as_posix() + " " + LEGACY_TOKEN,
+        "unicode-space": "\u00a0" + path.as_posix(),
+    }
+    source = Path("manifest.txt")
+    (tmp_path / source).write_text(payloads[variant])
+    assert _legacy_token_violations([source], tmp_path) == [source.as_posix()]
+
+
+def test_residual_path_exception_never_applies_to_symlink_targets(
+    tmp_path: Path,
+) -> None:
+    source = Path("link")
+    (tmp_path / source).symlink_to(sorted(ALLOWED_PATHS - {V2_NOTES})[0])
+    assert _legacy_token_violations([source], tmp_path) == [source.as_posix()]

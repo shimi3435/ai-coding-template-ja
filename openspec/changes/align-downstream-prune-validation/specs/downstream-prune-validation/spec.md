@@ -38,6 +38,7 @@ Taskfile の公開受理契約は拡張しない。R01 の専用参照検出は�
 historical records の過去の判断・本文の改変、版更新、release-ready 判断は対象外とする。
 下流文書の移設に伴う link target だけの修正は [design](../../design.md) §2 の許可表に限って認め、
 本文・見出し・表示名・fragment と destination 外の bytes を保持する。
+ただし M12 の末尾には workflow の既存 retrospective 手順を移設し、M12 の既存 bytes を保持する。
 tool-neutral residual contract は design §2 の固定規則に従い、M03 / M08 の exact path token
 だけを追加で許可する。同じ本文の他の旧名称残存と撤去済み公開操作の拒否は維持し、
 OpenSpec / ファイル全体の新しい除外を作らない。Task 1 で契約変更を検証し、

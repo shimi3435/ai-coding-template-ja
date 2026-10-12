@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { cli, temporaryRepository, writeValidRepository } from "./repository-contracts-test-fixture.ts";
 
-test("check-contracts accepts the tracked exact dependency and release ownership contract", () => {
+test("check-contracts accepts the tracked exact dependency and version format contract", () => {
   const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
     encoding: "utf8",
   });
@@ -13,7 +13,7 @@ test("check-contracts accepts the tracked exact dependency and release ownership
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /exact npm dependencies/);
   assert.match(result.stdout, /package-lock v3/);
-  assert.match(result.stdout, /TEMPLATE_VERSION 1\.0\.0/);
+  assert.match(result.stdout, /TEMPLATE_VERSION/);
   assert.match(result.stdout, /forbidden Node runners/);
   assert.match(result.stdout, /skill updater routes/);
   assert.match(result.stdout, /legacy skill checker: absent/);
@@ -242,23 +242,24 @@ for (const source of [
   });
 }
 
-test("check-contracts requires the prepare-v2-release dependency handoff", () => {
-  const repository = writeValidRepository();
-  writeFileSync(
-    join(repository, "docs", "template", "release.md"),
-    "TEMPLATE_VERSION release process\n",
-    "utf8",
-  );
-
-  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
-    cwd: repository,
-    encoding: "utf8",
+for (const version of ["2.3.4\n", "0.0.0\n"]) {
+  test(`check-contracts accepts downstream version ${version.trim()}`, () => {
+    const repository = writeValidRepository();
+    writeFileSync(join(repository, "TEMPLATE_VERSION"), version);
+    const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /handoff/);
   });
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /prepare-v2-release/);
-  assert.match(result.stderr, /docs\/template\/release\.md/);
-});
+}
+for (const version of ["", "1.0", "1.0.0\n2.0.0\n", "v1.0.0", "1.0.0-alpha"]) {
+  test(`check-contracts rejects invalid template version ${JSON.stringify(version)}`, () => {
+    const repository = writeValidRepository();
+    writeFileSync(join(repository, "TEMPLATE_VERSION"), version);
+    const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /TEMPLATE_VERSION/);
+  });
+}
 
 test("check-contracts requires generated node_modules to stay untracked", () => {
   const repository = writeValidRepository();

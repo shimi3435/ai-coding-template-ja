@@ -543,20 +543,14 @@ def _make_prune_fixture(tmp_path: Path) -> Path:
     スクリプトは自身の位置から REPO_ROOT を導出するため、実リポジトリを
     触らずに --apply の実削除まで検証できる。
     """
-    (tmp_path / "scripts").mkdir()
-    shutil.copy2(
-        REPO_ROOT / "scripts" / "prune-template-docs.py",
-        tmp_path / "scripts" / "prune-template-docs.py",
-    )
-    (tmp_path / "docs" / "template" / "adr").mkdir(parents=True)
-    (tmp_path / "docs" / "template" / "adr" / "0001-meta.md").write_text(
-        "テンプレのメタ ADR", encoding="utf-8"
-    )
-    (tmp_path / "docs" / "adr").mkdir()
-    (tmp_path / "docs" / "adr" / "0000-template.md").write_text(
-        "下流用スキャフォルド", encoding="utf-8"
-    )
-    (tmp_path / "TEMPLATE_VERSION").write_text("0.1.0\n", encoding="utf-8")
+    from template_prune_fixture import commit_fixture, copy_runtime, fixture
+
+    fixture(tmp_path)
+    copy_runtime(tmp_path)
+    (tmp_path / "docs/template/adr/0001-meta.md").write_text("テンプレのメタ ADR")
+    (tmp_path / "docs/adr/0000-template.md").write_text("下流用スキャフォルド")
+    (tmp_path / "TEMPLATE_VERSION").write_text("0.1.0\n")
+    commit_fixture(tmp_path)
     return tmp_path
 
 
@@ -583,7 +577,7 @@ def test_prune_template_docs_dry_run_deletes_nothing(tmp_path: Path) -> None:
 def test_prune_template_docs_apply_deletes_only_target_and_is_idempotent(
     tmp_path: Path,
 ) -> None:
-    """--apply は docs/template/ のみ削除し、docs/adr と TEMPLATE_VERSION は不可侵。
+    """--apply は固定保守資産を削除し、docs/adr と TEMPLATE_VERSION は不可侵。
     再実行は no-op で正常終了（冪等）であること。"""
     root = _make_prune_fixture(tmp_path)
     result = _run_prune(root, "--apply")

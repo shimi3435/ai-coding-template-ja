@@ -65,7 +65,7 @@ offline 検証を維持する。新規 dependency や汎用 profile engine / plu
 Genshijin の取得・host 登録解除・caveman 撤去は実装しない。
 #73 の policy 全体整理、#66 の archive semantics、#62 の README 全体設計、
 #70 の版更新・release-ready 判定も対象外である。historical records の過去の判断・本文は
-改変しない。下流文書の移設に伴う link target だけの機械的修正は、design §2 の許可表に従う。
+改変しない。下流文書の移設に伴う link target と、M12 末尾への既存 retrospective 手順の移設追記だけを、design §2 の限定例外として許可する。
 
 ## Acceptance Criteria
 
@@ -77,13 +77,19 @@ Genshijin の取得・host 登録解除・caveman 撤去は実装しない。
 - manifest 各行と各参照 surface の負例を検証し、説明・JSON fixture を実行参照と誤認しない。
 - workflow cwd の優先順位と相対 path 解決を検証し、解決不能時は root を仮定せず未評価と報告する。
   通常 script の `cd` だけでは FAIL にせず、検出済みの専用参照や既存契約違反は拒否する。
-- 移設に伴う履歴の変更が許可した link target だけであることと、新しいリンク解決を確認する。
+- 移設に伴う履歴の変更が許可した link target と M12 末尾への既存手順追記だけであることと、新しいリンク解決を確認する。
 - 歴史ADRの exact path 参照は許可し、同じ文書内でも他の旧名称残存を拒否する。
   active change を削除する前に正式 gate と保守 gate が成功する。
 - 通常 offline 検証に未使用 host・認証・ネットワークを要求しない。
 - [validation.md](validation.md) の検証と、AGENTS.md OSWF-5 に従う実装後の review / verifier が成功する。
 
 ## Authorization and Status
+
+利用者の明示指示により実装・検証を開始し、従来の「実装しない」制約を解除した。
+2026-10-08には M12 末尾への既存 retrospective 手順移設の限定例外も承認された。
+仕様の正本は本 change、現在の進捗・検証・再開位置の正本は `tasks.md` とする。
+
+### 仕様レビュー時点の記録
 
 今回の承認はレビュー後の合意に基づく OpenSpec 6文書の修正・検証までであり、
 実装開始は明示的に禁止されている。

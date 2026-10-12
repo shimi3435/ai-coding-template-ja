@@ -151,3 +151,20 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
 ## スコープ外
 
 - tag の削除・打ち直しはスコープ外（通常の git 運用として扱う）。
+
+## change close 時の軽量ふりかえり（テンプレート自身の運用）
+
+close までに `docs/template/retrospectives.md` へ固定形式の1行を追記する。
+
+```markdown
+- YYYY-MM-DD <change-id>（PR #N）: 逃した欠陥 <計> 件（self-review=a / review=b / CI=c / merge後=d）— 一言（任意）
+```
+
+「逃した欠陥」は実装 checkbox 完了後に発見され、修正を要した correctness / contract defect とする。
+実装中の自己修正、style nit、主観的 refactor、回答だけで済む質問は含めない。同一欠陥は最初の発見経路
+だけに数え、0件でも記録する。後から発見した場合は新しい行を足さず既存行を更新する。
+
+例外として、change ID 自体が retired legacy token を含み、固定形式の行を
+`docs/template/retrospectives.md` に置くと最終 residual allowlist に違反する場合だけ、固定形式の本体を exact history allowlist
+として指定済みの ADR または release notes に保存し、`docs/template/retrospectives.md` には archive pointer を残す。
+この例外は既存 allowlist を拡張せず、両条件を満たさない change の保存先を変更しない。

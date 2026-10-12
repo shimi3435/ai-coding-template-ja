@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach } from "node:test";
 
 export const cli = new URL("./cli.ts", import.meta.url);
@@ -21,7 +21,6 @@ export function writeValidRepository(): string {
   mkdirSync(join(repository, ".github", "workflows"), { recursive: true });
   mkdirSync(join(repository, "scripts"));
   mkdirSync(join(repository, "repo-tools"));
-  mkdirSync(join(repository, "docs", "template"), { recursive: true });
   writeFileSync(
     join(repository, "package.json"),
     JSON.stringify({
@@ -77,10 +76,12 @@ export function writeValidRepository(): string {
   writeFileSync(join(repository, ".github", "workflows", "ci.yml"), "name: CI\n", "utf8");
   writeFileSync(join(repository, "scripts", "bootstrap.sh"), "#!/bin/sh\n", "utf8");
   writeFileSync(join(repository, "repo-tools", "cli.ts"), "// fixture\n", "utf8");
-  writeFileSync(
-    join(repository, "docs", "template", "release.md"),
-    "prepare-v2-release: Node.js 24 / Python >=3.14 / TEMPLATE_VERSION=2.0.0\n",
-    "utf8",
-  );
+  for (const name of ["docs/reference/repository-contracts.md", "docs/reference/skill-maintenance.md", "docs/reference/skill-metadata-v2.md", "docs/reference/prune-template-assets.md", "scripts/prune-template-docs.py", "README.md", "docs/agents/workflow.md"]) {
+    mkdirSync(dirname(join(repository,name)),{recursive:true});
+    writeFileSync(join(repository,name),"# fixture\n");
+  }
+  mkdirSync(join(repository,"docs/adr"),{recursive:true});
+  mkdirSync(join(repository,"tests/fixtures/template_prune"),{recursive:true});
+  writeFileSync(join(repository,"tests/fixtures/template_prune/references.json"),readFileSync(new URL("../tests/fixtures/template_prune/references.json",import.meta.url)));
   return repository;
 }

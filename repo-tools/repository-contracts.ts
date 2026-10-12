@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseSemver } from "semver";
+import { validateTemplateConfiguration } from "./template-prune-contract.ts";
 import { validateRepositoryTaskfile } from "./repository-taskfile.ts";
 
 type PackageManifest = {
@@ -133,10 +134,12 @@ export function validateRepositoryContracts(): readonly string[] {
     throw new Error(`package-lock v3 が必要です（検出: ${String(lock.lockfileVersion)}）`);
   }
 
-  const templateVersion = readFileSync(join(repositoryRoot, "TEMPLATE_VERSION"), "utf8").trim();
-  if (templateVersion !== "1.0.0") {
-    throw new Error(`TEMPLATE_VERSION は 1.0.0 を維持してください（検出: ${templateVersion}）`);
+  const versionLines = readFileSync(join(repositoryRoot, "TEMPLATE_VERSION"), "utf8")
+    .split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/u).filter(line => line.trim().length > 0);
+  if (versionLines.length !== 1 || !/^\p{Decimal_Number}+\.\p{Decimal_Number}+\.\p{Decimal_Number}+$/u.test(versionLines[0]!)) {
+    throw new Error("TEMPLATE_VERSION は単一行の X.Y.Z 形式が必要です");
   }
+  const templateVersion = versionLines[0]!;
 
   const gitignorePath = join(repositoryRoot, ".gitignore");
   const gitignoreLines = readFileSync(gitignorePath, "utf8")
@@ -144,23 +147,6 @@ export function validateRepositoryContracts(): readonly string[] {
     .map((line) => line.trim());
   if (!gitignoreLines.includes("/node_modules/")) {
     throw new Error(`${gitignorePath}: /node_modules/ を除外してください`);
-  }
-
-  const releaseHandoffPath = join(repositoryRoot, "docs", "template", "release.md");
-  const releaseHandoff = readFileSync(releaseHandoffPath, "utf8");
-  const requiredHandoffMarkers = [
-    "prepare-v2-release",
-    "Node.js 24",
-    "Python >=3.14",
-    "TEMPLATE_VERSION=2.0.0",
-  ];
-  const missingHandoffMarkers = requiredHandoffMarkers.filter(
-    (marker) => !releaseHandoff.includes(marker),
-  );
-  if (missingHandoffMarkers.length > 0) {
-    throw new Error(
-      `${releaseHandoffPath}: prepare-v2-release handoff が不足しています: ${missingHandoffMarkers.join(", ")}`,
-    );
   }
 
   const taskfilePath = join(repositoryRoot, "Taskfile.yml");
@@ -208,10 +194,10 @@ export function validateRepositoryContracts(): readonly string[] {
     "node_modules ignored",
     "deterministic npm install and audit routes",
     `TEMPLATE_VERSION ${templateVersion}`,
-    "prepare-v2-release handoff",
     "native network access: none",
     "forbidden Node runners in static command text: none",
     "skill updater routes",
     "legacy skill checker: absent",
+    ...validateTemplateConfiguration(repositoryRoot),
   ];
 }

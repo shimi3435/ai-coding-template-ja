@@ -124,7 +124,8 @@ K05 の `expected` と `coverage` を別々に検証する。`not-detected` / `p
 移設時の focused 確認では、M01〜M15 の編集前 snapshot と編集後を比較する。
 design §2 の許可表に列挙した destination の byte 範囲だけを比較から除外し、
 その他の本文・判断・見出し・label・title・fragment・空白・改行が一致することを確認する。
-今回の許可表は M15 の1件だけである。label 改変・本文追記・別リンクの書換えを許可差分に含めない。
+リンクの許可表は M15 の1件だけである。M12 は既存 bytes の完全な prefix 保持と、
+末尾へ移した retrospective 手順が workflow の移設前本文と一致することを別途確認する。label 改変・本文追記・別リンクの書換えを許可差分に含めない。
 修正後の link target が K01 へ解決することも確認する。
 
 これは移設作業の before / after diff 確認であり、通常 CI に過去 commit や削除予定 snapshot を要求しない。

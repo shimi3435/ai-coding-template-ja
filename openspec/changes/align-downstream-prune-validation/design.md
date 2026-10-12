@@ -56,7 +56,8 @@ README の変更は入口・リンク・削除範囲の説明に限定する。
 保守検証の実体は §3.1 の M16〜M18 の3ファイルに固定し、既存 pytest で明示実行する。
 保守テストは通常側の fixture を利用できるが、逆向きの import は禁止する。
 
-`docs/agents/workflow.md` 内のテンプレート限定の retrospective 手順は保守文書へ移す。
+`docs/agents/workflow.md` 内のテンプレート限定の retrospective 手順は、
+M12 `docs/template/release.md` の末尾へ、見出しと本文を保持して移す。
 archive / close の既定動作や executor 手順は変更しない。#66 が所有する設計を先行実装しない。
 既存 historical records の本文や過去の判断を現行方針で上書きしない。
 
@@ -94,7 +95,10 @@ link label、title、fragment、本文、見出し、過去のコマンド、空
 | --- | --- | --- | --- |
 | `docs/template/v2-release-notes.md` | repository contracts の受理仕様 | `repository-contracts.md` | `../reference/repository-contracts.md` |
 
-この1件以外の履歴本文の bytes は本移設で変えない。追加の該当リンクが判明した場合は、
+このリンク1件と、M12 末尾への retrospective 手順の移設追記だけを許可する。
+M12 の既存 bytes はすべて保持し、追記する本文は workflow の現行手順と一致させる。
+この限定例外は2026-10-08の利用者承認に基づき、manifest の追加・他の履歴編集を許可しない。
+これら以外の履歴本文の bytes は本移設で変えない。追加の該当リンクが判明した場合は、
 編集前に同じ移設先3文書への参照であることを確認し、本表と V15 を更新する。
 close 時の policy が要求する retrospective の新しい1行は別の既存義務であり、
 過去行の変更を許可しない。V15 はリンク移設差分と close の追記差分を分けて確認する。

@@ -13,27 +13,10 @@ CURRENT_POLICY_PATHS = (
     Path("openspec/project.md"),
     Path("docs/agents/workflow.md"),
 )
-ADR_PATH = Path("docs/template/adr/0010-openspec-direct-execution.md")
 
 
 def _read(path: Path) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
-
-
-def test_adr_0010_supersedes_both_obsolete_route_decisions() -> None:
-    legacy_token = "g" + "sd"
-    adr_0003_name = f"0003-openspec-{legacy_token}-boundary.md"
-    adr_0008_name = f"0008-adaptive-openspec-{legacy_token}-execution-boundary.md"
-    adr = _read(ADR_PATH)
-    adr_0003 = _read(Path("docs/template/adr") / adr_0003_name)
-    adr_0008 = _read(Path("docs/template/adr") / adr_0008_name)
-
-    assert "> Status: Accepted." in adr
-    assert "Supersedes: ADR-0003 and ADR-0008." in adr
-    assert adr_0003_name not in adr
-    assert adr_0008_name not in adr
-    assert "Superseded by [ADR-0010](0010-openspec-direct-execution.md)" in adr_0003
-    assert "Superseded by [ADR-0010](0010-openspec-direct-execution.md)" in adr_0008
 
 
 def test_current_policies_select_only_openspec_direct_execution() -> None:
@@ -105,7 +88,7 @@ def test_task_targets_require_exact_code_spanned_paths() -> None:
 
 
 def test_external_orchestrator_requires_named_user_opt_in_before_discovery() -> None:
-    for path in (Path("AGENTS.md"), Path("docs/agents/workflow.md"), ADR_PATH):
+    for path in (Path("AGENTS.md"), Path("docs/agents/workflow.md")):
         policy = _read(path)
         assert "外部 orchestrator" in policy, path
         assert "利用者が特定の名前を選ぶ前" in policy, path

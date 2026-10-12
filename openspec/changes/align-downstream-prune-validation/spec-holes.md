@@ -45,7 +45,7 @@ workflow の静的 cwd は解決し、動的 cwd / shell 内移動の影響範�
 | 6 | エラー経路 | 該当 | 専用 workflow と task は失敗を伝播し、skip条件で握り潰さない。 | 1 | V05,V15 |
 | 7 | 冪等性・再実行 | 該当 | 保守 gate 再実行は実repositoryを変更せず、fixtureだけを生成・cleanupする。 | 1 | V05,V15 |
 | 8 | 時刻・タイムゾーン | 非該当 | release日時や現時刻による選択を導入しない。 | — | — |
-| 9 | 文字列 | 該当 | design §2 許可表の履歴 link destination だけを移設先へ修正する。本文・判断・label・fragment 等の他の bytes は保持。旧名称の path token は exact bytes と固定区切りを使用する。 | 1 | V05,V15 |
+| 9 | 文字列 | 該当 | design §2 許可表の履歴 link destination だけを移設先へ修正する。M12 末尾への retrospective 手順移設だけ追加許可し、既存 bytes は保持する（2026-10-08承認）。本文・判断・label・fragment 等の他の bytes は保持。旧名称の path token は exact bytes と固定区切りを使用する。 | 1 | V05,V15 |
 | 10 | 数値 | 非該当 | release版の数値演算や集計方式を新設しない。 | — | — |
 | 11 | 巨大入力・リソース枯渇 | 該当 | 統合smokeの失敗・資源不足を未検証として残し、成功扱いしない。 | 1 | V12,V16 |
 | 12 | 状態遷移の未定義パス | 該当 | pruneで専用task/workflowを一緒に除去し、部分除去は共通構成検査が拒否する。 | 1 | V02,V06 |

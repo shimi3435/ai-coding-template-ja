@@ -19,8 +19,11 @@ FAKE_GITHUB_TOKEN = "github_pat_FAKE_DO_NOT_PRINT"
 
 def _copy_cli_project(tmp_path: Path) -> Path:
     """公開 CLI を最小構成の一時プロジェクトへコピーする。"""
+    from template_prune_fixture import copy_runtime, fixture
+
     project = tmp_path / "project"
-    (project / "scripts").mkdir(parents=True)
+    fixture(project, False)
+    copy_runtime(project)
     (project / ".codex").mkdir()
     shutil.copy2(REPO_ROOT / "scripts" / "doctor.py", project / "scripts" / "doctor.py")
     shutil.copy2(
@@ -50,7 +53,10 @@ def _doctor_environment(project: Path, fake_bin: Path) -> dict[str, str]:
     (project / "uv.lock").write_text("", encoding="utf-8")
     (project / ".venv").mkdir()
     _write_executable(fake_bin / "uv", "#!/bin/sh\nexit 0\n")
-    _write_executable(fake_bin / "node", "#!/bin/sh\nprintf 'v24.11.1\\n'\n")
+    node = shutil.which("node")
+    assert node is not None
+    (fake_bin / "node").symlink_to(node)
+    (fake_bin / "bash").symlink_to("/bin/bash")
     _write_executable(fake_bin / "npm", "#!/bin/sh\nprintf '11.6.2\\n'\n")
     return {**os.environ, "PATH": str(fake_bin)}
 

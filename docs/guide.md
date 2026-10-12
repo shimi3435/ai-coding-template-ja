@@ -240,7 +240,7 @@ Node.js 24、npm、Python >=3.14、uv、Task、公開GitHubを読める `gh` を
 元の作業コピーにある未コミット差分は保持し、更新用の新しいbranchとpathを選ぶ。
 既存directoryを上書きしない。
 
-1. [公開操作・隔離更新手順](template/skill-maintenance.md)に従い、完全な開始commitと独立候補cloneを用意する。
+1. [公開操作・隔離更新手順](reference/skill-maintenance.md)に従い、完全な開始commitと独立候補cloneを用意する。
 2. Node.js 24 / Python >=3.14、locked dependencyでpreviewし、取得元・固定SHA・legalを確認する。
 3. 明示applyが成功した候補だけでoffline verify、`./scripts/check.sh`、差分レビューを行う。
 4. すべて成功した後に、push先を確認して通常PRへ進む。失敗候補は診断用に残し、新しいcloneから再実行する。
@@ -267,3 +267,9 @@ v1移行、指名repin、外部由来local化、legal再承認の使い分けも
    - **skill が見つからない / リンク切れ** — 修復用のタスクがある → README のタスク表（skills 系）。
    - **doctor の INFO が気になる** — 情報通知（オプションの在席・テンプレ由来の残存物など）
      であって問題ではない（§6）。
+
+## テンプレート保守資産の除去
+
+下流で保守履歴が不要になった場合は、`task prune-template-docs` で固定範囲を確認し、
+`task prune-template-docs -- --apply` で明示適用する。通常の開発・Skill 検証は維持する。
+[対象、構成状態と解析範囲、Git 保護、復旧手順](reference/prune-template-assets.md)を参照する。
