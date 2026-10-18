@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -145,7 +146,9 @@ def setup(root: Path = ROOT) -> Path:
         else:
             try:
                 publish.rename(destination)
-            except FileExistsError:
+            except OSError as exc:
+                if exc.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                    raise
                 if (
                     not regular(destination / "parser", root)
                     or digest(destination / "parser") != sha

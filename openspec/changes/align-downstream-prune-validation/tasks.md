@@ -1438,6 +1438,48 @@
   source / tests / dependency / build / CI は検証済み入力から変更していない。
   hosted CI 成功前は Task 5 検証・Task 6 を未完了のまま保持する。
 
+#### Task 5 hosted CI の同時公開競合修正（2026-10-19）
+
+- 利用者の再開指示後、worktree が clean、HEAD が `d8bfc600931c5dbf583507283dc4ec674ec24af6`、
+  draft PR が [#91](https://github.com/shimi3435/ai-coding-template-ja/pull/91) であることを確認した。
+  commit・push・PR 作成は承認済みであり、merge は実行していない。
+- 同 HEAD の hosted CI は、[通常 check](https://github.com/shimi3435/ai-coding-template-ja/actions/runs/39124702952)
+  と [保守 gate](https://github.com/shimi3435/ai-coding-template-ja/actions/runs/39124702915) が失敗した。
+  両方とも同一入力の同時 setup で `OSError: [Errno 39] Directory not empty` を返す同一欠陥である。
+  通常 check は1 failed / 1453 passed、保守 gate は1 failed / 14 passed。rename-smoke、audit、
+  security、OpenSpec gate は成功した。これは infrastructure failure ではなく実装の競合処理漏れである。
+- 原因: 既存 destination の確認から rename までの間に他の setup が公開すると、filesystem は
+  EEXIST または ENOTEMPTY を返す。既存実装は FileExistsError だけを処理し、後者を取りこぼした。
+  CI での初出欠陥として1件に数え、通常 check と保守 gate の重複は数えない。
+- `uv run --no-sync pytest --no-cov -q tests/test_shell_parser_artifact.py -k concurrent_setup_same_inputs --tb=short`:
+  同期位置を build から publish の rename 直前へ移して、fresh 1 failed を決定的に再現した。
+  失敗後の実 artifact は現在入力・checksum と一致しており、破損や異なる入力の混入は原因ではない。
+- 回帰テストは同じ実 rename 競合について EEXIST / ENOTEMPTY を対照化し、公開時 EACCES の
+  非成功と旧 pointer / binary 保持も確認する。修正前は1 failed / 2 passed。
+  `shell_parser_setup.py` は上記2 errno だけを既存の競合 artifact 検証へ渡し、他の OSError は再送出する。
+- 修正後 `uv run --no-sync pytest --no-cov -q tests/test_shell_parser_artifact.py`: fresh 25 passed。
+  変更2ファイルの Ruff check / format check は成功。self-review で例外範囲、競合先の hash / 型検査、
+  非競合エラー伝播、同期の timeout / cleanup を確認した。仕様・dependency は変更していない。
+- commit 時の `git diff --cached --check` は固定 `upstream.patch` の context 行の空白を警告した。
+  patch は検証済み hash `3c28310913d824ff941a1b7597504cbda2331f65cbf9d2fa1b089d7517ced18b` を保持する。
+  context を破壊する整形は行わず、当該 patch を除いた commit diff の whitespace 検査は成功した。
+- close review の準備中に agent が利用上限で1回中断したが、close の変更・最終判定は行っていない。
+  現在は CI finding の独立 review・最新 project checks・別 verifier・hosted CI を優先する。
+  Task 5 検証と Task 6 は未完了を保持する。
+
+#### Task 5 CI finding の独立 review（2026-10-19）
+
+- reviewer `issue51_setup_review`: APPROVE、blocker 0件。例外の限定、競合先の型・hash 検証、
+  実 rename の競合を確実に踏むテスト、EACCES の伝播を確認した。
+- `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/test_shell_parser_artifact.py`:
+  独立 fresh 25 passed。`git diff --check`: exit 0。
+- executor の `uv run --no-sync pytest --no-cov -q tests/test_tool_neutral_documentation_contract.py tests/test_shell_parser_artifact.py`:
+  fresh 76 passed。変更3ファイルの pre-commit は全適用 hook 成功。
+- source は `d8bfc600931c5dbf583507283dc4ec674ec24af6` と今回3ファイルの差分である。
+  承認済みの commit・push 範囲内で修正を PR #91 へ反映し、最新ローカル正式 gate と hosted CI を確認する。
+  hosted の保守 gate は同じ `task check:template` の最新入力で fresh 実行する。
+  過去のローカル保守 gate 成功を変更後入力の証跡には流用しない。
+
 ### 6. 承認された実装完了後に change を close する
 
 - 成果: 恒久文書へ契約を残し、retrospective と一時成果 cleanup を行う。

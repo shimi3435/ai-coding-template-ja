@@ -1,5 +1,6 @@
 """固定 parser の offline runtime と準備失敗の公開境界。"""
 
+import errno
 import importlib
 import shutil
 import subprocess
@@ -167,7 +168,8 @@ def stub_setup_build(root: Path, binary: Path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "phase", ["download", "extract", "patch", "build", "smoke", "publish"]
+    "phase",
+    ["download", "extract", "patch", "build", "smoke", "artifact_publish", "publish"],
 )
 def test_setup_failure_preserves_isolated_pointer_and_binary(
     tmp_path: Path, monkeypatch, phase: str
@@ -186,6 +188,15 @@ def test_setup_failure_preserves_isolated_pointer_and_binary(
     with monkeypatch.context() as injection:
         if phase in {"download", "extract"}:
             injection.setattr(setup, phase, fail)
+        elif phase == "artifact_publish":
+            rename = Path.rename
+
+            def fail_artifact_publish(source, destination):
+                if source.name == "publish":
+                    raise PermissionError(errno.EACCES, "injected publication denial")
+                return rename(source, destination)
+
+            injection.setattr(Path, "rename", fail_artifact_publish)
         elif phase == "publish":
             replace = setup.os.replace
 
@@ -220,26 +231,36 @@ def test_setup_failure_preserves_isolated_pointer_and_binary(
     assert setup.prepared_parser(tmp_path) == binary
 
 
+@pytest.mark.parametrize("collision_errno", [errno.EEXIST, errno.ENOTEMPTY])
 def test_concurrent_setup_same_inputs_publishes_valid_artifact(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, collision_errno: int
 ) -> None:
     binary = prepared_copy(tmp_path)
     bridge = tmp_path / "repo-tools/shell-parser/main.go"
     bridge.write_bytes(bridge.read_bytes() + b"\n")
     setup = stub_setup_build(tmp_path, binary, monkeypatch)
-    run = setup.subprocess.run
+    rename = Path.rename
     barrier = Barrier(2, timeout=10)
+    collisions = []
 
-    def simultaneous_build(command, **kwargs):
-        if command[1:2] == ["build"]:
+    def simultaneous_publish(source, destination):
+        if source.name == "publish":
             barrier.wait()
-        return run(command, **kwargs)
+        try:
+            return rename(source, destination)
+        except OSError as error:
+            if error.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                raise
+            collisions.append(error.errno)
+            # 同じ競合でも filesystem が返す errno は異なる。
+            raise OSError(collision_errno, "injected competing publication") from error
 
-    monkeypatch.setattr(setup.subprocess, "run", simultaneous_build)
+    monkeypatch.setattr(Path, "rename", simultaneous_publish)
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(setup.setup, tmp_path) for _ in range(2)]
         results = [future.result(timeout=20) for future in futures]
     assert results == [setup.prepared_parser(tmp_path)] * 2
+    assert len(collisions) == 1
     assert not list((tmp_path / ".cache/shell-parser").glob("stage-*"))
 
 
