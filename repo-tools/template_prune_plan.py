@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 from template_prune_manifest import DELETE_ROOTS, SHARED
+from template_prune_result import successful
 from template_prune_state import inspect
 
 
@@ -130,10 +131,8 @@ def plan(root: Path) -> dict:
         snapshot = inventory(root)
     except (PruneError, OSError) as exc:
         blockers.append(str(exc))
-    if state["state"] == "inconsistent":
-        blockers.append(
-            "構成が不整合。旧 prune / 部分失敗では対象資産を復元して再試行する"
-        )
+    if not successful(state):
+        blockers.append("構成・参照・解析の検査に失敗。診断を確認して再試行する")
     if state["state"] == "bundled" and head is not None:
         try:
             protect(root, head, snapshot)

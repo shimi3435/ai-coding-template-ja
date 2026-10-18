@@ -9,6 +9,7 @@ import stat
 import subprocess
 from pathlib import Path
 
+from template_prune_json import value_positions
 from template_prune_manifest import (
     DIRECTORIES,
     END,
@@ -19,6 +20,9 @@ from template_prune_manifest import (
     START,
 )
 from template_prune_references import References
+from template_prune_result import successful as successful
+from template_prune_result import validate
+from template_prune_shell import AnalysisError
 from template_prune_workflow import inspect_workflow
 
 TOOLS = Path(__file__).resolve().parent
@@ -196,7 +200,9 @@ def inspect(root: Path, node: str = "node") -> dict:
                 raise ValueError("source symlink / type")
             sources[path] = p.read_bytes().decode("utf-8")
         except (OSError, ValueError) as exc:
-            issue(path, str(exc))
+            refs.analysis_error(
+                AnalysisError(str(exc), "io"), surface_for(path), path, 1
+            )
 
     for p in (
         "Taskfile.yml",
@@ -294,10 +300,30 @@ def inspect(root: Path, node: str = "node") -> dict:
         if result.returncode:
             raise ValueError(result.stderr)
         bridge = json.loads(result.stdout)
+        if (
+            not isinstance(bridge, dict)
+            or any(
+                not isinstance(bridge.get(k), dict) for k in ("workflows", "javascript")
+            )
+            or not isinstance(bridge.get("errors"), list)
+        ):
+            raise ValueError("parser bridge protocol が不正")
+        if "taskfile" not in bridge and not any(
+            e.get("path") == "Taskfile.yml" for e in bridge["errors"]
+        ):
+            raise ValueError("canonical Taskfile の解析結果がない")
         for error in bridge["errors"]:
-            issue(error["path"], error["reason"])
+            if error["path"] == "Taskfile.yml":
+                issue(error["path"], error["reason"])
+            else:
+                refs.analysis_error(
+                    AnalysisError(error["reason"], "syntax"),
+                    surface_for(error["path"]),
+                    error["path"],
+                    1,
+                )
     except (OSError, ValueError) as exc:
-        issue("Taskfile.yml", "parser bridge: " + str(exc))
+        raise ValueError("canonical parser bridge: " + str(exc)) from exc
     task_present = False
     if "taskfile" in bridge:
         taskdata = bridge["taskfile"]
@@ -322,13 +348,14 @@ def inspect(root: Path, node: str = "node") -> dict:
                 if entry["kind"] == "task":
                     refs.task(entry["value"], "R01", "Taskfile.yml", entry["line"])
                 else:
-                    refs.shell(
-                        entry["value"],
-                        "R01",
-                        "Taskfile.yml",
-                        entry["line"],
-                        validate=False,
-                    )
+                    with refs.located(
+                        {
+                            "line": entry["line"],
+                            "position_kind": "field-value",
+                            "field_path": entry["field_path"],
+                        }
+                    ):
+                        refs.shell(entry["value"], "R01", "Taskfile.yml", entry["line"])
             except (OSError, ValueError) as exc:
                 issue("Taskfile.yml", str(exc))
     for p, body in sources.items():
@@ -343,8 +370,10 @@ def inspect(root: Path, node: str = "node") -> dict:
                     not isinstance(v, str) for v in scripts.values()
                 ):
                     raise ValueError("scripts は string mapping が必要")
-                for command in scripts.values():
-                    refs.shell(command, surface, p)
+                positions = value_positions(body)
+                for name, command in scripts.items():
+                    with refs.located(positions[("scripts", name)]):
+                        refs.shell(command, surface, p, refs.position["line"])
             elif surface in ("R04", "R05"):
                 if p.endswith(".py"):
                     refs.python(body, surface, p)
@@ -364,7 +393,14 @@ def inspect(root: Path, node: str = "node") -> dict:
                                 str(Path(p).parent) if value.startswith(".") else ".",
                             )
                         elif kind == "shell":
-                            refs.shell(value, surface, p, line)
+                            with refs.located(
+                                {
+                                    "line": line,
+                                    "line_end": event["line_end"],
+                                    "position_kind": "statement-range",
+                                }
+                            ):
+                                refs.shell(value, surface, p, line)
                         elif kind == "argv":
                             refs.argv(value, surface, p, line)
                             if (
@@ -373,16 +409,28 @@ def inspect(root: Path, node: str = "node") -> dict:
                                 and value[1] == "-c"
                                 and value[2] is not None
                             ):
-                                refs.shell(value[2], surface, p, line)
+                                with refs.located(
+                                    {
+                                        "line": line,
+                                        "line_end": event["line_end"],
+                                        "position_kind": "statement-range",
+                                    }
+                                ):
+                                    refs.shell(value[2], surface, p, line)
             elif surface == "R06":
                 refs.markdown(body, p)
         except (OSError, ValueError, SyntaxError) as exc:
-            issue(p, str(exc))
+            refs.analysis_error(
+                AnalysisError(str(exc), "syntax"),
+                surface,
+                p,
+                getattr(exc, "lineno", 1) or 1,
+            )
     for p, workflow in bridge.get("workflows", {}).items():
         try:
             inspect_workflow(refs, p, workflow, sources[p])
         except (ValueError, TypeError, AttributeError) as exc:
-            issue(p, str(exc))
+            refs.analysis_error(AnalysisError(str(exc), "position"), "R03", p, 1)
     flags = presence + [task_present, *marked]
     state = (
         "bundled"
@@ -397,7 +445,8 @@ def inspect(root: Path, node: str = "node") -> dict:
         state = "inconsistent"
     return {
         "state": state,
-        "coverage": "partial" if refs.partial else "evaluated",
+        "coverage": "partial" if refs.partial or refs.errors else "evaluated",
+        "analysis_errors": refs.errors,
         "references": refs.detected,
         "unevaluated": refs.partial,
         "errors": issues,
@@ -406,6 +455,7 @@ def inspect(root: Path, node: str = "node") -> dict:
 
 
 def report(result: dict, *, detailed: bool = True) -> list[str]:
+    validate(result)
     names = {"bundled": "同梱", "pruned": "完全除去", "inconsistent": "不整合"}
     lines = [
         f"構成: {names[result['state']]} ({result['state']}); "
@@ -415,22 +465,38 @@ def report(result: dict, *, detailed: bool = True) -> list[str]:
         lines.append(
             (
                 "評価できた範囲に専用参照の検出なし。"
-                if not result["references"]
-                else "専用参照を検出。"
+                if not result["references"] and not result["analysis_errors"]
+                else "参照検出または解析失敗あり。"
             )
-            + "cwd 依存参照に未評価あり"
+            + "未評価範囲あり（cwd / placeholder / 文書断片 / 解析失敗は各診断を参照）"
         )
         lines.append(
-            f"未評価 {len(result['unevaluated'])} 件（FAIL ではない）。"
+            f"未評価 {len(result['unevaluated'])} 件（partial 自体は FAIL ではない）。"
             "保証は R01〜R06 の列挙構文のみ。"
         )
-    for key in ("errors", "references", "unevaluated"):
+    for key in ("errors", "analysis_errors", "references", "unevaluated"):
         if key == "unevaluated" and not detailed:
             continue
         for row in result[key]:
+            if row["surface"] is None:
+                lines.append(f"共通解析基盤・位置なし {row['source']}: {row['reason']}")
+                continue
+            position = {
+                k: row[k]
+                for k in (
+                    "line_end",
+                    "position_kind",
+                    "field_path",
+                    "alias_uses",
+                    "shell_range",
+                )
+                if k in row
+            }
             lines.append(
                 f"{row['surface']} {json.dumps(row['source'], ensure_ascii=False)}"
                 f":{row['line']}: {row.get('reason', row.get('target'))}"
+                + (f" [{row['kind']}]" if "kind" in row else "")
+                + (" " + json.dumps(position, ensure_ascii=False) if position else "")
             )
     return lines
 

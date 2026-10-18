@@ -641,8 +641,8 @@ def check_template_docs(diag: Diagnostics) -> None:
         result = scanner.inspect(REPO_ROOT)
         for line in scanner.report(result):
             diag.info(line)
-        if result["state"] == "inconsistent":
-            diag.fail_("テンプレート保守資産が不整合です")
+        if not scanner.successful(result):
+            diag.fail_("テンプレート構成・参照・解析の検査に失敗しました")
     except (ImportError, OSError, ValueError) as exc:
         diag.fail_(f"テンプレート構成を検査できません: {exc}")
 

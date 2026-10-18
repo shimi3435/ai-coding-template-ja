@@ -1,0 +1,15 @@
+{
+  "protocol": 1,
+  "go": {
+    "version": "1.27.2",
+    "url": "https://go.dev/dl/go1.27.2.linux-amd64.tar.gz",
+    "sha256": "ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5"
+  },
+  "source": {
+    "version": "3.14.1",
+    "commit": "a3f0c75d21d918756fa38de8b5d3429efde7948b",
+    "url": "https://codeload.github.com/mvdan/sh/tar.gz/a3f0c75d21d918756fa38de8b5d3429efde7948b",
+    "sha256": "670f50d0ce71fb0aa6d43ee64126e7ca2933d027ba50789db850e9e69acb037d"
+  },
+  "patch_sha256": "3c28310913d824ff941a1b7597504cbda2331f65cbf9d2fa1b089d7517ced18b"
+}

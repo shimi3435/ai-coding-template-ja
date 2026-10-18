@@ -11,6 +11,7 @@ tasks:
       - node repo-tools/entrypoint.mjs runtime-preflight
       - npm ci --ignore-scripts
       - uv sync --inexact
+      - uv run --no-sync python scripts/setup-shell-parser.py
       - uv run pre-commit install
 
   setup:node:

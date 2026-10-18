@@ -1,7 +1,7 @@
 # ai-coding-template-ja
 
 研究者が AI コーディングを安全に始める開発基盤を提供する、日本語対応の研究用 Python
-プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。作成直後に `./scripts/check.sh` /
+プロジェクトテンプレート（Codex / Claude Code、Ubuntu amd64（x86_64）対象）。作成直後に `./scripts/check.sh` /
 `task doctor` が green になる最小実用セットに、必要なものだけ opt-in で足していく。
 
 必須ランタイムは Node.js 24 LTS、npm、Python 3.14 以上。リポジトリの既定は
@@ -34,16 +34,21 @@
 ## 2 回目以降
 
 ```bash
-task setup     # npm ci --ignore-scripts ＋ uv sync --inexact ＋ pre-commit install
+task setup     # Node / Python dependency ＋ 固定 shell parser ＋ pre-commit install
 ./scripts/check.sh # Node contracts / TypeScript / Node test ＋既存 Python checks
 task doctor    # 環境診断（read-only・FAIL ゼロで green）
 ```
+
+shell 参照検査には固定 mvdan/sh と限定 patch を使用する。初回 `task setup` は固定 Go と source を
+hash 検証して repository 内で build し、以後の検査は offline で実行する。system Go は不要。
+対象外の OS / CPU は取得前に停止する。準備・破損時の対応と解析範囲は
+[固定 parser と診断の契約](docs/reference/prune-template-assets.md#固定-parser-と解析診断)を参照する。
 
 ## 主なタスク
 
 | タスク | 内容 |
 | --- | --- |
-| `task setup` | `npm ci --ignore-scripts` ＋ Python inexact sync（導入済み extras を保持）＋ pre-commit hooks |
+| `task setup` | `npm ci --ignore-scripts` ＋ Python inexact sync（導入済み extras を保持）＋ 固定 shell parser 準備 ＋ pre-commit hooks |
 | `task setup:node` | lock 済み Node dependency を `npm ci --ignore-scripts` で導入 |
 | `task setup:research` ほか | extras を加算導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
 | `./scripts/check.sh` | 品質チェック一式 |

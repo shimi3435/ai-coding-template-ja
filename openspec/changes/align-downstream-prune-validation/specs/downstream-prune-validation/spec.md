@@ -6,7 +6,7 @@
 Node.js 24 / npm、Python >=3.14、既存 runtime / dependency / Taskfile 契約、remote / legal / links の
 offline 検証を維持する。`TEMPLATE_VERSION` の存在と既存の単一行 SemVer 形式を検証し、
 特定値を要求しない。自作 Skill の内容 hash lock を復活させない。
-通常検証に未使用 host・認証・ネットワークを要求しない。setup の既存の dependency 取得は別である。
+通常検証に未使用 host・認証・ネットワークを要求しない。setup の dependency 取得は別であり、固定 parser の準備と artifact 検査は design §8 に従う。
 下流向け3リファレンスは design の移設先に保持する。
 Taskfile の公開受理契約は拡張しない。R01 の専用参照検出は既存 canonical validator の
 成功した構造だけを対象にし、`dir` 等の既存の未対応設定は canonical 検証で拒否する。
@@ -26,6 +26,11 @@ Taskfile の公開受理契約は拡張しない。R01 の専用参照検出は�
 #### Scenario: canonical Taskfile 契約を維持
 - **WHEN** Taskfile に `dir: scripts` 等の既存 validator が許可しない設定を追加する
 - **THEN** canonical 検証で拒否し、prune scanner の有効入力として受理・再解釈しない。既存の受理構文では canonical 検証後に専用参照を検査する
+
+
+#### Scenario: 固定 parser の準備と offline 実行
+- **WHEN** Ubuntu amd64 で明示 setup を行い、その後通常検査を空 HOME・通信遮断・Go のない PATH で実行する
+- **THEN** 固定入力を検証して準備した parser を使う。欠落・破損・固定入力不一致は非成功とし、通常検査で取得・build・旧 lexer fallback を行わない。対象外 OS / CPU は取得・build 前に拒否する
 
 ### Requirement: DPV-2 保守検証の明示分離
 システムは SHALL、保守専用の release・履歴・出荷契約を `task check:template` に分離し、テンプレート CI で通常 gate とともに実行する。
@@ -76,6 +81,7 @@ active change を残した状態で Task 5 の gate を成功させてから clo
 現存 tree から必須集合を生成せず、内容 hash は判定に使わない。
 通常 gate と prune は不整合を非ゼロ終了にする。doctor は同じ状態を報告し、
 不整合は既存の機械コア破損に相当する FAIL、完全除去は正常な状態として扱う。
+解析エラーの独立報告と全入口の共通成功条件は design §8 に従い、構成表示だけで成功しない。
 直接参照の検出は design §3.2 の R01〜R06 と C / P / J / M 構文規則に限定する。
 説明文の path / 名称、comment、単なるデータと実行参照を区別する。
 負例は K05 の JSON に集約し、通常 test code / import を一括除外しない。
@@ -88,6 +94,7 @@ R03 は `step > job defaults > workflow defaults > repository root` の effectiv
 固定 root 初期化・特定ファイルの例外を作らず、cwd 非依存の専用 task 名・絶対 path は検査し続ける。
 構成状態と解析範囲を分けて報告し、未評価だけでは通常 gate / doctor / preview / apply /
 適用後検査 / no-op を失敗させない。検出した専用参照や既存契約違反・破損・変更保護違反の拒否は維持する。
+解析エラーを含む未評価は非成功とし、cwd / placeholder / 文書分類だけの partial と区別する。
 完全除去とは固定資産・専用項目の不在と評価できた範囲での専用参照非検出であり、未評価と併存できる。
 未評価を「参照なし」へ置き換えず、解析範囲・理由を示して保証を限定する。
 R01〜R06 は維持し、変数・任意 wrapper・呼出元 cwd の追跡へ保証を拡張しない。
@@ -131,6 +138,22 @@ R01〜R06 は維持し、変数・任意 wrapper・呼出元 cwd の追跡へ保
 #### Scenario: 未評価と検出済み参照の併存
 - **WHEN** cwd 不明の shell 単位に、対応構文による `task check:template` または repository 内の専用資産の絶対 path 呼出がある
 - **THEN** その専用参照を検出して拒否し、未評価情報も報告する。他の単位の静的相対参照や canonical 契約違反も検査から外さない
+
+#### Scenario: 解析エラーと構成状態
+- **WHEN** 資産構成を判定できるが shell 解析・parser dependency・protocol・位置対応に失敗する
+- **THEN** state を保持し analysis_errors と未評価範囲を報告する。通常 gate / doctor / preview / apply / postcheck / no-op は非成功とし、他単位の検出済み参照も残す。JSON field と位置は design §8 に従う
+
+#### Scenario: 文書の閉じた入力分類
+- **WHEN** R06 に説明データ・式やoptionの断片・placeholder・認識可能な command がある
+- **THEN** design §8 の順序と閉じた一覧で分類する。全体がJSONなら除外、式断片と専用参照の混在はpartialと違反を併記、認識済みcommandの不正引数は解析エラーとする。parser失敗後のprose fallbackは認めない
+
+#### Scenario: YAML 定義と alias の位置
+- **WHEN** 同値の name / run、別 step の同値run、scalar / step / job alias がある
+- **THEN** node rangeとfield pathで区別し、field value定義位置を主表示、alias利用位置を併記する。decoded shellのstatement相対範囲をYAML行へ単純加算しない
+
+#### Scenario: case pattern と展開境界
+- **WHEN** command substitution 内にcase patternの閉じ括弧と専用参照があり、その後に外側の専用commandがある
+- **THEN** 展開内部の参照は除外し、外側の参照を検出する。既存の有効なBash入力の受理を維持する
 
 ### Requirement: DPV-4 固定範囲の read-only preview
 システムは SHALL、既存の `task prune-template-docs` を既定の read-only preview とし、削除・書換え・保持対象と適用可否を表示する。
@@ -194,6 +217,10 @@ GitHub の PR / Issue / branch 削除と host 登録解除は行わない。
 #### Scenario: 途中の I/O 失敗
 - **WHEN** 一部の共有編集または削除後に処理が失敗する
 - **THEN** 非ゼロ終了し、対象限定の復旧手順を表示して停止する
+
+#### Scenario: 適用後の解析失敗
+- **WHEN** postcheck が pruned を返すが analysis_errors が空でない
+- **THEN** 失敗として変更済み・失敗・未処理・復旧基準commitと解析診断を報告し、自動rollbackしない
 
 #### Scenario: 中断後の再試行
 - **WHEN** kill や通常エラー後に prune を再実行する

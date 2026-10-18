@@ -72,6 +72,7 @@ def test_ci_runs_the_shared_offline_gate_after_pinned_setup_and_rename() -> None
             "node repo-tools/entrypoint.mjs runtime-preflight",
             "uv sync --locked",
             "npm ci --ignore-scripts",
+            "uv run --no-sync python scripts/setup-shell-parser.py",
         ]
         if job_name == "rename-smoke":
             preparation.append(

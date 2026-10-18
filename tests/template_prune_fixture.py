@@ -93,6 +93,7 @@ def copy_runtime(root: Path) -> None:
         shutil.copy2(source, root / "repo-tools" / source.name)
     for name in (
         "template-prune-bridge.ts",
+        "template-prune-yaml.ts",
         "template-prune-js.ts",
         "repository-taskfile.ts",
         "repository-taskfile-templates.ts",
@@ -102,3 +103,12 @@ def copy_runtime(root: Path) -> None:
         ROOT / "scripts/prune-template-docs.py", root / "scripts/prune-template-docs.py"
     )
     (root / "node_modules").symlink_to(ROOT / "node_modules", target_is_directory=True)
+
+    shutil.copy2(
+        ROOT / "repo-tools/shell_parser_artifact.py",
+        root / "repo-tools/shell_parser_artifact.py",
+    )
+    shutil.copytree(ROOT / "repo-tools/shell-parser", root / "repo-tools/shell-parser")
+    shutil.copytree(ROOT / ".cache/shell-parser", root / ".cache/shell-parser")
+    with (root / ".gitignore").open("a") as stream:
+        stream.write("\n.cache/\n")

@@ -1,0 +1,384 @@
+diff --git a/expand/expand.go b/expand/expand.go
+index b595860..d8374e2 100644
+--- a/expand/expand.go
++++ b/expand/expand.go
+@@ -562,6 +562,11 @@ func (cfg *Config) wordField(wps []syntax.WordPart, ql quoteLevel) ([]fieldPart,
+ 					b := s[i]
+ 					if b == '\\' && i+1 < len(s) {
+ 						switch s[i+1] {
++						case '\n':
++							if ql == quoteHeredoc {
++								i++
++								continue
++							}
+ 						case '"':
+ 							if ql != quoteDouble {
+ 								break
+diff --git a/syntax/filetests_test.go b/syntax/filetests_test.go
+index ad7688d..86519a5 100644
+--- a/syntax/filetests_test.go
++++ b/syntax/filetests_test.go
+@@ -1507,7 +1507,15 @@ var fileTests = []fileTestCase{
+ 				Word: litWord("EOF"),
+ 				Hdoc: word(lit("bar"), lit("baz\n")),
+ 			}},
+-		}),
++		}, langResolvedVariants&^langBashLike),
++		langFile(&Stmt{
++			Cmd: litCall("foo"),
++			Redirs: []*Redirect{{
++				Op:   Hdoc,
++				Word: litWord("EOF"),
++				Hdoc: litWord("bar\\\nbaz\n"),
++			}},
++		}, langBashLike),
+ 	),
+ 	fileTest(
+ 		[]string{
+diff --git a/syntax/lexer.go b/syntax/lexer.go
+index 82a5c0c..ea575c6 100644
+--- a/syntax/lexer.go
++++ b/syntax/lexer.go
+@@ -469,6 +469,16 @@ func (p *Parser) peekTwo() (byte, byte) {
+ 	return p.bs[p.bsp], p.bs[p.bsp+1]
+ }
+ 
++// redirRune reads a redirection operator while preserving physical positions.
++// Bash removes escaped newlines before matching multi-character operators.
++func (p *Parser) redirRune() rune {
++	r := p.rune()
++	for p.lang.in(langBashLike) && r == escNewl {
++		r = p.rune()
++	}
++	return r
++}
++
+ func (p *Parser) regToken(r rune) token {
+ 	switch r {
+ 	case '\'':
+@@ -482,28 +492,28 @@ func (p *Parser) regToken(r rune) token {
+ 		// properly handle backslashes in the lexer.
+ 		return bckQuote
+ 	case '&':
+-		switch p.rune() {
++		switch p.redirRune() {
+ 		case '&':
+-			p.rune()
++			p.redirRune()
+ 			return andAnd
+ 		case '>':
+-			switch p.rune() {
++			switch p.redirRune() {
+ 			case '|':
+-				p.rune()
++				p.redirRune()
+ 				return rdrAllClob
+ 			case '!':
+ 				if p.lang.in(LangZsh) {
+-					p.rune()
++					p.redirRune()
+ 					return rdrAllClob
+ 				}
+ 			case '>':
+-				switch p.rune() {
++				switch p.redirRune() {
+ 				case '|':
+-					p.rune()
++					p.redirRune()
+ 					return appAllClob
+ 				case '!':
+ 					if p.lang.in(LangZsh) {
+-						p.rune()
++						p.redirRune()
+ 						return appAllClob
+ 					}
+ 				}
+@@ -512,12 +522,12 @@ func (p *Parser) regToken(r rune) token {
+ 			return rdrAll
+ 		case '|':
+ 			if p.lang.in(LangZsh) {
+-				p.rune()
++				p.redirRune()
+ 				return andPipe
+ 			}
+ 		case '!':
+ 			if p.lang.in(LangZsh) {
+-				p.rune()
++				p.redirRune()
+ 				return andBang
+ 			}
+ 		}
+@@ -599,84 +609,84 @@ func (p *Parser) regToken(r rune) token {
+ 		}
+ 		return semicolon
+ 	case '<':
+-		switch p.rune() {
++		switch p.redirRune() {
+ 		case '<':
+-			switch p.rune() {
++			switch p.redirRune() {
+ 			case '-':
+-				p.rune()
++				p.redirRune()
+ 				return dashHdoc
+ 			case '<':
+-				p.rune()
++				p.redirRune()
+ 				return wordHdoc
+ 			}
+ 			return hdoc
+ 		case '>':
+-			p.rune()
++			p.redirRune()
+ 			return rdrInOut
+ 		case '&':
+-			p.rune()
++			p.redirRune()
+ 			return dplIn
+ 		case '(':
+ 			if !p.lang.in(langBashLike | LangZsh) {
+ 				break
+ 			}
+-			p.rune()
++			p.redirRune()
+ 			return cmdIn
+ 		}
+ 		return rdrIn
+ 	case '>':
+-		switch p.rune() {
++		switch p.redirRune() {
+ 		case '>':
+-			switch p.rune() {
++			switch p.redirRune() {
+ 			case '|':
+-				p.rune()
++				p.redirRune()
+ 				return appClob
+ 			case '!':
+ 				if p.lang.in(LangZsh) {
+-					p.rune()
++					p.redirRune()
+ 					return appClob
+ 				}
+ 			case '&':
+ 				if !p.lang.in(LangZsh) {
+ 					break
+ 				}
+-				switch p.rune() {
++				switch p.redirRune() {
+ 				case '|':
+-					p.rune()
++					p.redirRune()
+ 					return appAllClob // >>&| is an alias for &>>|
+ 				case '!':
+-					p.rune()
++					p.redirRune()
+ 					return appAllClob // >>&! is an alias for &>>|
+ 				}
+ 				return appAll // >>& is an alias for &>>
+ 			}
+ 			return appOut
+ 		case '&':
+-			r = p.rune()
++			r = p.redirRune()
+ 			if p.lang.in(LangZsh) {
+ 				switch r {
+ 				case '|':
+-					p.rune()
++					p.redirRune()
+ 					return rdrAllClob // >&| is an alias for &>|
+ 				case '!':
+-					p.rune()
++					p.redirRune()
+ 					return rdrAllClob // >&! is an alias for &>|
+ 				}
+ 			}
+ 			return dplOut
+ 		case '|':
+-			p.rune()
++			p.redirRune()
+ 			return rdrClob
+ 		case '!':
+ 			if p.lang.in(LangZsh) {
+-				p.rune()
++				p.redirRune()
+ 				return rdrClob
+ 			}
+ 		case '(':
+ 			if !p.lang.in(langBashLike | LangZsh) {
+ 				break
+ 			}
+-			p.rune()
++			p.redirRune()
+ 			return cmdOut
+ 		}
+ 		return rdrOut
+@@ -1188,7 +1198,9 @@ func (p *Parser) advanceLitHdoc(r rune) {
+ 	lastTok := p.tok
+ 	for r == escNewl {
+ 		r = p.rune()
+-		lastTok = _Lit
++		if !p.lang.in(langBashLike) {
++			lastTok = _Lit
++		}
+ 	}
+ 	p.pos = p.nextPos()
+ 
+@@ -1201,7 +1213,13 @@ func (p *Parser) advanceLitHdoc(r rune) {
+ 	stop := p.hdocStops[len(p.hdocStops)-1]
+ 	for ; ; r = p.rune() {
+ 		switch r {
+-		case escNewl, '$':
++		case escNewl:
++			if p.lang.in(langBashLike) {
++				p.litBs = append(p.litBs, '\\', '\n')
++				continue
++			}
++			fallthrough
++		case '$':
+ 			p.val = p.endLit()
+ 			return
+ 		case '\\': // escaped byte follows
+@@ -1228,6 +1246,9 @@ func (p *Parser) advanceLitHdoc(r rune) {
+ 				if r != runeEOF && len(line) > 0 {
+ 					line = line[:len(line)-1] // minus trailing character
+ 				}
++				if p.lang.in(langBashLike) {
++					line = bytes.ReplaceAll(line, []byte("\\\n"), nil)
++				}
+ 				if bytes.Equal(line, stop) {
+ 					p.tok = _LitWord
+ 					p.val = p.endLit()[:lStart]
+diff --git a/syntax/parser.go b/syntax/parser.go
+index bee1856..5164a72 100644
+--- a/syntax/parser.go
++++ b/syntax/parser.go
+@@ -714,7 +714,13 @@ func (p *Parser) unquotedWordBytes(w *Word) ([]byte, bool) {
+ 	buf := make([]byte, 0, 4)
+ 	didUnquote := false
+ 	for _, wp := range w.Parts {
+-		buf, didUnquote = p.unquotedWordPart(buf, wp, false)
++		var quoted bool
++		buf, quoted = p.unquotedWordPart(buf, wp, false)
++		if p.lang.in(langBashLike) {
++			didUnquote = didUnquote || quoted
++		} else {
++			didUnquote = quoted
++		}
+ 	}
+ 	return buf, didUnquote
+ }
+@@ -723,7 +729,7 @@ func (p *Parser) unquotedWordPart(buf []byte, wp WordPart, quotes bool) (_ []byt
+ 	switch wp := wp.(type) {
+ 	case *Lit:
+ 		for i := 0; i < len(wp.Value); i++ {
+-			if b := wp.Value[i]; b == '\\' && !quotes {
++			if b := wp.Value[i]; b == '\\' && (!quotes || p.lang.in(langBashLike) && i+1 < len(wp.Value) && strings.ContainsRune("$`\"\\", rune(wp.Value[i+1]))) {
+ 				if i++; i < len(wp.Value) {
+ 					buf = append(buf, wp.Value[i])
+ 				}
+diff --git a/syntax/parser_test.go b/syntax/parser_test.go
+index 121f0a2..153471f 100644
+--- a/syntax/parser_test.go
++++ b/syntax/parser_test.go
+@@ -846,7 +846,8 @@ var errorCases = []errorCase{
+ 	),
+ 	errCase(
+ 		"<<EOF\n\\\nEOF",
+-		langErr("1:1: unclosed here-document `EOF`"),
++		// Bash joins this empty continuation before testing the delimiter.
++		langErr("1:1: unclosed here-document `EOF`", langResolvedVariants&^langBashLike),
+ 		flipConfirmAll, // why does mksh allow this?
+ 	),
+ 	errCase(
+diff --git a/syntax/issue51_test.go b/syntax/issue51_test.go
+new file mode 100644
+index 0000000..09c6389
+--- /dev/null
++++ b/syntax/issue51_test.go
+@@ -0,0 +1,85 @@
++package syntax_test
++
++import (
++	"mvdan.cc/sh/v3/syntax"
++	"strings"
++	"testing"
++)
++
++func TestIssue51BashCompatibility(t *testing.T) {
++	cases := []struct {
++		name, source string
++		wantTask     bool
++	}{
++		{"shell-combined-redirect-continued-append", "task &>\\\n>/dev/null check:template", true},
++		{"shell-combined-redirect-continued-fd", "task 2>\\\n&1 check:template", true},
++		{"shell-heredoc-header-here-string", "cat <\\\n<<EOF\ntask check:template\n", true},
++		{"shell-heredoc-header-here-document", "cat <\\\n<EOF\ntask check:template\nEOF\n", false},
++		{"shell-heredoc-header-quoted-delimiter", "cat <<\"E\\$F\"\nprintf data\nE$F\ntask check:template\n", true},
++		{"shell-heredoc-payload-joined-delimiter", "cat <<EOF\nEO\\\nF\ntask check:template\n", true},
++		{"shell-heredoc-payload-tabs-joined-delimiter", "cat <<-EOF\n\tEO\\\nF\ntask check:template\n", true},
++		{"shell-heredoc-payload-continued-unquoted-delimiter", "cat <<EO\\\nF\nEO\\\nF\ntask check:template\n", true},
++	}
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"empty-continuation-delimiter", "<<EOF\n\\\nEOF\ntask check:template\n", true})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"quoted-prefix", "cat <<'E'OF\nEO\\\nF\ntask check:template\nEOF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"quoted-suffix", "cat <<EO'F'\nEO\\\nF\ntask check:template\nEOF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"quoted-empty-middle", "cat <<E''OF\nEO\\\nF\ntask check:template\nEOF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"quoted-backslash-literal", "cat <<\"E\\qF\"\ntask check:template\nE\\qF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"quoted-payload-no-join", "cat <<'EOF'\nEO\\\nF\ntask check:template\nEOF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"even-backslashes", "cat <<EOF\nEO\\\\\nF\ntask check:template\nEOF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"tab-after-continuation", "cat <<-EOF\nEO\\\n\tF\ntask check:template\nEOF\n", false})
++
++	cases = append(cases, struct {
++		name, source string
++		wantTask     bool
++	}{"multiple-continuations", "cat <<EOF\nE\\\nO\\\nF\ntask check:template\n", true})
++
++	for _, c := range cases {
++		t.Run(c.name, func(t *testing.T) {
++			f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(c.source), "")
++			if err != nil {
++				t.Fatal(err)
++			}
++			found := false
++			for _, s := range f.Stmts {
++				if call, ok := s.Cmd.(*syntax.CallExpr); ok && len(call.Args) > 1 && call.Args[0].Lit() == "task" && call.Args[1].Lit() == "check:template" {
++					found = true
++				}
++			}
++			if found != c.wantTask {
++				t.Fatalf("task outside payload=%v, want %v", found, c.wantTask)
++			}
++		})
++	}
++}

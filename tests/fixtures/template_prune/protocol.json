@@ -1,0 +1,261 @@
+[
+  {
+    "name": "surface-list",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": [
+            "R04"
+          ],
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": "cwd",
+          "reason": "dynamic cwd"
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "surface-dict",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": {},
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": "cwd",
+          "reason": "dynamic cwd"
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "surface-int",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": 1,
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": "cwd",
+          "reason": "dynamic cwd"
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "kind-list",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": "R04",
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": [
+            "cwd"
+          ],
+          "reason": "dynamic cwd"
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "kind-dict",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": "R04",
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": {},
+          "reason": "dynamic cwd"
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "kind-int",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": "R04",
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": 1,
+          "reason": "dynamic cwd"
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "position_kind-list",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": "R04",
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": "cwd",
+          "reason": "dynamic cwd",
+          "position_kind": [
+            "statement-range"
+          ]
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "position_kind-dict",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": "R04",
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": "cwd",
+          "reason": "dynamic cwd",
+          "position_kind": {}
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "position_kind-int",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [],
+      "unevaluated": [
+        {
+          "surface": "R04",
+          "source": "scripts/probe.sh",
+          "line": 1,
+          "kind": "cwd",
+          "reason": "dynamic cwd",
+          "position_kind": 1
+        }
+      ],
+      "edits": {}
+    }
+  },
+  {
+    "name": "explicit-null",
+    "valid": true,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [
+        {
+          "surface": null,
+          "source": ".cache/shell-parser/current.json",
+          "line": null,
+          "kind": "dependency",
+          "reason": "missing parser"
+        }
+      ],
+      "unevaluated": [],
+      "edits": {}
+    }
+  },
+  {
+    "name": "missing-surface",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [
+        {
+          "source": ".cache/shell-parser/current.json",
+          "line": null,
+          "kind": "dependency",
+          "reason": "missing parser"
+        }
+      ],
+      "unevaluated": [],
+      "edits": {}
+    }
+  },
+  {
+    "name": "missing-line",
+    "valid": false,
+    "result": {
+      "state": "pruned",
+      "coverage": "partial",
+      "references": [],
+      "errors": [],
+      "analysis_errors": [
+        {
+          "surface": null,
+          "source": ".cache/shell-parser/current.json",
+          "kind": "dependency",
+          "reason": "missing parser"
+        }
+      ],
+      "unevaluated": [],
+      "edits": {}
+    }
+  }
+]

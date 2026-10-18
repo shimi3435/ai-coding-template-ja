@@ -1,30 +1,21 @@
-"""C 規則の literal 単純コマンド解析。展開・呼出・cwd 遷移を実行しない。"""
+"""固定 mvdan/sh AST に対する C 規則。shell source は実行しない。"""
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from dataclasses import dataclass
 
-_REDIRECTION = re.compile(
-    "|".join(
-        r"(?:\\\n)*".join(re.escape(char) for char in operator)
-        for operator in (
-            "&>>",
-            "&>",
-            "<<<",
-            "<<-",
-            "<<",
-            ">>",
-            "<>",
-            ">&",
-            "<&",
-            ">|",
-            ">",
-            "<",
-        )
-    )
-)
+from shell_parser_artifact import prepared_parser
+
+
+class AnalysisError(ValueError):
+    def __init__(self, reason: str, kind: str = "syntax"):
+        super().__init__(reason)
+        self.kind = kind
+        self.offset: int | None = None
+        self.line = 1
 
 
 @dataclass
@@ -32,297 +23,250 @@ class Word:
     value: str
     literal: bool = True
     line: int = 1
+    line_end: int = 1
+    opaque_kind: str | None = None
 
 
-def _expansion_end(source: str, i: int) -> int:
-    """展開内部を評価せず、単純コマンドと header で同じ終端を使う。"""
-    ch = source[i]
-    if ch == "`":
-        j = i + 1
-        while j < len(source) and source[j] != "`":
-            j += 2 if source[j] == "\\" else 1
-        j = min(j + 1, len(source))
-    elif source[i : i + 2] in ("$(", "${"):
-        opening = source[i + 1]
-        closing = ")" if opening == "(" else "}"
-        if opening == "(" and source[i : i + 3] != "$((":
-            # substitution の本文でも comment / payload の括弧や引用は構文ではない。
-            # 停止位置を直接使い、同じ nested expansion を再走査しない。
-            return (
-                i + 2 + len(_mask_heredoc_payloads(source[i + 2 :], substitution=True))
-            )
-        depth = 1
-        j = i + 2
-        inner_quote = ""
-        while j < len(source) and depth:
-            c = source[j]
-            if c == "\\" and inner_quote != "'":
-                j += 2
-                continue
-            if c in "$`" and inner_quote != "'":
-                j = _expansion_end(source, j)
-                continue
-            if c in "'\"":
-                if inner_quote == c:
-                    inner_quote = ""
-                elif not inner_quote:
-                    inner_quote = c
-            elif not inner_quote:
-                if c == opening == "(":
-                    depth += 1
-                elif c == closing:
-                    depth -= 1
-            j += 1
-    else:
-        match = re.match(r"\$[A-Za-z_][A-Za-z_0-9]*|\$[0-9@*#?$!-]", source[i:])
-        j = i + (len(match[0]) if match else 1)
-    return min(j, len(source))
+_NODE_TYPES = frozenset(
+    """File Lit SglQuoted DblQuoted CmdSubst ParamExp ArithmExp
+ProcSubst ExtGlob BraceExp CallExpr Subshell Block IfClause WhileClause ForClause
+WordIter CStyleLoop BinaryCmd FuncDecl ArithmCmd LetClause CaseClause CaseItem
+TestClause DeclClause TimeClause CoprocClause UnaryArithm BinaryArithm ParenArithm
+UnaryTest BinaryTest ParenTest ArrayExpr ArrayElem Redirect Stmt Word Assign Comment
+""".split()
+)
 
 
-def _heredoc_delimiter(source: str, offset: int) -> tuple[str, int, bool] | None:
-    """展開せずに delimiter word の引用と継続行だけを除去する。"""
-    quote = ""
-    value = ""
-    started = False
-    quoted = False
-    while offset < len(source):
-        char = source[offset]
-        if not started and char in " \t":
-            offset += 1
-            continue
-        if char == "\\" and quote != "'" and offset + 1 < len(source):
-            following = source[offset + 1]
-            offset += 2
-            if following != "\n":
-                quoted = True
-                if quote == '"' and following not in '$`"\\':
-                    value += "\\"
-                value += following
-                started = True
-            continue
-        if char in "'\"" and (not quote or quote == char):
-            quoted = True
-            quote = "" if quote else char
-            started = True
-            offset += 1
-            continue
-        if not quote and char in " \t\r\n;&|<>()":
-            break
-        value += char
-        started = True
-        offset += 1
-    return (value, offset, quoted) if started else None
-
-
-def _mask_heredoc_payloads(source: str, *, substitution: bool = False) -> str:
-    """header を物理行に分断せず読み、payload / comment の位置と改行を保って隠す。"""
-    masked = list(source)
-    pending: list[tuple[str, bool, bool]] = []
-    quote = ""
-    word_started = False
-    depth = 1
-    offset = 0
-    while offset < len(source):
-        char = source[offset]
-        if char == "\\" and quote != "'":
-            if source[offset + 1 : offset + 2] != "\n":
-                word_started = True
-            offset += 2
-            continue
-        if char in "'\"" and (not quote or quote == char):
-            quote = "" if quote else char
-            word_started = True
-            offset += 1
-            continue
-        if quote != "'" and char in "$`":
-            offset = _expansion_end(source, offset)
-            word_started = True
-            continue
-        if not quote:
-            if char == "#" and not word_started:
-                end = source.find("\n", offset)
-                end = len(source) if end < 0 else end
-                masked[offset:end] = " " * (end - offset)
-                offset = end
-                continue
-            operator = _REDIRECTION.match(source, offset)
-            if operator is not None:
-                kind = operator[0].replace("\\\n", "")
-                offset = operator.end()
-                word_started = False
-                if kind in ("<<", "<<-"):
-                    delimiter = _heredoc_delimiter(source, offset)
-                    if delimiter is not None:
-                        value, offset, quoted = delimiter
-                        pending.append((value, kind == "<<-", quoted))
-                        word_started = True
-                continue
-            if char == "\n" and pending:
-                offset += 1
-                for delimiter, tabs, quoted in pending:
-                    logical_line = ""
-                    while offset < len(source):
-                        end = source.find("\n", offset)
-                        end = len(source) if end < 0 else end + 1
-                        line = source[offset:end]
-                        for index in range(offset, end):
-                            if masked[index] not in "\r\n":
-                                masked[index] = " "
-                        offset = end
-                        content = line.rstrip("\r\n")
-                        backslashes = len(content) - len(content.rstrip("\\"))
-                        continued = (
-                            not quoted and line.endswith("\n") and backslashes % 2
-                        )
-                        logical_line += content[:-1] if continued else content
-                        if continued:
-                            continue
-                        # <<- の tab 除去は継続行を結合した後の行頭にだけ適用する。
-                        if (
-                            logical_line.lstrip("\t") if tabs else logical_line
-                        ) == delimiter:
-                            break
-                        logical_line = ""
-                pending.clear()
-                word_started = False
-                continue
-            if substitution:
-                if char == "(":
-                    depth += 1
-                elif char == ")":
-                    depth -= 1
-                    if not depth:
-                        # 後続の sibling substitution は呼出元で一度だけ読む。
-                        return "".join(masked[: offset + 1])
-        # 継続行は word を切らず、引用済み空白も comment の開始境界にしない。
-        word_started = bool(quote) or char not in " \t\r\n;&|()<>"
-        offset += 1
-    return "".join(masked)
-
-
-def commands(source: str, *, validate: bool = True) -> list[list[Word]]:
-    if validate:
-        syntax_check = subprocess.run(
-            ["bash", "-n"], input=source, text=True, capture_output=True
-        )
-        if syntax_check.returncode:
-            raise ValueError(syntax_check.stderr.strip())
-    source = _mask_heredoc_payloads(source)
-    result: list[list[Word]] = []
-    argv: list[Word] = []
-    value = ""
-    literal = True
-    started = False
-    plain_word = True
-    redirect_operand = False
-    line = 1
-    word_line = 1
-    quote = ""
-    i = 0
-
-    def word() -> None:
-        nonlocal value, literal, started, plain_word, redirect_operand
-        if started:
-            if not redirect_operand:
-                argv.append(Word(value, literal, word_line))
-            redirect_operand = False
-        value = ""
-        literal = True
-        started = False
-        plain_word = True
-
-    def command() -> None:
-        nonlocal redirect_operand
-        word()
-        redirect_operand = False
-        if argv:
-            result.append(argv.copy())
-            argv.clear()
-
-    while i < len(source):
-        ch = source[i]
-        if not started:
-            word_line = line
-        if ch == "\\" and quote != "'":
-            if i + 1 < len(source):
-                following = source[i + 1]
-                if following == "\n":
-                    line += 1
-                else:
-                    plain_word = False
-                    if quote == '"' and following not in '$`"\\':
-                        value += "\\"
-                    value += following
-                    started = True
-                i += 2
-                continue
-        if ch == "'" and quote != '"':
-            plain_word = False
-            quote = "" if quote else "'"
-            started = True
-            i += 1
-            continue
-        if ch == '"' and quote != "'":
-            plain_word = False
-            quote = "" if quote else '"'
-            started = True
-            i += 1
-            continue
-        if quote != "'" and ch in "$`":
-            literal = False
-            started = True
-            # command substitution / parameter expansion の内部は検査しない。
-            j = _expansion_end(source, i)
-            value += source[i:j]
-            line += source[i:j].count("\n")
-            i = j
-            continue
-        if not quote and ch == "#" and not started:
-            j = source.find("\n", i)
-            i = len(source) if j < 0 else j
-            continue
-        redirection = None if quote else _REDIRECTION.match(source, i)
-        if not quote and ch in ";&|(){}\n" and redirection is None:
-            command()
-            if ch == "\n":
-                line += 1
-            i += 1
-            continue
-        if not quote and ch.isspace():
-            word()
-            i += 1
-            continue
-        if redirection is not None:
-            if (
-                ch in "<>"
-                and started
-                and literal
-                and plain_word
-                and value.isascii()
-                and value.isdecimal()
+def validate_tree(tree: dict, size: int) -> None:
+    def visit(value):
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, dict):
+            if "Type" in value and (
+                not isinstance(value["Type"], str) or value["Type"] not in _NODE_TYPES
             ):
-                value = ""
-                started = False
-            word()
-            # operand も通常の word と同じ引用連結・展開境界で読み、argv には加えない。
-            redirect_operand = True
-            line += redirection[0].count("\n")
-            i = redirection.end()
-            continue
-        value += ch
-        started = True
-        if ch == "\n":
-            line += 1
-        i += 1
-    command()
-    normalized = []
-    for argv in result:
-        while argv and (
-            re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", argv[0].value)
-            or argv[0].value
-            in ("command", "exec", "then", "do", "else", "if", "while", "until", "!")
+                raise ValueError("unknown parser node Type")
+            for key in ("Stmts", "Args", "Parts"):
+                if key in value and not isinstance(value[key], list):
+                    raise ValueError(f"parser {key} is not array")
+            if value.get("Type") == "Lit" and not isinstance(value.get("Value"), str):
+                raise ValueError("parser Lit Value is not string")
+            for key in ("Pos", "End"):
+                if key in value:
+                    pos = value[key]
+                    if (
+                        not isinstance(pos, dict)
+                        or type(pos.get("Offset")) is not int
+                        or not 0 <= pos["Offset"] <= size
+                    ):
+                        raise AnalysisError(
+                            "parser position outside source", "position"
+                        )
+                    if any(
+                        type(pos.get(k)) is not int or pos[k] < 1
+                        for k in ("Line", "Col")
+                    ):
+                        raise AnalysisError("parser line / column invalid", "position")
+            if (
+                "Pos" in value
+                and "End" in value
+                and value["Pos"]["Offset"] > value["End"]["Offset"]
+            ):
+                raise AnalysisError("parser range reversed", "position")
+            for child in value.values():
+                visit(child)
+
+    visit(tree)
+
+
+def parse(source: str) -> dict:
+    try:
+        binary = prepared_parser()
+    except (OSError, ValueError) as exc:
+        raise AnalysisError(str(exc), "dependency") from exc
+    try:
+        result = subprocess.run(
+            [str(binary)], input=source.encode(), capture_output=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise AnalysisError(str(exc), "io") from exc
+    if result.returncode:
+        reason = result.stderr.decode("utf-8", errors="replace")
+        error = AnalysisError(
+            reason, "syntax" if result.returncode == 1 else "protocol"
+        )
+        if error.kind == "syntax":
+            position = re.match(r"(\d+):(\d+):", reason)
+            if position:
+                line, col = map(int, position.groups())
+                lines = source.encode().split(b"\n")
+                if 1 <= line <= len(lines) and 1 <= col <= len(lines[line - 1]) + 1:
+                    error.offset = sum(len(v) + 1 for v in lines[: line - 1]) + col - 1
+                else:
+                    error.kind = "position"
+            else:
+                error.kind = "protocol"
+        raise error
+    try:
+        tree = json.loads(result.stdout)
+        if not isinstance(tree, dict) or tree.get("Type") != "File":
+            raise ValueError("parser root is not File")
+        if not isinstance(tree.get("Stmts", []), list):
+            raise ValueError("parser Stmts is not array")
+        validate_tree(tree, len(source.encode()))
+        return tree
+    except AnalysisError:
+        raise
+    except (ValueError, UnicodeError) as exc:
+        raise AnalysisError(str(exc), "protocol") from exc
+
+
+def literal(node: dict, quoted=False) -> tuple[str, bool]:
+    typ = node.get("Type")
+    if typ == "Lit":
+        pattern = r'\\([$`"\\\n])' if quoted else r"\\(.)"
+        return re.sub(
+            pattern, lambda m: "" if m[1] == "\n" else m[1], node["Value"], flags=re.S
+        ), True
+    if typ == "SglQuoted":
+        return node.get("Value", ""), not node.get("Dollar", False)
+    if typ == "DblQuoted" or "Parts" in node:
+        parts = [
+            literal(p, quoted or typ == "DblQuoted") for p in node.get("Parts", [])
+        ]
+        return "".join(v for v, _ in parts), all(
+            ok for _, ok in parts
+        ) and not node.get("Dollar", False)
+    return "", False
+
+
+def commands(
+    source: str, *, validate=True, doc_kind: str | None = None
+) -> list[list[Word]]:
+    # Every executable shell uses the same strict parser, regardless of its container.
+    from template_prune_document import prepare
+
+    prepared = prepare(source, doc_kind)
+    if prepared.classification == "data":
+        return []
+    if prepared.classification == "fragment":
+        return [
+            [
+                Word(
+                    "",
+                    False,
+                    line_end=max(1, len(source.rstrip().splitlines())),
+                    opaque_kind="document-fragment",
+                )
+            ]
+        ]
+
+    def mapped_parse(document):
+        try:
+            return parse(document.text)
+        except AnalysisError as exc:
+            # Native stderr の列は変換後入力の位置なので公開しない。
+            reason = re.sub(r"^\d+:\d+:\s*", "", str(exc))
+            for token in sorted(prepared.marks, key=len, reverse=True):
+                reason = reason.replace(token, prepared.marks[token])
+            exc.args = (reason,)
+            if exc.offset is not None:
+                try:
+                    exc.line = (
+                        source.encode()[: document.offset(exc.offset)].count(b"\n") + 1
+                    )
+                except ValueError as mapping:
+                    raise AnalysisError(str(mapping), "position") from mapping
+            raise
+
+    while True:
+        try:
+            tree = mapped_parse(prepared)
+            break
+        except AnalysisError as exc:
+            if exc.kind != "syntax" or not (
+                prepared.mask_placeholders([], exc.offset)
+                or prepared.mask_expression(exc.offset)
+            ):
+                raise
+    if doc_kind is not None:
+        try:
+            protected, literals = prepared.source_ranges(tree)
+            if prepared.restore_protected(protected):
+                tree = mapped_parse(prepared)
+                protected, literals = prepared.source_ranges(tree)
+            if prepared.mask_placeholders(protected, literals=literals):
+                tree = mapped_parse(prepared)
+        except (KeyError, TypeError, ValueError) as exc:
+            if isinstance(exc, AnalysisError):
+                raise
+            raise AnalysisError(str(exc), "position") from exc
+    expression_commands: set[int] = set()
+    output = []
+    original = source.encode()
+
+    def visit(node, start, end):
+        if isinstance(node, list):
+            for child in node:
+                visit(child, start, end)
+            return
+        if not isinstance(node, dict):
+            return
+        typ = node.get("Type")
+        if (
+            typ
+            in (
+                "CmdSubst",
+                "ProcSubst",
+                "ParamExp",
+                "ArithmExp",
+                "DblQuoted",
+                "SglQuoted",
+                "Lit",
+                "Word",
+            )
+            or "Parts" in node
         ):
-            argv = argv[1:]
-        if argv:
-            normalized.append(argv)
-    return normalized
+            return
+        if typ == "CallExpr":
+            argv = []
+            args = list(node.get("Args", []))
+            for arg in args:
+                value, known, opaque = prepared.word(arg)
+                argv.append(Word(value, known, start, end, opaque))
+            while argv and argv[0].literal and argv[0].value in ("command", "exec"):
+                argv.pop(0)
+                args.pop(0)
+            if argv:
+                expression_commands.update(prepared.command_expressions(args[0]))
+                if (
+                    doc_kind not in (None, "sh", "bash", "shell")
+                    and argv[0].literal
+                    and argv[0].value.startswith("-")
+                ):
+                    argv[0].opaque_kind = "document-fragment"
+                output.append(argv)
+            return
+        for key, value in node.items():
+            if key not in ("Assigns", "Redirs", "Args", "Pos", "End"):
+                visit(value, start, end)
+
+    try:
+        for statement in tree.get("Stmts", []):
+            a = prepared.offset(statement["Pos"]["Offset"])
+            b = prepared.offset(statement["End"]["Offset"])
+            if not 0 <= a <= b <= len(original):
+                raise ValueError("statement range outside source")
+            start = original[:a].count(b"\n") + 1
+            end = original[: max(a, b - 1)].count(b"\n") + 1
+            visit(statement, start, end)
+    except (KeyError, TypeError, ValueError) as exc:
+        if isinstance(exc, AnalysisError):
+            raise
+        raise AnalysisError(str(exc), "position") from exc
+    if prepared.expressions:
+        mapped_parse(prepared.restore_expressions(expression_commands))
+    if prepared.leading_operator:
+        output.insert(0, [Word("", False, opaque_kind="document-fragment")])
+    return output

@@ -258,7 +258,8 @@ C が認識した shell 内移動は次節の単位で未評価とし、workflow
 
 #### C: 直接コマンド
 
-shell の単純コマンドと literal argv sequence を対象とする。
+shell の単純コマンドと literal argv sequence を対象とする。shell の構文解析・位置情報・
+R06 の文書記法は §8 に従い、以下は AST に対する意味判定とする。
 shell は改行・`;`・`&&`・`||`・pipe で区切られた単純コマンドを認識し、literal の引用と
 backslash-newline を処理する。先頭の literal 環境変数代入、`command` / `exec` を取り除いて判定する。
 function body 内に直接書かれた単純コマンドも検査するが、関数呼出や alias を展開して追跡しない。
@@ -347,8 +348,8 @@ JSON は import / 実行しないデータであり、その中のソースを�
 言語 / surface、実行時に生成した source の依存切れは検出保証外である。
 これらを動かして調べること、専用識別子の全文 grep を完全な代替検査とすることは禁止する。
 構成状態とは別に、評価した範囲と未評価の source path / 位置 / surface ID / 理由を報告する。
-未評価がある場合の成功表示は「評価できた範囲に専用参照の検出なし。cwd 依存参照に未評価あり」
-とし、未評価を「参照なし」や不整合へ置き換えない。候補文字列の有無で未評価を隠さない。
+未評価がある場合の表示は §8 に従い、cwd・placeholder・文書断片・解析エラーを区別する。
+未評価を「参照なし」や不整合へ置き換えず、候補文字列の有無で未評価を隠さない。
 報告は通常 gate / doctor / preview / apply / 適用後検査 / no-op で共通とし、
 未評価だけでは非ゼロ終了・doctor の FAIL・apply blocker にしない。追加の force / 承認操作も要求しない。
 検出した専用参照、canonical contract 違反、資産の破損、Git・変更保護の失敗は引き続き拒否する。
@@ -359,9 +360,8 @@ JSON は import / 実行しないデータであり、その中のソースを�
 
 R01〜R06 を維持する。設定だけへ絞ると通常 scripts / tests の呼出・読取や文書リンクの残存を
 手作業に委ねるため、この change では列挙した静的解析の保守コストを意図的に引き受ける。
-既存 dependency / 標準ライブラリの解析機構を優先する。新規 dependency、変数追跡、任意 wrapper、
-実行時解析、列挙外の shell / 言語構文は追加しない。Task 2 の最初に既存機構で対応する範囲と
-必要な限定処理を確認し、独自 parser が必要なら方式と検証対象を記録してから着手する。
+shell 構文解析は §8 の固定 mvdan/sh と限定 patch を使用する。新規依存はこの承認範囲に限る。
+変数追跡、任意 wrapper、実行時解析、列挙外の参照構文は追加しない。
 R01 の canonical validation を共有し、Taskfile の受理言語を scanner 側で拡張しない。
 これを口実に構文保証を黙って減らさず、仕様拡張・dependency 追加が必要なら停止・再計画する。
 
@@ -381,6 +381,7 @@ R01 の canonical validation を共有し、Taskfile の受理言語を scanner 
 - **不整合**: 上記のどちらでもない。欠落、空の必須文書、壊れた link、誤った file type、
   空ディレクトリだけの残存、共有設定の片側変更等を含む。
 
+解析失敗は §8 の analysis_errors として構成状態から分離し、全入口で非成功とする。
 未評価は構成状態と独立した解析範囲の情報であり、第4の構成状態にしない。
 同梱 / 完全除去と未評価は併存できる。完全除去を任意の実行時依存の不存在と解釈しない。
 
@@ -434,7 +435,7 @@ Git の path は NUL 区切りで扱い、空白・改行・Unicode を shell �
 
 同一入力の表示順と適用順は repository 相対 path の安定順とし、共有編集後に固定削除を行う。
 各共有ファイルは必要な部分だけ変更し、変更成功した対象を追跡する。
-適用後は構成が完全除去であることを再検査してから exit 0 を返す。
+適用後は構成が完全除去であり、§8 の共通成功条件を満たすことを再検査してから exit 0 を返す。
 ここで full setup / gate を暗黙に実行したり、install / network を開始したりしない。
 
 I/O 失敗・検査失敗は非ゼロ終了する。通常の例外を捕捉できた場合は、変更済み・失敗箇所・
@@ -460,3 +461,158 @@ prune smoke は使い捨てコピーの通常 gate だけを呼び、保守 gate
 
 #74 への引き渡しは「同梱中は offline 検証、完全除去後は専用検証を要求しない、
 host 登録解除は別操作」という境界だけとする。今回の固定対象に任意 Skill を混ぜない。
+
+## 8. shell parser と解析報告の契約（規範）
+
+2026-10-15に利用者が改訂全体、依存採用、本実装再開を承認した。本節は §1〜7 と一体の規範である。
+候補比較と個別判断の経緯・試作証跡は tasks.md に保持する。
+BSD-3-Clause の mvdan/sh v3.14.1（commit `a3f0c75d21d918756fa38de8b5d3429efde7948b`）を採用し、
+評価済みの限定 patch を保守する。patch は redirection 行継続、heredoc delimiter の quote removal /
+引用情報集約 / 終端比較前の行継続処理、および raw AST に対応する既存展開処理の調整に限る。
+Go 1.27.2 linux-amd64 を setup 専用とし、archive / patch の hash は tracked manifest に固定する。
+上流更新時は patch 再適用と upstream suite / 恒久 fixture を検証する。広範な grammar 改造が
+必要なら停止・再計画する。旧 lexer fallback と実行用 shell の独自前処理による構文補修は禁止する。
+
+shell 構文解析全体を置換するが、C の意味判定、cwd 方針、展開内部・heredoc payload の非検査境界は
+維持する。既存の有効な Bash 入力を拒否する変更で対応範囲を縮小しない。通常検査は入力を実行しない。
+Taskfile の canonical validation 先行と受理構文は変更しない。
+
+R06 だけで未引用・未 escape の `<name>` を文書用 placeholder とする。name は
+`[A-Za-z_][A-Za-z0-9_-]*`、語中表記も対象とし、引用済み / escape 済みなら通常の literal である。
+placeholder をリダイレクトより優先し、`task <input> check:template` は専用参照、
+`task < input > check:template` はリダイレクトとする。実行用 shell にはこの読み替えを適用しない。
+検査対象が placeholder に依存する範囲は理由付き partial とし、混在する既知の参照を拒否する。
+
+### 固定 parser と setup / runtime
+
+通常検査では shfmt CLI 全体を使わず、`syntax` / `syntax/typedjson` と標準 library だけを
+直接利用する専用 bridge を準備する。内部依存の `fileutil` も同じ固定 source に含まれる。
+入力は stdin の shell source、成功出力は typed JSON AST とし、解析失敗時は非成功・診断を返す。
+成功 AST を解析失敗と混在させず、入力コマンドは実行しない。bridge の version / source も
+固定入力に含め、旧 lexer や PATH 上の別 parser へ fallback しない。
+
+準備先は repository 内の gitignore 対象 `.cache/` 配下とし、HOME や system Go に依存しない。
+Go archive、upstream source archive、patch を固定 hash と照合してから展開・適用・実行する。
+bridge、build option、OS / CPU を artifact identity に含める。専用 Go の絶対 path を使い、
+`GOTOOLCHAIN=local`、`GOENV=off`、`GOWORK=off`、`CGO_ENABLED=0`、`GOPROXY=off`、
+`GOSUMDB=off` と専用 cache を指定する。build は `-mod=readonly -trimpath -buildvcs=false` とし、
+parser-only bridge の build 中に追加 module や別 toolchain を取得しない。
+
+setup は staging 領域で build と最小の parse smoke を成功させ、入力 identity と binary hash を
+対応付けた artifact を準備した後、参照先を atomic に更新する。checksum 不一致や build 失敗で
+以前の artifact を上書きしない。同じ入力で検証済み artifact があれば再 build は不要とする。
+runtime は現在の固定入力と artifact identity / binary hash を照合し、欠落・破損・別入力の
+artifact なら setup の再実行を案内して非成功とする。以前の版を保持していても、現在の入力と
+一致しなければ利用しない。gate / doctor / preview / apply / 適用後検査 / no-op から取得・
+install・build を開始しない。この provenance は dependency 準備の検査用であり、prune の
+構成状態を記録する receipt や、状態判定の正本にはしない。
+
+既存 `task setup` と CI の dependency 準備段階に組み込み、通常の offline gate より前に済ませる。
+`task setup:node` の Node-only の責務は維持する。prune 後にも scanner が使うため、bridge の
+準備処理・固定入力・license・runtime artifact を保守資産の削除集合へ追加しない。
+採用と実装再開は承認済みである。isolated probe の成功を全入口の成功と読み替えない。
+
+利用者は選択肢1により、parser の初期保証範囲を Ubuntu amd64（x86_64）とする方針を承認した。
+既存文書の Ubuntu 対象記述には CPU 制限がなかったため、採用時は追加制約として明示する。
+他 OS / CPU は parser の取得・build 前に対象外の理由を示して停止し、別 architecture の
+artifact を実行しない。arm64 の保証や未検証環境での自動継続は追加しない。
+本実測は Ubuntu 22.04.5 LTS / x86_64 であり、全 Ubuntu release の実動作検証を意味しない。
+
+### Markdown の入力分類
+
+利用者は選択肢1により、以下の閉じた一覧を採用する方針を承認した。記法追加時は仕様と
+対照テストを更新する。parser のエラー結果から除外条件を増やさない。
+分類の単位は既存 R06 の code span または fence body とし、shell 言語指定
+（`sh` / `bash` / `shell`）は合意した placeholder 以外の説明断片を許可しない。
+`console` の行頭 `$ ` 除去は維持する。block quote 内も fence の言語区分を保持し、
+非 shell 言語の fence を inline shell として再走査しない。
+
+inline / 言語指定なし fence / console では、次の順序で分類する。
+
+1. 全体が JSON object / array、HTML comment、または既存の `printf [label](target)` 表示例に
+   一致する入力は説明データとする。部分一致で同じ単位の別コマンドを除外しない。
+2. 単位全体が Python 文法で成立する assignment / augmented assignment / call expression の
+   列なら、理由付き partial とする。shell 明示 fence にはこの規則を適用しない。
+3. 混在入力では、ASCII identifier を dot で連結した名前と、括弧・semicolon・改行を含まない
+   引数部からなる call 形 `name(args)` を説明候補とする。shell function 宣言に該当する
+   後続 `{` は除く。候補が AST 上で未引用のコマンド位置に現れた場合だけ理由付き partial とし、
+   同じ単位の separator 後の認識可能なコマンドは引き続き検査する。
+   引用済み文字列は literal のまま保持し、認識済みコマンドの未引用引数や展開内の不正構文を
+   この規則で受理しない。例: `foo(); task check:template` は partial と専用参照を併記する。
+4. コマンド位置が `-` で始まる option 断片、先頭が `||` / `&&` / `|` の演算子断片は
+   理由付き partial とする。後続の認識可能なコマンドの検査は継続する。
+5. 残りは placeholder 規則を適用して Bash AST へ渡す。列挙した説明・断片に該当しない
+   構文エラーは非成功とし、任意の自然言語・他言語の推測で成功へ読み替えない。
+
+例えば `task foo(bar)` と `printf "$(foo(bar))"` は構文エラー、
+`printf "foo(bar)"` と `printf "$(printf 'foo(bar)')"` は通常の引用として扱う。
+unknown executable を専用参照と推定する変更はせず、C の限定検出範囲は維持する。
+この一覧は個別判断として承認済みだが、試作28対照例の成功から任意の文書記法への適合性を
+保証しない。説明候補の追加は仕様と正例・負例を更新して行い、実装中に黙って追加しない。
+
+仮 token は入力内に存在しない値を選び、同じ placeholder の同じ表記は同一 token にする。
+引用・展開の判別は AST に従い、引用済みの元 literal を復元する。仮 token の bytes や長さを
+元 source の位置として表示しない。置換区間の対応表を持ち、行数・CRLF・Unicode・前後の
+offset を元 source に戻す。対応不能なら診断付き非成功とし、位置を推測しない。
+quoted / escaped heredoc の delimiter、payload、終端は parser の位置情報に基づいて保護し、
+仮 token 化で quote removal 前後の対応を壊さない。文書全体の正規表現だけで shell の引用・
+heredoc 範囲を推測しない。
+これらの衝突・位置不変条件は validation.md の対象とし、実施結果は tasks.md に記録する。
+
+### 解析エラー・位置情報・全入口の成功条件
+
+JSON の既存 `state`、`coverage`、`references`、`unevaluated`、`errors`、`edits` を維持し、
+`analysis_errors` 配列を追加する。`state` は確認できた資産構成、canonical 契約、既知参照から
+bundled / pruned / inconsistent を判定する。`errors` は構成・既存契約の違反、
+`analysis_errors` は走査の syntax / dependency / protocol / io / position の失敗を持つ。
+走査の失敗だけで `state` を inconsistent にせず、unknown も追加しない。
+Taskfile の canonical validation 違反、必須資産の欠落・誤型、marker の破損等は引き続き
+構成・既存契約の違反である。通常 source の shell 解析エラーと混同しない。
+R01 の canonical validation は shell parser の利用・専用参照検査より先に行う。
+
+各解析エラーには `kind`、`surface`、`source`、`line`、`reason` を含める。source が特定できる
+エラーは対応する R01〜R06 と元 source の位置を示す。全体の parser 準備・protocol 失敗などで
+source 単位に帰属できない場合だけ、source は対象 artifact / bridge の repository 相対 path、
+surface と line は null とし、表示も「共通解析基盤・位置なし」とする。架空の行番号を作らない。
+`unevaluated` は従来の情報に `kind` を加え、cwd / placeholder / document-fragment / analysis-error
+を区別する。解析エラーで検査できない範囲も残し、失敗前・他の単位で確認できた参照は消さない。
+
+全体 `coverage` は evaluated / partial の二値を維持し、未評価または解析エラーがあれば partial とする。
+全 shell 単位の解析ができない場合も、資産構成などの検査結果と区別して partial と表示する。
+K05 の個別入力の構文エラーは従来どおり expected=invalid-syntax / coverage=not-run とし、
+この fixture の単位別ラベルを全体 coverage の新しい状態に流用しない。
+成功には `state != inconsistent`、`references` / `errors` / `analysis_errors` が空であることを
+すべて要求する。state と配列の矛盾を成功として受け入れない。
+既知の専用参照は従来どおり inconsistent にし、解析エラーと同時でも双方を保持する。
+JSON の必須 field 欠落・誤型・不明な列挙値は protocol 失敗とし、空のエラー配列を補って成功させない。
+
+- 通常 gate は共通成功条件を満たさなければ非成功。構成と coverage を併記し、
+  partial だけなら理由別の件数・source / 位置を集約表示する。doctor は各件を詳細表示する。
+  cwd 以外の partial を「cwd 依存だけが未評価」と表示しない。解析エラーは明示的な FAIL とし、
+  検査できなかった範囲について「専用参照なし」と断定しない。
+- doctor は共通成功条件の失敗を既存の必須検査 FAIL とする。他の既存必須検査も維持する。
+- preview は共通成功条件と既存の Git 前提・差分保護を確認し、不成立なら読める予定と診断を
+  示して exit 1 とする。解析エラー時に編集範囲を推測して埋めない。
+- apply は直前の再検査でも同じ条件を要求し、解析エラーがあれば最初の書込みより前に停止する。
+  postcheck は state=pruned に加えて共通成功条件を要求する。解析エラー時は exit 1 とし、
+  変更済み・失敗・未処理・復旧基準 commit と解析診断を保持する。自動 rollback はしない。
+- no-op も state=pruned だけで早期成功せず、共通成功条件と既存の Git / HEAD / root 前提を要求する。
+  正常な完全除去で直前の削除差分が未コミットであることだけは引き続き許容する。
+
+Python の公開 prune CLI は失敗 exit 1、引数エラーは既存の exit 2、help は exit 0 を維持する。
+Task / Node 等の wrapper は既存の非ゼロ伝播を維持し、全 wrapper を同じ数値へ変更しない。
+内部 inspect の JSON 取得成功と公開検査成功は別である。内部 process が exit 0 でも上記 field に
+失敗があれば caller は非成功とする。canonical 検査基盤の故障等で構成状態そのものを算出できない
+致命的な失敗は、内部 process を非ゼロにして caller が診断付きで停止する。成功形の JSON や
+unknown 状態を捏造しない。これは構成を算出できる通常の shell 解析失敗と区別する。
+Git 保護違反は構成状態を書き換えず blocker として拒否する。
+
+行番号は1始まり、行範囲の終端は inclusive とする。元 bytes の offset は0始まりで扱う。
+`field_path` は string / 0以上の整数の配列で key と sequence index を区別する。`alias_uses` は source / line / field_path の配列、
+`shell_range` は decoded shell の line / line_end とする。位置情報は既存の `source` / `line` を
+主表示に使い、shell では `line_end` と
+`position_kind=statement-range` を添える。Workflow では主表示を YAML field value の定義位置とし、
+`field_path` と `position_kind=field-value` を添える。alias の利用位置は `alias_uses`、
+decoded shell の top-level statement の相対行範囲は `shell_range` として別情報にする。
+別 source への埋込みや escape / folded scalar の行を単純加算せず、位置対応が保証できなければ
+推測値を返さず解析エラーとする。別 step / field の同値は field path と node range で区別する。

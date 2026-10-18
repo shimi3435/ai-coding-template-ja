@@ -46,7 +46,11 @@ def test_reference_surface_and_coverage(
         source += "  check:template:\n    cmds:\n      - echo maintenance\n"
     p.write_text(source)
     result = inspect(tmp_path)
-    errors = [e for e in result["errors"] if e["source"] == case["path"]]
+    errors = [
+        e
+        for e in result["errors"] + result["analysis_errors"]
+        if e["source"] == case["path"]
+    ]
     detected = [e for e in result["references"] if e["source"] == case["path"]]
     partial = [e for e in result["unevaluated"] if e["source"] == case["path"]]
     expected = (

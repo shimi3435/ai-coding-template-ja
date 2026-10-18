@@ -292,3 +292,54 @@ def test_allowed_reference_locations_disappear_with_prune(tmp_path: Path) -> Non
     proposal = plan(tmp_path)
     assert not proposal["blockers"], proposal
     assert importlib.import_module("template_prune_apply").apply(proposal)["ok"]
+
+
+@pytest.mark.parametrize("bundled", [True, False])
+@pytest.mark.parametrize("args", [[], ["--apply"]])
+def test_analysis_error_blocks_preview_apply_and_noop_without_writes(
+    tmp_path: Path, bundled: bool, args: list[str], capsys
+) -> None:
+    fixture(tmp_path, bundled)
+    (tmp_path / "scripts/probe.sh").write_text("if then\n")
+    commit_fixture(tmp_path)
+    before = snapshot(tmp_path)
+    cli = load_script("prune-template-docs.py")
+    cli.REPO_ROOT = tmp_path
+    assert cli.main(args) == 1
+    assert snapshot(tmp_path) == before
+    assert "scripts/probe.sh" in capsys.readouterr().out
+
+
+def test_analysis_error_in_postcheck_preserves_recovery_diagnostics(
+    tmp_path: Path, monkeypatch
+) -> None:
+    fixture(tmp_path)
+    commit_fixture(tmp_path)
+    engine = importlib.import_module("template_prune_apply")
+    proposal = plan(tmp_path)
+    original = engine.inspect
+
+    def postcheck(root):
+        (root / "scripts/broken.sh").write_text("if then\n")
+        return original(root)
+
+    monkeypatch.setattr(engine, "inspect", postcheck)
+    result = engine.apply(proposal)
+    assert not result["ok"] and result["failed"] == "postcheck"
+    assert result["changed"] and result["state"]["state"] == "pruned"
+    assert result["state"]["analysis_errors"]
+    rendered = "\n".join(engine.failure_report(result))
+    assert "scripts/broken.sh" in rendered and proposal["head"] in rendered
+
+
+def test_malformed_postcheck_keeps_recovery_report(tmp_path: Path, monkeypatch) -> None:
+    fixture(tmp_path)
+    commit_fixture(tmp_path)
+    engine = importlib.import_module("template_prune_apply")
+    proposal = plan(tmp_path)
+    monkeypatch.setattr(engine, "inspect", lambda root: {})
+    result = engine.apply(proposal)
+    rendered = "\n".join(engine.failure_report(result))
+    assert not result["ok"] and result["failed"] == "postcheck"
+    assert proposal["head"] in rendered and "git restore" in rendered
+    assert "protocol" in rendered

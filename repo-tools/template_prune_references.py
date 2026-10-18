@@ -6,11 +6,12 @@ import ast
 import os
 import re
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from template_prune_manifest import DELETE_ROOTS
-from template_prune_shell import Word, commands
+from template_prune_shell import AnalysisError, Word, commands
 
 
 def code_spans(text: str) -> Iterator[tuple[int, int, str]]:
@@ -42,9 +43,25 @@ class References:
         self.detected: list[dict] = []
         self.partial: list[dict] = []
         self.errors: list[dict] = []
+        self.position: dict = {}
+
+    @contextmanager
+    def located(self, position: dict):
+        previous = self.position
+        self.position = position
+        try:
+            yield
+        finally:
+            self.position = previous
 
     def entry(self, surface: str, source: str, line: int, **details) -> dict:
-        return {"surface": surface, "source": source, "line": line, **details}
+        return {
+            "surface": surface,
+            "source": source,
+            "line": line,
+            **self.position,
+            **details,
+        }
 
     def path(
         self, target: str, surface: str, source: str, line: int, cwd: str | None = "."
@@ -82,8 +99,28 @@ class References:
                 reason = "cwd の既知 symlink により字句解決を保証できない"
             else:
                 return path.relative_to(self.root).as_posix()
-        self.partial.append(self.entry(surface, source, line, reason=reason))
+        self.partial.append(
+            self.entry(surface, source, line, kind="cwd", reason=reason)
+        )
         return None
+
+    def analysis_error(
+        self, exc: AnalysisError, surface: str, source: str, line: int
+    ) -> None:
+        row = self.entry(
+            surface, source, line + exc.line - 1, kind=exc.kind, reason=str(exc)
+        )
+        self.partial.append({**row, "kind": "analysis-error"})
+        if exc.kind == "dependency":
+            row = {
+                "surface": None,
+                "source": ".cache/shell-parser/current.json",
+                "line": None,
+                "kind": exc.kind,
+                "reason": str(exc),
+            }
+        if row not in self.errors:
+            self.errors.append(row)
 
     def shell(
         self,
@@ -93,8 +130,13 @@ class References:
         line: int = 1,
         cwd: str | None = ".",
         validate: bool = True,
+        doc_kind: str | None = None,
     ) -> None:
-        parsed = commands(body, validate=validate)
+        try:
+            parsed = commands(body, validate=validate, doc_kind=doc_kind)
+        except AnalysisError as exc:
+            self.analysis_error(exc, surface, source, line)
+            return
         expanded = list(parsed)
 
         def nested(argv: list[Word]) -> None:
@@ -103,10 +145,29 @@ class References:
             if Path(argv[0].value).name in ("bash", "sh"):
                 for i, word in enumerate(argv[:-1]):
                     if word.literal and word.value == "-c" and argv[i + 1].literal:
-                        inner = commands(argv[i + 1].value, validate=validate)
+                        try:
+                            inner = commands(argv[i + 1].value, doc_kind=doc_kind)
+                        except AnalysisError as exc:
+                            position = self.position or {
+                                "line": line + argv[0].line - 1,
+                                "line_end": line + argv[0].line_end - 1,
+                                "position_kind": "statement-range",
+                            }
+                            with self.located(
+                                {
+                                    **position,
+                                    "shell_range": {
+                                        "line": exc.line,
+                                        "line_end": exc.line,
+                                    },
+                                }
+                            ):
+                                self.analysis_error(exc, surface, source, line)
+                            return
                         for child in inner:
                             for item in child:
-                                item.line += argv[i + 1].line - 1
+                                item.line = argv[0].line
+                                item.line_end = argv[0].line_end
                             expanded.append(child)
                             nested(child)
                         break
@@ -125,19 +186,43 @@ class References:
                     surface,
                     source,
                     line + moves[0].line - 1,
+                    kind="cwd",
                     reason=(
                         "shell 単位内の cd / pushd / popd により cwd 依存参照は未評価"
                     ),
                 )
             )
         for argv in expanded:
-            self.argv(
-                [w.value if w.literal else None for w in argv],
-                surface,
-                source,
-                line + argv[0].line - 1,
-                cwd,
-            )
+            statement = {
+                "line": line + argv[0].line - 1,
+                "line_end": line + argv[0].line_end - 1,
+                "position_kind": "statement-range",
+            }
+            if self.position:
+                statement = {
+                    **self.position,
+                    "shell_range": {"line": argv[0].line, "line_end": argv[0].line_end},
+                }
+            with self.located(statement):
+                for kind in sorted({w.opaque_kind for w in argv if w.opaque_kind}):
+                    self.partial.append(
+                        self.entry(
+                            surface,
+                            source,
+                            line,
+                            kind=kind,
+                            reason="未引用 placeholder の値は未評価"
+                            if kind == "placeholder"
+                            else "承認済みの文書断片は shell コマンドとして未評価",
+                        )
+                    )
+                self.argv(
+                    [w.value if w.literal else None for w in argv],
+                    surface,
+                    source,
+                    line,
+                    cwd,
+                )
 
     def argv(
         self,
@@ -301,7 +386,14 @@ class References:
                         and argv[1] == "-c"
                         and argv[2] is not None
                     ):
-                        self.shell(argv[2], surface, source, line)
+                        with self.located(
+                            {
+                                "line": node.lineno,
+                                "line_end": node.end_lineno,
+                                "position_kind": "statement-range",
+                            }
+                        ):
+                            self.shell(argv[2], surface, source, line)
                 elif (
                     isinstance(arg, ast.Constant)
                     and isinstance(arg.value, str)
@@ -312,13 +404,27 @@ class References:
                         for k in node.keywords
                     )
                 ):
-                    self.shell(arg.value, surface, source, line)
+                    with self.located(
+                        {
+                            "line": node.lineno,
+                            "line_end": node.end_lineno,
+                            "position_kind": "statement-range",
+                        }
+                    ):
+                        self.shell(arg.value, surface, source, line)
             elif (
                 callee == "os.system"
                 and isinstance(arg, ast.Constant)
                 and isinstance(arg.value, str)
             ):
-                self.shell(arg.value, surface, source, line)
+                with self.located(
+                    {
+                        "line": node.lineno,
+                        "line_end": node.end_lineno,
+                        "position_kind": "statement-range",
+                    }
+                ):
+                    self.shell(arg.value, surface, source, line)
 
     def markdown(self, body: str, source: str) -> None:
         surface = "R06"
@@ -368,11 +474,16 @@ class References:
         begin = 1
         info = ""
         source_offset = 0
+        quote_depth = 0
         for n, line in enumerate(body.splitlines(keepends=True), 1):
             line_offset = source_offset
             source_offset += len(line)
             if fence is None:
                 line = mask_comments(line, line_offset)
+                quote = re.match(r"^ {0,3}(?:> ?)+", line)
+                quote_depth = quote[0].count(">") if quote else 0
+            if quote_depth:
+                line = re.sub(r"^ {0,3}(?:> ?){" + str(quote_depth) + r"}", "", line)
             match = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", line)
             if (
                 match
@@ -401,7 +512,14 @@ class References:
                         command = "".join(lines)
                         if info == "console":
                             command = re.sub(r"^\$ ", "", command, flags=re.M)
-                        self.shell(command, surface, source, begin, validate=False)
+                        self.shell(
+                            command,
+                            surface,
+                            source,
+                            begin,
+                            validate=False,
+                            doc_kind=info,
+                        )
                     fence = None
                 prose.append("\n")
                 continue
@@ -418,11 +536,12 @@ class References:
             if not re.search(r"\s", code):
                 continue
             self.shell(
-                re.sub(r"\r\n?|\n", " ", code),
+                code,
                 surface,
                 source,
                 body[:start].count("\n") + 1,
                 validate=False,
+                doc_kind="inline",
             )
         # code span 内の link 表記は説明データとして扱う。
         masked = list(body)

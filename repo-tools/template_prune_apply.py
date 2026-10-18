@@ -8,7 +8,8 @@ from pathlib import Path
 
 from template_prune_manifest import DELETE_ROOTS, SHARED
 from template_prune_plan import PruneError, inventory, plan, repository_head, tracked
-from template_prune_state import inspect
+from template_prune_result import successful
+from template_prune_state import inspect, report
 
 
 def apply(proposal: dict) -> dict:
@@ -64,7 +65,7 @@ def apply(proposal: dict) -> dict:
             completed += 1
         failed = "postcheck"
         state = inspect(root)
-        if state["state"] != "pruned":
+        if not successful(state) or state["state"] != "pruned":
             raise PruneError("適用後の完全除去検査に失敗")
         return {"ok": True, "changed": changed, "state": state}
     except (OSError, ValueError, PruneError) as exc:
@@ -99,8 +100,13 @@ def apply(proposal: dict) -> dict:
 
 
 def failure_report(result: dict) -> list[str]:
+    try:
+        diagnostics = report(result["state"])
+    except ValueError as exc:
+        diagnostics = ["解析診断 protocol failure: " + str(exc)]
     return [
         "[FAIL] " + result["error"],
+        *diagnostics,
         "変更済み: " + json.dumps(result["changed"], ensure_ascii=False),
         "失敗箇所: " + json.dumps(result["failed"], ensure_ascii=False),
         "未処理: " + json.dumps(result["pending"], ensure_ascii=False),

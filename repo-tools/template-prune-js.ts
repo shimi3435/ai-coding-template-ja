@@ -11,13 +11,13 @@ import {
   type Node, type SourceFile,
 } from "typescript/unstable/ast";
 
-export type ReferenceEvent = { kind: "path" | "import" | "shell" | "argv"; value: string | (string | null)[]; line: number };
+export type ReferenceEvent = { kind: "path" | "import" | "shell" | "argv"; value: string | (string | null)[]; line: number; line_end: number };
 
 function inspectSourceFile(source: SourceFile): ReferenceEvent[] {
   const aliases = new Map<string, string>();
   const events: ReferenceEvent[] = [];
   const add = (kind: ReferenceEvent["kind"], value: ReferenceEvent["value"] | undefined, node: Node): void => {
-    if (value !== undefined) events.push({ kind, value, line: source.text.slice(0, node.getStart(source)).split("\n").length });
+    if (value !== undefined) events.push({ kind, value, line: source.text.slice(0, node.getStart(source)).split("\n").length, line_end: source.text.slice(0, Math.max(node.getStart(source), node.end - 1)).split("\n").length });
   };
   for (const node of source.statements) {
     if (!(isImportDeclaration(node) || isExportDeclaration(node)) || !node.moduleSpecifier || !isStringLiteralLikeNode(node.moduleSpecifier)) continue;

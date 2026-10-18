@@ -1430,5 +1430,725 @@
     "source": "printf '%s\\n' $((1 << 2\n + 3))\ntask check:template\n",
     "expected": "detected",
     "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-excluded",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=\"$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\"\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-outside",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=\"$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-excluded-unquoted",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-outside-unquoted",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-target",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task <target>`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-known",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task check:template <extra>`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-embedded",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task setup:<extra>`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-quoted",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task '<target>'`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-escaped",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task \\<target\\>`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-placeholder-priority",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task <input> check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-redir",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task < input > check:template`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-shell-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ntask <target>\n```",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-invalid-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ntask (\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-method",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`foo(1, 2)`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-method-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`foo(); task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-method-after",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task check:template; foo()`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-invalid-known-arg",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task foo(bar)`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-quoted-method",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`printf \"foo(bar)\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-operator",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`|| true`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-operator-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`|| task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-flags",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`--foo value`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-flags-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`--foo value; task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-json",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`{\"a\": \"task check:template\"}`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-comment",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`<!-- template-maintenance:start -->`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-quoted-sql",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "> ```sql\n> DROP TABLE users;\n> ```\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-quoted-bash",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "> ```bash\n> task check:template\n> ```\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-nested-placeholder",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`sh -c 'task <target>'`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-nested-quoted",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`sh -c \"task '<target>'\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-escaped-opener",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task \\<target>`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-invalid-nested-expression",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`printf \"$(foo(bar))\"`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-quoted-nested-expression",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`printf \"$(printf 'foo(bar)')\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-strict-method",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\nfoo()\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-placeholder-expression-token-collision",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task <EXPR_0> check:template; foo()`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-expression-argument-with-placeholder",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task foo(bar)<extra>`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-assignment-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nx=$(foo(bar))\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-assignment-command",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`x=$(foo(bar)) echo ready`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-redirect",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`echo >$(foo(bar))`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-parameter-inline",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`echo ${x:-foo(bar)}`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review-parameter-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho ${x:-foo(bar)}\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review-parameter-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`foo(); echo ${x:-foo(bar)}; task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review-assignment-parameter",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`x=${x:-foo(bar)} echo ready`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review-redirect-quoted",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`echo >\"foo(bar)\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review2-quoted-heredoc",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'foo(bar)'\ndata\nfoo(bar)\n\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review2-heredoc-tail",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'foo(bar)'\nfoo(bar); task check:template\nfoo(bar)\ntask check:template\n\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review2-heredoc-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); cat <<'foo(bar)'\nfoo(bar)\ntask check:template\n\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review2-shared-assignment",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); x=$(foo(bar)) echo ready\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review2-shared-redirection",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); echo >$(foo(bar))\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review2-shared-argument",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); task foo(bar)\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review2-shared-parameter",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); echo ${x:-foo(bar)}\n```",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review2-shared-quoted-command",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); 'foo(bar)'\n```",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review3-partial-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<f'oo(bar)'\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review3-partial-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar);\ncat <<f'oo(bar)'\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review3-escaped-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<\"foo(\\\"bar\\\")\"\ndata\nfoo(\"bar\")\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review3-escaped-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar);\ncat <<\"foo(\\\"bar\\\")\"\ndata\nfoo(\"bar\")\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review3-backslash-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<foo\\(bar\\)\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review3-backslash-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar);\ncat <<foo\\(bar\\)\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-multiple",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'<'a'>' <<\\<b\\>\n<x>\n<a>\n<y>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-expression",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(); cat <<'<'tag'>'\n<x>\n<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-nested",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nprintf \"$(cat <<'<'tag'>'\n<x>\n<tag>\n)\"\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'<'tag'>'\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<'<'tag'>'\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<\\<tag\\>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<\\<tag\\>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<'tag'>'\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<'<'tag'>'\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<\\<tag\\>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<\\<tag\\>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-empty-heredoc-simple",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<tag>'\n<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-tab",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<-'<tag>'\n<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-tab-indent",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<-'<tag>'\n\t<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-two-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<a>' <<'<b>'\n<a>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-empty-first",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<a>' <<'<b>'\n<a>\n<payload>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-empty-last",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<a>' <<'<b>'\n<payload>\n<a>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-script-0",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo $((1 << 2))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-script-1",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "((a << 1))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-script-2",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo $((1 >> 2))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-bash-0",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho $((1 << 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-bash-1",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\n((a << 1))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-bash-2",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho $((1 >> 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-plain-0",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho $((1 << 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-plain-1",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\n((a << 1))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-plain-2",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho $((1 >> 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
   }
 ]

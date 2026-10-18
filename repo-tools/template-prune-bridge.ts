@@ -1,8 +1,10 @@
 /** Python state scanner が既存の canonical YAML 契約と J lexer を使う read-only bridge。 */
 import { readFileSync } from "node:fs";
-import { isMap, isScalar, isSeq, parseDocument } from "yaml";
+import { isMap, isScalar, isSeq } from "yaml";
 import { inspectRepositoryTaskfile } from "./repository-taskfile.ts";
 import { inspectJavaScriptFiles } from "./template-prune-js.ts";
+
+import { workflowDocument } from "./template-prune-yaml.ts";
 
 type Input = { taskfile: string; workflows: Record<string,string>; javascript: Record<string,string> };
 const input = JSON.parse(readFileSync(0, "utf8")) as Input;
@@ -29,25 +31,22 @@ try {
     inspectRepositoryTaskfile(edited);
     edit=[start,end];
   }
-  const entries: {task:string;kind:string;value:string;line:number}[]=[];
+  const entries: {task:string;kind:string;value:string;line:number;field_path:(string|number)[]}[]=[];
   for (const {key,value} of tasks.items) {
     if (!isScalar(key) || !isMap(value)) continue;
     const cmds=value.get("cmds",true);
     if (!isSeq(cmds)) continue;
-    for (const entry of cmds.items) {
+    for (const [index,entry] of cmds.items.entries()) {
       const kind=isMap(entry) && entry.has("task") ? "task" : "shell";
       const node=isMap(entry) ? entry.get(kind === "task" ? "task" : "cmd",true) : entry;
-      if (isScalar(node) && typeof node.value === "string") entries.push({task:String(key.value),kind,value:node.value,line:input.taskfile.slice(0,node.range?.[0]??0).split(/\r\n|\r|\n/).length});
+      if (isScalar(node) && typeof node.value === "string") entries.push({task:String(key.value),kind,value:node.value,field_path:["tasks",String(key.value),"cmds",index,...(isMap(entry)?[kind === "task"?"task":"cmd"]:[])],line:input.taskfile.slice(0,node.range?.[0]??0).split(/\r\n|\r|\n/).length});
     }
   }
   output.taskfile={data:root.toJSON(),edit,entries};
 } catch (error) { errors.push({path:"Taskfile.yml",reason:String(error)}); }
 for (const [path,source] of Object.entries(input.workflows)) {
   try {
-    const doc=parseDocument(source,{version:"1.2",schema:"core",strict:true,uniqueKeys:true});
-    if (doc.errors.length || doc.warnings.length) throw new Error([...doc.errors,...doc.warnings].map(String).join("; "));
-    if (!isMap(doc.contents)) throw new Error("workflow root は mapping が必要です");
-    (output.workflows as Record<string,unknown>)[path]=doc.toJSON();
+    (output.workflows as Record<string,unknown>)[path]=workflowDocument(source,path);
   } catch (error) { errors.push({path,reason:String(error)}); }
 }
 const javascript = inspectJavaScriptFiles(input.javascript);

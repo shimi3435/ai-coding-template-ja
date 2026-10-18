@@ -203,6 +203,7 @@
   - `docs/`
   - `README.md`
   - `CONTEXT.md`
+  - `.pre-commit-config.yaml`
 - [x] 実装: self-review、initial independent review、必要な finding 修正を policy 順に完了する。
 - [ ] 検証: active change を残した最新入力の正式 gate・保守 gate・OpenSpec validation、hosted CI、および別 agent の verifier を完了する。gate 成功のための先行 close は禁止する。
 
@@ -709,70 +710,733 @@
   独立 review、最新 project checks、この cycle と別の verifier を順に実施する。
   Task 1〜4 完了、Task 5 検証未完了、Task 6 未着手、active change 保持。
 
-<!-- executor-owned-snapshot:start -->
-#### Task 5 累積 executor-owned snapshot（2026-10-12）
+#### Task 5 外部レビュー後の隔離試作と改訂案（2026-10-13）
 
-状態は `implementation-complete / validation-incomplete`。第3 cycle 開始時に利用者が引継ぎを承認した52 pathの累積差分。
-last_task は最後に内容を変更した task。content_sha256 は file bytes / symlink target bytes のSHA-256、削除はnull。
-post_task_diff_digest は `[type,mode,content_sha256]` を空白なしJSONとしてUTF-8化したSHA-256。
-tasks.md は、この start comment から end comment 後の空行までを除いたbytesで算出する。
-このsnapshotは再開ownership用であり、reviewや完了判定の証跡ではない。
+- source commit: `bcd9eecc3e556c58ae8cba0af6082479b9c35de6`。
+  利用者依頼による作業ブランチへの commit / push は完了し、当該 HEAD から clean で開始した。
+  従来の52 path の累積差分はこの commit に収録済みであり、未コミット差分の正本として扱わない。
+- 外部レビューは REQUEST_CHANGES。case pattern の既知 BLOCKER、Workflow 位置誤報、
+  validation / spec-holes の古い未着手表記を対象とする。
+- 利用者承認は隔離試作と OpenSpec 改訂案まで。4つの合意方針は design §8 を参照する。
+  新規 dependency 採用、本実装再開、既存 C の対応範囲縮小は承認されていない。
+- fresh 試作: `/tmp/issue51-parser-probe-amnamw6d` に Python 3.14.6 の独立 venv と
+  Node 24.14.1 の独立 npm prefix を作成した。production dependency / lockfile / 実装は無変更。
+  `uv pip install --python <probe>/venv/bin/python --only-binary :all: tree-sitter==0.26.0 tree-sitter-bash==0.25.1`
+  と `npm install --prefix <probe>/node --ignore-scripts --no-audit --no-fund sh-syntax@0.7.0`: exit 0。
+- `PYTHONDONTWRITEBYTECODE=1 <probe>/venv/bin/python <probe>/probe.py`: exit 0。
+  実 workspace と bundled K05 fixture から既存 commands 呼出2382件を収集し、候補 parser に投入した。
+  tree-sitter は59回のエラー tree（context / source の重複除去後57件）。有効な K05 shell 14件を
+  拒否した。対象14件への `bash -n` は全て exit 0。case 再現例自体の AST は正常だった。
+  nesting 深さ4〜128、各20回の parser 単体計測は平均0.021〜0.306 ms。
+  scanner の意味判定の置換や end-to-end 性能の証拠ではない。
+- `node <probe>/node/probe.mjs`: exit 0。重複除去した2086入力のうち37入力で解析例外。
+  有効な K05 shell 8件を拒否し、8件への `bash -n` は全て exit 0。
+  case 再現例の公開 AST の Cmd は Pos / End だけで argv / 展開構造を含まなかった。
+  tree-sitter / sh-syntax の両候補とも現状のままでは採用条件不適合と判定した。
+- `unshare --user --map-root-user --net env -i HOME=<empty-home> PATH=<Node24>:/usr/bin:/bin ...` で
+  `<probe>/venv/bin/python <probe>/offline.py` と `node <probe>/node/probe.mjs` を fresh 実行: exit 0。
+  準備済み dependency・空 HOME・通信遮断下で同じ解析失敗数を再現した。
+  package の再取得や通常 gate / prune の offline 成功を示す検証ではない。
+- 新たな仕様判断: 全 inline code span を厳格 shell として扱うと正常文書も失敗する。
+  R06 の入力種別・断片認識文法を先に確定する案を design §8 に提示した。
+  解析エラーを黙って prose / 成功へ読み替えず、既知参照を隠さない条件は維持する。
+- 本実装の修正、AST-to-command adapter、bundled / pruned の修正後 acceptance、
+  新候補での全検証、独立 review / verifier、hosted CI は未実施。
+  Task 1〜4 と Task 5 実装の既存 checkbox を保持し、Task 5 検証・Task 6 は未完了のままとする。
+- 文書差分の self-review: 合意と未解決案の区別、既存 checkbox の保持、6文書だけの変更を確認した。
+  stale status の修正は tasks の既存完了記録と照合した。これは試作・文書差分の確認であり、
+  commit 済み実装全体の再レビューではない。新たな本実装・公開契約変更は行っていない。
+- fresh 文書検証（上記 source commit と6文書差分）:
+  `openspec validate align-downstream-prune-validation --strict --no-interactive`: exit 0、valid。
+  `python -B scripts/openspec-validate-gate.py`: exit 0、1 passed / 0 failed。
+  `uv run --no-sync pre-commit run --files <変更した6文書>` と `git diff --check`: exit 0。
+  `task --dry check`: exit 0、入口の展開可否のみ確認。`task check` 本体は改訂案のみのため未再実行。
+  以前の green evidence を最新入力の全体 gate 成功として再利用していない。
+- 試作一時物は調査終了後に所有ディレクトリだけ削除した。恒久 CI / 完了判定は一時 script / log に依存しない。
+- 利用者の選択肢1回答により、実行用 shell と Markdown のコマンド記法の入力種別分離を
+  合意した。厳格な shell 解析と文書用の明示文法を分け、既知参照の検出を維持する。
+  その後の選択肢1回答で、shell 言語指定 fence の文書用 placeholder 許容も合意した。
+  混在する既知参照の検査と placeholder 以外の構文エラー拒否を維持する。
+  続く選択肢1回答で、placeholder に依存する検査対象引数は source / 位置 / 理由付き
+  partial とし、それだけでは失敗させない方針を合意した。既知参照の拒否は維持する。
+  続く選択肢1回答で、未引用・未 escape の `<name>`（ASCII 英字または underscore で始まる
+  英数字・underscore・hyphen 列）、語中表記の許容、引用済み文字列の literal 扱いを合意した。
+  リダイレクトとの衝突時の優先順位は未確定。候補採用・本実装は再開しない。
+- 追加の read-only 確認: `docs/optional/template-update.md:24` の bash fence に
+  `<template-repo-url>` / `<commit-sha>` / `<merge-commit-sha>` が存在する。
+  `python3 -` で当該 fence 本文を `bash -n` へ渡すと exit 2。source は実行していない。
+  「bash fence なら常に実行可能な shell」とは分類できないことを確認した。
+- partial 表示の合意反映後、`openspec validate align-downstream-prune-validation --strict --no-interactive`
+  と `git diff --check` を fresh 実行して exit 0。self-review で合意範囲と未承認の文法案を区別した。
+  本実装の検証・全体 gate はこの文書更新では未実施であり、完了 checkbox は変更していない。
+- 追加候補の調査: `libbash==0.1.14` の公開 source と PyPI を確認した。Python 3.14 用 wheel は
+  公開されておらず、Bash 5.2 の native build が必要。Context7 には libbash の該当資料がなく、
+  公式 repository / PyPI を参照した。隔離先 `/tmp/issue51-libbash-probe-lgq44o` の Python 3.14.6
+  venv で build した。production の dependency / lockfile / 実装は無変更。
+- fresh 追加試作（source commit は同じ `bcd9eecc3e556c58ae8cba0af6082479b9c35de6`）:
+  `uv pip install --python <probe>/venv/bin/python libbash==0.1.14`: exit 0、native build は43.15秒。
+  `unshare --user --map-root-user --net env -i HOME=<empty-home> PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 <probe>/venv/bin/python <probe>/probe.py`: exit 0。
+  K05 の `.sh` 入力91件は、構文受理・拒否について expected の invalid-syntax と全件一致した。
+  専用参照の detected / not-detected 自体はまだ評価していない。入力ごとに別 process で解析した。
+  case 再現例は正常 AST となり、代入の word 内に substitution を保持し、後続の task を別 command に
+  分離できた。解析前後で副作用検出用 sentinel は未作成。空 HOME・通信遮断下で実行した。
+  深さ4・8・16・32・64・128も全件受理、process 起動込み約36〜37 ms（各1回）だった。
+  精密な性能測定、任意入力での非実行性、scanner 全体の offline 成功を保証する証拠ではない。
+- AST-to-command adapter、全 R01〜R06、literal の復号・source 位置、同一 process の再利用、
+  bundled / pruned の acceptance、他 OS / architecture は未検証。候補の採用判断はまだ行わない。
+- 追加試作の所有一時ディレクトリは削除した。文書差分の self-review で、書式の合意と
+  native build 条件の未承認、構文解析試作と意味判定未検証を区別した。
+  最新改訂案で OpenSpec strict と `git diff --check` は fresh exit 0。
+  本実装の再開、全体 gate、Task 5 検証完了、Task 6 close は行っていない。
+- 利用者の選択肢1回答により、native build を要する parser も採用候補として許容する方針を合意した。
+  全 scanner・位置情報・offline 検証の成立後に採用判断する。本実装再開の承認とは扱わない。
+- fresh 隔離 adapter 試作（source commit は同じ `bcd9eecc3e556c58ae8cba0af6082479b9c35de6`）:
+  `/tmp/issue51-libbash-adapter-JyXWi1` の独立 venv へ
+  `uv pip install --offline --python <probe>/venv/bin/python libbash==0.1.14`: exit 0。
+  前試作で build 済みの package cache を使用した。AST 取得は入力ごとの別 process とし、旧 parser へ fallback しない。
+  AST の単純コマンドと word を既存参照判定へ渡す一時 adapter を作り、実行中 process 内だけで差し替えた。
+  production の source / dependency / lockfile は変更していない。
+- `unshare --user --map-root-user --net env -i HOME=<empty-home> PATH=<Node24>:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 <probe>/venv/bin/python <probe>/integration.py`: exit 0。
+  K05 全179件 × bundled / pruned の358組で、検出結果と coverage は356組一致した。
+  不一致2組は `markdown-multiline-code-link-data` の両構成。期待は not-detected / evaluated だが、
+  文書用の認識処理が未実装のため invalid-syntax / not-run になった。全件成功とは扱わない。
+  外部レビューの case 再現例は両構成で内部を除外でき、直後の専用コマンドを加えると両構成で検出した。
+- 実 workspace への初回試作は13 source でエラー。R01 と bootstrap の2件は、試作の JSON 転送で
+  libbash の Enum を直接渡したことによる TypeError だった。Enum の名前を転送する処理を加え、
+  `<probe>/workspace.py` を同じ空 HOME・通信遮断条件で fresh 再実行: exit 0。
+  残る11件は全て R06 の文書入力であり、構成判定は inconsistent / partial。通常 gate の成功ではない。
+  Enum 転送変更後の358組の再実行は未実施。文書の分類・placeholder 処理も未実装である。
+- `<probe>/position_probe.py` を空 HOME・通信遮断条件で fresh 実行: exit 0。
+  継続行を含む command の line が開始行に一致しない例を確認した。
+  with_linno_info は top-level statement の source 範囲を返すが、入れ子 command / argv の
+  正確な開始位置の解決は未検証。構文エラー後の正常入力2件は同一 process で再解析できたが、
+  任意の process 再利用を保証する検証ではない。
+- `bash -n` と libbash の読取 AST により、`task <input> check:template` は exit 0 で、
+  argv は task だけ、input と check:template はリダイレクト先になることを確認した。
+  これを R06 で placeholder と解釈するかは新たな優先順位の判断となる。source は実行していない。
+- self-review: 本試作の不一致・source 位置問題を採用 blocker として残し、既存の完了 checkbox と
+  本実装再開の境界を維持した。全体 gate・独立 review / verifier・hosted CI は追加実行していない。
+- adapter 試作の所有一時ディレクトリは削除した。一時 script / log を恒久 CI や完了判定へ依存させない。
+- 利用者の選択肢1回答により、R06 では合意した placeholder 書式をリダイレクトより優先する
+  方針を合意した。`task <input> check:template` は専用参照として検出し、
+  `task < input > check:template` はリダイレクトとして扱う。実行用 shell の解釈は変えない。
+  design / spec-holes / validation / spec delta の改訂案へ反映し、未実装の状態を維持した。
+- 優先順位の反映後、OpenSpec strict と `git diff --check` は fresh exit 0。self-review で
+  文書と実行用 shell の期待値を区別した。本実装検証・全体 gate は未実施、checkbox は不変。
+- 利用者の選択肢1回答により、shell 位置は該当 top-level statement の元 source 行範囲で
+  報告する方針を合意した。正確な開始行とは表示せず、Workflow の YAML field value 開始位置を
+  維持して shell 相対範囲を別情報にする。source bytes との対応検証は未実施のまま保持する。
+- 位置報告方針の反映後、OpenSpec strict と `git diff --check` は fresh exit 0。self-review で
+  保証する範囲と未実施の検証を区別した。本実装・全体 gate・完了 checkbox は変更していない。
+- 利用者の選択肢1回答により、inline / 言語指定なし fence / console の分類不能断片は
+  理由付き partial とし、それだけでは失敗させない方針を合意した。同じ単位内の認識可能な
+  専用参照の検査は継続し、実行用 shell・shell 明示 fence・認識済みコマンドの構文エラーは拒否する。
+  具体的な分類規則、candidate adapter の修正、全入力の適合性確認は未実施である。
+- 分類不能時の方針反映後、OpenSpec strict と `git diff --check` は fresh exit 0。self-review で
+  partial の許可と構文エラーの拒否を区別した。本実装・全体 gate・完了 checkbox は変更していない。
+- 利用者の選択肢1回答により、解析エラー時も bundled / pruned / inconsistent を保持して
+  エラーを別報告する方針を合意した。unknown は追加しない。構成状態だけで成功とせず、
+  gate / doctor / preview / apply / 適用後検査 / no-op は解析エラー時に非成功とする。
+  design / spec-holes / validation / spec delta の改訂案へ反映した。本実装は変更していない。
+- 構成状態と解析エラーの分離方針を反映後、同じ source commit と6文書差分に対する
+  `openspec validate align-downstream-prune-validation --strict --no-interactive` と
+  `git diff --check` は fresh exit 0。self-review で合意済み方針・未確定契約の区別と、
+  各入口の非成功条件、既存 checkbox の保持を確認した。全体 checks・本実装の検証は未再実行。
+- 再開指示後、同じ source commit と6文書差分を入力に、所有 snapshot と対象 branch を確認した。
+  `/tmp/issue51-suitability-fqn1d9rn` に Python 3.14.6 の隔離 venv を作成し、
+  `uv pip install --offline --python <probe>/venv/bin/python libbash==0.1.14`: exit 0。
+  前試作で準備した cache を使い、production の dependency / lockfile は変更していない。
+- `<probe>/capture.py` と `<probe>/capture_probe.py`: fresh exit 0。
+  現行 scanner が実 workspace の R06 から抽出した271入力を確認した。
+  厳格な Bash parser のみでは28入力が失敗した。placeholder の試験的正規化後は5入力が残り、
+  HTML comment 表記、左辺なし演算子、他言語式、引用 block 内の非 shell fence だった。
+- `unshare --user --map-root-user --net env -i HOME=<empty-home> PATH=<Node24>:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 <probe>/venv/bin/python <probe>/positions.py`: fresh exit 0。
+  shell 13入力で top-level statement の範囲と元 bytes を照合した。空入力、末尾改行なし、
+  同一行複数 command、コメント、継続行、if / function、heredoc、case substitution、CRLF、Unicode を含む。
+- 同じ空 HOME・通信遮断条件の `node <probe>/yaml_positions.mjs`: 初回 exit 1。
+  Unicode flow YAML の期待 column を39とした試作側の誤りだった。UTF-16 offset の期待値を42へ
+  修正し、fresh 再実行 exit 0。重複 name / run、重複 step、literal / folded / escaped scalar、
+  Unicode、CRLF、scalar / step / job alias、同値 sequence item の11入力で node の位置を確認した。
+  cycle は既存 JSON 境界で拒否されることも確認した。column の公開形式は本試作で確定しない。
+- 利用者は alias の実際の field value 定義位置を主表示し、利用位置も併記する選択肢1を承認した。
+  design / spec delta / spec-holes / validation の改訂案に反映した。
+- 文書用認識処理を含む隔離 adapter の `<probe>/integration.py`: fresh exit 0。
+  K05 全179件 × bundled / pruned の358組で検出 / coverage が一致し、実 workspace は
+  bundled / partial、errors 0、references 0、unevaluated 28件だった。
+  これは process 内の adapter 差替えによる試作であり、通常 gate / doctor / apply の成功ではない。
+- `<probe>/boundaries.py` の追加対照で、式断片と同じ単位の既知 command の取りこぼしと、
+  独自 quote 状態による入れ子内 placeholder の誤分類を発見した。
+  事前の文書 notation 認識と AST word の引用・展開区分から復元する方式へ試作を修正した。
+  更新後、同じ空 HOME・通信遮断条件の fresh 対照20件が期待値と一致した。
+- `<probe>/final_boundaries.py`: 同条件で fresh exit 0。placeholder executable、heredoc、
+  引用 path、escape、shell 明示 fence の厳格な扱いなど追加10件、実行用 shell の
+  redirection 2件、case substitution の内部除外 / 後続検出2件が成功した。
+  入力中の touch / command substitution / process substitution による sentinel は作成されなかった。
+  nesting 4 / 8 / 16 / 32 / 64 / 128 は各1回、別 process 込み約35.8〜37.4 msだった。
+  任意入力の非実行や資源上限の一般保証には読み替えない。
+- package metadata / LICENSE と公式 PyPI 0.1.14 を照合し、libbash の GPL-3.0 を確認した。
+  テンプレート本体の MIT と両立不可とは断定しないが、常設依存の license 許容方針は未合意である。
+  API は共有 library 欠落時に configure / make を起動するため、採用時は呼出前に欠落を拒否する必要がある。
+- 最終の placeholder executable 対応後、同条件の `<probe>/integration.py` を fresh 再実行:
+  exit 0、K05 358組一致。実 workspace は bundled / partial、errors 0、references 0、unevaluated 28件。
+  過去の356組一致を最新結果として流用していない。
+- 本追加記録の文書検証は fresh 実行。OpenSpec strict: exit 0、
+  `python -B scripts/openspec-validate-gate.py`: exit 0、1 passed / 0 failed、
+  6文書を対象とした `pre-commit run --files ...` と `git diff --check`: exit 0。
+  self-review で6文書だけの差分、ownership digest と既存 checkbox の保持、
+  alias の合意と parser 採用未確定の区別を確認した。
+- 所有する隔離試作ディレクトリは削除した。試作の code / log を恒久 CI の入力にしない。
+  文書文法の最終確定、全要件の12分類再監査、通常 gate / doctor / apply への組込み、
+  最新 project checks・独立 review / verifier・hosted CI は未実施。Task 5 / 6 は完了にしない。
+- 再開位置: 利用者の選択肢1回答と再開指示に基づき、permissive license の候補を再選定する。
+  libbash は採用候補から外し、既存 Bash 構文の受理を維持する条件で隔離比較を続ける。
+  合意した方針に沿って Markdown 入力分類とエラー報告形式を具体化し、
+  隔離 adapter で既存 K05・正常 workspace・位置対応の候補適合性を確認する。
+  技術的事実は試作で確認し、新たな仕様判断が生じた場合だけ利用者へ確認する。
+  全要件の12分類再監査、6文書の規範化、利用者の本実装再開承認を経て新 cycle を開始する。
+  active change を保持し、Task 5 成功前に close しない。
 
-```jsonl
-{"path":".github/workflows/template-maintenance.yml","last_task":1,"type":"regular","mode":"0644","content_sha256":"83983f87cd233a4df9187ee46d506b3c2070544e77427a9acfc84f3754a9c7bb","post_task_diff_digest":"c0e1b6cfe5210314a50fee03ae6f0b1b29276bbf2897d781eaf9d2ab21784b94"}
-{"path":"README.md","last_task":4,"type":"regular","mode":"0644","content_sha256":"7d589ad66e278f22162e06ef614ac9e7d39d1009a75d81853ad414ce533d2558","post_task_diff_digest":"8d150eb60abc56dae6e0d0fa4e0c7b28eda770e41ab3337c825b67e573beef6e"}
-{"path":"Taskfile.yml","last_task":4,"type":"regular","mode":"0644","content_sha256":"5b92c0266c3008e79351ca38f52a863087c5bbf58d596b346a5302a3c3218c1e","post_task_diff_digest":"ec7e35ce8f72ed4a8330f0c09b112ec1465d2008e266bff5d0106b3d9f08617a"}
-{"path":"docs/agents/workflow.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"65d51f112f1dcaf7cb9d974cee9d261cc0b30b99a87938014494757e9197d247","post_task_diff_digest":"4ddab6e84851e4e31479868d67c85ddd6ec8bd93c060aa087faa2510427b51d0"}
-{"path":"docs/guide.md","last_task":4,"type":"regular","mode":"0644","content_sha256":"013a1e65a9464ee1fa6a0399115d9f021138d4829bd5121737712f0cf313307f","post_task_diff_digest":"b5ba6ca82bc1f1bd38a445284b6aeeda8362d55ab5b793a25d4982f97b2c509d"}
-{"path":"docs/optional/template-update.md","last_task":2,"type":"regular","mode":"0644","content_sha256":"8f4377323763313812c28c470bb91323833abf4b34bc3f2ac5c2994370e86fcc","post_task_diff_digest":"125476abf741a51f11647c07ccfc49bc74d9e18109dfa89b39fe006c3371255d"}
-{"path":"docs/reference/prune-template-assets.md","last_task":4,"type":"regular","mode":"0644","content_sha256":"a62208bc4e034c26d82f7d829cc8d1843b4a5f44cc3170e65f4c6a0c597bd1d3","post_task_diff_digest":"babefd98d66b94a567f1749da2f34443de72d95b3407e97a3de86496551183e1"}
-{"path":"docs/reference/repository-contracts.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"733a06b3750ba139d3fa368c3f71e489ac53b7fc4aa9f57c96265b64cf3193ea","post_task_diff_digest":"a482438480067e17fde18c27e3e86c7f6529c6a16fb32f2ad453205a0dce5595"}
-{"path":"docs/reference/skill-maintenance.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"97ed276c32bd82c187f14c26da02acabf37fb0943191ef36d9327672ca8d15ef","post_task_diff_digest":"c1c381cd368d18f12c5f4754870fabc0a3b779a07c548cde3b51f1b7a0a115e0"}
-{"path":"docs/reference/skill-metadata-v2.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"7f5791446e38f0cf055173bb8e0f07ddb216a13fcfbfc717698b004c09b3b8fd","post_task_diff_digest":"4cbe303c436c3a469d400e07dc00cde56c4f2d3a9bdbb01554648a27b6fefccc"}
-{"path":"docs/template/release.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"08430fc58626e977e1e92c434481de2d11359908b1d667e12f5c9813142ef939","post_task_diff_digest":"c327f13597669126589b62839641223785f5545e89990716e9f5c88d3a2ab64d"}
-{"path":"docs/template/repository-contracts.md","last_task":1,"type":"deleted","mode":null,"content_sha256":null,"post_task_diff_digest":"1a96473b9b11f762718602f4e4467ef69482867ca65a558f61af014ee8f604d1"}
-{"path":"docs/template/skill-maintenance.md","last_task":1,"type":"deleted","mode":null,"content_sha256":null,"post_task_diff_digest":"1a96473b9b11f762718602f4e4467ef69482867ca65a558f61af014ee8f604d1"}
-{"path":"docs/template/skill-metadata-v2.md","last_task":1,"type":"deleted","mode":null,"content_sha256":null,"post_task_diff_digest":"1a96473b9b11f762718602f4e4467ef69482867ca65a558f61af014ee8f604d1"}
-{"path":"docs/template/v2-release-notes.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"8be971831e118999eaa32a68c76fcdf4c77ede5704ec5bd9aef8d498190ed75e","post_task_diff_digest":"b278be0f59c9324cc4724bb8b885683134f46b6301aecdfa53a4e68f8aff722c"}
-{"path":"openspec/changes/align-downstream-prune-validation/design.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"c04f0f0ceb098a63519986777f5a6b35937e9c3a7aabbc1f6eddefb115874521","post_task_diff_digest":"f4d39c9aeeeb4e3db7ea18bc27ed539bf1aad66b09b2a4b8b52ccbd5aac629ac"}
-{"path":"openspec/changes/align-downstream-prune-validation/proposal.md","last_task":4,"type":"regular","mode":"0644","content_sha256":"795c78e7c872e358b02c9cd8cbc080f499e2f239298a2f68ffb879a9d17837f6","post_task_diff_digest":"4a1597f0f2587113b9a83f286fd0a83d40665c188ffa4a7ed66e88eaa5022283"}
-{"path":"openspec/changes/align-downstream-prune-validation/spec-holes.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"7bffcbdede8a3b33e61ba3972eafd9c9492fb318ed3d2af6c65932d247177898","post_task_diff_digest":"0cc7e063e4d423160d479fa7790725c5ad9eb08f7b39b5616fa002e4e3904c52"}
-{"path":"openspec/changes/align-downstream-prune-validation/specs/downstream-prune-validation/spec.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"6f21fd0b2c28804d12c346522fb730d1fd55d09763cc03ea356b5c7851c6ae3f","post_task_diff_digest":"d306ee88afe612e4bc7144f3a42cb6172b862e8f0083af7fcebf212ba30df643"}
-{"path":"openspec/changes/align-downstream-prune-validation/tasks.md","last_task":5,"type":"regular","mode":"0644","content_sha256":"8f48a5b692a18e57fbf5f5f18e50880e62a93f658d7dc65d90a2cc96c99959de","post_task_diff_digest":"555ea0e1e7818294d0fceaa19887af2cfba1639c434efea3a1e4578b24e28923"}
-{"path":"openspec/changes/align-downstream-prune-validation/validation.md","last_task":1,"type":"regular","mode":"0644","content_sha256":"504e341734e3233dedd920f1750616315d024fa898c83cf3bb3a6cf2e2fb56ee","post_task_diff_digest":"4d68527d88411b210565c2b6385d306a41ec6c4917b0d6833480a0dae644b878"}
-{"path":"repo-tools/repository-contracts-test-fixture.ts","last_task":2,"type":"regular","mode":"0644","content_sha256":"8e5e0e15e9c95607f83b680158a99436a7c1a2c25151948d1874358f0002eee0","post_task_diff_digest":"53af494c138adef26f03117f2d5ba83ac38adf9d89a5b5b218bf49ed8bb21a32"}
-{"path":"repo-tools/repository-contracts.test.ts","last_task":1,"type":"regular","mode":"0644","content_sha256":"2c0c1960d6e95ba1299bd9b2bb01e154e8ff38279747558d476d4ea876c05873","post_task_diff_digest":"97fe36bcd27ff6f752466d272ef028bf8c8d715a461874822d6c6e383fd74fe1"}
-{"path":"repo-tools/repository-contracts.ts","last_task":2,"type":"regular","mode":"0644","content_sha256":"51b95c91e08e93916d43a6dd92a146512e16985d2a8aaf97f1ddeaee270b6c52","post_task_diff_digest":"490b9fdde0d021cca106d9b8c54690f5de405f148077dddb1ffb2d68c15432dd"}
-{"path":"repo-tools/repository-taskfile.ts","last_task":2,"type":"regular","mode":"0644","content_sha256":"fcd4431610d933057f1bc7fb7c93f7a5cfcab2536de6f30361e0b79106ac4ac3","post_task_diff_digest":"712a8d7066d3eafdbfa286c35d1d3e264968082c47d6633bff11eea543d2f540"}
-{"path":"repo-tools/template-prune-bridge.ts","last_task":5,"type":"regular","mode":"0644","content_sha256":"565eaa2f0c799769b74daf93779c9745418364b3c25523fa00c3213b4204723e","post_task_diff_digest":"118ecbb384406faf7181910dce0707b510769fa816bf1d39522adbf4b6b54415"}
-{"path":"repo-tools/template-prune-contract.ts","last_task":2,"type":"regular","mode":"0644","content_sha256":"e395661da4caf8d52c62f8109f14342d61bf80434c51aa58abbd6e05bab4a605","post_task_diff_digest":"bba308e4cb4d3d7ab85901d6b090903da720648294a2cec959b29e7d947cadb7"}
-{"path":"repo-tools/template-prune-js.ts","last_task":5,"type":"regular","mode":"0644","content_sha256":"e58f1ad74255cd9ffc86d877253ade00e821a53a4c58173fb0294b5387a6b678","post_task_diff_digest":"c751bbfb5ba88a2858673ef0c13f44f99492af71d3456209870ac0a096ec2046"}
-{"path":"repo-tools/template_prune_apply.py","last_task":3,"type":"regular","mode":"0644","content_sha256":"1720547cc969b1e70f7e82250393775c33483b17cf25063bcee7fc408ffe438a","post_task_diff_digest":"fa169a75c9083a844b97103c729d8f571936a8fed2cb933ad4d10a75ab492d38"}
-{"path":"repo-tools/template_prune_manifest.py","last_task":2,"type":"regular","mode":"0644","content_sha256":"58b2f1b387246141048fec0754443c52e3a9da3df82bb3a57e843c1bed8cd1ef","post_task_diff_digest":"9932bf63d2b0d6bbc0ad632a02326cd4718182c9eb18eb084003245fed189d27"}
-{"path":"repo-tools/template_prune_plan.py","last_task":2,"type":"regular","mode":"0644","content_sha256":"3051c67a6c21a975d1a03b545ff18c0b8384a2bba166b083fc8464b68feb050f","post_task_diff_digest":"1e209efe4305587224cf128af64b9033d9d2594b9ad3f9477ecfd6350c228e41"}
-{"path":"repo-tools/template_prune_references.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"f3fc421486eb3dd35676811e3055610e7bd5aa96c774f95fa5e66473dbda98e1","post_task_diff_digest":"ff15759287ae43c9de19b50ea5b5262e154ec7223dc9f3960aff4c1af65ec8e9"}
-{"path":"repo-tools/template_prune_shell.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"73282133296fb7aa7f902d75d5ddbf4ab3b9e0c3a67a94c7761b55b9581d5de3","post_task_diff_digest":"065f0edf9f7a8572e58d5d637a90098ac478fdf692160258536db97f8b2d12fc"}
-{"path":"repo-tools/template_prune_state.py","last_task":4,"type":"regular","mode":"0644","content_sha256":"581339f4dc072b5c760971088ffce8f37938ce243a4836f7689304a0f2d216ef","post_task_diff_digest":"b5507ddbf68f634fe82608464f8c51a6c9db7f1ffc06f48cfb02a4d15337257a"}
-{"path":"repo-tools/template_prune_workflow.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"872311d872fac98e039a02083aeb6c511c77505045f2f177e425b07a2bc7f167","post_task_diff_digest":"01d4320ba423e67c241621a3ffc6fb6b55139267b2963b9d7ba12e0ce165db05"}
-{"path":"scripts/doctor.py","last_task":2,"type":"regular","mode":"0755","content_sha256":"bb47da0d06afd08a8ee332a10efec02c96a890a5c199304606932ba672da9055","post_task_diff_digest":"e081f14b542f00182dde004649aac715f5b2d41b0d6161506e77afc181f9f84c"}
-{"path":"scripts/prune-template-docs.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"60f535ea7d5b45f5bd0b6af09251a6e66c444139091de50d1179995a414d3148","post_task_diff_digest":"b271aaa925cb2a648a3561115a65bce89abc49300bb70df2e58ecd49a585c916"}
-{"path":"template-maintenance/tests/test_history_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"c273ca07439d0013f5c0a289bfe6cd0bd544d60397513ea7e66607d71d41e706","post_task_diff_digest":"8aaaca10cc795e09bbcbe47dce695bb5cb89fce4d577e40bd43f19e1feca5646"}
-{"path":"template-maintenance/tests/test_prune_integration.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"5f12de8ba605e2cf4f4ff7cef75a2b07365235818ca73011c02156366edd99fa","post_task_diff_digest":"bf0097320536e71f0d5da23463265b5b887ff90baa53a3ab40957dbbd09258e8"}
-{"path":"template-maintenance/tests/test_release_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"8e851bbb55d91e5641938b202bb446c20811002f4f3507696b28a5ed5c5b99a7","post_task_diff_digest":"4aae0036b353f0e3d945fe1b8f05de9afd33571dfe8eb788cf6d2df3a56468a1"}
-{"path":"tests/fixtures/template_prune/references.json","last_task":5,"type":"regular","mode":"0644","content_sha256":"78a5133b894cd453f0b9b40b0d2f572c640bbb079d22dea959102ae075dc65a6","post_task_diff_digest":"af5aa105d312fc6b65b732ba587992983e79e1984db9c6ed319a5eb9097bf9c4"}
-{"path":"tests/template_prune_fixture.py","last_task":4,"type":"regular","mode":"0644","content_sha256":"a31f25c46eeb7ee56815436beaabdd443c37bf8bcdceff8f198624ca84943af4","post_task_diff_digest":"a84cab20a84e1e1e0ade1470191c043c290fff55d4e7c26054989b25dc900b17"}
-{"path":"tests/test_openspec_direct_workflow_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"8a20c1fc92468b06d08ef1b9daa4da791e0012d5def9b71c03a035924e7778c0","post_task_diff_digest":"278dd1238dc6e756b56fdd175a93f87594c6787310b48145fcf713bb57f5f3e9"}
-{"path":"tests/test_project_gate_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"81f9ce0c313b53a70b69df877c31c1ad7db7f58791e6c477c5fd66f938256e1a","post_task_diff_digest":"4410ffe7bf4be57e2b2c4501d277f79d53daa51e28b3afa49bba11cd823de5f6"}
-{"path":"tests/test_review_convergence_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"7b7c31d8b7d72541a0dbcf0c55f8d89587e53edca12cc8b68d63947b960ade0b","post_task_diff_digest":"f751665d2a445b6eab273d9f8dc298006ab5e43ab56418af607caec1a8354975"}
-{"path":"tests/test_runtime_foundation_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"d9c2c93dd1ccd4beb29fbf9ddf004f368fdbf44870a01dee96d3691cd8ce4296","post_task_diff_digest":"0cf24dc4d1043a2ac988d09a903ab9049ef89ed89589bdcd7193c2341bf03404"}
-{"path":"tests/test_setup_mcp.py","last_task":4,"type":"regular","mode":"0644","content_sha256":"9e9ac059afc5545d09cc4bc53388f61441889cac8df94b14cde2bc4e08e53978","post_task_diff_digest":"af716872471ba4bd1aa70bc90fec3b6901c3056bdd9a079c7b88a51b5c853c0d"}
-{"path":"tests/test_smoke.py","last_task":4,"type":"regular","mode":"0644","content_sha256":"b3284df3c5b61e6a31748f4653e1f6689ef681335b95dd52d05e05398b426747","post_task_diff_digest":"73ab80f3f45d7d1a7c4e33bd034474bfd88e44b7157400177f176868215e154e"}
-{"path":"tests/test_template_prune_apply.py","last_task":4,"type":"regular","mode":"0644","content_sha256":"61375f56f7ad12d8e6a139745ce1813cb4d0daeca0b26194d5ce6e686e998132","post_task_diff_digest":"11554d8633eb3315b09881d609a9caff1c3e801190fd972de368f4feb9a8ddbd"}
-{"path":"tests/test_template_prune_plan.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"01e6fd3f3343db953f474ef0dfe35ce01689a056d89c16e9d5c4cd4511c2407d","post_task_diff_digest":"6e200d57b1afb00620456f80214bc77f71049a991df9e3503d96cd55e80780fc"}
-{"path":"tests/test_template_prune_state.py","last_task":5,"type":"regular","mode":"0644","content_sha256":"b8abde585422797790b94728bc9a2af0ee377fb4ee222de0bdd79d206439fbb9","post_task_diff_digest":"82dd2c3d24785d8372ef8388fd910161b6b1c543cfbbcd4b1389c450484bebec"}
-{"path":"tests/test_tool_neutral_documentation_contract.py","last_task":1,"type":"regular","mode":"0644","content_sha256":"05ef16c31c2fce70048fa5e7628f39fe954d74601bdc92c172d34f1cb5abe7c6","post_task_diff_digest":"968933d26c2062d8b1e07ecff013313635a1725d107cd7ae83d4f0e6c56074da"}
-```
-<!-- executor-owned-snapshot:end -->
+#### Task 5 permissive parser 再選定（2026-10-14）
+
+- 利用者は選択肢1を承認した。新規 shell parser を permissive license の候補から再選定し、
+  GPL-3.0 の libbash は採用候補から外す。再開指示後も production の実装・dependency は変更しない。
+- source commit は `bcd9eecc3e556c58ae8cba0af6082479b9c35de6`。
+  branch と6文書の ownership snapshot 一致を確認し、既存の未完了 checkbox を保持した。
+- 以下は同 source commit の fixture に対する fresh 実行。隔離試作先は
+  `/tmp/issue51-permissive-parser-8ze04o7r`。依存は workspace 外に準備した。
+  Node 24.14.1 / Python 3.14.6、入力検査は空 HOME・network namespace 内で実行し、
+  shell 入力は parser API または no-execution オプションだけに渡した。
+- `shfmt -ln bash --to-json`（mvdan/sh v3.14.1、BSD-3-Clause）:
+  K05 の shell file 91件中、期待した構文受理との不一致8件。8件すべて system `bash -n` は exit 0。
+  演算子途中の行継続4件、quoted heredoc delimiter 1件、heredoc 終端の行継続3件を拒否した。
+  外部レビューの case substitution と後続コマンドの入力は exit 0、typed AST 上で分離できた。
+  公式 release binary の SHA-256 は
+  `76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf` と一致した。
+  公式 v3.14.1 source の `regToken` / `advanceLitHdoc` を読取確認したが、patch は未作成。
+- `bash-parser@0.5.0`（MIT）の `parse(source, {mode: 'bash', insertLOC: true})`:
+  同91件中、構文受理の不一致12件。外部レビューの case 入力も parser error となった。
+  npm 導入は隔離 prefix に `--ignore-scripts --no-audit --no-fund` を指定した。
+- `brush --no-config --noprofile --norc --noenv -n -c SOURCE`
+  （brush-shell v0.4.0、MIT）: 同91件中、構文受理の不一致15件。
+  先行した stdin 経路の35件不一致とは区別する。Rust parser API 自体は未検証であり、
+  CLI 経路の結果を library 単体の結果としない。公式 musl binary archive の SHA-256 は
+  `7397aa2cecef43ed38070912b6d865fdbe23dc08fda2d6148d8cee8dc12d15ee` と一致した。
+- OSH 0.38.0（Apache-2.0）は公式 source を隔離先で
+  `./configure --without-readline`、
+  `OILS_PARALLEL_BUILD=0 _build/oils.sh --without-readline --variant dbg` により build した（exit 0）。
+  GPL readline を含めず、source archive の SHA-256 は
+  `a33453722819b55ee552bfd7f3c2bab8f1940def55d5c8b46af16ce95bdf8803` と一致した。
+  `osh --rcfile /dev/null -n --ast-format none`: 同91件中、構文受理の不一致7件。
+  case 入力は exit 0、`--ast-format text` では substitution と後続コマンドを区別できたが、
+  安定した公開 JSON AST interface は確認できなかった。`touch` と command substitution の
+  sentinel 入力は実行されないことを確認した（exit 0、sentinel 不在）。
+- 参照元: [mvdan/sh v3.14.1](https://github.com/mvdan/sh/releases/tag/v3.14.1)、
+  [bash-parser](https://github.com/vorpaljs/bash-parser)、
+  [brush v0.4.0](https://github.com/reubeno/brush/releases/tag/brush-shell-v0.4.0)、
+  [Oils 0.38.0](https://oils.pub/release/0.38.0/)。
+- 全候補について、この比較は構文受理の検査であり、K05 全179件×2構成の検出・coverage 一致、
+  Markdown adapter、正常 workspace、位置情報、各入口への統合の成功を示さない。
+  既存の正常入力を拒否する版をそのまま採用しない。production source / dependency / lockfile は未変更。
+- 新しい判断案: mvdan/sh の固定 source に限定 patch を持つ責務を条件付きで許容し、
+  まず隔離試作で範囲と適合性を評価する。Go toolchain / artifact 準備、上流更新への追従が
+  追加コストとなるため、現時点では未承認とする。広範な grammar 改造が必要なら再計画する。
+  本実装・具体的な依存採用・上流への投稿は行わない。代案は無改造の別候補の探索継続である。
+- 文書の focused validation は同 source commit と6文書の差分に対する fresh 実行。
+  `openspec validate align-downstream-prune-validation --strict --no-interactive`: exit 0。
+  `python -B scripts/openspec-validate-gate.py`: exit 0、1 passed / 0 failed。
+  6文書の `pre-commit run --files ...`、`git diff --check`: exit 0。
+  本追加差分の self-review では実測件数、CLI と library の区別、未承認案と合意事項、
+  6文書だけの変更、既存 checkbox の保持を確認した。libbash の過去の候補承認を現在の
+  採用可能性と誤読しないよう文言を修正した。
+  `task check` / `./scripts/check.sh`、本実装の独立 review / verifier、hosted CI は
+  改訂案検討中のため今回未実施であり、過去の green evidence で代用しない。
+- 所有する隔離試作ディレクトリを削除した。試作 code / log を恒久 CI の入力にしない。
+- 利用者は選択肢1を承認した。限定 patch の保守を条件付きで許容し、隔離評価を行う。
+  大規模改造が必要なら再計画する。具体的な採用と本実装は未承認のまま維持する。
+- 再開位置: `/tmp/issue51-shfmt-patch-hc5esq3d` で mvdan/sh v3.14.1 の限定 patch を評価する。
+  既存の受理範囲・Taskfile canonical validation・partial 時の検査継続・Git 保護は維持する。
+  Task 5 検証と Task 6 の checkbox は未完了のまま保持する。
+
+#### Task 5 mvdan/sh 限定 patch の隔離評価（2026-10-14）
+
+- 利用者の選択肢1と再開指示に従い、同じ source commit
+  `bcd9eecc3e556c58ae8cba0af6082479b9c35de6` の6文書だけを改訂した。
+  production source / dependency / lockfile / setup / CI は変更していない。
+- upstream は mvdan/sh v3.14.1 / `a3f0c75d21d918756fa38de8b5d3429efde7948b`。
+  隔離先の Go 1.27.2 Linux amd64 toolchain は公式 download metadata の SHA-256
+  `ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5` と照合した。
+  試作は `/tmp/issue51-shfmt-patch-hc5esq3d` で実施した。
+- RED: 無改造版に対する shell file 91件の比較と
+  `go test ./syntax -run TestIssue51BashCompatibility -count=1` は既知8件を拒否した。
+  redirection 行継続・heredoc quote removal・論理行の終端比較を upstream parser 内で修正した。
+  対照例から、delimiter の途中にある引用情報を後続 literal で失う問題も再現し、集約を修正した。
+- 中間版では heredoc AST の変更により printer / AST / interpreter の回帰を検出した。
+  物理行を保持する表現へ修正し、既存の interpreter 出力を保つため展開処理も修正した。
+  upstream の期待値変更は Bash / Bats の heredoc AST 表現1例と、空継続行後の正常な delimiter を
+  不正としていた1例に限定し、後者は正常入力の回帰例を追加した。repository の K05 期待値は未変更。
+- 最終 patch に対する `go test ./... -count=1`: fresh exit 0（テストを持つ9 packages）。
+  追加した `TestIssue51BashCompatibility` は17入力。parser の source 2ファイルと
+  AST consumer の `expand/expand.go` を変更し、文法全体の独自実装は追加していない。
+- `go build -o ../shfmt ./cmd/shfmt`: exit 0。
+  隔離 Python adapter で現行 `References` / `inspect` に接続し、K05 の179入力を
+  bundled / pruned の両構成で比較した。`semantic_probe.py --all`: fresh exit 0、358組一致。
+  既存の Markdown 表示データ例を入力分類前に除外し、parser error 後の fallback は使っていない。
+- Markdown adapter を接続した同じ358組の比較も fresh exit 0。
+  `doc_boundaries.py`: fresh exit 0、28入力。placeholder の引用・escape・語中表記、
+  shell fence、式断片と既知参照の混在、認識済みコマンドの不正引数、block quote 内の
+  shell / 非 shell fence、literal sh -c を比較した。
+  source surface が R06 であることを条件にし、Taskfile の validate flag を文書分類に流用しない。
+  追加の対照例で、式用 token が command substitution 内の不正構文を受理させる試作不備を
+  再現して修正した。展開内の未引用の式は拒否し、引用された同じ文字列は維持する。
+- `extra_probe.py`: fresh exit 0。case substitution と後続コマンド、関数、Unicode、heredoc 等の
+  9入力×LF / CRLF = 18入力で検出と top-level statement の元 bytes / 行範囲を照合した。
+  非実行 sentinel は生成されず、nesting 4 / 16 / 64 / 128 の各入力で外側の専用参照1件を検出した。
+  process 起動込みの所要時間は約1.44 / 2.18 / 11.15 / 30.84 ms。任意入力の資源保証ではない。
+- 上記 adapter 検査は Node 24.14.1 / Python 3.14.6、空 HOME、network namespace 内で実行した。
+  正常 workspace の最新試作結果は bundled / partial、errors 0、references 0、unevaluated 35件。
+  これは通常 gate / doctor / apply の実行結果ではなく、Markdown 文法の最終仕様でもない。
+  初期 adapter の正常文書11件の parser error を、合意した入力分類・placeholder 方針の試作で解消した。
+- 未検証: 分類規則全体の規範化、任意の複雑な説明断片、生成 token と位置対応の全境界、
+  YAML 診断の本実装接続、他 OS / architecture、setup / runtime artifact 欠落、
+  最新 project checks、独立 review / verifier、hosted CI。Task 5 検証と Task 6 は完了扱いしない。
+- 本 cycle の文書検証は同 source commit と6文書差分に対する fresh 実行。
+  OpenSpec strict、`python -B scripts/openspec-validate-gate.py`（1 passed / 0 failed）、
+  6文書の `pre-commit run --files ...`、`git diff --check` は exit 0。
+  self-review で承認範囲、試作と本実装の区別、失敗修正の証跡、未検証項目、
+  6文書の ownership、Task 1〜4 完了と Task 5 検証・Task 6 未完了の保持を照合した。
+- 再開用の一時成果は `/tmp/issue51-parser-review-inz3b9eo` の patch と adapter に限定する。
+  patch SHA-256 は `3c28310913d824ff941a1b7597504cbda2331f65cbf9d2fa1b089d7517ced18b`。
+  `git apply --reverse --check` は exit 0。これは再開・レビュー用であり、通常 CI や完了判定に依存させない。
+  Go module cache の read-only directory により最初の cleanup は失敗したが、所有する一時 directory の
+  write 権限を戻して再実行し、隔離 source、toolchain、cache、binary、生 log を削除した。
+  改訂仕様確定時に残した一時成果も cleanup する。
+- 利用者は選択肢1を承認した。setup 時だけ固定 Go toolchain を専用領域へ取得し、
+  固定 source / patch から parser を build する。通常検査に Go / network / build を要求しない。
+  再開位置は取得・build・runtime 検査の隔離評価と改訂案の具体化。production の
+  setup / CI / dependency はまだ変更せず、Task 5 / 6 の未完了状態を保持する。
+
+#### Task 5 setup build 方式の隔離評価（2026-10-14）
+
+- source commit: `bcd9eecc3e556c58ae8cba0af6082479b9c35de6` と6文書の未コミット差分。
+  production source / dependency / setup / CI は変更していない。以下は fresh 実行であり、
+  本実装の project checks や Task 5 の完了証跡として再利用しない。
+- 利用者の選択肢1を反映し、setup 時だけ専用 Go を取得して固定 source / patch から build する
+  方針を記録した。取得 archive の SHA-256 を展開前に照合した。
+  Go 1.27.2 linux-amd64 は `ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5`、
+  upstream commit `a3f0c75d21d918756fa38de8b5d3429efde7948b` の source archive は
+  `670f50d0ce71fb0aa6d43ee64126e7ca2933d027ba50789db850e9e69acb037d`。
+  前節の固定 patch を照合して適用し、専用 bridge を一時 source に追加した。
+- `go list -mod=readonly -deps` と `go build -mod=readonly -trimpath -buildvcs=false`:
+  exit 0。標準 library 以外は同じ source 内の `fileutil` / `syntax` / `syntax/typedjson` と
+  bridge だけであり、他の Go module を取得しなかった。Go は専用絶対 path、
+  `GOTOOLCHAIN=local GOENV=off GOWORK=off CGO_ENABLED=0 GOPROXY=off GOSUMDB=off` を指定した。
+- `unshare --user --map-root-user --net ... python -B setup_probe.py`: exit 0、9項目成功。
+  取得済み入力・空 module cache での cold build、warm setup の再 build 不要、checksum 不一致の
+  compiler 起動前拒否、実際の build 失敗時の旧 artifact 保持、parse 失敗時の成功 AST 不出力、
+  空 HOME / 実行不能 PATH での入力非実行、artifact 欠落・破損・固定入力不一致の拒否を確認した。
+  checksum 不一致 / 欠落等で runtime から build を起動していない。
+  これは専用 prototype の動作であり、既存 gate / doctor / prune の接続検証ではない。
+- 同じ network namespace、空 HOME、Node 24.14.1 / Python 3.14.6 で
+  `python -B run_adapters.py`: exit 0。新しい parser-only binary へ接続し、K05 の179入力×2構成の
+  358組、文書境界28入力、位置境界18入力が成功した。非実行 sentinel は生成されなかった。
+  nesting 4 / 16 / 64 / 128 では外側の参照を各1件検出した。任意の資源使用の保証ではない。
+- 未検証: download 通信中断、展開失敗、同時 setup / runtime、全入口への本実装接続、他 OS / CPU、
+  YAML 診断の本実装、最新 `./scripts/check.sh` / `task check`、独立 review / verifier、hosted CI。
+  本 turn は設計の隔離評価であり、全体 gate を再実行していない。Task 5 検証・Task 6 は未完了。
+- 利用者は Ubuntu amd64 を初期保証範囲とし、対象外は parser の取得・build 前に明示して
+  停止する選択肢1を承認した。本環境は `/etc/os-release` / `uname -m` により
+  Ubuntu 22.04.5 LTS / x86_64 と確認した。実装開始承認とは扱わない。
+- 所有する一時 source / Go / cache / archive / binary は cleanup 済み。
+  再開用の最小資料は `/tmp/issue51-parser-review-inz3b9eo/setup-study` に保持し、改訂確定時に削除する。
+  試作 script は cleanup 済みの入力に依存するため、そのまま再実行できない旨を付記した。
+  通常 CI・完了判定から一時資料へ依存しない。
+
+- 次の判断は design §8 の Markdown 入力分類の閉じた一覧である。説明データの全体一致、
+  式 / option / 演算子断片の partial、認識済み command / 展開内の不正構文の拒否を具体化した。
+  その後、利用者は選択肢1で一覧の採用と記法追加時の仕様・対照テスト更新を承認した。
+  token 衝突・元 source 位置の網羅検証、報告 schema の具体化、12分類再監査は継続課題。
+- 本 turn の文書検証は同 source commit と最新6文書差分に対する fresh 実行。
+  `openspec validate align-downstream-prune-validation --strict --no-interactive` は exit 0。
+  `.venv/bin/python -B scripts/openspec-validate-gate.py` は exit 0、1 passed / 0 failed。
+  6文書の `pre-commit run --files ...` と `git diff --check` は exit 0。
+  self-review では承認済み setup / CPU 方針と未承認の分類案を区別し、
+  patch / source 固定、offline・非実行・旧 artifact 保持の評価範囲と未検証項目を照合した。
+  Git branch、6文書の ownership、checkbox 9完了・3未完了、active change 保持を確認した。
+  production の独立 review / verifier と最終 gate の代用にはしない。
+
+#### Task 5 Markdown 分類の承認反映と改訂案の集約（2026-10-15）
+
+- source commit: `bcd9eecc3e556c58ae8cba0af6082479b9c35de6` と6文書の未コミット差分。
+  branch と executor-owned snapshot が一致し、production 変更がないことを再開時に確認した。
+- 利用者は Markdown の閉じた分類一覧を承認した。追加記法には仕様・対照テスト更新を要求し、
+  parser 失敗後の prose fallback を禁止する。承認済みの個別方針として6文書へ反映した。
+- 現行 caller を読取確認した。Node gate / doctor / plan が state=inconsistent、postcheck が
+  state!=pruned だけで失敗を決める箇所を確認し、構成状態を保持する変更時には
+  analysis_errors を共通成功条件へ加える必要がある。現行 production は変更していない。
+- design §8 に JSON / coverage / 位置情報 / 全入口の成功条件と実装再開 cycle を具体化した。
+  field 命名の再確認ではなく、合意済みの独立報告・非成功・位置方針を統合する改訂案である。
+  具体的な mvdan/sh 依存採用と本実装再開は改訂全体の確認待ち。Task 5 / 6 は未完了を保持する。
+- spec-holes の全6要件×12分類を再監査し、影響行へ改訂案を追記した。位置 protocol の
+  整数・範囲検証により DPV-3 分類10を該当へ変更した。影響のない既存判断は維持した。
+  validation に新 cycle の受入れ検証、spec delta に統合予定シナリオを追加した。
+  token / 位置 property、protocol matrix、取得・競合等の障害経路は本実装時の未実施検証であり、
+  候補試作の28例や9項目で網羅済みとは扱わない。
+- self-review: 今回の6文書差分と caller を照合し、解析エラーを保持した state だけで成功する危険、
+  構成を算出できない致命的失敗、1始まりの行番号と0始まり offset / index の混同を
+  改訂案と検証条件に明記した。新しい仕様の実装成功は主張しない。
+- 同 source commit と本改訂差分に対する fresh 文書検証:
+  `openspec validate align-downstream-prune-validation --strict --no-interactive`: exit 0。
+  `.venv/bin/python -B scripts/openspec-validate-gate.py`: exit 0、1 passed / 0 failed。
+  6文書の `pre-commit run --files ...`、`git diff --check`: exit 0。
+  読取監査で6文書のみの差分、未追跡0件、全72分類行、checkbox 9完了・3未完了を確認した。
+- 未実施: production の修正・新規依存採用、最新 `./scripts/check.sh` / `task check` /
+  `task check:template`、新 cycle の独立 review / verifier / hosted CI。設計文書だけの変更であり、
+  それらの成功や Task 5 検証完了をこの文書検証で代替しない。
+- 再開条件: design §8、spec delta の統合予定シナリオ、spec-holes / validation の改訂全体を
+  利用者へ提示し、固定 mvdan/sh＋限定 patch の採用と本実装再開を確認する。承認後は
+  規範文書の統合を先に行い、Task 5 の新 cycle を開始する。個別判断を再質問しない。
+
+#### Task 5 承認後の実装修正 cycle（2026-10-15）
+
+- 利用者は改訂全体・固定 mvdan/sh＋限定 patch の依存採用・本実装再開を承認した。
+  承認済み方針を規範へ統合した。既完了 checkbox は保持し、新 cycle の完了とは扱わない。
+- 順序: setup / runtime artifact の実装と最初の CI parity → shell AST 接続 → 文書分類・位置対応 →
+  全入口の共通成功条件 → 恒久文書・回帰検証 → OSWF-5 の self-review / 独立 review / project checks /
+  別 verifier / hosted CI。Task 5 検証と Task 6 は未完了を保持する。
+- TDD の検査 seam は承認済み validation の setup CLI・parser stdin/JSON・scanner・公開 gate / doctor /
+  preview / apply / postcheck / no-op とする。個別方針や検査境界の再承認は要求しない。
+- 現在: implementation-in-progress。setup / runtime artifact の最初の slice は成功し、AST scanner 接続へ進む。
+- 最初の CI parity（source `bcd9eec` + この cycle の未コミット差分、すべて fresh）:
+  Node 24.14.1 / Python 3.14.6 で `./scripts/check.sh` は exit 0、pytest 1087 passed / 126 skipped。
+  先行実行の basedpyright import 解決失敗と CI preparation contract の1失敗は修正後に再実行した。
+  この時点では旧 scanner の検証であり、改訂 scanner の最終成功証跡ではない。
+- `.venv/bin/python -B scripts/setup-shell-parser.py`: 固定 source / Go を hash 検証し private build 成功。
+  `pytest tests/test_shell_parser_artifact.py`: missing artifact の red を確認後 1 passed。
+  network namespace + empty HOME + PATH なしの実 parser probe: AST 成功、不正構文は非 zero / stdout 空、
+  source 内 sentinel は未作成。通常実行に download / system Go / shell 評価を要しないことを確認した。
+
+#### Task 5 新 parser 接続・self-review（2026-10-15）
+
+- source: `bcd9eec` + この cycle の未コミット差分。以下は明記したものを除き fresh 実行。
+- 旧 lexer を固定 parser AST に置換し、展開・assignment・redirect・heredoc payload の非検査を維持した。
+  外部レビューの引用付き最小例はこの入力では再現しなかったが、未引用 substitution の case pattern で
+  bundled / pruned の2 red を再現した。引用有無と外側の実コマンドを K05 の4例に固定し green。
+- R06 の28分類例を K05 へ移し、YAML node range / alias 利用位置、embedded shell の元 source 範囲、
+  `analysis_errors`、全入口の共通成功条件を接続した。Taskfile canonical validation と受理キーは維持した。
+  既存 YAML punctuation テストには不正 heredoc が含まれていたため、同じ記号を引用した有効 shell に修正した。
+- `pytest --no-cov -q tests/test_template_prune_state.py tests/test_template_prune_plan.py
+  tests/test_template_prune_apply.py tests/test_template_prune_diagnostics.py tests/test_shell_parser_artifact.py`:
+  595 passed。この後の self-review で追加した回帰例は別途検証し、最終 project checks は未実施。
+- `pytest --no-cov -q tests/test_shell_parser_artifact.py tests/test_template_prune_diagnostics.py
+  tests/test_template_prune_apply.py`: 48 passed。破損 artifact / checksum 失敗 / unsupported CPU /
+  malformed AST / 入力非実行 / preview・apply・no-op・postcheck の失敗伝播を検証した。
+- `node --test repo-tools/template-prune-result.test.ts`: 16 passed。JSON 欠落・列挙値・位置の誤型と
+  state / error channel の矛盾を拒否した。Node の focused test は初回 Python PATH が3.10だったため失敗し、
+  Node 24.14.1 / Python 3.14.6 を明示して再実行した。runtime 対応範囲は拡張していない。
+- self-review では token 同士の衝突、prefix が重なる quoted literal の復元、式内 placeholder の復元、
+  placeholder と混在する不正な式引数、syntax error の元行、malformed postcheck の復旧診断欠落を red にした。
+  修正後、`pytest tests/test_template_prune_tokens.py --no-cov -q`: 3 passed（位置の Hypothesis 30例を含む）。
+  `pytest tests/test_template_prune_state.py --no-cov -q -k 'document or substitution-case-pattern'`:
+  70 passed。postcheck の malformed result も共通検証で拒否し、復旧基準・変更済み対象を保持する。
+- production setup CLI を parser 固定入力だけ持つ新規一時 repository で実行し、cold build / parse smoke / cleanup 成功。
+  system Go を使わず、build 内の module / toolchain 取得を禁止する環境で、前回と同じ binary hash を得た。
+- 中間 `./scripts/check.sh`: exit 0、Node 602 passed、pytest 1173 passed / 126 skipped。
+  実行中・後に self-review の位置・protocol・token 修正を追加したため、最終の同一入力証跡としては再利用しない。
+  最新 `ruff check` / `npm run typecheck` / `git diff --check` は成功。
+- 次は新 cycle の initial independent review。その finding 修正後に最新 `./scripts/check.sh`、保守 gate、
+  OpenSpec / pre-commit / doctor と別 verifier を実行する。hosted CI は未検証。
+  Task 5 検証 checkbox、Task 6 は未完了。active change は保持する。
+
+#### Task 5 parser cycle initial review / fix iteration 1（2026-10-15）
+
+- source: `bcd9eec` + この cycle の未コミット差分。以下は fresh 実行。
+- initial reviewer `issue51_parser_initial_review`: 利用上限による初回中断後、利用者の再開指示で再試行。
+  review は完了し REQUEST_CHANGES、BLOCKER 4件。R06 の assignment / redirect 内の不正展開受理、
+  有効な parameter expansion の誤拒否、nested shell の元位置、JSON protocol の誤型・欠落受理を指摘した。
+- iteration 1: 文書の式 token は AST の実 command 位置で認識したものだけ維持し、それ以外を戻した
+  shell 全体を固定 parser で再検証する。参照検出の除外領域でも文法は検証し、有効な展開を一律拒否しない。
+  K05 の追加8例を両構成で実行し、修正前 12 failed / 4 passed、修正後は文書関連全体 86 passed。
+- nested shell の解析失敗を外側 statement / 埋込み field の元位置へ帰属させ、decoded error の行は
+  `shell_range` に分離した。単一行・複数行・行継続・再帰・Python 埋込みを追加した。
+  初回テストに含めた ANSI-C quote は既存 literal 対象外なので、対象内の行継続で escape の位置を検証した。
+- 両言語共通の protocol corpus を追加。TS は surface / kind / position_kind の string 型を要求し、
+  Python は nullable な surface / line もキー存在を要求する。explicit null の正常対照を維持する。
+  修正前は Python 2件と TS の array enum 3件が失敗。修正後 `node --test
+  repo-tools/template-prune-result.test.ts`: 28 passed。
+- `pytest --no-cov -q tests/test_template_prune_diagnostics.py tests/test_template_prune_tokens.py`:
+  32 passed。`ruff check` / `npm run typecheck` / `git diff --check`: exit 0。
+- 修正前入力の `PRUNE_TEST_NETWORK_NAMESPACE=1 task check:template`: 15 passed、683.55秒。
+  実通信遮断で fresh / rename / prune / no-op / 再 setup を確認したが、iteration 1 後の最終証跡には再利用しない。
+- pre-commit の trailing-whitespace hook が固定 patch の空白 context 行を書き換え、並行中の focused
+  validation は 32 failed / 617 passed となった。patch bytes を承認済み hash と完全一致する形へ復元し、
+  当該 patch だけを同 hook から除外した。Task 5 対象に設定ファイルを追加したが parser patch の内容・hash は変更しない。
+  修正後の `pre-commit run --files <変更・追加された現存ファイル全件>` は適用 hook 全件成功。
+  入力が変化した focused validation は成功として扱わず、復元後の固定入力で再実行する。
+- 復元後の固定入力で `pytest --no-cov -q tests/test_template_prune_state.py tests/test_template_prune_plan.py
+  tests/test_template_prune_apply.py tests/test_template_prune_diagnostics.py tests/test_template_prune_tokens.py
+  tests/test_shell_parser_artifact.py`: 649 passed、116.20秒。
+- diff review は利用上限で1回中断した。2026-10-16 の利用者再開指示後、45 path の ownership 一致を確認し
+  同じ reviewer へ再依頼した。最新正式 gate・保守 gate、別 verifier、hosted CI は未検証。
+  Task 5 検証、Task 6 は未完了のまま、active change を保持する。
+
+#### Task 5 parser cycle fix iteration 2（2026-10-16）
+
+- source: `bcd9eec` + この cycle の未コミット差分。以下は fresh 実行。
+- iteration 1 diff review: 元の4 BLOCKER は解消。新規 BLOCKER 1件として、同じ式を含む quoted heredoc
+  delimiter と終端が別の仮 token になり、有効な入力が最初の parse で拒否されることを検出した。
+- iteration 2: 同じ式表記を同一 token にする。復元から除外する実 command は token 値の集合ではなく、
+  AST の未引用 Lit の byte offset 集合で限定する。同じ式の assignment / redirect / 引数 / 展開への
+  許可漏れを防ぎ、引用済み heredoc の対応と payload 非検査を維持する。
+- K05 の8対照例を両構成へ追加。修正前 `pytest --no-cov -q tests/test_template_prune_state.py
+  -k document-review2`: 6 failed / 10 passed。修正後 `-k document`: 94 passed。
+  heredoc 内の専用語を非検査とし、末尾の実コマンドを検出する。共通 token の他位置への漏れも拒否した。
+- `pytest --no-cov -q tests/test_template_prune_tokens.py`: 3 passed。
+  `ruff check` / `git diff --check`: exit 0。
+- iteration 1 後の `python scripts/openspec-validate-gate.py`: 1 passed / 0 failed、
+  `task doctor`: exit 0、FAIL=0 / WARN=3。最終同一入力の代用にはしない。
+- iteration 2 diff review、最新正式 gate・保守 gate、別 verifier、hosted CI は未検証。
+  Task 5 検証、Task 6 は未完了、active change を保持する。
+
+#### Task 5 parser cycle fix iteration 3（2026-10-16）
+
+- source: `bcd9eec` + この cycle の未コミット差分。以下は fresh 実行。
+- iteration 2 diff review: 元の4指摘の再発はなく、通常の offset 限定は成功。一方、partial quote / escape
+  を含む heredoc delimiter と終端の quote removal 前後の差を壊す問題、変換後の column が reason に
+  残る問題の2 BLOCKER があった。
+- iteration 3: 式の一括仮置換をやめ、placeholder 適用後の入力をまず native parser へ渡す。
+  syntax error の位置にある承認済みの式候補だけを仮置換して再解析する。AST 確認後に command 位置以外を
+  復元して全体を厳密再検証する流れは維持する。有効な heredoc の delimiter / payload には触れず、
+  列挙外の prose fallback や quoting の独自 parser は追加しない。
+- parser reason の変換後 line / column prefix は除去し、仮 token は元表記へ戻す。
+  公開位置は元 source に対応した structured line / range に限定する。
+- heredoc の partial quote / escaped quote / backslash、式断片との混在を K05 の6例×両構成へ追加。
+  公開 error reason の回帰例と合わせて修正前 13 failed、修正後 `pytest --no-cov -q
+  tests/test_template_prune_state.py tests/test_template_prune_diagnostics.py tests/test_template_prune_tokens.py
+  -k 'document or substitution-case-pattern or nested or placeholder'`: 137 passed。
+- import の空行を ruff の指示で機械整形した。第3 diff review、最新正式 gate・保守 gate、別 verifier、
+  hosted CI は未検証。Task 5 検証、Task 6 は未完了、active change を保持する。
+
+#### Task 5 parser cycle 第3 review / soft stop（2026-10-16）
+
+- source: `bcd9eec` + この cycle の未コミット差分。独立 reviewer `issue51_parser_initial_review` の
+  第3 diff review は REQUEST_CHANGES、BLOCKER 1件。前回の式 delimiter と変換後 column の2件は解消した。
+- 残存 BLOCKER: `cat <<'<'tag'>'` と終端 `<tag>`、または escaped delimiter `cat <<\<tag\>` と
+  終端 `<tag>` は native parser では有効。しかし placeholder 前処理が終端だけを仮 token に置換し、
+  `unclosed here-document <tag>` を返す。言語指定なし / bash fence の4対照を公開 inspect で再現した。
+  quoted / escaped literal、有効 Bash の受理、heredoc payload 非検査の契約に反する。
+- reviewer の fresh focused validation は 15 passed、`git diff --check` 成功。
+  executor の `pre-commit run --files <変更・追加された現存ファイル全件>` も適用 hook 全件成功。
+  これらを未解決 blocker の解消や change 完了の証拠にはしない。
+- AGENTS.md OSWF-5 / execute-openspec-change の最大3 iterations に達したため追加 fix を開始せず停止する。
+  推奨修正方針は parser の位置情報で引用済み delimiter、heredoc payload / 終端を保護してから
+  placeholder を処理すること。閉じた文書分類、Taskfile canonical validation、全体の厳密再検証を維持する。
+- 再開条件: 利用者が上記 blocker の修正を行う新 cycle を承認すること。承認後に red 回帰例、fix、
+  focused validation、独立 review、最新正式 gate・保守 gate、別 verifier の順で進める。
+  最新 `./scripts/check.sh` / 保守 gate、別 verifier、hosted CI は未検証。Task 5 検証と Task 6 は未完了。
+  active change を保持し、今回の差分は未コミット・未 push のまま保存する。
+
+#### Task 5 placeholder 保護 cycle 開始（2026-10-16）
+
+- 利用者の「はい」により、前 cycle の残存 blocker を修正する新 cycle を承認済み。
+  45 path の累積 ownership が一致することを確認し、同じ executor が継続する。
+- 固定 parser の AST 位置から引用済み delimiter、heredoc payload / 終端を保護する。
+  syntax error に関係する placeholder / 承認済み式候補だけを先に処理して AST を得た後、
+  保護範囲外の placeholder を処理し、全入力を再検証する。依存・受理分類・参照検出範囲は変更しない。
+- Context7 の mvdan/sh syntax AST / Redirect.Hdoc 仕様を確認し、固定 parser の実 AST でも
+  Hdoc の End が終端を含むことを確認した。Go bridge の protocol や固定 patch は変更しない。
+- partial quote / escape、明示 shell fence、外側の placeholder と既知参照、複数 heredoc、
+  式断片・substitution との混在11例×両構成を K05 へ追加。修正前 22 failed を再現した。
+- 修正後 `pytest --no-cov -q tests/test_template_prune_state.py tests/test_template_prune_diagnostics.py
+  tests/test_template_prune_tokens.py -k 'document or substitution-case-pattern or placeholder'`:
+  146 passed。`pre-commit run --files <変更・追加された現存ファイル全件>`: 適用 hook 全件成功。
+- self-review: AST 保護範囲は仮置換前の bytes で決め、仮置換した候補が保護範囲に入った場合は元表記へ
+  戻して strict parse する。非文書 shell の受理、展開内の不正構文、未引用 placeholder の partial、
+  heredoc payload の非検出、後続の cwd 非依存参照を既存・追加の対照で確認した。
+  design / spec-holes / validation に保護境界と回帰例を明記し、受理分類や依存は拡張していない。
+- 広範 focused validation は実行中。新 cycle の initial independent review、最新正式 gate・保守 gate、
+  別 verifier、hosted CI は未検証。Task 5 検証と Task 6 は未完了、active change を保持する。
+
+#### Task 5 placeholder 保護 cycle initial review / fix iteration 1（2026-10-16）
+
+- source: `bcd9eec` + 未コミット差分。以下は fresh 実行。
+- セッション復帰時に45 path の ownership 一致を再確認した。直前の広範実行と review の結果は取得できず、
+  成功として扱わない。広範 focused 6 suites を改めて実行し 700 passed、122.99秒。
+  `python scripts/openspec-validate-gate.py`: 1 passed / 0 failed。
+- initial reviewer `issue51_placeholder_review`: REQUEST_CHANGES、BLOCKER 1件。
+  空 payload では AST の Hdoc field が省略されるため、終端 `<tag>` が placeholder 化される。
+  native parse / bash 検証は成功するが公開 inspect は syntax error となり、後続参照も検出できない。
+  reviewer は非空 heredoc の1,152入力と focused 47 tests の成功も確認した。
+- iteration 1: 最終 placeholder 置換は AST の未引用 Lit と重なる候補だけに限定する。
+  空 payload の終端位置を推測せず、AST の literal でない領域を変更しない。Redirect の Op が
+  `<<` / `<<-` なら Hdoc の有無によらず delimiter の Word を保護する。固定 bridge / patch は変更しない。
+- 空本文、`<<-`、複数の空 / 非空本文、外側 placeholder との混在14例×両構成を K05 へ追加。
+  修正前 `pytest --no-cov -q tests/test_template_prune_state.py -k 'document and empty'`:
+  26 failed / 2 passed。修正後 `pytest --no-cov -q tests/test_template_prune_state.py
+  tests/test_template_prune_tokens.py tests/test_template_prune_diagnostics.py
+  -k 'document or placeholder or substitution-case-pattern'`: 174 passed、30.68秒。
+  `ruff check` / `git diff --check`: exit 0。diff review は進行中。
+- 最新正式 gate・保守 gate、別 verifier、hosted CI は未検証。Task 5 検証と Task 6 は未完了。
+
+#### Task 5 placeholder 保護 cycle fix iteration 2（2026-10-16）
+
+- source: `bcd9eec` + 未コミット差分。以下は fresh 実行。
+- iteration 1 diff review: 空 heredoc の元指摘は解消。新規 BLOCKER 1件として、BinaryArithm の
+  左 shift を `Op == "<<"` だけで heredoc と誤認し、Word 欠落の position error になることを検出した。
+- iteration 2: `Redirs` collection の要素だけを Redirect として扱い、演算子の同名性で分類しない。
+  文書用の位置保護処理は R06 だけに限定する。通常 shell / 明示 bash / 未指定 fence の左・右 shift と
+  後続の既知参照を追加した。空 heredoc の保護は維持する。
+- `pytest --no-cov -q tests/test_template_prune_state.py -k arithmetic-shift`:
+  修正前 14 failed / 6 passed。修正後 `pytest --no-cov -q tests/test_template_prune_state.py
+  tests/test_template_prune_tokens.py tests/test_template_prune_diagnostics.py
+  -k 'document or placeholder or arithmetic-shift or substitution-case-pattern'`: 194 passed、34.12秒。
+  `ruff check` / `git diff --check`: exit 0。
+- iteration 2 diff review、最新正式 gate・保守 gate、別 verifier、hosted CI は未検証。
+  Task 5 検証と Task 6 は未完了、active change は保持する。
+
+#### Task 5 placeholder 保護 cycle review 収束（2026-10-16）
+
+- source: `bcd9eec` + 未コミット差分。iteration 2 diff reviewer `issue51_placeholder_review` は
+  APPROVE、BLOCKER 0。Redirs と arithmetic shift の区別、空 heredoc の保護、受理分類と依存の維持を確認した。
+- reviewer の fresh 検証: heredoc / shift 70 passed、空・非空本文、引用・escape、外側 placeholder /
+  式 / shift の1,440入力成功。過去の不正展開・式引数の拒否も維持。`git diff --check` 成功。
+- executor の `node --test repo-tools/template-prune-result.test.ts`: 28 passed。
+  実 network namespace の起動も成功した。これから active change を残した正式 gate と保守 gate を実行する。
+- 別 verifier と hosted CI は未検証。Task 5 検証と Task 6 は未完了。
+
+#### 利用者指示による実装中止（2026-10-16）
+
+- 利用者が実装の一時中止と Codex 使用量の解析を指示したため、実装・追加検証・review 起動を停止する。
+- 最新の独立 review は APPROVE / BLOCKER 0。正式 gate は開始したが、セッション復帰後に
+  実行プロセスと一時出力が残っておらず、最終結果を取得できないため成功とは記録しない。
+- 追加の保守 gate、別 verifier、hosted CI は未実施。Task 5 検証と Task 6 は未完了、active change を保持する。
+  未コミット差分を保存し、実装は利用者の再開指示まで行わない。
+
+#### Task 5 利用者指示による検証再開（2026-10-17）
+
+- 利用者の Issue #51 実装再開指示に従い、前 cycle の検証を再開した。HEAD は
+  `bcd9eecc3e556c58ae8cba0af6082479b9c35de6`。累積45 path の type / mode / bytes / digest と
+  dirty path 集合が全て一致し、active change 1件・必須6文書・依存順6 tasks・12分類監査の
+  preflight が成立した。Task 1〜4 と Task 5 実装の完了状態を保持する。
+- 合意した下流の詳細回帰テスト・fixture 分離は、本 change の close / merge 後に別 change とする。
+  本再開では現行 K05 と R01〜R06、固定 parser、通常 gate の検証責務を変更しない。
+- 以下は上記 source commit と記録済み累積実装差分での fresh 実行。旧 green evidence は再利用しない。
+  - `./scripts/check.sh`: Node 24.14.1 / Python 3.14.6 の PATH で exit 0。
+    Node 614 passed、pytest 1319 passed / 126 skipped、pytest 所要129.32秒。
+    skip は `en_US.UTF-8` 未導入による追加 locale 検証であり、その環境は未検証。
+    初回は PATH の `python3` が3.10.12で `hashlib.file_digest` 不在により exit 1となった。
+    既存 `.venv/bin` を PATH 先頭へ追加して再実行し、コード変更なしで解消した。
+  - `uv run --no-sync pytest --no-cov -q tests/test_shell_parser_artifact.py tests/test_template_prune_tokens.py tests/test_template_prune_apply.py -k 'missing_parser or invalid_artifact or never_executes or malformed_parser or placeholder or analysis_error'`:
+    20 passed / 20 deselected、1.97秒。入力非実行・artifact / protocol 拒否・placeholder 復元・解析失敗時の非書込みを確認した。
+  - `node --test repo-tools/integration/repository-taskfile-gate.test.ts`: 11 passed。
+  - `task doctor`: exit 0、FAIL=0 / WARN=3。解析範囲の partial を別表示した。
+  - `openspec validate align-downstream-prune-validation --strict --no-interactive`: exit 0、valid。
+  - `task openspec:validate`: exit 0、1 passed / 0 failed。
+  - `unshare --user --map-root-user --net true`: exit 0。通信遮断下の統合検証を実行できる。
+  - `git diff --check`: exit 0。
+- `PRUNE_TEST_NETWORK_NAMESPACE=1 task check:template`: fresh exit 0、15 passed、709.95秒。
+  使い捨て repository の fresh / rename / pruned / 再setupで正式 gate・doctor を確認し、
+  prune preview / apply / 未コミットおよびコミット後の no-op を実通信遮断下で確認した。
+  アプリケーション module を import しない保守テストのため coverage の no-data 警告が出たが、
+  テスト失敗・skip はない。別 verifier の結果は次節に記録する。
+- 検証記録だけの追記後に `uv run --no-sync pytest --no-cov -q tests/test_tool_neutral_documentation_contract.py`
+  は fresh 51 passed、`uv run --no-sync pre-commit run --files openspec/changes/align-downstream-prune-validation/tasks.md`
+  は適用 hook 全件成功。`tasks.md` 以外の44 path は再開 snapshot から不変である。
+- hosted CI:
+  `gh pr list --repo shimi3435/ai-coding-template-ja --head docs/issue-51-prune-boundaries --state all`
+  と同 branch の `gh run list` はともに0件だった。最新の未コミット実装の hosted CI は未検証であり、
+  Task 5 検証と Task 6 は未完了を保持する。commit / push / PR 作成は行っていない。
+
+#### Task 5 独立 verifier と検証証跡の不足による停止（2026-10-18）
+
+- 利用者の再開指示後、HEAD・active change 1件・累積45 path の type / mode / bytes / digest と
+  dirty path 集合の一致を再確認した。source commit は引き続き
+  `bcd9eecc3e556c58ae8cba0af6082479b9c35de6` と累積実装差分である。
+- initial reviewer と異なる独立 verifier `issue51_final_verifier` は REQUEST_CHANGES と判定した。
+  新規の実装欠陥は検出していないが、validation.md の改訂全体の受入れ検証が要求する
+  **異なる固定入力による同時準備の競合**について、本実装の成功証跡がない。
+  過去の隔離試作や正常 cold build の記録では代替しない。これは hosted CI 未検証と別の blocker である。
+- verifier の独立 fresh 検証:
+  - `pytest -p no:cacheprovider --no-cov -q tests/test_template_prune_diagnostics.py tests/test_template_prune_tokens.py tests/test_shell_parser_artifact.py tests/test_template_prune_apply.py`: 70 passed。
+  - `node --test repo-tools/template-prune-result.test.ts`: 28 passed。
+  - `python -B -` の隔離 probe: heredoc / arithmetic shift / fence の72組が成功。
+    空 HOME・Go のない PATH・network namespace の実 scanner は bundled / partial、
+    references=0 / analysis_errors=0、HOME 無変更を確認した。
+  - `python -B -` の production `setup.setup(target)` に対する隔離失敗注入:
+    download / extract / patch / build / smoke / current.json 公開前の6境界で非成功、
+    隔離先の旧 pointer bytes 保持、stage cleanup を確認した。同一入力の並行準備では、
+    build 境界を barrier で同期し、少なくとも1成功と現入力で検証可能な artifact を確認した。
+    download / extract / compiler は決定的な代用品、正常 smoke は実 parser を使用した。
+    この観測範囲は有効な補足証跡とする。一方、6障害で隔離先の旧 binary bytes を直接比較しておらず、
+    その保持は未検証である。既存 checksum テストの pointer / binary 保持とは区別する。
+    process kill は未実施だが、新しい必須条件としては追加しない。probe の一時領域は cleanup 済み。
+  - `git diff --check`: exit 0。
+- verifier は44 path の digest / mode、成功条件・placeholder 保護・元位置・JSON 契約を照合し、
+  前節の最新正式 gate・保守 gate の green evidence を再利用した。追加の全体 gate は実行していない。
+- self-review: 今回の変更は検証記録と ownership snapshot の更新だけである。実装・仕様・依存・
+  fixture は変更せず、既存の完了 checkbox を保持した。成功した失敗注入と未検証の競合・binary 保持を
+  区別し、検証不足を実装欠陥として断定していない。
+- OSWF-5 に従い soft stop する。Task 5 検証と Task 6 は未完了で、change close は行わない。
+  再開条件は利用者による新 cycle の承認である。承認後は `tests/test_shell_parser_artifact.py` を中心に、
+  異なる固定入力の競合と失敗時の隔離先 pointer / binary 保持を検証する。
+  欠陥を再現した場合だけ既存契約内で最小修正し、focused validation・独立 review・最新 project checks・
+  今回と別の verifier の順で確認する。hosted CI は引き続き未検証であり、commit / push / PR 作成は行っていない。
+
+#### Task 5 setup 検証補完 cycle（2026-10-18、利用者承認済み）
+
+- 利用者の「OK」により、前節の検証不足を補う新 cycle を開始した。再開時に active change 1件、
+  必須 artifacts、解決済み仕様判断、6 tasks の依存・対象・重複順序、累積45 path の digest 一致を確認した。
+  source commit は `bcd9eecc3e556c58ae8cba0af6082479b9c35de6` と累積実装差分である。
+- `tests/test_shell_parser_artifact.py` に9ケースを追加した。取得・展開・patch・build・smoke・公開前の
+  6障害では、隔離先の旧 pointer / binary bytes 保持と staging cleanup を直接検証する。
+  同一入力の同時準備に加え、異なる入力で build 中・pointer 公開直前に競合させ、旧入力の拒否と
+  現入力の artifact 検証を確認する。公開直前の競合では runtime が非成功となり、明示 setup で復旧する。
+- 取得・展開・patch・compiler は決定的な代用品を使い、production setup の制御・公開・identity 検査と
+  実 parser の smoke は実行する。隔離先は pytest の tmp_path、並行順序は Event / Barrier で制御する。
+  既存 checksum テストと合わせて失敗境界を補完し、実際の取得・cold build は既存の実動作証跡と区別する。
+- `uv run --no-sync pytest --no-cov -q tests/test_shell_parser_artifact.py`: fresh 23 passed。
+  Ruff check / format は成功。新規実装欠陥は再現せず、production source・仕様・依存は変更していない。
+- self-review: 隔離先の実 bytes を比較すること、例外が注入箇所から発生すること、worker を finally で解放し
+  join 後に monkeypatch を解除すること、実 smoke と代用品の境界を確認した。スコープ外変更はない。
+  この時点では独立 review・最新 project checks・前 cycle と別の verifier・hosted CI は未完了だった。
+- 独立 initial reviewer `issue51_setup_review`: APPROVE、blocker 0件。今回の9ケース・記録と関連する
+  production 処理／契約を照合し、前 cycle の検証不足を補完していることを確認した。
+  `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/test_shell_parser_artifact.py`:
+  reviewer による fresh 23 passed。実取得・cold build や全体 gate を代替する判定ではない。
+- `uv run --no-sync pytest --no-cov -q tests/test_tool_neutral_documentation_contract.py tests/test_shell_parser_artifact.py`:
+  fresh 74 passed。両変更ファイルへの pre-commit と strict OpenSpec validation は成功した。
+- review 後の最新入力で以下を fresh 実行した。Node 24.14.1、Python 3.14.6、Ubuntu 22.04.5 LTS /
+  x86_64、locale は C / C.utf8 / POSIX。dependency install / update は行っていない。
+  - `./scripts/check.sh`: exit 0、Node 614 passed、Python 1328 passed / 126 skipped、pytest 162.63秒。
+    126件は任意の en_US.UTF-8 が利用できないための skip であり、検証済みには含めない。
+  - `PRUNE_TEST_NETWORK_NAMESPACE=1 task check:template`: exit 0、15 passed、971.66秒。
+    使い捨て repository の fresh / rename / pruned / 再setupの正式 gate・doctor と、実通信遮断下の
+    preview / apply / no-op が成功した。アプリケーションを import しない保守検証のため
+    coverage の no-data 警告が出たが、テスト失敗・skip はない。
+  - `task doctor`: exit 0、FAIL=0 / WARN=3。
+  - `task openspec:validate`: exit 0、1 passed / 0 failed。
+- initial reviewer と前 cycle の verifier のいずれとも異なる `issue51_setup_verifier`:
+  今回の補完範囲は APPROVE、新規ローカル blocker 0件。
+  `.venv/bin/python -B -m pytest -p no:cacheprovider --no-cov -q tests/test_shell_parser_artifact.py`:
+  独立 fresh 23 passed。実 parser の追加 probe は空 HOME・Go のない PATH で正常／不正入力を確認し、
+  入力非実行、HOME・pointer・binary 無変更を確認した。`git diff --check` は exit 0。
+  verifier は44 path と依存関連4ファイルの digest、および source / tests / dependency environment /
+  lockfile / build / CI / fixture の入力同一性を照合し、上記正式 gate・保守 gate・doctor・OpenSpec gate の
+  最新 green evidence を再利用した。両 gate の実行中・完了後に実装・tests・環境は変更していない。
+- hosted CI は未検証である。同 branch の `gh pr list` と `gh run list` は再照会でも0件だった。
+  Task 5 の検証 checkbox と Task 6 は未完了を保持し、change close は行わない。
+  ローカルの検証不足は解消したが、hosted CI に進むための commit / push / PR 作成には利用者の別の
+  明示依頼が必要であり、これらは未実行である。
+- 検証記録追記後の `uv run --no-sync pytest --no-cov -q tests/test_tool_neutral_documentation_contract.py`
+  は fresh 51 passed。変更2ファイルへの pre-commit、strict OpenSpec validation、`git diff --check` も成功した。
+  一時検証ログは削除し、証跡は本節の要約だけを保持する。
+
+#### Task 5 hosted CI への移行（2026-10-18、利用者承認済み）
+
+- 利用者の「OK」により、Issue #51 の累積差分の commit・push・draft PR 作成を承認された。
+  active change、45 path の ownership、最新ローカル検証と独立 review / verifier の結果を再確認した。
+- 累積差分を同一 branch にコミットするため、未コミット差分用の ownership snapshot をここで除去する。
+  source / tests / dependency / build / CI は検証済み入力から変更していない。
+  hosted CI 成功前は Task 5 検証・Task 6 を未完了のまま保持する。
 
 ### 6. 承認された実装完了後に change を close する
 
@@ -874,7 +1538,7 @@ tasks.md は、この start comment から end comment 後の空行までを除�
   違反は本 change の `design.md` 1件。これは契約変更が未実装であることによる失敗であり、
   修正判断は Task 1 に組み込まれている。テストの除外や先行 close による回避は行っていない。
 
-## 第3回レビュー対応の状態と証跡
+## 第3回仕様レビュー対応の証跡（実装開始前の記録）
 
 - source commit: `20e06d1d40193051e7ca1bf7228b548925665ca7` に今回の6文書差分を加えた入力。
   以下は fresh 実行であり、前 cycle の成功証跡を流用していない。

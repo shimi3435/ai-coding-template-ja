@@ -1,7 +1,7 @@
 # 検証計画
 
-文書種別: 検証リファレンス。ここに列挙する実動作はすべて実装後の予定であり、現時点では未検証。
-文書作成時の実行結果は tasks.md の証跡だけを参照する。
+文書種別: 検証リファレンス。ここには要求する検証条件を記載する。
+各条件の実施状況・結果・未検証理由は tasks.md を正本とし、本書から一律に未検証とは判定しない。
 
 ## 検証ケース
 
@@ -155,3 +155,94 @@ reset / clean / prune しない。rename による変更と prune 対象の差�
 保守 gate の smoke からは通常 gate だけを呼び出す。通常 tests にフル保守 smoke を置かない。
 Windows / DrvFS、敵対的同時変更への sandbox 保証、任意の巨大入力への資源保証は対象外。
 通信遮断、disk / permission error は制御可能な fixture を使い、認証情報や host 実設定を読み書きしない。
+
+## 外部レビュー後の追加検証（2026-10-15承認）
+
+以下は design §8 の契約に対応する。既存 V01〜V16 の実行結果を置き換えない。
+
+- V06 / V11: command substitution 内の case pattern を検査対象へ漏らさず、直後の本物の
+  専用コマンドを検出する。nested substitution、heredoc、quote、comment、arithmetic、
+  backslash-newline の既存 K05 を bundled / pruned の両構成で維持する。
+- V06 / V11 / V16: 選定 parser のエラーを構成不整合と区別し、非成功とする。
+  bundled / pruned / inconsistent の各構成に解析エラーを組み合わせ、既存の構成状態と
+  エラーが別報告されることを確認する。unknown は追加しない。gate / doctor / preview /
+  apply / 適用後検査 / no-op が非成功となり、適用前に判明したエラーで削除を開始しないことを確認する。
+  cwd の partial のみで失敗せず、既知参照と Git 保護違反を引き続き拒否する。
+- V06 / V11: YAML の同一 name / run、同一 run の複数 step、literal / folded / escaped scalar で
+  該当 field value の開始位置を確認する。shell 相対範囲を YAML source 行と混同しない。
+  scalar / step / job の alias では定義位置を主表示し、alias 利用位置を併記する。
+  同値 sequence item、CRLF、Unicode でも別 node を文字列検索で取り違えない。
+- V06 / V11 / V16: shell の継続行、コメント、関数・if 内の検出について、報告した top-level
+  statement の行範囲が元 source bytes に対応し、検出箇所を含むことを確認する。
+  parser の line を正確なコマンド開始行として表示しない。
+- V06 / V11: `task <target>` は理由付き partial として報告し、それだけでは失敗させない。
+  `task check:template <extra>` は既知参照として拒否する。文書用 placeholder の扱いを
+  実行用 shell の変数展開等へ拡張しない。
+- V06 / V11: R06 の `task <input> check:template` は placeholder 優先で専用参照を検出する。
+  `task < input > check:template` はリダイレクトとして扱い、専用 task 参照にしない。
+  実行用 shell では両方をリダイレクトとして扱い、文書用 placeholder へ読み替えない。
+- V06 / V11: inline / 言語指定なし fence / console の分類不能断片を理由付き partial とし、
+  分類不能だけで gate / doctor / prune を失敗させない。同じ単位内の認識可能な専用参照は拒否する。
+  実行用 shell・shell 明示 fence・認識済みコマンドの構文エラーを partial へ読み替えない。
+- V06 / V11: R06 の入力境界が確定した後、正常な説明断片・placeholder を保持しつつ、
+  専用コマンドとの混在・不正構文を利用した隠蔽の対照例を追加する。design §8 の入力分類案では、
+  全体だけが JSON 等なら除外し、部分一致で後続 command を隠さない。式 / option / 演算子断片を
+  partial とし、認識済み command の不正引数・展開内部の不正構文は非成功とする。
+  この分類一覧は利用者承認済み。token 衝突・元 bytes / 行範囲への復元も追加検証する。
+- V14 / V16: 準備済み dependency と空 HOME・通信遮断で実行可能なこと、入力を実行しないこと、
+  深い nesting の資源挙動を確認する。parser 単体の成功を scanner 全体の成功とみなさない。
+  選定候補の必要 artifact が欠落した場合に build / install を起動せず、解析エラーで
+  非成功となることを確認する。GPL-3.0 の libbash は利用者判断で候補から除外し、
+  permissive license の候補について同じ既存構文・意味判定の適合性を検証する。
+  限定 patch を採用する場合は upstream の syntax / typed JSON / printer に加え、AST 表現変更が
+  同 library の既存 consumer を壊さないことを確認する。heredoc の引用済み prefix / suffix / 空引用、
+  偶数 backslash、継続後の tab を対照例に含める。準備方式は setup 時の固定 Go による build とし、
+  新規準備・同一入力の再準備・checksum 不一致・build 失敗・runtime artifact の欠落 / 破損 /
+  固定入力不一致を検証する。取得済み入力からの build は空 module cache と通信遮断で成功し、
+  準備失敗は直前の有効 artifact を上書きしないことを確認する。runtime は空 HOME・Go のない
+  PATH で動作し、不足時の自動 build / network / 旧 lexer fallback を行わないことを確認する。
+  初期保証範囲の Ubuntu amd64 で setup・runtime・既存回帰検査を実行し、
+  対象外 OS / CPU では取得・build・artifact 実行の前に理由付きで拒否することを確認する。
+  cross compile の成功だけで対象 CPU の実動作を検証済みとしない。
+- V06 / V11: 入れ子 substitution 内の引用済み placeholder、ANSI quote、片側だけ escape した
+  山括弧、placeholder executable、式断片の前後にある既知 command を対照検証する。
+  独自の quote 状態による再解釈、生成 token の衝突、既知参照の取りこぼしを検出する。
+
+承認された新 cycle では OSWF-5 の review / verifier と最新 project checks を新 cycle で実施する。
+過去の試作は候補の適合性を判断した証拠であり、本実装の修正成功を示さない。
+
+### 改訂全体の受入れ検証の具体化
+
+以下は design §8 の報告契約と12分類再監査に対応する計画であり、実行済みの証跡ではない。
+
+- V06 / V11 / V16: state 3種 × analysis_errors の有無 × gate / doctor / preview / apply /
+  postcheck / no-op の入口で、構成表示を保持しつつ共通成功条件を適用する。
+  inconsistent は常に拒否し、bundled / pruned＋解析エラーも拒否する。
+  analysis_errors が空の cwd / placeholder / document-fragment partial は、それだけでは拒否しない。
+  Git / HEAD / root / 対象差分の既存前提による失敗を別に確認する。
+- V06 / V11 / V16: parse-error と別単位の既知参照、partial と Git 保護違反を組み合わせ、
+  検出済み情報が消えず、最初の write 前に拒否することを確認する。
+  postcheck の解析失敗では変更済み対象と復旧情報・診断が残り、ok=true を返さない。
+- V06 / V11: JSON の必須 field 欠落・未知の列挙値・空でない analysis_errors、位置の
+  負数 / bool / 非整数 / 範囲外 / 開始終了逆転を非成功にする。protocol 不正を空配列で補わない。
+  位置なしの共通解析基盤エラーだけは明示 null とし、通常 source の範囲を推測しない。
+  行番号は1始まり、bytes offset / sequence index は0始まりとして境界を確認する。
+  state と references の矛盾、canonical 検査基盤の故障による内部 process 非ゼロも拒否し、
+  構成を算出できない場合に成功形 JSON / unknown を捏造しない。
+- V06 / V11: 仮 token が入力に存在しないこと、同一 placeholder の同一 token 化、引用済み
+  literal の復元、元 bytes / 行への対応を property と例示テストにする。LF / CRLF、結合文字・
+  絵文字、入力端・隣接 token・同名 placeholder の反復・heredoc delimiter・literal sh -c を含める。
+  heredoc は部分引用 / escape、空 payload、`<<-`、複数 delimiter、payload と同じ綴りの外側 placeholder、
+  式断片 / substitution との混在、後続の既知参照を明示 shell / 言語指定なし fence で対照検証する。
+  全体が JSON 等の場合だけの除外、混在する既知参照、不正な引数・展開内構文を対照にする。
+- V14 / V16: Ubuntu amd64 で準備と offline gate を確認する。取得中断・展開失敗・hash不一致・
+  patch適用失敗・build失敗・公開前の中断は非成功で、現在の有効 artifact を上書きしない。
+  同時準備・異なる固定入力の競合で古い artifact を現在の成功として使わないことを確認する。
+  cache の喪失後は runtime が非成功となり、明示 setup で復旧できる。破損 cache の黙認はしない。
+- V01 / V02 / V14 / V15: fresh / rename / prune の各構成で parser 準備を正式 gate より前に済ませる。
+  prune 後も固定入力・license・準備処理・parser が残り、保守資産の復活・通常 CI の一時資料参照がない。
+  patch を変更する際は固定 upstream の回帰 suite と恒久 fixture を再確認する。
+
+最初の setup / runtime slice の CI parity を全実装後へ延期しない。Task 5 の新 cycle では
+最新入力の `./scripts/check.sh`、`task check:template` と必要な hosted CI、OSWF-5 の
+review / verifier を完了させる。過去の候補試作・文書検証を本実装の成功として使わない。
