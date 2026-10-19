@@ -31,3 +31,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-09-28 delegate-repository-parsers（PR #83）: 逃した欠陥 6 件（self-review=1 / review=5 / CI=0 / merge後=0）— self-review=ローカル project check で startup dependency 回帰、review=check skip・補助 shell・static vars 合成・正式入口の案内漏れ・ローカル Task exact pin を検出（rename 案内は正式入口の伝播漏れとして重複除外）
 - 2026-10-04 update-virtualenv-audit（PR #86）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— virtualenvと必要なpython-discoveryだけを更新し、コア監査・locked環境・独立review / verifier・hosted CI成功を確認
 - 2026-10-04 unify-runtime-version-validation（PR #85）: 逃した欠陥 6 件（self-review=0 / review=6 / CI=0 / merge後=0）— locale依存・spawn回帰不足・出荷範囲文書・時限的spec条件・functionによるPATH検査迂回・serialの設計記述をreviewで検出し修正。既存依存の監査失敗は独立PR #86で解消
+- 2026-10-19 align-downstream-prune-validation（PR #91）: 逃した欠陥 47 件（self-review=13 / review=33 / CI=1 / merge後=0）— 直接参照・shell境界・placeholder・解析診断・固定parser準備を回帰検証し、同時公開のENOTEMPTYをCIで検出して修正

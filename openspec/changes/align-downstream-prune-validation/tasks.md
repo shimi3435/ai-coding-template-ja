@@ -1507,8 +1507,35 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/align-downstream-prune-validation/`
-- [ ] 実装: policy に従う retrospective を追記し、全 task 完了を確認して pre-merge close する。
-- [ ] 検証: active change 0 と cleanup 後の影響範囲の検証を確認する。通常 CI が削除した artifacts に依存しないことを確認する。
+- [x] 実装: policy に従う retrospective を追記し、全 task 完了を確認して pre-merge close する。
+- [x] 検証: active change 0 と cleanup 後の影響範囲の検証を確認する。通常 CI が削除した artifacts に依存しないことを確認する。
+
+#### Task 6 close 検証完了（2026-10-19）
+
+- source commit: `71d992d49d76f743d965fd3e81c9d8999063c8a4` と retrospective 1行追記・本 change 6文書削除。
+  以下はこの削除後候補で実行した。完了証跡を履歴へ保存するため本 tasks.md だけを一時復元し、
+  この記録の commit 後に再削除する。最終 tree を検証済み候補と照合して close commit とする。
+- self-review: 削除対象は承認済み6文書だけであり、恒久 reference / manifest / fixtures を保持した。
+  retrospective は既存 bytes を保持して1行追記した。通常 CI の削除 artifacts への依存はない。
+- retrospective は47件（self-review 13 / review 33 / CI 1 / merge後 0）。
+  self-review は既完了 scanner の heredoc・marker 2件、operator continuation 1件、
+  bare dollar・nested termination・literal brace 3件、parser placeholder・位置・診断6件、固定 patch 整形1件。
+  review はこれまでの独立 review / verifier の異なる原因33件。実装途中の修正・証跡不足・重複指摘は除外した。
+  CI は同時公開の ENOTEMPTY 1件であり、通常・保守 CI の同原因を二重計上していない。
+- initial independent reviewer `issue51_close_review`: APPROVE、blocker 0件。
+  文書・履歴・release 契約の独立 fresh focused validation は61 passed、`git diff --check` は exit 0。
+- `uv run --no-sync pytest --no-cov -q tests/test_tool_neutral_documentation_contract.py tests/test_openspec_direct_workflow_contract.py template-maintenance/tests/test_history_contract.py`:
+  executor fresh 72 passed。
+- review 後の `./scripts/check.sh`: fresh exit 0、Node 614 passed、Python 1330 passed / 126 skipped、136.77秒。
+  source / tests / dependency / lock / CI / fixtures は実装検証済み入力を保持し、変更は上記7 pathsだけである。
+  locale の126件は同じ実装の hosted check / rename-smoke の1456 passed が補完する。
+- `task openspec:validate`: fresh exit 0、No items found to validate。active change 0、`.gitkeep` のみ。
+- 独立 verifier `issue51_close_verifier`: APPROVE、blocker 0件。
+  同 focused command は fresh 72 passed、OpenSpec gate は fresh exit 0。
+  full gate は source・diff・環境・依存・lock・CI・fixtures の同一性を確認して green evidence を再利用した。
+  parser staging と untracked 成果物の残存なし。required evidence の未検証なし。
+- 保守 full gate は Task 5 の hosted success と変更範囲・focused 検証を照合した。
+  最終 commit の hosted CI は push 後に別途確認し、結果を PR #91 に記録する。merge は行わない。
 
 ## 初稿作成時の証跡
 
