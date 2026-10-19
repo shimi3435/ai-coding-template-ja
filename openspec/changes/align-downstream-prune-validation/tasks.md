@@ -205,7 +205,7 @@
   - `CONTEXT.md`
   - `.pre-commit-config.yaml`
 - [x] 実装: self-review、initial independent review、必要な finding 修正を policy 順に完了する。
-- [ ] 検証: active change を残した最新入力の正式 gate・保守 gate・OpenSpec validation、hosted CI、および別 agent の verifier を完了する。gate 成功のための先行 close は禁止する。
+- [x] 検証: active change を残した最新入力の正式 gate・保守 gate・OpenSpec validation、hosted CI、および別 agent の verifier を完了する。gate 成功のための先行 close は禁止する。
 
 #### Task 5 self-review（2026-10-08）
 
@@ -1479,6 +1479,26 @@
   承認済みの commit・push 範囲内で修正を PR #91 へ反映し、最新ローカル正式 gate と hosted CI を確認する。
   hosted の保守 gate は同じ `task check:template` の最新入力で fresh 実行する。
   過去のローカル保守 gate 成功を変更後入力の証跡には流用しない。
+
+#### Task 5 最終検証完了（2026-10-19）
+
+- source commit: `74107343ae57097b4c757a8ceb8f897d63ecf89c`。再開時 worktree は clean。
+  preflight は active change 1件、6 artifacts、解決済み12分類、依存順の6 tasks と3制約を再確認した。
+- `./scripts/check.sh`: fresh exit 0、Node 614 passed、Python 1330 passed / 126 skipped。
+  Node 24.14.1、Python 3.14.6、Ubuntu amd64。skip はローカルにない en_US.UTF-8 条件である。
+- `task doctor`: fresh exit 0、FAIL 0 / WARN 3。
+- `task openspec:validate` と `openspec validate align-downstream-prune-validation --strict --no-interactive`:
+  再開時にも fresh exit 0、1 passed / 0 failed、strict valid。
+- 通常 hosted CI run `39143805146`: 同 source commit の全5 jobs が成功。
+  check / rename-smoke はともに Node 614 passed、Python 1456 passed。ローカル skip 分も実行した。
+- 保守 hosted CI run `39143805098` の `task check:template`: 同 source commit で fresh success、
+  15 passed / 1272.75秒。fresh / rename / prune / 再setup を含む。過去入力の保守結果は流用していない。
+- 独立 verifier `issue51_ci_verifier`: APPROVE、blocker 0件。
+  `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/test_shell_parser_artifact.py` は fresh 25 passed。
+  一時 probe で実 rename の native ENOTEMPTY 競合3回と、2 errno × 不正 checksum / 親 symlink の負例4件を確認した。
+  full gate は source / tests / 環境 / lock / CI / fixtures の同一性を照合して green evidence を再利用し、
+  hosted 両 run の source と success も独立照合した。probe の取得・コンパイルは代用品であり、実取得は hosted gate が補完した。
+- Task 5 の required evidence に未検証はない。Task 6 の close と cleanup 後検証はこれから実行する。
 
 ### 6. 承認された実装完了後に change を close する
 
