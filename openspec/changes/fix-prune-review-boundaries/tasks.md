@@ -91,3 +91,16 @@
 - 作業場所: PR #91の既存worktree ai-coding-template-ja-issue-51。開始時tracked/untracked差分なし。
 - 元worktreeの利用者ファイル docs/template/issue-71-ownership-poc.md は対象外で変更しない。
 - 仕様は会話で承認済み。commit/push/closeは今回行わず、未コミット成果と証跡を保持する。
+
+## Pre-merge close（2026-10-21）
+
+- 利用者のarchive依頼に従い、`openspec/project.md`の規約どおりchange directoryを削除する。archive directoryや出荷用specは作らず、本成果と証跡を削除直前のcommitへ保存する。先に受けたcommit/push承認を継承し、PR本文更新・Issue起票・mergeは今回の対象に含めない。
+- 対象source commit: `02858987a8fbdbd95a6a36cd8c2bd541715a213d`。close候補の差分はretrospective更新と完了changeの4ファイル削除のみ。実装、tests、runtime/dependency、lockfile、build/CI設定は変更していない。
+- Close前（fresh）: `openspec validate fix-prune-review-boundaries --strict --no-interactive` と `task openspec:validate` はexit 0、active change 1件成功。T1〜T5の実装・検証checkbox完了、cycle 2の独立review/verifier PASSを照合した。
+- Self-reviewとclose initial independent reviewはblockerなし。恒久reference、回帰tests、parser計測文書が保持され、削除対象を必要とする恒久リンクがないことを確認した。
+- Retrospective: 元changeにclose後発見のhardlink/Git比較/版形式の3欠陥を追加し、47件から50件へ更新した。今回のchangeはfilter/encodingの状態名衝突2欠陥をreview経路へ計上した。性能最適化の延期は重複計上しない。
+- Close候補（fresh）: `uv run --no-sync pytest tests/test_openspec_direct_workflow_contract.py tests/test_tool_neutral_documentation_contract.py template-maintenance/tests/test_history_contract.py template-maintenance/tests/test_release_contract.py -q` は73 passed。`task openspec:validate` はactive change 0、exit 0。`task doctor` はbundled、FAIL=0/WARN=3、exit 0。WARNは既定package名・.env不在・Context7 key未設定。`git diff --check` はexit 0。
+- Project checks（green evidence再利用）: 既存のローカル `./scripts/check.sh`（Node 638/Python 1529、skipなし）と `task check:template`（15 passed）の成功証跡を再利用した。通常gateは削除したchange directoryを入力にせず、retrospective本文も解析対象外である。本文に依存する保守history検証とOpenSpec gateは今回再実行した。
+- Hosted確認: source commit `02858987` の通常CI run `39468852617` は全5jobs success、check/rename-smokeともNode 638/Python 1529、Task integration 11成功。保守CI run `39468852637` は15 passed（907.38秒）、success。`gh run view`とlogで確認し、close verifierも対象SHAとsuccessを独立確認した。当該runについてbilling停止は確認されなかった。
+- Close final verifier（initial reviewerとは別担当）はPASS、追加blockerなし。上記focused 73件、active 0のOpenSpec gate、doctor、diffcheckをfreshで再実行し、全体gateのgreen再利用を妥当と判定した。
+- 未検証: 最終close commit自体のhosted CIはまだ実行していない。性能最適化、後続Issue起票、PR本文更新、mergeは今回の対象外。close証跡保存commit後に、検証済みの削除差分と同一であることを確認して最終close commitを作る。
