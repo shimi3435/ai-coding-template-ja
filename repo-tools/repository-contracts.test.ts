@@ -242,22 +242,21 @@ for (const source of [
   });
 }
 
-for (const version of ["2.3.4\n", "0.0.0\n"]) {
-  test(`check-contracts accepts downstream version ${version.trim()}`, () => {
+const templateVersionCases = JSON.parse(
+  readFileSync(new URL("../tests/fixtures/template_versions.json", import.meta.url), "utf8"),
+) as { id: string; text: string; valid: boolean }[];
+for (const version of templateVersionCases) {
+  test(`check-contracts template version shared case: ${version.id}`, () => {
     const repository = writeValidRepository();
-    writeFileSync(join(repository, "TEMPLATE_VERSION"), version);
+    writeFileSync(join(repository, "TEMPLATE_VERSION"), version.text);
     const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
-    assert.equal(result.status, 0, result.stderr);
-    assert.doesNotMatch(result.stdout, /handoff/);
-  });
-}
-for (const version of ["", "1.0", "1.0.0\n2.0.0\n", "v1.0.0", "1.0.0-alpha"]) {
-  test(`check-contracts rejects invalid template version ${JSON.stringify(version)}`, () => {
-    const repository = writeValidRepository();
-    writeFileSync(join(repository, "TEMPLATE_VERSION"), version);
-    const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /TEMPLATE_VERSION/);
+    if (version.valid) {
+      assert.equal(result.status, 0, result.stderr);
+    } else {
+      assert.notEqual(result.status, 0);
+      // TypeScript自身の拒否を確認し、後段Pythonの拒否で不一致を隠さない。
+      assert.match(result.stderr, /TEMPLATE_VERSION は単一行の/);
+    }
   });
 }
 

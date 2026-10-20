@@ -134,9 +134,10 @@ export function validateRepositoryContracts(): readonly string[] {
     throw new Error(`package-lock v3 が必要です（検出: ${String(lock.lockfileVersion)}）`);
   }
 
+  // Pythonのsplitlines / str.stripと同じ空行判定。値そのものはtrimしない。
   const versionLines = readFileSync(join(repositoryRoot, "TEMPLATE_VERSION"), "utf8")
-    .split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/u).filter(line => line.trim().length > 0);
-  if (versionLines.length !== 1 || !/^\p{Decimal_Number}+\.\p{Decimal_Number}+\.\p{Decimal_Number}+$/u.test(versionLines[0]!)) {
+    .split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/u).filter(line => /[^\t\n\r\v\f \x1c-\x1f\x85\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/u.test(line));
+  if (versionLines.length !== 1 || !/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u.test(versionLines[0]!)) {
     throw new Error("TEMPLATE_VERSION は単一行の X.Y.Z 形式が必要です");
   }
   const templateVersion = versionLines[0]!;

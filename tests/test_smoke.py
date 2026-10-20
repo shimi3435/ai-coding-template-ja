@@ -67,7 +67,9 @@ def test_template_version_is_single_semver_line() -> None:
     raw = (REPO_ROOT / "TEMPLATE_VERSION").read_text(encoding="utf-8")
     lines = [line for line in raw.splitlines() if line.strip()]
     assert len(lines) == 1, "TEMPLATE_VERSION は単一行であること"
-    assert re.fullmatch(r"\d+\.\d+\.\d+", lines[0]), "semver 形式であること"
+    assert re.fullmatch(
+        r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", lines[0]
+    ), "semver 形式であること"
 
 
 def test_python_version_pin_declares_default_and_runtime_meets_minimum() -> None:

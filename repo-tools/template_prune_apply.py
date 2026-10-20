@@ -45,7 +45,7 @@ def apply(proposal: dict) -> dict:
         for path, content in operations:
             failed = path
             if (
-                inventory(root) != expected
+                inventory(root, edit_paths=proposal["edits"]) != expected
                 or repository_head(root) != proposal["head"]
                 or tracked(root, proposal["head"], index=True) != initial_index
             ):
@@ -72,7 +72,7 @@ def apply(proposal: dict) -> dict:
         # write が部分的に成功してから例外を返した場合も変更済みとして報告する。
         if failed in expected and failed not in changed:
             try:
-                now = inventory(root)
+                now = inventory(root, edit_paths=proposal["edits"])
                 if now.get(failed) != expected[failed]:
                     changed.append(failed)
             except (OSError, PruneError):

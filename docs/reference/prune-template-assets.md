@@ -23,6 +23,27 @@ workflow の cwd は step、job defaults、workflow defaults、root の順で選
 共有ファイルの区画外の差分も、そのファイルを編集する場合は拒否する。
 対象外の staged / unstaged / untracked / ignored 差分は保持する。
 symlink、特殊 file、submodule、入れ子 Git、対象内の未追跡 / ignored file は拒否する。
+編集対象 regular file の hardlink（st_nlink > 1）は事前検査と各操作直前に拒否する。
+削除専用 file の hardlink は unlink だけを行い、対象外の内容・inode は保持する。
+編集しない完全除去状態の no-op は共有ファイルの hardlink を理由に拒否しない。
+
+HEAD と index の path・mode・blob OID は一致が必要。working tree の内容は Git の改行変換
+（core.autocrlf、text / eol 属性）を適用した blob OID で比較し、core.fileMode=false では
+初期の実行 bit 差だけを許容する。assume-unchanged / skip-worktree や stat cache による
+clean 判定は信用せず、対象の実体を検査する。Git status が clean でも、本検査の対応範囲外や
+構成・実体の不整合があれば拒否する。
+filter / ident / working-tree-encoding 属性は unset / unspecified 以外を変換前に拒否し、
+独自 clean / process filter は実行しない。状態名と同名の文字列値 filter=unset / filter=unspecified
+も拒否する。Git側で両driverを必須・実装なしに上書きし、外部commandなしで失敗させる。
+実際の属性状態 unset / unspecified はこのdriverを使用しないため、引き続き許容する。
+working-tree-encoding=unset / working-tree-encoding=unspecified も無効状態ではなく
+未対応の文字列値として拒否する。全属性照会で実際の unspecified 状態（出力なし）を区別し、
+unset の衝突は非空の合成入力による変換診断で検査する。対象ファイルが空でも検査し、
+Git が exit 0 で変換エラーを出した場合も拒否する。実際の -working-tree-encoding /
+!working-tree-encoding は許容する。合成入力の検査にも filter の無効化を適用する。
+対象外だけに設定された属性は拒否理由にしない。
+preview 後と各操作直前の同時変更検出は、正規化しない生 bytes / mode で行う。
+改行正規化で同じ blob になる変更や、core.fileMode=false 下の mode 変更も停止理由となる。
 完全除去の再実行は Git / HEAD / root を確認後、未コミットの正常削除差分があっても no-op。
 
 ## 途中失敗と旧 prune からの復旧

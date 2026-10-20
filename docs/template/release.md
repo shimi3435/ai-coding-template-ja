@@ -10,7 +10,7 @@ v2の責務境界と後続実装の担当は[配布境界監査](v2-boundary-aud
 
 ## semver 規律
 
-`TEMPLATE_VERSION` は semver（`X.Y.Z`）。境界判断の基準は「**下流の互換を壊すか**」。
+`TEMPLATE_VERSION` は SemVer の通常版（`X.Y.Z`）に限定する。各要素は ASCII 数字で、単独の `0` を除き先頭ゼロを禁止する。pre-release / build metadata は受理しない。境界判断の基準は「**下流の互換を壊すか**」。
 
 - **major** … 下流の bootstrap / rename / 構成互換を壊す変更。
 - **minor** … 機能 / skill / docs の追加。

@@ -275,7 +275,9 @@ def inspect(root: Path, node: str = "node") -> dict:
     try:
         version = (root / "TEMPLATE_VERSION").read_text()
         lines = [line for line in version.splitlines() if line.strip()]
-        if len(lines) != 1 or not re.fullmatch(r"\d+\.\d+\.\d+", lines[0]):
+        if len(lines) != 1 or not re.fullmatch(
+            r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", lines[0]
+        ):
             raise ValueError("TEMPLATE_VERSION の単一行形式が不正")
     except (OSError, ValueError) as exc:
         issue("TEMPLATE_VERSION", str(exc))

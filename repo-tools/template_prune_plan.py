@@ -5,10 +5,10 @@ index 更新・一時 file 作成は行わない。
 
 from __future__ import annotations
 
-import hashlib
 import os
 import stat
 import subprocess
+from collections.abc import Collection
 from pathlib import Path
 
 from template_prune_manifest import DELETE_ROOTS, SHARED
@@ -20,13 +20,15 @@ class PruneError(Exception):
     pass
 
 
-def git(root: Path, *args: str) -> bytes:
+def git(
+    root: Path, *args: str, input: bytes | None = None, reject_stderr: bool = False
+) -> bytes:
     env = dict(os.environ)
     env["GIT_OPTIONAL_LOCKS"] = "0"
     result = subprocess.run(
-        ["git", "-C", str(root), *args], env=env, capture_output=True
+        ["git", "-C", str(root), *args], env=env, input=input, capture_output=True
     )
-    if result.returncode:
+    if result.returncode or (reject_stderr and result.stderr):
         raise PruneError(result.stderr.decode(errors="replace").strip())
     return result.stdout
 
@@ -41,7 +43,9 @@ def repository_head(root: Path) -> str:
         raise PruneError("Git の差分保護未確認: " + str(exc)) from exc
 
 
-def inventory(root: Path) -> dict[str, tuple[int, bytes | None]]:
+def inventory(
+    root: Path, *, edit_paths: Collection[str] = SHARED
+) -> dict[str, tuple[int, bytes | None]]:
     result = {}
 
     def visit(p: Path) -> None:
@@ -54,6 +58,8 @@ def inventory(root: Path) -> dict[str, tuple[int, bytes | None]]:
         info = p.lstat()
         if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
             raise PruneError(f"{relative!r}: 特殊 file / symlink")
+        if relative in edit_paths and stat.S_ISREG(info.st_mode) and info.st_nlink > 1:
+            raise PruneError(f"{relative!r}: 編集対象の hardlink（st_nlink > 1）")
         if p.name == ".git":
             raise PruneError(f"{relative!r}: 入れ子 Git")
         result[relative] = (
@@ -107,14 +113,78 @@ def protect(root: Path, head: str, snapshot: dict) -> None:
     working = {p: v for p, v in snapshot.items() if v[1] is not None}
     if set(working) != set(committed):
         raise PruneError("対象に未追跡 / ignored file または未コミット削除がある")
-    algo = git(root, "rev-parse", "--show-object-format").decode().strip()
+    # 全対象の属性を先に確認する。独自filterを起動してから拒否しない。
+    attributes = git(
+        root,
+        "check-attr",
+        "-z",
+        "--stdin",
+        "--all",
+        input=b"".join(os.fsencode(path) + b"\0" for path in working),
+    ).split(b"\0")[:-1]
+    ambiguous_encodings = []
+    for raw_path, attribute, value in zip(
+        attributes[::3], attributes[1::3], attributes[2::3], strict=True
+    ):
+        if attribute not in (b"filter", b"ident", b"working-tree-encoding"):
+            continue
+        # --allでは本来のunspecified状態は出力されない。同名文字列は拒否。
+        if value != b"unset":
+            raise PruneError(
+                f"{os.fsdecode(raw_path)!r}: 未対応の Git 変換属性 "
+                f"{os.fsdecode(attribute)}={os.fsdecode(value)}"
+            )
+        if attribute == b"working-tree-encoding":
+            ambiguous_encodings.append(os.fsdecode(raw_path))
+    file_mode = (
+        git(
+            root, "config", "--type=bool", "--default=true", "--get", "core.fileMode"
+        ).strip()
+        == b"true"
+    )
+    # check-attrは状態名と同名の文字列値を区別しない。Git内部の判定で
+    # literal driverだけを必須・実装なしにし、外部processを起動せず失敗させる。
+    filter_guards = [
+        option
+        for name in ("unset", "unspecified")
+        for setting in ("clean=", "process=", "required=true")
+        for option in ("-c", f"filter.{name}.{setting}")
+    ]
+    for path in ambiguous_encodings:
+        # -working-tree-encodingと文字列値unsetは同じ表示になる。非空の
+        # 合成入力なら後者の変換失敗を検出でき、空fileでも見逃さない。
+        # hash-objectは変換失敗をstderrに出してexit 0を返す場合がある。
+        try:
+            git(
+                root,
+                *filter_guards,
+                "hash-object",
+                "--stdin",
+                "--path=" + path,
+                input=b"\0",
+                reject_stderr=True,
+            )
+        except PruneError as exc:
+            raise PruneError(
+                f"{path!r}: 未対応の Git 変換属性 working-tree-encoding: {exc}"
+            ) from exc
     for path, (mode, content) in working.items():
         expected_mode, oid = committed[path]
-        actual_mode = "100755" if mode & 0o111 else "100644"
-        digest = hashlib.new(
-            algo, b"blob " + str(len(content)).encode() + b"\0" + content
-        ).hexdigest()
-        if actual_mode != expected_mode or digest != oid:
+        actual_mode = "100755" if mode & stat.S_IXUSR else "100644"
+        # stat cache / index flagsに依存せず、snapshotをGitの改行規則で比較する。
+        digest = (
+            git(
+                root,
+                *filter_guards,
+                "hash-object",
+                "--stdin",
+                "--path=" + path,
+                input=content,
+            )
+            .decode()
+            .strip()
+        )
+        if (file_mode and actual_mode != expected_mode) or digest != oid:
             raise PruneError(f"{path!r}: 対象の実体 / mode と HEAD が一致しない")
 
 
@@ -128,7 +198,7 @@ def plan(root: Path) -> dict:
     except (PruneError, OSError) as exc:
         blockers.append(str(exc))
     try:
-        snapshot = inventory(root)
+        snapshot = inventory(root, edit_paths=state["edits"])
     except (PruneError, OSError) as exc:
         blockers.append(str(exc))
     if not successful(state):
