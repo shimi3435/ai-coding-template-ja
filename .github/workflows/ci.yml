@@ -36,6 +36,8 @@ jobs:
         run: uv sync --locked
       - name: Install Node dependencies (locked, no lifecycle scripts)
         run: npm ci --ignore-scripts
+      - name: Prepare pinned shell parser
+        run: uv run --no-sync python scripts/setup-shell-parser.py
       - name: Canonical offline gate (shared with local development)
         run: ./scripts/check.sh
       - name: Pinned Task regression probes
@@ -64,6 +66,8 @@ jobs:
         run: uv sync --locked
       - name: Install Node dependencies (locked, no lifecycle scripts)
         run: npm ci --ignore-scripts
+      - name: Prepare pinned shell parser
+        run: uv run --no-sync python scripts/setup-shell-parser.py
       - name: rename (apply・使い捨て名)
         run: uv run python scripts/rename-package.py ci_rename_smoke --apply
       - name: Canonical offline gate (shared with local development)

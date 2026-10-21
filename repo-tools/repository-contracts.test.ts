@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { cli, temporaryRepository, writeValidRepository } from "./repository-contracts-test-fixture.ts";
 
-test("check-contracts accepts the tracked exact dependency and release ownership contract", () => {
+test("check-contracts accepts the tracked exact dependency and version format contract", () => {
   const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
     encoding: "utf8",
   });
@@ -13,7 +13,7 @@ test("check-contracts accepts the tracked exact dependency and release ownership
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /exact npm dependencies/);
   assert.match(result.stdout, /package-lock v3/);
-  assert.match(result.stdout, /TEMPLATE_VERSION 1\.0\.0/);
+  assert.match(result.stdout, /TEMPLATE_VERSION/);
   assert.match(result.stdout, /forbidden Node runners/);
   assert.match(result.stdout, /skill updater routes/);
   assert.match(result.stdout, /legacy skill checker: absent/);
@@ -242,23 +242,23 @@ for (const source of [
   });
 }
 
-test("check-contracts requires the prepare-v2-release dependency handoff", () => {
-  const repository = writeValidRepository();
-  writeFileSync(
-    join(repository, "docs", "template", "release.md"),
-    "TEMPLATE_VERSION release process\n",
-    "utf8",
-  );
-
-  const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], {
-    cwd: repository,
-    encoding: "utf8",
+const templateVersionCases = JSON.parse(
+  readFileSync(new URL("../tests/fixtures/template_versions.json", import.meta.url), "utf8"),
+) as { id: string; text: string; valid: boolean }[];
+for (const version of templateVersionCases) {
+  test(`check-contracts template version shared case: ${version.id}`, () => {
+    const repository = writeValidRepository();
+    writeFileSync(join(repository, "TEMPLATE_VERSION"), version.text);
+    const result = spawnSync(process.execPath, [cli.pathname, "check-contracts"], { cwd: repository, encoding: "utf8" });
+    if (version.valid) {
+      assert.equal(result.status, 0, result.stderr);
+    } else {
+      assert.notEqual(result.status, 0);
+      // TypeScript自身の拒否を確認し、後段Pythonの拒否で不一致を隠さない。
+      assert.match(result.stderr, /TEMPLATE_VERSION は単一行の/);
+    }
   });
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /prepare-v2-release/);
-  assert.match(result.stderr, /docs\/template\/release\.md/);
-});
+}
 
 test("check-contracts requires generated node_modules to stay untracked", () => {
   const repository = writeValidRepository();

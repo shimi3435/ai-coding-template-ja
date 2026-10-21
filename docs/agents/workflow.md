@@ -240,20 +240,9 @@ CLI がない場合も固定ディレクトリから Markdown files を読み、
 
 ## change close 時の軽量ふりかえり（テンプレート自身の運用）
 
-close までに `docs/template/retrospectives.md` へ固定形式の1行を追記する。
-
-```markdown
-- YYYY-MM-DD <change-id>（PR #N）: 逃した欠陥 <計> 件（self-review=a / review=b / CI=c / merge後=d）— 一言（任意）
-```
-
-「逃した欠陥」は実装 checkbox 完了後に発見され、修正を要した correctness / contract defect とする。
-実装中の自己修正、style nit、主観的 refactor、回答だけで済む質問は含めない。同一欠陥は最初の発見経路
-だけに数え、0件でも記録する。後から発見した場合は新しい行を足さず既存行を更新する。
-
-例外として、change ID 自体が retired legacy token を含み、固定形式の行を
-`docs/template/retrospectives.md` に置くと最終 residual allowlist に違反する場合だけ、固定形式の本体を exact history allowlist
-として指定済みの ADR または release notes に保存し、`docs/template/retrospectives.md` には archive pointer を残す。
-この例外は既存 allowlist を拡張せず、両条件を満たさない change の保存先を変更しない。
+<!-- template-maintenance:start -->
+テンプレート自身の close では[保守側のふりかえり手順](../template/release.md#change-close-時の軽量ふりかえりテンプレート自身の運用)に従う。
+<!-- template-maintenance:end -->
 
 ## material task の executor 配分
 
@@ -290,7 +279,7 @@ local本文はGitとレビューで管理し、内容lockを持たない。外�
 上流確認は `skills:check --source <repository> --base <full-sha>`、update / repin / adopt-local / migrateは
 これらに `--candidate <independent-clone>` が必須で、`--apply` 指定時だけ候補へ書き込む。
 旧 `skills:lock-local`、SemVer探索、元repositoryへのtransaction / rollbackは提供しない。
-[公開操作と短絡停止手順](../template/skill-maintenance.md)、[metadata v2](../template/skill-metadata-v2.md)を参照する。
+[公開操作と短絡停止手順](../reference/skill-maintenance.md)、[metadata v2](../reference/skill-metadata-v2.md)を参照する。
 通常checkはnetworkや移行用履歴に依存しない。vendored skillは各 `LICENSE` に従う。
 
 ## クロス AI レビュー（オプション）

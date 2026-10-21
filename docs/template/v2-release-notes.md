@@ -15,7 +15,7 @@ CI は Task から独立した先行検査を実行し、ローカル最終検�
 正式入口 `./scripts/check.sh` に統一する。引数なし専用で、配置先の repository を検証する。
 ローカル Task の exact pin は要求せず、版依存の旧挙動再現は CI の固定版環境に分離する。
 変更前から使われている標準 Taskfile はそのまま通るが、下流で記述を変更した場合は
-[repository contracts の受理仕様](repository-contracts.md)に合わせて修正する。
+[repository contracts の受理仕様](../reference/repository-contracts.md)に合わせて修正する。
 
 ## Breaking: 自前Node installerの撤去
 

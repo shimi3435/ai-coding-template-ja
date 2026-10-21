@@ -1,65 +1,74 @@
-"""テンプレ固有メタ文書（docs/template/）を削除する（§19 / ADR-0006）。
-
-下流の研究リポジトリでは、テンプレ固有メタ文書は不要なノイズになる。
-このスクリプトは、それらを隔離した `docs/template/` を一括削除する。
-
-安全規約:
-- 削除対象は `docs/template/` に固定。他のパスは触らない。
-- `docs/adr/`（下流用 ADR スキャフォルド）と `TEMPLATE_VERSION`（由来追跡）は不可侵。
-- 既定は dry-run（削除予定の表示のみ）。実削除は --apply。
-- `docs/template/` が無ければ no-op で正常終了（冪等）。
-- 解決後のパスがリポジトリ外を指す場合は abort（安全装置）。
-"""
+"""テンプレ固有メタ文書と保守資産の固定範囲 preview / apply。"""
 
 from __future__ import annotations
 
 import argparse
-import shutil
+import difflib
+import importlib
+import json
+import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TARGET = REPO_ROOT / "docs" / "template"
+sys.path.insert(0, str(REPO_ROOT / "repo-tools"))
 
-
-def _assert_inside_repo(path: Path) -> None:
-    """path がリポジトリ配下であることを検証（外なら abort）。"""
-    resolved = path.resolve()
-    if resolved == REPO_ROOT.resolve() or REPO_ROOT.resolve() not in resolved.parents:
-        raise SystemExit(
-            f"エラー: 削除対象 {resolved} がリポジトリ配下ではありません。中止します。"
-        )
+plan = importlib.import_module("template_prune_plan").plan
+engine = importlib.import_module("template_prune_apply")
+report = importlib.import_module("template_prune_state").report
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="docs/template/ を削除（task prune-template-docs）"
+        description="テンプレート保守資産を除去（既定は read-only preview）",
+        allow_abbrev=False,
     )
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="実削除する（既定は dry-run で対象表示のみ）",
-    )
+    parser.add_argument("--apply", action="count", default=0, help="固定対象へ明示適用")
     args = parser.parse_args(argv)
-
-    if not TARGET.exists():
-        print("[INFO] docs/template/ は存在しません。何もしません（no-op）。")
+    if args.apply > 1:
+        parser.error("--apply の重複は許可しない")
+    try:
+        proposal = plan(REPO_ROOT)
+        print("\n".join(report(proposal["state"])))
+        for path in proposal["deletions"]:
+            print("削除: " + json.dumps(path, ensure_ascii=False))
+        for path, new in sorted(proposal["edits"].items()):
+            old = (REPO_ROOT / path).read_bytes().decode("utf-8")
+            print(
+                "".join(
+                    difflib.unified_diff(
+                        old.splitlines(True),
+                        new.splitlines(True),
+                        fromfile=path,
+                        tofile=path,
+                    )
+                ),
+                end="",
+            )
+        print(
+            "保持: docs/reference/ ・ docs/adr/ ・ TEMPLATE_VERSION ・ "
+            "Skill / lock / legal / links ・通常 CI"
+        )
+        for blocker in proposal["blockers"]:
+            print("[BLOCKER] " + blocker)
+        if proposal["blockers"]:
+            return 1
+        if proposal["state"]["state"] == "pruned":
+            print("no-op: 完全除去を read-only 確認")
+            return 0
+        if not args.apply:
+            print("dry-run: 変更なし。適用は --apply")
+            return 0
+        result = engine.apply(proposal)
+        if not result["ok"]:
+            print("\n".join(engine.failure_report(result)))
+            return 1
+        print("\n".join(report(result["state"])))
+        print("apply: 固定対象の完全除去を確認")
         return 0
-
-    _assert_inside_repo(TARGET)
-
-    files = sorted(p for p in TARGET.rglob("*") if p.is_file())
-    print(f"削除対象: {TARGET.relative_to(REPO_ROOT)}/（{len(files)} ファイル）")
-    for f in files:
-        print(f"  {f.relative_to(REPO_ROOT)}")
-    print("不可侵: docs/adr/ ・ TEMPLATE_VERSION")
-
-    if not args.apply:
-        print("\n--dry-run（削除せず）。実削除するには --apply を付けてください。")
-        return 0
-
-    shutil.rmtree(TARGET)
-    print("docs/template/ を削除しました。")
-    return 0
+    except (OSError, ValueError) as exc:
+        print("[FAIL] " + str(exc))
+        return 1
 
 
 if __name__ == "__main__":

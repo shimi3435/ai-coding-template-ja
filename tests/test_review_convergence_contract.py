@@ -13,7 +13,6 @@ POLICY_PATHS = (
     Path("AGENTS.md"),
     Path("CONTEXT.md"),
     Path("docs/agents/workflow.md"),
-    Path("docs/template/adr/0009-proportional-agent-workflow-evidence-economy.md"),
     Path(".agents/skills/self-review/SKILL.md"),
     Path(".agents/skills/verify-change/SKILL.md"),
 )

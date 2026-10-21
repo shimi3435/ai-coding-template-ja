@@ -72,6 +72,7 @@ def test_ci_runs_the_shared_offline_gate_after_pinned_setup_and_rename() -> None
             "node repo-tools/entrypoint.mjs runtime-preflight",
             "uv sync --locked",
             "npm ci --ignore-scripts",
+            "uv run --no-sync python scripts/setup-shell-parser.py",
         ]
         if job_name == "rename-smoke":
             preparation.append(
@@ -104,23 +105,3 @@ def test_existing_audit_job_runs_the_explicit_online_node_audit() -> None:
     assert "npm ci --ignore-scripts" in audit
     assert "task audit:node" not in audit
     assert "npm audit --audit-level=high" in audit
-
-
-def test_v2_runtime_breaking_change_is_handed_off_without_bumping_version() -> None:
-    release_guide = (REPO_ROOT / "docs" / "template" / "release.md").read_text(
-        encoding="utf-8"
-    )
-
-    assert (REPO_ROOT / "TEMPLATE_VERSION").read_text(encoding="utf-8") == "1.0.0\n"
-    for contract in (
-        "establish-v2-runtime-foundation",
-        "Node.js 24",
-        "Python >=3.14",
-        "破壊的変更",
-        "prepare-v2-release",
-        "全 4 changes",
-        "TEMPLATE_VERSION=2.0.0",
-        "移行ガイド最終化",
-        "release-ready 判定",
-    ):
-        assert contract in release_guide

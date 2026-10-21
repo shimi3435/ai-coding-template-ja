@@ -1,0 +1,2154 @@
+[
+  {
+    "id": "task-call",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    cmds:\n      - task: check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "task-comment",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n# task check:template\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "task-forbidden-dir",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    dir: scripts\n    cmds: []\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "task-forbidden-deps",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    deps: []\n    cmds: []\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "task-forbidden-defer",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    defer: echo ok\n    cmds: []\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "task-forbidden-if",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    if: true\n    cmds: []\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "task-forbidden-status",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    status: []\n    cmds: []\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "task-forbidden-preconditions",
+    "surface": "R01",
+    "path": "Taskfile.yml",
+    "source": "version: \"3\"\ntasks:\n  setup:node:\n    cmds:\n      - npm ci --ignore-scripts\n  audit:node:\n    cmds:\n      - npm audit --audit-level=high\n  skills:links:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:links\n  skills:verify:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n  skills:check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:check\n  skills:update:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:update\n  skills:repin:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:repin\n  skills:adopt-local:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:adopt-local\n  skills:migrate:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:migrate\n  check:\n    cmds:\n      - node repo-tools/entrypoint.mjs skills:verify\n      - node --test repo-tools/*.test.ts\n  probe:\n    preconditions: []\n    cmds: []\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "package-command",
+    "surface": "R02",
+    "path": "package.json",
+    "source": "{\"scripts\": {\"probe\": \"task check:template\"}}",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "package-prose",
+    "surface": "R02",
+    "path": "package.json",
+    "source": "{\"description\": \"task check:template\", \"scripts\": {\"probe\": \"echo ok\"}}",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "package-invalid",
+    "surface": "R02",
+    "path": "package.json",
+    "source": "{",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "workflow-cwd-workflow",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\ndefaults:\n  run:\n    working-directory: scripts\njobs:\n  probe:\n    steps:\n      - run: \"python ../template-maintenance/tests/test_release_contract.py\"\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-cwd-job",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    defaults:\n      run:\n        working-directory: scripts\n    steps:\n      - run: \"python ../template-maintenance/tests/test_release_contract.py\"\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-cwd-step",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"python ../template-maintenance/tests/test_release_contract.py\"\n        working-directory: scripts\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-unrelated",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"echo task check:template\"\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-cwd-unrelated",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"python ../template-maintenance/tests/test_release_contract.py\"\n        working-directory: docs/reference\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-dynamic",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"python template-maintenance/check.py\"\n        working-directory: ${{ inputs.cwd }}\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-dynamic-task",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"task check:template\"\n        working-directory: ${{ inputs.cwd }}\n",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-static-override",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\ndefaults:\n  run:\n    working-directory: ${{ inputs.cwd }}\njobs:\n  probe:\n    steps:\n      - run: \"python ../template-maintenance/test.py\"\n        working-directory: scripts\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-cwd-null",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"echo normal\"\n        working-directory: null\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-cwd-\"\"",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"echo normal\"\n        working-directory: \"\"\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-cwd-false",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"echo normal\"\n        working-directory: false\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-cwd-[scripts]",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"echo normal\"\n        working-directory: [scripts]\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-cwd-/outside",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "name: probe\non: push\njobs:\n  probe:\n    steps:\n      - run: \"echo normal\"\n        working-directory: /outside\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-24",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-25",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "command task \"check:template\"\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-26",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "X=1 exec task check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-27",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "bash -c 'task check:template'\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-28",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "python \"docs/template/release.md\"\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-29",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "f() { task check:template; }; f\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-data-30",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "# task check:template\necho ok\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-data-31",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo \"task check:template\"\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-data-32",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<'EOF'\ntask check:template\nEOF\n\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-data-33",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task \"$NAME\"\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-data-34",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task check:template-extra\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-cwd-35",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cd src\nmake\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-cwd-36",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "pushd src\nmake\npopd\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-cwd-37",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "f() { cd src; }; make\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-cwd-38",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "bash -c \"cd src; make\"\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-cwd-39",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "python template-maintenance/test.py; cd src\n",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-cwd-task",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cd src\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-invalid",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo '\n",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "python-42",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "import subprocess as sp\nsp.run([\"task\", \"check:template\"])",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-43",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "from pathlib import Path as P\n(P(ROOT) / \"docs\" / \"template\" / \"release.md\").read_text()",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-44",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "import io\nio.open(\"docs/template/release.md\")",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-45",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "import importlib.util\nimportlib.util.spec_from_file_location(\"probe\", \"docs/template/tool.py\")",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-46",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "import docs.template.probe",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-47",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "import os\nos.system(\"task check:template\")",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-data-48",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "source = \"task check:template\"",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-data-49",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "open(\"docs/template/data.txt\", \"w\")",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-data-50",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "from pathlib import Path\nPath(\"docs/template/file\").exists()",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-invalid",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "def (",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "javascript-52",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "import {execSync as run} from \"node:child_process\"; run(\"task check:template\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-53",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "import {spawnSync} from \"child_process\"; spawnSync(\"task\", [\"check:template\"]);",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-54",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "import fs from \"node:fs\"; fs.readFileSync(\"docs/template/release.md\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-55",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "import {readFile} from \"node:fs/promises\"; import {join as p} from \"node:path\"; readFile(p(ROOT, \"docs\", \"template\", \"release.md\"));",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-56",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "import \"../template-maintenance/tool.ts\";",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-57",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "export {x} from \"../template-maintenance/tool.ts\";",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-58",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "import(\"../template-maintenance/tool.ts\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-59",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "require(\"../template-maintenance/tool.ts\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-data",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "const source = 'import \"../template-maintenance/tool.ts\";';",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-invalid",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "const = ;",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "pytest-command",
+    "surface": "R05",
+    "path": "tests/test_probe.py",
+    "source": "import subprocess\nsubprocess.run([\"task\", \"check:template\"])",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "pytest-data",
+    "surface": "R05",
+    "path": "tests/test_probe.py",
+    "source": "source = \"task check:template\"",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-64",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "`task check:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-65",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "```bash\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-66",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "[guide](../template/release.md)",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-67",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "![guide](<../template/release.md>)",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-68",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "[guide]: ../template/release.md",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-69",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "[guide](../%74emplate/release.md#title)",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-data-70",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "`check:template` and `docs/template/`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-data-71",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "task check:template in prose",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-data-72",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "<!-- task check:template -->",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-data-73",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "```json\n\"task check:template\"\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-data-74",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "[external](https://example.invalid/docs/template/release.md)",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-template-interpolation",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "const text = `# ${name} import \"../template-maintenance/tool.ts\"`;",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-template-progress",
+    "surface": "R05",
+    "path": "repo-tools/probe.ts",
+    "source": "const text = [`${name}`, `# ${name}`];",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-cwd-absolute",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cd src\npython {{ROOT}}/template-maintenance/test.py\n",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "workflow-uses",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "jobs:\n  probe:\n    uses: ./template-maintenance/action\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-with-path",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "jobs:\n  probe:\n    steps:\n      - uses: external/action@v1\n        with:\n          path: docs/template/**\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-with-paths",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "jobs:\n  probe:\n    steps:\n      - uses: external/action@v1\n        with:\n          paths: |\n            src\n            docs/template/**\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-cache",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "jobs:\n  probe:\n    steps:\n      - uses: external/action@v1\n        with:\n          cache-dependency-path: template-maintenance/lock\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "workflow-filter",
+    "surface": "R03",
+    "path": ".github/workflows/probe.yml",
+    "source": "on:\n  push:\n    paths-ignore: ['!docs/template/**']\njobs: {}\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-comment-heredoc",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "# <<EOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-echo-heredoc",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo \"<<EOF\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-punctuation",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<EOF.1\nignored\nEOF.1\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-here-string",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<<EOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "package-nonmapping",
+    "surface": "R02",
+    "path": "package.json",
+    "source": "[]",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "shell-fd-prefix",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "2>/dev/null task check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-fd-dup",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "2>&1 task check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-fd-middle",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task 2>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-literal-dollar",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "open(\"docs/template/$literal.md\")",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "python-literal-braces",
+    "surface": "R04",
+    "path": "scripts/probe.py",
+    "source": "open(\"docs/template/{{literal.md\")",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-fence-html-string",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "```sh\nprintf \"<!--\"\ntask check:template\nprintf \"-->\"\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-escaped-opening",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "\\[example](../template/release.md)",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-orphan-closing",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "](../template/release.md)",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-regex-conditional",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import { readFileSync } from \"node:fs\"; const pattern = true ? /readFileSync(\"docs\\/template\\/release.md\")/ : null;",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-regex-control",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import { readFileSync } from \"node:fs\"; if (true) /readFileSync(\"docs\\/template\\/release.md\")/.test(\"x\");",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-division-read",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import {readFileSync} from \"node:fs\"; const size = 1 / readFileSync(\"docs/template/release.md\").length / 2;",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-keyword-property-division",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import {readFileSync} from \"node:fs\"; const n = limits.default / 2; readFileSync(\"docs/template/release.md\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-function-expression-division",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import {readFileSync} from \"node:fs\"; const n = function(){} / readFileSync(\"docs/template/release.md\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-object-expression-division",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import {readFileSync} from \"node:fs\"; const n = true ? {} / readFileSync(\"docs/template/release.md\") : 0;",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-quoted-fd-command",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "'2'>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-escaped-fd-command",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "\\2>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-unicode-fd-command",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "２>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "javascript-named-default-alias",
+    "surface": "R05",
+    "path": "repo-tools/probe.mjs",
+    "source": "import {default as disk} from \"node:fs\"; disk.readFileSync(\"docs/template/release.md\");",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-continued-fd",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "2\\\n>/dev/null task check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-redirect-quoted-concatenation",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": ">\"/dev/\"null task check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-double-quoted-literal-backslash",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task \"check\\:template\"",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-even-backslash-code-span",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "\\\\`task check:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-redirect-concatenated-operand-data",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": ">\"task \"check:template printf ok",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-redirect-concatenation-partial",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": ">\"/dev/\"null cd src; task check:template",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "markdown-odd-backslash-code-span",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "\\`task check:template`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-four-backslash-code-span",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "\\\\\\\\`task check:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-even-backslash-comment-in-code",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "\\\\`printf '<!--'` and `task check:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-even-backslash-link-in-code",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "\\\\`[archive](../template/release.md)`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-unmatched-backtick-length",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "``task check:template`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-multiline-code-comment",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "`printf '<!--'\nignored`\n`task check:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-multiline-code-link-data",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "`printf\n[x](../template/release.md)`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-real-comment-multiline-code",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "<!--\n`task\ncheck:template`\n-->",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-comment-before-command-code",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "<!-- ` --> `task check:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "markdown-multiline-code-command",
+    "surface": "R06",
+    "path": "docs/reference/probe.md",
+    "source": "`task\ncheck:template`",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-truncate-argument",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task &>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-truncate-partial",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cd src; task &>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-combined-redirect-truncate-prefix",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "&>/dev/null task check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-truncate-data",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf &>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-truncate-numeric-command",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "2&>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-truncate-background",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task & >/dev/null check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-append-argument",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task &>>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-append-partial",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cd src; task &>>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "shell-combined-redirect-append-prefix",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "&>>/dev/null task check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-append-data",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf &>>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-append-numeric-command",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "2&>>/dev/null task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-quoted-data",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf \"&>>\" task check:template",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-continued-amp",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task &\\\n>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-continued-append",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task &>\\\n>/dev/null check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-combined-redirect-continued-fd",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "task 2>\\\n&1 check:template",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-header-here-string",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <\\\n<<EOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-header-here-document",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <\\\n<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-header-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<EO\\\nF\nprintf data\nEOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-header-quoted-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<\"E\\$F\"\nprintf data\nE$F\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-joined-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<EOF\nEO\\\nF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-joined-data",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<EOF\npayload\\\nEOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-quoted-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<'EOF'\npayload\\\nEOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-escaped-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<\\EOF\npayload\\\nEOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-paired-backslash",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<EOF\npayload\\\\\nEOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-tabs-joined-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<-EOF\n\tEO\\\nF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-tabs-after-continuation",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<-EOF\n\tEO\\\n\tF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-payload-continued-unquoted-delimiter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "cat <<EO\\\nF\nEO\\\nF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-escaped-space",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' a\\ # <<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-escaped-tab",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' a\\\t# <<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-continued-word",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' a\\\n# <<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-continued-comment",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' a \\\n# <<EOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-escaped-space-live",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' a\\ # <<EOF\necho payload\nEOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-quoted-space",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' 'a '# <<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-empty-quote",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ''# <<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-heredoc-comment-ordinary-comment",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' a # <<EOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-parameter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-<<EOF}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-arithmetic",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' $((1<<2))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-nested-parameter",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-${other:-<<EOF}}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-parameter-escaped-end",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-\\}<<EOF}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-quoted-substitution",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' \"$(printf '%s\\n' ${unset_name:-<<EOF})\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-backtick",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' `printf '%s\\n' ${unset_name:-<<EOF}`\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-real-heredoc",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-<<FAKE} <<EOF\ntask check:template\nEOF\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-real-heredoc-live",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-<<FAKE} <<EOF\necho payload\nEOF\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-parameter-internal",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-task check:template}\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-substitution-internal",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' $(task check:template)\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-literal-dollar-quote",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf \"%s\\n\" \"$\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-literal-dollar-separator",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf \"%s\\n\" $; task check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-nested-backtick-end",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-`printf }`<<EOF}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-nested-command-end",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-$(printf })<<EOF}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-parameter-literal-open-brace",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-foo{}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-expansion-header-parameter-single-quoted-slash",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-'\\'}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-boundary-comment-paren",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' \"$(printf x # (\n)\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-boundary-comment-quote",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' \"$(printf x # '\n)\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-boundary-payload-paren",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' \"$(cat <<EOF\n(\nEOF\n)\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-boundary-payload-quote",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' \"$(cat <<EOF\n'\nEOF\n)\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-boundary-nested-parameter-comment",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' ${unset_name:-$(printf x # (\n)}\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-boundary-arithmetic-shift",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "printf '%s\\n' $((1 << 2\n + 3))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-excluded",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=\"$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\"\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-outside",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=\"$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\"\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-excluded-unquoted",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "shell-substitution-case-pattern-outside-unquoted",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "value=$(case x in\n  y) task check:template ;;\n  x) : ;;\nesac)\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-target",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task <target>`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-known",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task check:template <extra>`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-embedded",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task setup:<extra>`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-quoted",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task '<target>'`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-escaped",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task \\<target\\>`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-placeholder-priority",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task <input> check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-redir",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task < input > check:template`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-shell-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ntask <target>\n```",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-invalid-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ntask (\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-method",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`foo(1, 2)`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-method-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`foo(); task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-method-after",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task check:template; foo()`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-invalid-known-arg",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task foo(bar)`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-quoted-method",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`printf \"foo(bar)\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-operator",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`|| true`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-operator-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`|| task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-flags",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`--foo value`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-flags-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`--foo value; task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-json",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`{\"a\": \"task check:template\"}`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-comment",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`<!-- template-maintenance:start -->`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-quoted-sql",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "> ```sql\n> DROP TABLE users;\n> ```\n",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-quoted-bash",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "> ```bash\n> task check:template\n> ```\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-nested-placeholder",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`sh -c 'task <target>'`",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-boundary-nested-quoted",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`sh -c \"task '<target>'\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-escaped-opener",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task \\<target>`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-invalid-nested-expression",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`printf \"$(foo(bar))\"`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-boundary-quoted-nested-expression",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`printf \"$(printf 'foo(bar)')\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-boundary-strict-method",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\nfoo()\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-placeholder-expression-token-collision",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task <EXPR_0> check:template; foo()`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-expression-argument-with-placeholder",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`task foo(bar)<extra>`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-assignment-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nx=$(foo(bar))\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-assignment-command",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`x=$(foo(bar)) echo ready`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-redirect",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`echo >$(foo(bar))`",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review-parameter-inline",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`echo ${x:-foo(bar)}`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review-parameter-fence",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho ${x:-foo(bar)}\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review-parameter-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`foo(); echo ${x:-foo(bar)}; task check:template`",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review-assignment-parameter",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`x=${x:-foo(bar)} echo ready`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review-redirect-quoted",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "`echo >\"foo(bar)\"`",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review2-quoted-heredoc",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'foo(bar)'\ndata\nfoo(bar)\n\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review2-heredoc-tail",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'foo(bar)'\nfoo(bar); task check:template\nfoo(bar)\ntask check:template\n\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review2-heredoc-mixed",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); cat <<'foo(bar)'\nfoo(bar)\ntask check:template\n\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review2-shared-assignment",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); x=$(foo(bar)) echo ready\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review2-shared-redirection",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); echo >$(foo(bar))\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review2-shared-argument",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); task foo(bar)\n```",
+    "expected": "invalid-syntax",
+    "coverage": "not-run"
+  },
+  {
+    "id": "document-review2-shared-parameter",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); echo ${x:-foo(bar)}\n```",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review2-shared-quoted-command",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar); 'foo(bar)'\n```",
+    "expected": "not-detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review3-partial-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<f'oo(bar)'\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review3-partial-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar);\ncat <<f'oo(bar)'\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review3-escaped-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<\"foo(\\\"bar\\\")\"\ndata\nfoo(\"bar\")\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review3-escaped-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar);\ncat <<\"foo(\\\"bar\\\")\"\ndata\nfoo(\"bar\")\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-review3-backslash-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<foo\\(bar\\)\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-review3-backslash-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(bar);\ncat <<foo\\(bar\\)\ndata\nfoo(bar)\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<'<'tag'>'\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-False",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-True",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<\\<tag\\>\ntask check:template <payload>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-multiple",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'<'a'>' <<\\<b\\>\n<x>\n<a>\n<y>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-expression",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nfoo(); cat <<'<'tag'>'\n<x>\n<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-nested",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\nprintf \"$(cat <<'<'tag'>'\n<x>\n<tag>\n)\"\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<'<'tag'>'\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-partial-quote-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<'<'tag'>'\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\ncat <<\\<tag\\>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-plain-escape-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho <input>\ncat <<\\<tag\\>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<'tag'>'\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-partial-quote-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<'<'tag'>'\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-False-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<\\<tag\\>\n<tag>\n```",
+    "expected": "not-detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-heredoc-placeholder-bash-escape-True-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho <input>\ncat <<\\<tag\\>\n<tag>\ntask <target> check:template\n```",
+    "expected": "detected",
+    "coverage": "partial"
+  },
+  {
+    "id": "document-empty-heredoc-simple",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<tag>'\n<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-tab",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<-'<tag>'\n<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-tab-indent",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<-'<tag>'\n\t<tag>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-two-empty",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<a>' <<'<b>'\n<a>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-empty-first",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<a>' <<'<b>'\n<a>\n<payload>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "document-empty-heredoc-empty-last",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\ncat <<'<a>' <<'<b>'\n<payload>\n<a>\n<b>\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-script-0",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo $((1 << 2))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-script-1",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "((a << 1))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-script-2",
+    "surface": "R04",
+    "path": "scripts/probe.sh",
+    "source": "echo $((1 >> 2))\ntask check:template\n",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-bash-0",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho $((1 << 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-bash-1",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\n((a << 1))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-bash-2",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```bash\necho $((1 >> 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-plain-0",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho $((1 << 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-plain-1",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\n((a << 1))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  },
+  {
+    "id": "arithmetic-shift-plain-2",
+    "surface": "R06",
+    "path": "docs/guide.md",
+    "source": "```\necho $((1 >> 2))\ntask check:template\n```",
+    "expected": "detected",
+    "coverage": "evaluated"
+  }
+]

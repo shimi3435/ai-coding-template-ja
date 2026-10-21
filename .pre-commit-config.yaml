@@ -34,7 +34,8 @@ repos:
       - id: end-of-file-fixer
         exclude: '^\.agents/skills/'
       - id: trailing-whitespace
-        exclude: '^\.agents/skills/'
+        # 固定 hash の upstream patch は context 行の空白を保持する。
+        exclude: '^(\.agents/skills/|repo-tools/shell-parser/upstream\.patch$)'
       - id: check-yaml
       - id: check-toml
       - id: check-json

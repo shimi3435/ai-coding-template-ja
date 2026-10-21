@@ -11,6 +11,7 @@ tasks:
       - node repo-tools/entrypoint.mjs runtime-preflight
       - npm ci --ignore-scripts
       - uv sync --inexact
+      - uv run --no-sync python scripts/setup-shell-parser.py
       - uv run pre-commit install
 
   setup:node:
@@ -67,6 +68,11 @@ tasks:
       - uv run --no-sync ruff check .
       - uv run --no-sync basedpyright
       - uv run --no-sync pytest
+
+  check:template:
+    desc: テンプレート保守専用の release・履歴・統合検証
+    cmds:
+      - uv run --no-sync pytest template-maintenance/tests/test_release_contract.py template-maintenance/tests/test_history_contract.py template-maintenance/tests/test_prune_integration.py
 
   check:isolated:
     desc: 必須 runtime だけの隔離環境で通常 check が OpenSpec CLI / ネットワークに依存しないことを検証
@@ -317,7 +323,7 @@ tasks:
 
   prune-template-docs:
     desc: |
-      docs/template/ 配下のテンプレ固有メタ文書を一括削除。
+      テンプレ固有メタ文書・保守テスト・専用 CI / task / 文書区画を固定範囲で除去。
       既定は dry-run。実削除は --apply（docs/adr と TEMPLATE_VERSION は不可侵）。
         task prune-template-docs              # dry-run
         task prune-template-docs -- --apply   # 実削除

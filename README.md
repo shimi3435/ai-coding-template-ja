@@ -1,7 +1,7 @@
 # ai-coding-template-ja
 
 研究者が AI コーディングを安全に始める開発基盤を提供する、日本語対応の研究用 Python
-プロジェクトテンプレート（Codex / Claude Code、Ubuntu 対象）。作成直後に `./scripts/check.sh` /
+プロジェクトテンプレート（Codex / Claude Code、Ubuntu amd64（x86_64）対象）。作成直後に `./scripts/check.sh` /
 `task doctor` が green になる最小実用セットに、必要なものだけ opt-in で足していく。
 
 必須ランタイムは Node.js 24 LTS、npm、Python 3.14 以上。リポジトリの既定は
@@ -34,16 +34,21 @@
 ## 2 回目以降
 
 ```bash
-task setup     # npm ci --ignore-scripts ＋ uv sync --inexact ＋ pre-commit install
+task setup     # Node / Python dependency ＋ 固定 shell parser ＋ pre-commit install
 ./scripts/check.sh # Node contracts / TypeScript / Node test ＋既存 Python checks
 task doctor    # 環境診断（read-only・FAIL ゼロで green）
 ```
+
+shell 参照検査には固定 mvdan/sh と限定 patch を使用する。初回 `task setup` は固定 Go と source を
+hash 検証して repository 内で build し、以後の検査は offline で実行する。system Go は不要。
+対象外の OS / CPU は取得前に停止する。準備・破損時の対応と解析範囲は
+[固定 parser と診断の契約](docs/reference/prune-template-assets.md#固定-parser-と解析診断)を参照する。
 
 ## 主なタスク
 
 | タスク | 内容 |
 | --- | --- |
-| `task setup` | `npm ci --ignore-scripts` ＋ Python inexact sync（導入済み extras を保持）＋ pre-commit hooks |
+| `task setup` | `npm ci --ignore-scripts` ＋ Python inexact sync（導入済み extras を保持）＋ 固定 shell parser 準備 ＋ pre-commit hooks |
 | `task setup:node` | lock 済み Node dependency を `npm ci --ignore-scripts` で導入 |
 | `task setup:research` ほか | extras を加算導入（`setup:notebook` / `setup:experiment` / `setup:all`） |
 | `./scripts/check.sh` | 品質チェック一式 |
@@ -59,7 +64,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 | `task audit:node` | `npm audit --audit-level=high` を明示的にオンライン実行 |
 | `task security` | gitleaks（在席時）＋ pip-audit / bandit ゲート（CI audit ジョブと同一範囲） |
 | `task nb:strip` / `nb:sync` / `nb:check` | notebook 出力除去 / jupytext 同期 / nbqa lint（extra 在席時） |
-| `task prune-template-docs [-- --apply]` | テンプレ メタ文書 docs/template/ の削除 |
+| `task prune-template-docs [-- --apply]` | テンプレート保守資産の preview / 除去 |
 | `task clean` | キャッシュ・カバレッジ生成物の削除 |
 
 ## Skillの手動更新
@@ -67,7 +72,7 @@ task doctor    # 環境診断（read-only・FAIL ゼロで green）
 同梱Skillはそのまま利用できる。`task skills:links` は現在checkoutのlinkを修復し、
 `task skills:verify` はnetworkなしで検証する。local本文の内容lock更新は不要で、構造・identity・legal検証は維持する。
 上流更新は元repositoryと完全な開始commit、`git clone --no-local` で作った独立候補を指定する。
-[公開操作・隔離更新手順](docs/template/skill-maintenance.md)に従い、適用成功、offline検証、`./scripts/check.sh`、差分レビュー後に通常PRへ進む。
+[公開操作・隔離更新手順](docs/reference/skill-maintenance.md)に従い、適用成功、offline検証、`./scripts/check.sh`、差分レビュー後に通常PRへ進む。
 更新PR自動化の提供は終了した。既存の利用環境は先に
 [手動更新・自動化撤去の手順](docs/guide.md#7-skillの手動更新と旧自動化の撤去)に従って停止・棚卸しを行う。
 
@@ -123,7 +128,8 @@ inexact sync により、導入済み extras を削除しない。
   立ち上げの「なぜ」・オプションの選び方・詰まったとき）。
 - `docs/adr/` … **下流の研究 ADR 用**（出荷時は `0000-template.md` の道標 1 枚のみ）。
 - `docs/template/` … **テンプレ固有メタ文書**（設計判断・リリース・ふりかえり）。
-  下流では不要なら `task prune-template-docs -- --apply` で一括削除できる
+  下流では不要なら保守テスト・専用 CI とともに除去できる。
+  [対象・preview / apply・復旧手順](docs/reference/prune-template-assets.md)を確認する
   （ADR-0006）。
 - `docs/agents/` … エージェント向けの workflow / safety / mcp 詳細。
 - `docs/optional/` … オプション機能の手順（caveman hook・notebook 管理・extras 監査・
@@ -154,3 +160,8 @@ vendoring した第三者 skill は**各 skill の `LICENSE` に従う**（い�
   `.env` と gitignore 済みのローカル生成設定にのみ保存し、mode `0600` で保護する
 - GitHub の認証（`gh auth login` / `GH_TOKEN`）は各自で設定する
 - WSL 利用時は **WSL 上の Ubuntu** で `bootstrap.sh` を実行する
+
+<!-- template-maintenance:start -->
+テンプレート保守者は `./scripts/check.sh` 成功後に `task check:template` を実行する。
+[保守手順](docs/template/release.md)を参照する。
+<!-- template-maintenance:end -->

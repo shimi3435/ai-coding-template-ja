@@ -1,0 +1,157 @@
+[
+  {
+    "id": "valid-0",
+    "text": "0.0.0",
+    "valid": true
+  },
+  {
+    "id": "valid-1",
+    "text": "1.0.0\n",
+    "valid": true
+  },
+  {
+    "id": "valid-2",
+    "text": "2.0.0\r\n",
+    "valid": true
+  },
+  {
+    "id": "valid-3",
+    "text": "10.20.30",
+    "valid": true
+  },
+  {
+    "id": "valid-4",
+    "text": "123456789012345678901234567890.0.9",
+    "valid": true
+  },
+  {
+    "id": "valid-5",
+    "text": "\n\t \n1.2.3\n\n",
+    "valid": true
+  },
+  {
+    "id": "valid-6",
+    "text": "\u001f\n1.2.3\n",
+    "valid": true
+  },
+  {
+    "id": "valid-7",
+    "text": "\u00a0\n1.2.3\n",
+    "valid": true
+  },
+  {
+    "id": "invalid-0",
+    "text": "01.2.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-1",
+    "text": "1.02.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-2",
+    "text": "1.2.03",
+    "valid": false
+  },
+  {
+    "id": "invalid-3",
+    "text": "00.0.0",
+    "valid": false
+  },
+  {
+    "id": "invalid-4",
+    "text": "\u0661.\u0662.\u0663",
+    "valid": false
+  },
+  {
+    "id": "invalid-5",
+    "text": "\uff11.\uff12.\uff13",
+    "valid": false
+  },
+  {
+    "id": "invalid-6",
+    "text": "1.\u0662.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-7",
+    "text": "",
+    "valid": false
+  },
+  {
+    "id": "invalid-8",
+    "text": "\n\t\n",
+    "valid": false
+  },
+  {
+    "id": "invalid-9",
+    "text": "1.2",
+    "valid": false
+  },
+  {
+    "id": "invalid-10",
+    "text": "1.2.3.4",
+    "valid": false
+  },
+  {
+    "id": "invalid-11",
+    "text": "v1.2.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-12",
+    "text": "-1.2.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-13",
+    "text": "1.0.0-rc.1",
+    "valid": false
+  },
+  {
+    "id": "invalid-14",
+    "text": "1.0.0+build.1",
+    "valid": false
+  },
+  {
+    "id": "invalid-15",
+    "text": " 1.2.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-16",
+    "text": "1.2.3 ",
+    "valid": false
+  },
+  {
+    "id": "invalid-17",
+    "text": "1.2.3\n2.0.0",
+    "valid": false
+  },
+  {
+    "id": "invalid-18",
+    "text": "1.2.3\u0000",
+    "valid": false
+  },
+  {
+    "id": "invalid-19",
+    "text": "\ufeff\n1.2.3",
+    "valid": false
+  },
+  {
+    "id": "invalid-20",
+    "text": "1.2.3\u00a0",
+    "valid": false
+  },
+  {
+    "id": "invalid-21",
+    "text": "NaN.0.0",
+    "valid": false
+  },
+  {
+    "id": "invalid-22",
+    "text": "inf.0.0",
+    "valid": false
+  }
+]

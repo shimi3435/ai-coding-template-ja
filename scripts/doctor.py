@@ -26,6 +26,7 @@ read-only 方針: 実 sync を行わない。lock の検査は `uv lock --check`
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import re
@@ -631,12 +632,19 @@ def _mcp_has_serena_entry() -> bool:
 
 
 def check_template_docs(diag: Diagnostics) -> None:
-    """テンプレ固有メタ文書（docs/template/）の残存を INFO 通知（任意 prune 可）。"""
-    if (REPO_ROOT / "docs" / "template").is_dir():
-        diag.info(
-            "テンプレ固有メタ文書が docs/template/ に残存しています"
-            "（任意・task prune-template-docs で削除可）"
-        )
+    """テンプレ固有メタ文書の構成と coverage を独立して診断する。"""
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(REPO_ROOT / "repo-tools"))
+    try:
+        scanner = importlib.import_module("template_prune_state")
+
+        result = scanner.inspect(REPO_ROOT)
+        for line in scanner.report(result):
+            diag.info(line)
+        if not scanner.successful(result):
+            diag.fail_("テンプレート構成・参照・解析の検査に失敗しました")
+    except (ImportError, OSError, ValueError) as exc:
+        diag.fail_(f"テンプレート構成を検査できません: {exc}")
 
 
 def check_env_and_version(diag: Diagnostics) -> None:

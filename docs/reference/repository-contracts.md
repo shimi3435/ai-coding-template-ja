@@ -5,6 +5,15 @@ exact dependency version / Taskfile 検査を定義する。Issue #77 で構文�
 検査は read-only で、入力を正規化して書き戻したり、Taskfile のコマンドを実行したりしない。
 不正入力は非ゼロ終了し、対象と理由を報告する。
 
+## TEMPLATE_VERSION
+
+下流由来情報の版は SemVer の通常版 `X.Y.Z` に限定する。各要素は ASCII の `0`、または
+`1`〜`9` で始まる整数であり、複数桁の先頭ゼロ、Unicode 数字、pre-release、build metadata は拒否する。
+数値型には変換せず、新しい桁数上限は設けない。特定の release 版への固定は保守側の責務である。
+空白だけの行を除いて非空行が1行必要であり、値の前後空白は許容しない。改行・空行の分類は
+Python の `str.splitlines()` / `str.strip()` と同じとし、BOM は空白として扱わない。
+Python scanner と TypeScript gate は[共通ケース](../../tests/fixtures/template_versions.json)で一致を検証する。
+
 ## Exact dependency version
 
 対象は `package.json` の `dependencies` / `devDependencies`。両 field は欠損を許可し、存在する場合は

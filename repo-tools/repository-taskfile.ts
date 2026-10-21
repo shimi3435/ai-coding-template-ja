@@ -99,6 +99,12 @@ function validateTaskPolicy(root: YAMLMap): readonly string[] {
   return commands;
 }
 
+export function inspectRepositoryTaskfile(source: string): { root: YAMLMap; commands: readonly string[] } {
+  const root = parseTaskfile(source);
+  const commands = validateTaskPolicy(root);
+  return { root, commands };
+}
+
 export function validateRepositoryTaskfile(source: string): readonly string[] {
-  return validateTaskPolicy(parseTaskfile(source));
+  return inspectRepositoryTaskfile(source).commands;
 }

@@ -2,7 +2,7 @@
 
 「Use this template」で作成した下流リポジトリへ、テンプレの後続改善を**手動 cherry-pick**で
 取り込む手順。テンプレ更新は下流へ自動伝播せず、upstream remote を追加して `git merge` で
-全体追随する方式は [ADR-0005](../template/adr/0005-template-update-not-propagated.md) で
+全体追随する方式は ADR-0005（テンプレート側の設計記録） で
 **却下済み**（rename 後のコンフリクト大量化が理由。詳細は ADR 参照。prune 済み下流では
 `docs/template/` が削除済みのため、ADR はテンプレリポジトリ側で参照する）。本ページは
 必要な変更だけを人が選んで取り込む手順に徹する。
