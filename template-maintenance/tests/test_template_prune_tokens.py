@@ -7,7 +7,7 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "repo-tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "repo-tools"))
 shell = importlib.import_module("template_prune_shell")
 
 

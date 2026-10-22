@@ -19,7 +19,7 @@ FAKE_GITHUB_TOKEN = "github_pat_FAKE_DO_NOT_PRINT"
 
 def _copy_cli_project(tmp_path: Path) -> Path:
     """公開 CLI を最小構成の一時プロジェクトへコピーする。"""
-    from template_prune_fixture import copy_runtime, fixture
+    from downstream_repository_fixture import copy_runtime, fixture
 
     project = tmp_path / "project"
     fixture(project, False)

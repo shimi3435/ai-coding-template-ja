@@ -61,10 +61,17 @@ preview 後と各操作直前の同時変更検出は、正規化しない生 by
 GitHub や host 登録解除は操作しない。#74 の Skill 除去・host 操作は別の責務であり、
 同梱中の Skill offline 検証はこの prune で省略しない。
 
+## 旧参照corpusの扱い
+
+新しいテンプレートからpruneした構成では、旧K05（tests/fixtures/template_prune/references.json）を
+配布しない。既に旧形式でprune済みの下流repositoryに残る旧ファイルは、更新後も自動削除しない。
+手動整理は、利用者が独自のimport・読取り・リンク等の参照を確認して判断する。
+自動migrationが必要になった場合は別Issueで扱い、本機能に移行処理は追加しない。
+
 ## 判定契約
 
 [固定 manifest](../../repo-tools/template_prune_manifest.py) の D / M に相当する
-4 directory と19 regular file、専用 task と2つの marker pair がすべて存在する場合に同梱となる。
+6 directory と31 regular file、専用 task と2つの marker pair がすべて存在する場合に同梱となる。
 必須 file は空を許可しない。削除資産と専用区画がすべて不在で、保持資産が健全な場合が完全除去であり、
 その他は不整合となる。内容の歴史的な意味検証は同梱側の保守 gate が担当する。
 削除 subtree に追加した通常 file は必須集合に昇格しないが、追跡済み・差分なしなら削除対象に含む。
@@ -111,7 +118,9 @@ local inline / reference-style link と image は escape、山括弧、query / f
 path / task 名だけの code span、HTML comment、通常 prose、外部 URL、fragment-only link、
 その他の fence、raw HTML href は対象外である。実際の保守コマンドを説明データへ隠してはならない。
 
-負例と境界例は [JSON fixture](../../tests/fixtures/template_prune/references.json) を参照する。
+参照の負例・境界例と詳細回帰は保守専用領域に置き、保守 gate で検証する。
+prune 後はこれらの corpus を保持・読取りせず、上記の R01〜R06 契約による実入力検査を継続する。
+公開 JSON protocol の共通 fixture と CLI smoke は通常 check に残す。
 `expected` と `coverage` は独立し、`detected` / `partial` も成立する。
 
 
