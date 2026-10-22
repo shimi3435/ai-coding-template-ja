@@ -201,6 +201,19 @@
 - strict OpenSpec gate1 passed、diff check成功。未完了はPR/hosted CI、close後の最終HEAD検証。
   locale126 skipsを検証済みへ読み替えず、hosted側の実行結果を確認する。
 
+#### Hosted CI blockerと依存修正への引継ぎ（2026-10-22）
+
+- source `ced268ccc5f71bdc52594a38d339eac3d2b6e821`、draft PR #92。
+  CI run39730782236のcheck / rename-smoke / security / openspec-validateは成功。
+  audit job119665079900はpip-audit exit1。既存virtualenv21.7.13の
+  CVE-2026-113726 / 113776 / 113732 / 113725 / 113722を報告した。
+- baseと本PRのuv.lock / package-lock.jsonに差分はなく、最適化の変更で追加した依存ではない。
+  ただし必須auditの失敗を免除せずTask3検証とTask4を未完了に保つ。
+- 利用者は別change・別PRで最小依存更新と監査を行う方針を承認した。
+  `fix/virtualenv-audit-october` の `update-virtualenv-security-fixes` をmain起点の別worktreeで進める。
+  先行PRのmerge後、その修正を本branchへ反映し、変更後の入力で必要gate・測定・review/verifier・CIを再評価する。
+  mergeは利用者が行う。Template maintenanceのrun39730782542はこの記録時点では実行中。
+
 ### 4. change を close する
 
 - 成果: 完了証跡とretrospectiveを保存してpre-merge closeする。
