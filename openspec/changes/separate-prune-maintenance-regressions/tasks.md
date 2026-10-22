@@ -212,7 +212,11 @@
 - 利用者は別change・別PRで最小依存更新と監査を行う方針を承認した。
   `fix/virtualenv-audit-october` の `update-virtualenv-security-fixes` をmain起点の別worktreeで進める。
   先行PRのmerge後、その修正を本branchへ反映し、変更後の入力で必要gate・測定・review/verifier・CIを再評価する。
-  mergeは利用者が行う。Template maintenanceのrun39730782542はこの記録時点では実行中。
+  mergeは利用者が行う。先行する依存修正PRは #93。
+- source `ced268c` のhosted結果を確定した。通常check / rename-smokeはそれぞれNode638 / Python763 passed、
+  pinned Task probe11 passed。ローカルでskipした126 locale casesもhostedで実行された。
+  Template maintenance run39730782542は型0 errors、852 passed / 640.15秒で成功した。
+  未解決はauditの5件であり、Task3検証 / Task4の未完了を維持する。
 
 ### 4. change を close する
 
