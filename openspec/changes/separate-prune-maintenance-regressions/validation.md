@@ -15,3 +15,12 @@
 
 測定環境差・localeによるskipは明記し、required検証の欠落を成功と扱わない。
 同一入力の全体gate再利用はworkflowの証跡規律に従い、focused validationはfreshで行う。
+
+- V09: 保守全Pythonの型検査範囲を確認し、一時的な型不正probeで失敗伝播を確認する。
+  probeはcleanupし、正常時の型検査wall秒・最大RSSを別測定する。通常includeは不変とする。
+- V10: pruned Git fixtureの正常対照の後、構文エラー1ケースで解析診断、successful=False、
+  解析由来plan blocker、実CLI apply非ゼロ、全fixtureファイルとindexの不変を確認する。
+- V11: release notesと保持referenceの旧K05案内を照合する。自動migration・独自参照の一律削除は追加しない。
+
+修正cycleではV09〜V11→self-review→独立review→最新通常・保守gate→V06再測定→別verifier→
+PR/hosted CI→V08の順とする。beforeの入力・環境同一性が不明ならbeforeも再測定する。

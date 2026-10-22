@@ -12,6 +12,8 @@ prune 後のアプリケーション開発へこの保守負担を配布し続�
 - **BREAKING（保守資産配置）**: 旧 K05 `tests/fixtures/template_prune/references.json` を
   `template-maintenance/fixtures/prune/references.json` へ移し、下流保持要件を撤回する。
 - prune 詳細回帰・token property・計測テストを保守側へ移し、`task check:template` で全件収集する。
+- 保守gateで保守tests/helperの型検査を実施し、通常gateに解析失敗の公開CLI拒否検証を残す。
+- 既存下流の旧K05自動削除は追加せず、手動整理の判断境界を利用者向け文書へ記す。
 - runtime の corpus 読取り・schema 検証を撤去し、保守 gate が corpus を検証する。
 - 通常 check には公開 CLI smoke、構成・参照安全性、version、parser artifact、JSON protocol、
   Skill / legal / links 等の共通検証を維持する。共通 fixture を corpus 非依存に分離する。
