@@ -163,5 +163,6 @@ vendoring した第三者 skill は**各 skill の `LICENSE` に従う**（い�
 
 <!-- template-maintenance:start -->
 テンプレート保守者は `./scripts/check.sh` 成功後に `task check:template` を実行する。
+保守 gate は release・履歴・prune 詳細回帰と実統合を検証する。詳細回帰と参照 corpus は prune 時に除去される。
 [保守手順](docs/template/release.md)を参照する。
 <!-- template-maintenance:end -->

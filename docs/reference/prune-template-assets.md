@@ -111,7 +111,9 @@ local inline / reference-style link と image は escape、山括弧、query / f
 path / task 名だけの code span、HTML comment、通常 prose、外部 URL、fragment-only link、
 その他の fence、raw HTML href は対象外である。実際の保守コマンドを説明データへ隠してはならない。
 
-負例と境界例は [JSON fixture](../../tests/fixtures/template_prune/references.json) を参照する。
+参照の負例・境界例と詳細回帰は保守専用領域に置き、保守 gate で検証する。
+prune 後はこれらの corpus を保持・読取りせず、上記の R01〜R06 契約による実入力検査を継続する。
+公開 JSON protocol の共通 fixture と CLI smoke は通常 check に残す。
 `expected` と `coverage` は独立し、`detected` / `partial` も成立する。
 
 

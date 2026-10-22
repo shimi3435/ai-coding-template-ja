@@ -57,48 +57,6 @@ def surface_for(path: str) -> str:
     return "R06"
 
 
-def validate_cases(value) -> None:
-    if not isinstance(value, list) or not value:
-        raise ValueError("K05 は空でない JSON 配列が必要")
-    ids = set()
-    pairs = set()
-    for case in value:
-        fields = ("id", "surface", "path", "source", "expected", "coverage")
-        if not isinstance(case, dict) or any(
-            not isinstance(case.get(k), str) for k in fields
-        ):
-            raise ValueError("K05 case field は string が必要")
-        if not case["id"] or case["id"] in ids:
-            raise ValueError("K05 id は空でなく重複しないこと")
-        ids.add(case["id"])
-        path = case["path"]
-        surface = case["surface"]
-        if (
-            surface not in {f"R{i:02}" for i in range(1, 7)}
-            or Path(path).is_absolute()
-            or ".." in Path(path).parts
-            or not path
-        ):
-            raise ValueError("K05 surface / path が不正")
-        if not in_surface(path, surface):
-            raise ValueError("K05 path が指定 surface 外")
-        if case["expected"] not in (
-            "detected",
-            "not-detected",
-            "invalid-syntax",
-        ) or case["coverage"] not in ("evaluated", "partial", "not-run"):
-            raise ValueError("K05 expected / coverage が不正")
-        if (case["expected"] == "invalid-syntax") != (case["coverage"] == "not-run"):
-            raise ValueError("K05 構文違反は not-run が必要")
-        pairs.add((surface, case["expected"]))
-    if any(
-        (f"R{i:02}", expected) not in pairs
-        for i in range(1, 7)
-        for expected in ("detected", "not-detected")
-    ):
-        raise ValueError("K05 各 surface の検出・非検出例が必要")
-
-
 def in_surface(path: str, surface: str) -> bool:
     p = Path(path)
     if surface == "R01":
@@ -246,7 +204,7 @@ def inspect(root: Path, node: str = "node") -> dict:
             for filename in files:
                 p = (Path(directory) / filename).relative_to(root).as_posix()
                 surface = surface_for(p)
-                if p == MAINTENANCE_FILES[-1]:
+                if p == ".github/workflows/template-maintenance.yml":
                     continue
                 if in_surface(p, surface):
                     read_source(p)
@@ -268,10 +226,6 @@ def inspect(root: Path, node: str = "node") -> dict:
             except ValueError as exc:
                 issue(p, str(exc))
                 marked.append(False)
-    try:
-        validate_cases(json.loads((root / KEEP_FILES[4]).read_text()))
-    except (OSError, ValueError) as exc:
-        issue(KEEP_FILES[4], str(exc))
     try:
         version = (root / "TEMPLATE_VERSION").read_text()
         lines = [line for line in version.splitlines() if line.strip()]

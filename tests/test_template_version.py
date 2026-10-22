@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from template_prune_fixture import ROOT, fixture, inspect
+from downstream_repository_fixture import ROOT, fixture, inspect
 
 CASES = json.loads((ROOT / "tests/fixtures/template_versions.json").read_text())
 
