@@ -167,14 +167,28 @@
 - 一時probe、生成環境、requirements、hook cache、wheel、logはcleanup済み。
 - 証跡更新後のstrict target validation / `task openspec:validate` / diff checkはfresh exit0。
 
+#### Close前の完了条件確認（2026-10-24）
+
+- source: 2f063eaf34247f946b530baa3bdc49fc5eb365b6。
+- `gh run view 39996908795 --json status,conclusion,headSha,jobs`: fresh照会、同HEADのCI全5jobs成功。
+  checkのログはNode638 passed / Python1529 passed。ローカルskip分もHosted環境で成功した。
+- `gh run view 39996908752 --json status,conclusion,headSha,jobs`: fresh照会、同HEADのTemplate maintenance成功。
+  ログは15 passed（1146.09秒）。これによりHOLD-1を解消した。
+- 利用者の敵対的再レビューはP1/P2解消、実装blocker0。今回の利用者指示でcloseおよびmergeを明示承認済み。
+- self-review: close対象はこのchangeの7 Markdown artifactsだけ。uv.lock、ふりかえり、公開設定、tests、CIは変更しない。
+- この証跡をcommitで保存後、7 artifactsを削除する。削除差分を独立reviewし、close後の正式gateをfresh実行、
+  別verifier、最終HEADのCI全5jobsとTemplate maintenanceの成功を確認してからmergeする。
+- Task 3の検証checkboxはclose後の検証が終わるまで未完了を維持する。
+  削除後の最終HEAD、commands、結果、独立verifier、Task 3完了はPR本文に記録する。
+
 #### 公開準備と残作業
 
 - Task 4/5は完了。利用者は2026-10-24にcommit / push / PR本文更新を明示承認した。
 - 外部反映用本文はpr-body.md。提案タイトルは「fix: virtualenvの追加セキュリティ修正を反映」。
-- 今回はこのchangeと証跡をcommit/pushし、PR本文を更新する。公開前のownership全9pathのdigest一致を確認した。
+- 2f063eaをcommit/pushし、PR本文更新済み。公開前のownership全9pathのdigest一致を確認した。
 - 残作業はCI全5jobsとTemplate maintenanceの確認、およびpre-merge closeのcommit/push、
   active0と必要gate、最終HEADのHosted CI確認。今回の公開だけではTask 3を完了しない。
-- 実行していないHosted CI、Template maintenance、closeを完了扱いしない。mergeは行わない。
+- close後のHosted CIと正式gateはまだ未実行。成功確認後に利用者承認済みのmergeを実行する。
 
 
 - 旧cycleではふりかえりを0件として記録した。新cycle Task 4で敵対的reviewの2件を反映して訂正済み。
