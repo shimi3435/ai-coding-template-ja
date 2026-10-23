@@ -45,7 +45,7 @@
   - `uv.lock`
   - `openspec/changes/update-virtualenv-security-fixes/`
 - [x] 実装: self-review・独立reviewと必要な修正を完了する。
-- [ ] 検証: 最新正式gate、別verifier、PR/hosted CI、strict validationを完了する。
+- [x] 検証: 最新正式gate、別verifier、PR/hosted CI、strict validationを完了する。
 
 #### Task 2 独立review
 
@@ -64,6 +64,15 @@
   空白、shell展開、backtick入りの3pathで生成python / pip launcher / bash activateが正常動作しsentinelなし。
 - fresh diff check成功、使い捨てrequirementsと環境はcleanup。未完了はPR / hosted CIとclose後検証。
 
+#### Task 2 hosted CI（2026-10-23確認）
+
+- source `e362544cbda8b8dcbc7e0038eaed43523762f4e1`、PR #93。
+- hosted fresh実行: CI run39769433804のcheck / rename-smoke / security / audit / openspec-validateが全て成功。
+  checkはNode638 passed、Python1529 passed。ローカルでskipしたlocale依存126件もhostedで成功した。
+- Template maintenance run39769433822もfresh成功、15 passed（1395.34秒）。
+- `openspec validate update-virtualenv-security-fixes --strict` と `task openspec:validate`: fresh成功。
+  未完了は以下のclose処理とclose後の最終HEAD検証だけである。
+
 ### 3. pre-merge close
 
 - 成果: ふりかえりと完了証跡を残しactive changeをcloseする。
@@ -71,8 +80,12 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/update-virtualenv-security-fixes/`
-- [ ] 実装: ふりかえりを記録する。
+- [x] 実装: ふりかえりを記録する。
 - [ ] 検証: close後active0、必要gate、最終HEADのCI成功とcleanupを確認する。
+
+- ふりかえりはPR #93、逃した欠陥0件として記録した。既存lockの脆弱性5件は本changeで新たに混入した欠陥ではない。
+- この記録をブランチ履歴へ保存後、6 artifactsを削除してclose後検証を行う。
+  削除後の最終HEADとCI結果はPR #93本文へ記録する。未実行の検証を先に完了扱いしない。
 
 ## 開始条件
 

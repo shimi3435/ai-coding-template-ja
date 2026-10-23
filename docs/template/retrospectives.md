@@ -33,3 +33,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-10-04 unify-runtime-version-validation（PR #85）: 逃した欠陥 6 件（self-review=0 / review=6 / CI=0 / merge後=0）— locale依存・spawn回帰不足・出荷範囲文書・時限的spec条件・functionによるPATH検査迂回・serialの設計記述をreviewで検出し修正。既存依存の監査失敗は独立PR #86で解消
 - 2026-10-19 align-downstream-prune-validation（PR #91）: 逃した欠陥 50 件（self-review=13 / review=36 / CI=1 / merge後=0）— 直接参照・shell境界・placeholder・解析診断・固定parser準備を回帰検証し、同時公開のENOTEMPTYをCIで検出して修正。close後のreviewでhardlink経由の対象外変更、CRLF/fileMode判定、版形式の過剰受理を追加検出し、fix-prune-review-boundariesで修正
 - 2026-10-21 fix-prune-review-boundaries（PR #91）: 逃した欠陥 2 件（self-review=0 / review=2 / CI=0 / merge後=0）— 属性状態名と同名のfilter/working-tree-encoding文字列による拒否回避を独立review/verifierで検出して修正。性能は計測のみで最適化は後続change
+- 2026-10-23 update-virtualenv-security-fixes（PR #93）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— virtualenvと必要な推移依存だけを更新し、監査RED→GREEN・生成環境・独立検証・hosted CI成功を確認
