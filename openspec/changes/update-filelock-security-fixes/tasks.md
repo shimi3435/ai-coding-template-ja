@@ -78,8 +78,18 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/update-filelock-security-fixes/`
-- [ ] 実装: PR番号を確定し、ふりかえりとclose前証跡を保存する。
+- [x] 実装: PR番号を確定し、ふりかえりとclose前証跡を保存する。
 - [ ] 検証: validation 7のclose後gate・hosted CI・cleanupを確認する。
+
+#### Task 3 close準備（2026-10-25）
+
+- source `36796fe`。draft PR #94を作成し、ふりかえり1行を追加した。逃した欠陥は0件。
+- self-reviewでPR番号・件数・最終差分の範囲を確認した。仕様・実装・受入証跡はcommit履歴へ保存する。
+- close metadataの独立diff review `filelock_october_review`: APPROVE、blocker0。
+  strict target validationと `task openspec:validate` はfresh成功した。
+- ローカル受入後にこの6 artifactsだけを削除し、active0と必要gateを確認する。
+  最終HEADのhosted CIとcleanupはまだ未完了であり、Task3検証checkboxは未完了を保持する。
+  削除後に確定する証跡はPR本文へ記録し、全必須job成功までready / 完了と宣言しない。
 
 ## 開始条件
 

@@ -34,3 +34,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-10-19 align-downstream-prune-validation（PR #91）: 逃した欠陥 50 件（self-review=13 / review=36 / CI=1 / merge後=0）— 直接参照・shell境界・placeholder・解析診断・固定parser準備を回帰検証し、同時公開のENOTEMPTYをCIで検出して修正。close後のreviewでhardlink経由の対象外変更、CRLF/fileMode判定、版形式の過剰受理を追加検出し、fix-prune-review-boundariesで修正
 - 2026-10-21 fix-prune-review-boundaries（PR #91）: 逃した欠陥 2 件（self-review=0 / review=2 / CI=0 / merge後=0）— 属性状態名と同名のfilter/working-tree-encoding文字列による拒否回避を独立review/verifierで検出して修正。性能は計測のみで最適化は後続change
 - 2026-10-24 update-virtualenv-security-fixes（PR #93）: 逃した欠陥 2 件（self-review=0 / review=2 / CI=0 / merge後=0）— close後の敵対的reviewで更新先の追加修正未反映と監査GREENだけに依存した受入証跡不足を検出。21.14.13への更新と上流差分照合、一時cache削除後・bash prompt再描画の検証を追加
+- 2026-10-25 update-filelock-security-fixes（PR #94）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— filelockだけを4.2.4へ更新し、上流修正の包含と実consumerの排他・失敗回復・共有cache並列生成を検証。独立review / verifierで指摘なし
