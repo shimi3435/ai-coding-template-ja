@@ -163,7 +163,7 @@
   - `docs/agents/workflow.md`
   - `openspec/changes/separate-prune-maintenance-regressions/`
 - [x] 実装: self-review、independent reviewと必要なfinding修正を完了する。
-- [ ] 検証: V06〜V07、同一環境のafter3回、正式gate、保守gate、hosted CI、別verifierを完了する。
+- [x] 検証: V06〜V07、同一環境のafter3回、正式gate、保守gate、hosted CI、別verifierを完了する。
 
 #### Task 3 ローカル検証・測定完了（2026-10-21）
 
@@ -329,6 +329,15 @@
   中央値244.26→63.79秒、最大RSS386496→343952 KiBと整合する。
 - 最新push後のhosted CIとlocale126件の実行、close後の最終HEADは未検証。Task3検証とTask4は未完了を維持する。
 
+#### Task 3 最新hosted CIによる受入完了（2026-10-26）
+
+- source `2bd07c95122710b4ca11cabf4aaa7aa770ef07b4`。CI run40206703004の5 jobsと
+  Template maintenance run40206703005が全て成功した。依存監査のblockerは解消済み。
+- 通常check / rename-smokeは各Node638、Python763、追加pinned Task probe11件が成功。
+  ローカルでskipしたlocale126件もhostedで実行された。
+- 保守型0 errors、852 passed / 546.30秒。再開記録を含む最新commitの入力で受入を確認した。
+  Task3検証を完了とし、Task4のpre-merge closeへ進む。
+
 ### 4. change を close する
 
 - 成果: 完了証跡とretrospectiveを保存してpre-merge closeする。
@@ -336,8 +345,20 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/separate-prune-maintenance-regressions/`
-- [ ] 実装: 完了証跡とretrospectiveを記録する。
+- [x] 実装: 完了証跡とretrospectiveを記録する。
 - [ ] 検証: V08を完了しactive0を確認する。
+
+#### Task 4 close準備（2026-10-26）
+
+- PR #92のふりかえり1行を追加した。逃した欠陥は3件（self-review1 / review2）。
+  型検査対象の欠落・公開CLI拒否の検証不足はreview、固定資産数の古い記述はself-reviewによる発見である。
+  既存依存の脆弱性と実行基盤のusage limitは本changeで混入した欠陥として計上しない。
+- self-reviewで件数、PR番号、実装と証跡の対応を確認した。6 artifactsをcommit履歴へ保存してから削除する。
+- close metadataの独立diff review `prune_post93_review`: APPROVE、finding0。
+  strict target validationと全change validationはfresh成功。PRと全6 CI jobsも独立確認した。
+- close後のactive0、必要gate、別verifier、最終HEADのhosted CI、cleanupは未完了。
+  Task4検証checkboxは未完了を保持し、削除後に確定する結果はPR本文へ記録する。
+  全必須job成功までPR ready / 最終完了を宣言しない。
 
 ## 開始時点
 
