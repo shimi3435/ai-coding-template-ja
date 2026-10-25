@@ -85,3 +85,18 @@ successful=False、解析失敗由来のplan blocker、実CLI applyの非ゼロ�
 自動migrationは必要時に別Issueで扱うことをrelease notesと保持referenceに明記する。
 修正後のpruned task checkは3回再測定する。beforeの環境・依存・測定条件の同一性が不明ならbeforeも
 再測定する。保守型検査の時間・最大RSSは別に記録し、旧after値を修正後の結果として流用しない。
+
+## 8. 依存修正merge後の再開（2026-10-24）
+
+PR #93 merge `2d311ad3c86afde8a7cff15a116797fd096d0def` を新しい比較baseとする。
+同PRの最終lockはvirtualenv21.14.13 / packaging26.3 / python-discovery1.6.4である。
+本changeでは追加の依存更新を行わず、merge済みmainのlockをそのまま継承する。
+旧lockによる測定値は履歴として保持し、新lockでbefore / after各3回をfresh測定する。
+通常・保守gate、監査、独立review / verifier、hosted CIを更新後の入力で確認する。
+
+## 9. filelock修正merge後の最終受入（2026-10-25）
+
+PR #94 merge `50687105f1fc6a21992ddc1d90ca959a6cd023a9` を最終比較baseとする。
+filelock4.2.4を含むmainのlockをそのまま継承し、本changeでは依存を変更しない。
+beforeは同baseの出荷tree、afterは本branchの出荷treeを使い、同一host・lock・実行環境で各3回をfresh測定する。
+過去のgate・測定は履歴として保持し、最新入力の正式gate・保守gate・監査・review/verifier・CIを確認する。

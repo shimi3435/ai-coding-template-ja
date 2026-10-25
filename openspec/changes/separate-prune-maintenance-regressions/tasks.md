@@ -218,6 +218,117 @@
   Template maintenance run39730782542は型0 errors、852 passed / 640.15秒で成功した。
   未解決はauditの5件であり、Task3検証 / Task4の未完了を維持する。
 
+#### Task 3 依存修正merge後の再開（2026-10-24）
+
+- 利用者はPR #93のmergeを報告し、続行を指示した。GitHub上でmerge commit
+  `2d311ad3c86afde8a7cff15a116797fd096d0def` を確認した。
+- cleanな専用branchへmainをmergeし、sourceは `ccd6d2fff17bcac4d1c827bccaf7ca218d9078e9`。
+  最適化の実装に競合・変更はない。mainとの差分に依存更新を含めず、virtualenv21.14.13 /
+  packaging26.3 / python-discovery1.6.4をそのまま継承した。
+- active change1、必須6 artifacts、全12分類の解決、依存付きtasksとdirtyなしを確認後に再開した。
+  strict target / `task openspec:validate` はfresh成功。
+- `uv sync --locked --group security`、`npm ci --ignore-scripts`、pinned parser setupはfresh成功。
+  新lockの通常・保守gate、監査、before / after各3回、review / verifier、hosted CIはこれから確認する。
+- 旧完了checkboxと測定値は当時の履歴として保持し、Task3検証とTask4は未完了のままとする。
+  commit / push / PR更新 / pre-merge closeは既存承認範囲。PRのmergeは利用者が行う。
+
+#### Task 3 新しい依存監査blocker（2026-10-24）
+
+- source `ccd6d2fff17bcac4d1c827bccaf7ca218d9078e9` と再開記録4文書。
+  self-reviewで恒久差分を再読し、mainとのlock一致と実装scope維持を確認した。
+- `prune_post93_review`: 独立review APPROVE、実装finding0。初回はusage limitで成果なし、
+  利用者の再開指示後の1回の再試行で完了した。監査の受入判断は以下のrootの結果を適用する。
+- fresh focused `pytest --no-cov -q tests/test_downstream_prune_contract.py tests/test_taskfile.py template-maintenance/tests/test_prune_corpus.py`:
+  rootは30 passed / 4.47秒、reviewerは30 passed / 5.76秒。保守basedpyrightは双方0 errors。
+- fresh `uv export --locked --format requirements-txt --no-emit-project` →
+  `uv run --locked --group security pip-audit -r <一時requirements>` はexit1。
+  mainから継承したfilelock3.29.4にCVE-2026-112940 / CVE-2026-112913 / CVE-2026-112907の3件を検出し、
+  監査が示す修正版は4.2.1だった。一時requirementsはcleanup済み。
+- 上流advisoryで修正版4.2.1を確認した:
+  [POSIX ReadWriteLock](https://github.com/advisories/GHSA-v4x8-3wr5-3wq8)、
+  [Windows ReadWriteLock](https://github.com/advisories/GHSA-9vhv-jxww-xfm5)、
+  [Windows SoftFileLock](https://github.com/advisories/GHSA-567q-5qvw-pf92)。
+- `uv lock --dry-run --upgrade-package filelock==4.2.1`: fresh成功、filelock1件だけの更新候補となった。
+  lock SHA-256 `f32c30a740e361776ad851c771247bf75b90c0455a5cc4ea4d1647b0dce029d5` は実行前後不変。
+  installed metadataはvirtualenvのfilelock<5,>=3.24.2とpython-discoveryのfilelock>=3.16.1で、候補と整合する。
+- 上流4.0.0の互換変更はSoftReadWriteLockの永続形式など。repository内の直接利用は見つからず、
+  installed virtualenv / python-discoveryはFileLockをimportする。ただし実動作の互換性は未検証。
+- 必須audit失敗のためTask3検証とTask4は未完了。新lockの正式gate / 保守gate / 測定 / verifier /
+  hosted CIは未実行であり、成功扱いしない。
+- 提案: main起点の別change・別PRでfilelockだけを修正済み版へ更新する。4.2.1を候補に上流修正・互換性を確認し、
+  コア監査、virtualenv / python-discovery / pre-commitの実動作、正式gateと独立review/verifierを検証する。
+  AGENTS.mdのscope拡張規律とsafety.mdのmajor更新規律により、依存変更は利用者承認まで開始しない。
+  承認・先行merge後に本branchへ取り込み、最終lockでbefore / after各3回と残りの受入を再開する。
+
+#### Task 3 依存修正PRへの引継ぎ（2026-10-25）
+
+- 利用者はfilelockのmajor更新と互換性検証を別change・別PRで行う方針を承認した。
+  先行PRは [#94](https://github.com/shimi3435/ai-coding-template-ja/pull/94)、
+  changeは `update-filelock-security-fixes`、branchは `fix/filelock-audit-october`。
+- 上流差分確認により、4.2.1の修正に加えてFileLockの失敗回復修正を含む4.2.4を選択した。
+  先行PRではfilelock以外のlock recordを保持し、コア監査と実consumerの排他・cache・並列環境生成、
+  正式gate・独立review / verifierを確認済み。先行PRはpre-merge close済みで、
+  最終HEAD `da21ea63e130a25c473322181f4fd6df03db5255` の全6 CI jobs成功を確認してreadyにした。
+  通常・renameは各Python1529件、保守15件が成功。先行PRのmergeは利用者待ちである。
+- 本branchのlockはまだ変更しない。利用者による#94 merge後にmainを取り込み、最終lockで
+  before / after各3回、通常・保守gate、独立検証、hosted CI、pre-merge closeを再開する。
+  Task3検証とTask4は未完了のままとする。
+
+#### Task 3 最終依存修正merge後の再開（2026-10-25）
+
+- 利用者指示によりPR #94をmergeした。mainは `50687105f1fc6a21992ddc1d90ca959a6cd023a9`。
+  executor所有4文書のpath・digest一致とactive1・strict validation成功を確認し、mainを競合なくmergeした。
+  sourceは `0c79d82`。最適化の実装は変更せず、filelock4.2.4を含むmainのlockを継承した。
+- 最新lockの監査、通常・保守gate、before / after各3回、review / verifier、hosted CIを実行する。
+  Task3検証とTask4は未完了を維持し、旧測定・検証を最新の成功として扱わない。
+- commit / push / PR更新 / pre-merge closeは既存承認に従う。#94へのmerge指示を#92のmerge承認とは扱わない。
+
+#### Task 3 最終lockのfocused検証と独立review
+
+- source `0c79d82dbf3e039303d2a82f8c6f546b351201ab` と再開記録4文書。
+  `uv sync --locked --group security`、`npm ci --ignore-scripts`、pinned parser setup、strict target / 全change validationはfresh成功。
+- mainと両lockのbytes一致、corpus269件のbytes不変、移設8modulesの差分をself-reviewで確認した。実装findingなし。
+- `pytest --no-cov -q tests/test_downstream_prune_contract.py tests/test_taskfile.py template-maintenance/tests/test_prune_corpus.py`:
+  rootはfresh30 passed / 5.33秒。保守basedpyrightは0 errors、wall1.95秒 / 最大RSS333772 KiB。
+  コアexport / pip-auditはfresh exit0、既知脆弱性0。一時requirementsはcleanup済み。
+- `prune_post93_review` は新しいmerge後差分を独立確認してAPPROVE、blocker0。
+  reviewerのfresh focused30 passed / 4.84秒、保守basedpyright0 errors、corpusと全test関数保持、lock一致を確認した。
+  正式gate・保守gate・各3回測定・別verifier・hosted CIはこれから実行する。
+
+#### Task 3 最終lockの正式gate・保守gateと各3回測定
+
+- sourceはbefore `50687105f1fc6a21992ddc1d90ca959a6cd023a9`、after `0c79d82dbf3e039303d2a82f8c6f546b351201ab` と再開記録。
+- review後の `./scripts/check.sh`: fresh exit0、Node638 passed、Python637 passed / 126 skipped、24.70秒。
+  `task check:template`: fresh exit0、保守型検査0 errors、852 passed / 559.58秒。
+  fresh/rename/prune/再setupの実統合を含む。coverage対象アプリmodule未importの既存warningだけで失敗・skipはない。
+- before / afterをdisposable Git repositoryへ配置し、locked setupと正式prune後に直列測定した。
+  afterのactive OpenSpecだけを出荷状態に合わせて除外し、setup / pruneは測定外、cache非flushとした。
+  Node24.14.1 / Python3.14.6 / uv0.11.26 / Task3.51.1、同一Ubuntu amd64 host、LANG/LC_ALL=C.UTF-8。
+  両treeのuv.lock / package-lock.jsonのbytes hashが一致し、全測定後も不変だった。
+- `/usr/bin/time -f '%e %M' task check`: before3回ともfresh exit0。
+  wall秒=266.54 / 244.26 / 219.95、最大RSS KiB=387032 / 386496 / 382620。
+  各回Node638 passed、Python1403 passed / 126 skipped。
+- 同commandのafter3回ともfresh exit0。
+  wall秒=66.32 / 63.56 / 63.79、最大RSS KiB=343952 / 342268 / 344620。
+  各回Node638 passed、Python637 passed / 126 skipped。
+- 中央値: wall244.26→63.79秒（73.88%減）、最大RSS386496→343952 KiB（11.01%減）。
+  before範囲219.95〜266.54秒、after範囲63.56〜66.32秒。明らかな悪化なし。
+  保守専用テストの配布境界変更による効果であり、parser自体の高速化や他hostでの保証値ではない。
+- before / afterのpruned `task doctor` はfresh exit0。disposable treesはcleanup済み。
+  別verifier照合後に一時script・logをcleanupする。hosted CI / closeは未完了のままとする。
+
+#### Task 3 最終lockの独立verifier（2026-10-26）
+
+- `prune_post94_verifier`: ローカル受入APPROVE、blocker0。初回はusage limitで最終判定前に停止し、
+  利用者の再開指示後の1回の再試行で完了した。sourceは `0c79d82` と再開記録、検証開始・終了の入力は不変。
+- 証跡追記後の `./scripts/check.sh`: rootのfresh exit0、Node638 passed、Python637 passed / 126 skipped、19.08秒を
+  同一入力として再利用した。保守integrationはtasks本文も読むため、保守gateは旧結果を再利用しなかった。
+- verifierの `task check:template`: fresh exit0、保守型0 errors、852 passed / 509.13秒。
+  focusedはfresh30 passed / 3.27秒、保守型0 errors、コアexport / pip-audit指摘0、doctor FAIL0 / WARN3。
+- 移設8modulesの全test関数、corpus269件bytes、全6回の測定と両lock・環境・cleanupを独立照合した。
+  中央値244.26→63.79秒、最大RSS386496→343952 KiBと整合する。
+- 最新push後のhosted CIとlocale126件の実行、close後の最終HEADは未検証。Task3検証とTask4は未完了を維持する。
+
 ### 4. change を close する
 
 - 成果: 完了証跡とretrospectiveを保存してpre-merge closeする。

@@ -24,3 +24,10 @@
 
 修正cycleではV09〜V11→self-review→独立review→最新通常・保守gate→V06再測定→別verifier→
 PR/hosted CI→V08の順とする。beforeの入力・環境同一性が不明ならbeforeも再測定する。
+
+2026-10-24の再開では、PR #93 merge後の同じlockをbefore / afterへ適用する。
+過去の測定・gateを新しい依存環境の証跡として再利用せず、V06の各3回とV07をfreshで確認する。
+依存監査は既存CIと同じexport / pip-auditを実行し、監査範囲やignoreを変更しない。
+
+2026-10-25の最終受入では、PR #94 merge後のfilelock4.2.4を含むlockをbefore / afterへ適用する。
+比較baseは `50687105f1fc6a21992ddc1d90ca959a6cd023a9`。V06の各3回とV07はfreshで確認する。
