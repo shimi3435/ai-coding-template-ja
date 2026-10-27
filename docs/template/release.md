@@ -46,7 +46,8 @@ Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する
 以下を**全て満たすまでリリースしない**（1 つでも red / 不一致なら tag を打たず、
 先に解消する）。
 
-1. `./scripts/check.sh` が green。
+1. リリース対象の同一commitで `./scripts/check.sh` と `task check:template` が両方green。
+   通常gateだけの成功では、保守側へ移設したprune詳細回帰を検証したことにならない。
 2. `task openspec:validate` が green（engine 必須のゲート。CI の `openspec-validate`
    ジョブでも同じ gate が走る）。
 3. `openspec/changes/` が `.gitkeep` のみ（pre-merge close 規約の帰結。規約本文は
@@ -62,6 +63,7 @@ Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する
 
 ```bash
 ./scripts/check.sh
+task check:template
 task openspec:validate
 ls -A openspec/changes/   # .gitkeep のみであること
 task skills:check -- --source "$PWD" --base "$(git rev-parse HEAD)"  # commit済みsnapshotの陳腐化点検
@@ -74,7 +76,7 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
 
 ## リリース手順
 
-**前提: step 2〜3 の間は main へ他の変更をマージ・push しない**（照合済み commit と
+**前提: step 2〜3 の間は main へ他の変更をマージ・push せず、検証中に作業tree・HEADを変更しない**（照合済み commit と
 公開 tag の対象がずれる TOCTOU を運用で閉じる。単独保守者の直列作業を前提とし、
 複数人が同時に main を動かす体制になったら freeze / lock 手順の導入を検討する）。
 
@@ -86,19 +88,26 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
    git switch main && git pull --ff-only
    ```
 
-3. 検証（清潔・live main 一致・同名 tag 不在）→ annotated tag の作成 → push →
+3. 検証（清潔な対象commit・通常gate・保守gate・状態再照合・同名 tag 不在）→ annotated tag の作成 → push →
    GitHub Release の作成を**単一の `&&` ブロック**で行う（途中で失敗すると後続は
    実行されない fail-closed。分割すると「前段の失敗後に後段だけ実行」の事故が可能に
    なるため分割しない）。冒頭の `unset` で同じ shell に残った古い変数を拒否し、
    `VERSION` / `RELEASE_COMMIT` は必ずこのブロック内で導出する。`git push --tags` は
    使わない（ローカルに残る無関係な tag までまとめて公開してしまうため、対象 tag
-   だけを指定して push する）。
+   だけを指定して push する）。両gateをこのブロック内で実行し、その後に清潔な作業tree、
+   検証開始時のHEAD、live remote mainの一致を再確認する。gateの失敗・未導入・状態不一致なら公開しない。
 
    ```bash
-   unset VERSION RELEASE_COMMIT
-   test -z "$(git status --porcelain)" \
+   unset VERSION RELEASE_COMMIT RELEASE_STATUS
+   RELEASE_STATUS=$(git status --porcelain) \
+     && test -z "${RELEASE_STATUS}" \
      && VERSION=$(cat TEMPLATE_VERSION) \
      && RELEASE_COMMIT=$(git rev-parse HEAD) \
+     && ./scripts/check.sh \
+     && task check:template \
+     && RELEASE_STATUS=$(git status --porcelain) \
+     && test -z "${RELEASE_STATUS}" \
+     && test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT}" \
      && test "$(git ls-remote origin refs/heads/main | cut -f1)" = "${RELEASE_COMMIT}" \
      && ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
      && { git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null; test "$?" -eq 2; } \
@@ -107,6 +116,7 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
      && gh release create "v${VERSION}" --verify-tag --title "v${VERSION}" --generate-notes
    # - tag 名 = `v` + TEMPLATE_VERSION の一致は、値をファイルから読んで tag 名に
    #   使うことで担保される。
+   # - 両gate後に作業treeとHEADを再照合し、検証中の変更を検出したら公開前に停止する。
    # - refs/heads/main の live 照合は、HEAD が remote の最新 main でない（未 push
    #   commit・同期漏れ・step 2 以降に main が進んだ）場合に古い commit へ公開 tag を
    #   打つのを防ぐ（照合に失敗したら step 2 からやり直す）。
