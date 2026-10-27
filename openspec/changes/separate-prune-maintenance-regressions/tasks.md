@@ -375,7 +375,7 @@
   - `template-maintenance/tests/test_release_contract.py`
   - `openspec/changes/separate-prune-maintenance-regressions/`
 - [x] 実装: 合意済みrelease手順と保守側の失敗伝播testを追加する。
-- [ ] 検証: V12、独立review、正式・保守gate、別verifier、hosted CIを完了する。
+- [x] 検証: V12、独立review、正式・保守gate、別verifier、hosted CIを完了する。
 
 #### Task 6 開始条件（2026-10-27）
 
@@ -418,6 +418,12 @@
   使い捨てrepositoryはcleanup済みで、実ネットワーク公開は行っていない。
 - 最新hosted CI、Task7再close、close後の最終HEADは未検証。Task6検証checkboxはCI成功まで未完了を維持する。
 
+#### Task 6 hosted CI受入
+
+- source `5d3b76c56c8eda8511f1f4a0b5f60ae99a7d4225`。CI40498650672 / 保守CI40498650720の全6 jobs成功。
+  通常・renameは各Node638 / Python763 / pinned Task probe11、保守型0 / 863 passed / 806.04秒。
+  auditは既知脆弱性0。ローカルのlocale126 skipsもhostedで実行した。Task6検証を完了する。
+
 ### 7. 修正cycleをcloseする
 
 - 成果: retrospectiveと最新受入証跡を保存し、active0と最終CIを確認する。
@@ -425,8 +431,17 @@
 - 対象:
   - `docs/template/retrospectives.md`
   - `openspec/changes/separate-prune-maintenance-regressions/`
-- [ ] 実装: review発見1件を追記し、close前証跡を履歴保存する。
+- [x] 実装: review発見1件を追記し、close前証跡を履歴保存する。
 - [ ] 検証: close後active0・正式gate・独立verifier・最終hosted CI・cleanupを確認する。
+
+#### Task 7 close準備
+
+- release必須gateの欠落をreview発見1件として既存ふりかえりへ追加し、合計4件（self-review1 / review3）とした。
+  self-reviewで既存3件との重複なし、PR番号、6 artifactsの履歴保存と削除範囲を確認した。
+- close metadataの独立review `prune_release_review`: APPROVE、blocker0 / nit0。
+  strict target / 全change validation、diff checkはfresh成功した。
+- close後のactive0・正式gate・別verifier・最終hosted CI・cleanupは未完了。
+  Task7検証checkboxは未完了を保持し、削除後に確定する証跡をPR本文へ記録する。
 
 ## 開始時点
 
