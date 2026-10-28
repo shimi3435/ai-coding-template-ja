@@ -1,7 +1,6 @@
-"""prune の隔離 fixture。期待値は承認済み manifest の固定コピーを使用する。"""
+"""下流の公開CLI検証に必要な最小repositoryとruntime配置。corpusには依存しない。"""
 
 import importlib
-import json
 import shutil
 import subprocess
 import sys
@@ -13,7 +12,6 @@ sys.path.insert(0, str(ROOT / "repo-tools"))
 inspect = importlib.import_module("template_prune_state").inspect
 plan = importlib.import_module("template_prune_plan").plan
 
-CASES = json.loads((ROOT / "tests/fixtures/template_prune/references.json").read_text())
 ASSETS = (
     "docs/template/adr/0001-skill-distribution-vendoring.md",
     "docs/template/adr/0002-mcp-remote-default-node-not-core.md",
@@ -34,13 +32,24 @@ ASSETS = (
     "template-maintenance/tests/test_history_contract.py",
     "template-maintenance/tests/test_prune_integration.py",
     ".github/workflows/template-maintenance.yml",
+    "template-maintenance/tests/test_template_prune_apply.py",
+    "template-maintenance/tests/test_template_prune_plan.py",
+    "template-maintenance/tests/test_template_prune_state.py",
+    "template-maintenance/tests/test_template_prune_diagnostics.py",
+    "template-maintenance/tests/test_template_prune_git.py",
+    "template-maintenance/tests/test_template_prune_hardlinks.py",
+    "template-maintenance/tests/test_template_prune_tokens.py",
+    "template-maintenance/tests/test_shell_parser_cost.py",
+    "template-maintenance/tests/template_prune_fixture.py",
+    "template-maintenance/tests/prune_corpus.py",
+    "template-maintenance/tests/test_prune_corpus.py",
+    "template-maintenance/fixtures/prune/references.json",
 )
 KEPT = (
     "docs/reference/repository-contracts.md",
     "docs/reference/skill-maintenance.md",
     "docs/reference/skill-metadata-v2.md",
     "docs/reference/prune-template-assets.md",
-    "tests/fixtures/template_prune/references.json",
     "scripts/prune-template-docs.py",
     "TEMPLATE_VERSION",
 )
@@ -52,8 +61,40 @@ def fixture(root: Path, bundled=True) -> Path:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("# fixture\n")
     (root / "TEMPLATE_VERSION").write_text("1.0.0\n")
-    (root / KEPT[4]).write_text(json.dumps(CASES))
-    taskfile = next(c["source"] for c in CASES if c["id"] == "task-comment")
+    taskfile = """version: "3"
+tasks:
+  setup:node:
+    cmds:
+      - npm ci --ignore-scripts
+  audit:node:
+    cmds:
+      - npm audit --audit-level=high
+  skills:links:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:links
+  skills:verify:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:verify
+  skills:check:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:check
+  skills:update:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:update
+  skills:repin:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:repin
+  skills:adopt-local:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:adopt-local
+  skills:migrate:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:migrate
+  check:
+    cmds:
+      - node repo-tools/entrypoint.mjs skills:verify
+      - node --test repo-tools/*.test.ts
+"""
     if bundled:
         taskfile += "  check:template:\n    cmds:\n      - echo maintenance\n"
     (root / "Taskfile.yml").write_text(taskfile)

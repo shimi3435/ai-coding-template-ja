@@ -5,6 +5,8 @@ DIRECTORIES = (
     "docs/template/adr",
     "template-maintenance",
     "template-maintenance/tests",
+    "template-maintenance/fixtures",
+    "template-maintenance/fixtures/prune",
 )
 MAINTENANCE_FILES = (
     "docs/template/adr/0001-skill-distribution-vendoring.md",
@@ -26,6 +28,18 @@ MAINTENANCE_FILES = (
     "template-maintenance/tests/test_history_contract.py",
     "template-maintenance/tests/test_prune_integration.py",
     ".github/workflows/template-maintenance.yml",
+    "template-maintenance/tests/test_template_prune_apply.py",
+    "template-maintenance/tests/test_template_prune_plan.py",
+    "template-maintenance/tests/test_template_prune_state.py",
+    "template-maintenance/tests/test_template_prune_diagnostics.py",
+    "template-maintenance/tests/test_template_prune_git.py",
+    "template-maintenance/tests/test_template_prune_hardlinks.py",
+    "template-maintenance/tests/test_template_prune_tokens.py",
+    "template-maintenance/tests/test_shell_parser_cost.py",
+    "template-maintenance/tests/template_prune_fixture.py",
+    "template-maintenance/tests/prune_corpus.py",
+    "template-maintenance/tests/test_prune_corpus.py",
+    "template-maintenance/fixtures/prune/references.json",
 )
 DELETE_ROOTS = (
     "docs/template",
@@ -38,7 +52,6 @@ KEEP_FILES = (
     "docs/reference/skill-maintenance.md",
     "docs/reference/skill-metadata-v2.md",
     "docs/reference/prune-template-assets.md",
-    "tests/fixtures/template_prune/references.json",
     "scripts/prune-template-docs.py",
     "TEMPLATE_VERSION",
 )

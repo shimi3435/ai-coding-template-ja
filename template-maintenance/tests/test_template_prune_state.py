@@ -1,9 +1,9 @@
 """構成状態と scanner coverage の独立性、および固定 manifest の公開判定。"""
 
-import json
 from pathlib import Path
 
 import pytest
+from prune_corpus import validate_cases
 from template_prune_fixture import ASSETS, CASES, KEPT, fixture, inspect
 
 
@@ -73,9 +73,8 @@ def test_retained_assets_are_required_in_both_states(
 
 
 def test_fixture_contract_rejects_duplicate_id(tmp_path: Path) -> None:
-    fixture(tmp_path)
-    (tmp_path / KEPT[4]).write_text(json.dumps([CASES[0], CASES[0]]))
-    assert inspect(tmp_path)["state"] == "inconsistent"
+    with pytest.raises(ValueError, match="id"):
+        validate_cases([CASES[0], CASES[0]])
 
 
 @pytest.mark.parametrize(
@@ -85,6 +84,8 @@ def test_fixture_contract_rejects_duplicate_id(tmp_path: Path) -> None:
         "docs/template/adr",
         "template-maintenance",
         "template-maintenance/tests",
+        "template-maintenance/fixtures",
+        "template-maintenance/fixtures/prune",
         "docs/adr",
     ],
 )

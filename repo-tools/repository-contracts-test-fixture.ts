@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach } from "node:test";
@@ -81,7 +81,5 @@ export function writeValidRepository(): string {
     writeFileSync(join(repository,name),"# fixture\n");
   }
   mkdirSync(join(repository,"docs/adr"),{recursive:true});
-  mkdirSync(join(repository,"tests/fixtures/template_prune"),{recursive:true});
-  writeFileSync(join(repository,"tests/fixtures/template_prune/references.json"),readFileSync(new URL("../tests/fixtures/template_prune/references.json",import.meta.url)));
   return repository;
 }
