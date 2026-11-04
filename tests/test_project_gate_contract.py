@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
     "path",
     [
         "AGENTS.md",
-        "CONTEXT.md",
+        "GLOSSARY.md",
         "README.md",
         "scripts/bootstrap.sh",
         "scripts/rename-package.py",
@@ -35,7 +35,7 @@ def test_current_completion_instructions_use_the_canonical_gate(path: str) -> No
 
 def test_quickstart_and_repeated_local_use_share_the_green_definition() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    context = (ROOT / "CONTEXT.md").read_text(encoding="utf-8")
+    context = (ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
     assert "`./scripts/check.sh` と `task doctor` が green" in readme
     assert "\n./scripts/check.sh" in readme
     assert "`task doctor` と `./scripts/check.sh` がともに exit 0" in context

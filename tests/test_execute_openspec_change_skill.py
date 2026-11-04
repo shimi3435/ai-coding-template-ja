@@ -15,6 +15,10 @@ def _skill() -> str:
     return SKILL_PATH.read_text(encoding="utf-8")
 
 
+def _workflow() -> str:
+    return (REPO_ROOT / "docs/agents/workflow.md").read_text(encoding="utf-8")
+
+
 def _cases() -> dict[str, Any]:
     return json.loads(CASES_PATH.read_text(encoding="utf-8"))
 
@@ -68,7 +72,7 @@ def test_preflight_fixture_covers_zero_one_multiple_and_invalid_inputs() -> None
 
 
 def test_preflight_requires_exactly_three_execution_constraints() -> None:
-    skill = _skill()
+    contract = _workflow()
     rows = {row["case"]: row for row in _cases()["preflight"]}
 
     assert rows["exact-execution-constraints"]["result"] == "continue"
@@ -79,24 +83,24 @@ def test_preflight_requires_exactly_three_execution_constraints() -> None:
     ):
         assert rows[case]["result"] == "stop-before-mutation"
 
-    assert "Execution Constraints section" in skill
-    assert "exactly 3" in skill
-    assert "欠落、重複、余剰" in skill
-    assert "次のheadingまで" in skill
+    assert "Execution Constraints section" in contract
+    assert "exactly 3" in contract
+    assert "欠落、重複、余剰" in contract
+    assert "次のheadingまで" in contract
 
 
 def test_preflight_rejects_an_empty_task_list_before_mutation() -> None:
-    skill = _skill()
+    contract = _workflow()
     row = next(row for row in _cases()["preflight"] if row["case"] == "empty-task-list")
 
     assert row["task_count"] == 0
     assert row["result"] == "stop-before-mutation"
-    assert "task entry を1件以上" in skill
-    assert "task が0件" in skill
+    assert "task entry を1件以上" in contract
+    assert "task が0件" in contract
 
 
 def test_detailed_task_contract_and_dependency_selection_are_explicit() -> None:
-    skill = _skill()
+    contract = _workflow()
 
     for required_field in (
         "成果",
@@ -105,10 +109,10 @@ def test_detailed_task_contract_and_dependency_selection_are_explicit() -> None:
         "実装 checkbox",
         "検証 checkbox",
     ):
-        assert required_field in skill
-    assert "依存が全て完了した先頭の未完了 task" in skill
-    assert "循環依存" in skill
-    assert "実行可能 task がない" in skill
+        assert required_field in contract
+    assert "依存が全て完了した先頭の未完了 task" in contract
+    assert "循環依存" in contract
+    assert "実行可能 task がない" in contract
 
     rows = {row["case"]: row for row in _cases()["task_selection"]}
     assert rows["dependency-order"]["selected"] == "1"
@@ -116,7 +120,7 @@ def test_detailed_task_contract_and_dependency_selection_are_explicit() -> None:
 
 
 def test_overlapping_target_paths_require_a_transitive_dependency_order() -> None:
-    skill = _skill()
+    contract = _workflow()
     rows = {row["case"]: row for row in _cases()["target_path_ordering"]}
 
     ordered = rows["transitively-ordered-directory-overlap"]
@@ -128,13 +132,13 @@ def test_overlapping_target_paths_require_a_transitive_dependency_order() -> Non
     assert unordered["target_paths"]["1"] == unordered["target_paths"]["2"]
     assert unordered["dependencies"] == {"1": [], "2": []}
     assert unordered["result"] == "stop-before-mutation"
-    assert "exact match または directory containment" in skill
-    assert "推移的な依存 path" in skill
-    assert "依存関係で順序化されない" in skill
+    assert "exact match または directory containment" in contract
+    assert "推移的な依存 path" in contract
+    assert "依存関係で順序化されない" in contract
 
 
 def test_target_paths_use_exact_markdown_code_spans() -> None:
-    skill = _skill()
+    contract = _workflow()
     rows = {row["case"]: row for row in _cases()["target_path_syntax"]}
 
     accepted = rows["unicode-space-code-span"]
@@ -143,14 +147,14 @@ def test_target_paths_use_exact_markdown_code_spans() -> None:
     for case in ("unclosed-code-span", "plain-space-path", "multiple-code-spans"):
         assert rows[case]["result"] == "stop-before-mutation"
 
-    assert "単一の Markdown inline code span" in skill
-    assert "trim または Unicode 正規化をせず exact に保持" in skill
-    assert "閉じていない code span" in skill
-    assert "複数の code span" in skill
+    assert "単一の Markdown inline code span" in contract
+    assert "trim または Unicode 正規化をせず exact に保持" in contract
+    assert "閉じていない code span" in contract
+    assert "複数の code span" in contract
 
 
 def test_verification_state_cannot_be_promoted_to_completion() -> None:
-    skill = _skill()
+    contract = _workflow()
     row = next(
         row
         for row in _cases()["task_selection"]
@@ -161,10 +165,10 @@ def test_verification_state_cannot_be_promoted_to_completion() -> None:
     assert row["verification_complete"] is False
     assert row["task_complete"] is False
     assert row["change_close_allowed"] is False
-    assert "検証 checkbox は未完了" in skill
-    assert "change close を禁止" in skill
-    assert "構造上非該当" in skill
-    assert "N/A 理由" in skill
+    assert "検証 checkbox は未完了" in contract
+    assert "change close を禁止" in contract
+    assert "構造上非該当" in contract
+    assert "N/A 理由" in contract
 
 
 def test_dirty_overlap_blocks_only_paths_owned_by_unfinished_tasks() -> None:
@@ -210,13 +214,14 @@ def test_blocker_persistence_starts_only_after_safe_boundary() -> None:
     assert "preflight または dirty overlap の失敗" in skill
     assert "report-only" in skill
     assert "task execution blocker" in skill
-    assert "文書順で先頭の未解決 task" in skill
-    assert "先頭の未完了 validation task" in skill
-    assert "文書順で最後の task" in skill
+    workflow = _workflow()
+    assert "文書順で先頭の未解決 task" in workflow
+    assert "先頭の未完了 validation task" in workflow
+    assert "文書順で最後の task" in workflow
 
 
 def test_review_and_verification_blockers_reopen_completion_state() -> None:
-    skill = _skill()
+    contract = _workflow()
     rows = _cases()["completion_reopen"]
 
     assert [row["stage"] for row in rows] == [
@@ -231,10 +236,10 @@ def test_review_and_verification_blockers_reopen_completion_state() -> None:
         assert row["validation_after"] is False
         assert row["parent_after"] is False
 
-    assert "initial / diff review" in skill
-    assert "完了済みの検証 checkbox" in skill
-    assert "検証 checkbox と親 task を未完了へ戻す" in skill
-    assert "blocker 解消後の新しい evidence" in skill
+    assert "initial / diff review" in contract
+    assert "完了済みの検証 checkbox" in contract
+    assert "検証 checkbox と親 task を未完了へ戻す" in contract
+    assert "blocker 解消後の新しい evidence" in contract
 
 
 def test_orderly_stop_snapshots_partial_implementation_and_crash_fails_closed() -> None:
@@ -284,18 +289,12 @@ def test_git_publication_operations_are_forbidden() -> None:
 def test_review_and_stop_boundaries_reference_canonical_requirements() -> None:
     skill = _skill()
 
-    _assert_tokens_in_order(
-        skill,
-        (
-            "self-review",
-            "focused validation",
-            "initial independent review",
-            "最大3 iterations",
-            "最新入力の `./scripts/check.sh`",
-            "独立 verifier",
-        ),
+    assert "../../../docs/agents/workflow.md#bounded-review-convergence" in skill
+    assert (
+        "../../../docs/agents/workflow.md#validation-cadence-と-reusable-green-evidence"
+        in skill
     )
-    assert "`AGENTS.md` の OSWF-5" in skill
+    assert "最大3 iterations" not in skill
     assert "追加 executor" in skill
     assert "別の明示承認" in skill
     assert "不可逆操作" in skill
@@ -305,11 +304,11 @@ def test_review_and_stop_boundaries_reference_canonical_requirements() -> None:
 
 
 def test_report_updates_tasks_but_never_creates_tool_state() -> None:
-    skill = _skill()
+    contract = _workflow()
 
-    assert "command、結果、source commit" in skill
-    assert "fresh実行 / green evidence再利用の別" in skill
-    assert "未検証理由の要約だけ" in skill
-    assert "生 log" in skill
-    assert "tool 固有 state" in skill
-    assert "`tasks.md`" in skill
+    assert "command、結果、source commit" in contract
+    assert "fresh実行 / green evidence再利用の別" in contract
+    assert "未検証理由の要約だけ" in contract
+    assert "生 log" in contract
+    assert "tool 固有 state" in contract
+    assert "`tasks.md`" in contract

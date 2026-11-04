@@ -44,6 +44,27 @@
       ]
     },
     {
+      "name": "codebase-design",
+      "ownership": "remote",
+      "license": "MIT",
+      "redistribution": "allowed",
+      "target": ".agents/skills/codebase-design",
+      "repository": "mattpocock/skills",
+      "ref": {
+        "branch": "main"
+      },
+      "subtree": {
+        "path": "skills/engineering/codebase-design"
+      },
+      "legalMappings": [
+        {
+          "sourcePath": "LICENSE",
+          "targetPath": "LICENSE",
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
       "name": "diagnosing-bugs",
       "ownership": "remote",
       "license": "MIT",
@@ -171,6 +192,27 @@
         {
           "path": "LICENSE",
           "expectedSha256": "bb5efecfb1a81e3d7899c8aa5c9fc3ab24cb436b4fe9d8a3420e5ae3f1fdecfb"
+        }
+      ]
+    },
+    {
+      "name": "setup-matt-pocock-skills",
+      "ownership": "remote",
+      "license": "MIT",
+      "redistribution": "allowed",
+      "target": ".agents/skills/setup-matt-pocock-skills",
+      "repository": "mattpocock/skills",
+      "ref": {
+        "branch": "main"
+      },
+      "subtree": {
+        "path": "skills/engineering/setup-matt-pocock-skills"
+      },
+      "legalMappings": [
+        {
+          "sourcePath": "LICENSE",
+          "targetPath": "LICENSE",
+          "expectedSha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
         }
       ]
     },

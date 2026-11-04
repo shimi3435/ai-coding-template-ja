@@ -14,6 +14,25 @@ def test_complete_configuration(tmp_path: Path, bundled: bool) -> None:
     assert result["coverage"] == "evaluated"
 
 
+@pytest.mark.parametrize("bundled", [True, False])
+def test_glossary_is_scanned_for_maintenance_dependencies(
+    tmp_path: Path, bundled: bool
+) -> None:
+    fixture(tmp_path, bundled)
+    (tmp_path / "GLOSSARY.md").write_text(
+        "# 用語集\n\n[保守手順](docs/template/release.md)\n", encoding="utf-8"
+    )
+
+    result = inspect(tmp_path)
+
+    assert result["state"] == "inconsistent"
+    assert result["coverage"] == "evaluated"
+    assert any(
+        reference["source"] == "GLOSSARY.md" and reference["surface"] == "R06"
+        for reference in result["references"]
+    )
+
+
 @pytest.mark.parametrize("asset", ASSETS)
 @pytest.mark.parametrize("damage", ["missing", "empty", "directory", "symlink"])
 def test_every_fixed_maintenance_file_is_required(

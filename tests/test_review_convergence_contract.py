@@ -1,4 +1,4 @@
-"""OSWF-5 のリスク比例 review / verification contract。"""
+"""独立レビュー必須条件と共通review手順の恒久contract。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CASES_PATH = REPO_ROOT / "tests/fixtures/review_convergence/cases.json"
 POLICY_PATHS = (
     Path("AGENTS.md"),
-    Path("CONTEXT.md"),
+    Path("GLOSSARY.md"),
     Path("docs/agents/workflow.md"),
     Path(".agents/skills/self-review/SKILL.md"),
     Path(".agents/skills/verify-change/SKILL.md"),
@@ -43,12 +43,16 @@ def test_agents_is_the_only_permanent_owner_of_the_full_risk_enumeration() -> No
         "削除 / migration",
     )
 
-    assert "### OSWF-5 review 発火条件" in agents
+    assert "### 独立レビュー必須条件" in agents
     for term in risk_terms:
         assert term in agents
     for path in POLICY_PATHS[1:]:
         policy = _read(path)
-        assert "OSWF-5" in policy, path
+        assert "OSWF-5" not in policy, path
+        if path == Path("docs/agents/workflow.md"):
+            assert "../../AGENTS.md#独立レビュー必須条件" in policy
+        elif str(path).startswith(".agents/"):
+            assert "../../../docs/agents/workflow.md" in policy
         assert not all(term in policy for term in risk_terms), path
 
 
@@ -106,7 +110,7 @@ def test_focused_validation_distinguishes_na_from_unverified() -> None:
     assert rows["failed"]["complete"] is False
     for text in (workflow, verify_skill):
         assert "構造上非該当" in text
-        assert "N/A 理由" in text
+        assert "N/A" in text
         assert "環境制約" in text
         assert "完了にできない" in text
 
@@ -147,12 +151,7 @@ def test_external_tool_state_never_completes_or_resumes_a_change() -> None:
 
 
 def test_persistent_review_evidence_records_freshness_without_raw_identity() -> None:
-    evidence_owners = (
-        Path("AGENTS.md"),
-        Path("docs/agents/workflow.md"),
-        Path(".agents/skills/execute-openspec-change/SKILL.md"),
-        Path(".agents/skills/verify-change/SKILL.md"),
-    )
+    evidence_owners = (Path("docs/agents/workflow.md"),)
     summary_contract = (
         "command、結果、source commit、fresh実行 / green evidence再利用の別、"
         "未検証理由の要約だけ"
@@ -166,7 +165,7 @@ def test_persistent_review_evidence_records_freshness_without_raw_identity() -> 
         assert "生log" in normalized
 
 
-def test_self_review_and_verify_skills_share_fail_closed_evidence_fields() -> None:
+def test_skills_reach_canonical_fail_closed_evidence_fields() -> None:
     self_review = _read(Path(".agents/skills/self-review/SKILL.md"))
     verify = _read(Path(".agents/skills/verify-change/SKILL.md"))
     minimum_fields = (
@@ -186,10 +185,12 @@ def test_self_review_and_verify_skills_share_fail_closed_evidence_fields() -> No
         "認証",
     )
 
+    workflow = _read(Path("docs/agents/workflow.md"))
+    for field in minimum_fields:
+        assert field in workflow
     for skill in (self_review, verify):
-        assert "OSWF-5" in skill
-        for field in minimum_fields:
-            assert field in skill
+        assert "../../../docs/agents/workflow.md#" in skill
+        assert "dirty diff digest" not in skill
     assert "未検証を検証済みとして報告しない" in verify
 
 
@@ -200,3 +201,39 @@ def test_full_input_identity_is_required_only_to_reuse_green_evidence() -> None:
     assert "green evidenceを再利用する場合だけ" in workflow
     assert "最新入力でfresh実行" in workflow
     assert "旧green evidenceを再利用しない" in workflow
+
+
+def test_self_review_is_report_only_and_keeps_execution_with_the_caller() -> None:
+    skill = _read(Path(".agents/skills/self-review/SKILL.md"))
+
+    assert "standalone / convergenceの両方" in skill
+    assert "report-only" in skill
+    assert "コード・テスト・文書・checkboxを変更しない" in skill
+    assert "検証コマンドの実行、進捗更新は呼出元の実行担当が所有" in skill
+    assert "Fix obvious defects on the spot" not in skill
+
+
+def test_spec_holes_preserves_all_categories_without_owning_execution() -> None:
+    skill = _read(Path(".agents/skills/spec-holes/SKILL.md"))
+
+    categories = re.findall(r"^(\d+)\. ", skill, re.MULTILINE)
+    assert categories == [str(number) for number in range(1, 13)]
+    assert "要件ID・分類番号群・共通理由" in skill
+    assert "分類を評価せずに省略しない" in skill
+    assert "実装・検証実行・進捗更新は実行担当が所有" in skill
+
+
+def test_first_party_skills_have_reachable_workflow_references() -> None:
+    for name in (
+        "self-review",
+        "spec-holes",
+        "verify-change",
+        "execute-openspec-change",
+    ):
+        path = REPO_ROOT / ".agents/skills" / name / "SKILL.md"
+        destinations = re.findall(r"\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
+        assert destinations, name
+        for destination in destinations:
+            target = (path.parent / destination.split("#", 1)[0]).resolve()
+            assert target.is_relative_to(REPO_ROOT)
+            assert target.is_file(), (name, destination)
