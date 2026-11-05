@@ -177,10 +177,13 @@ placeholder は redirection より優先するが、空白を含む `"< input >"
 
 inline / 言語指定なし fence / console では、複数語の説明placeholderも扱う。
 山括弧内はASCII英字またはunderscoreで始まり、ASCII英数字、underscore、hyphen、space、comma、
-period、parenthesesだけを含み、末尾spaceを認めない。引用・escape済みはliteralのままとする。
+period、parenthesesだけを含み、ASCII spaceを1個以上含むものとし、末尾spaceを認めない。
+空白なしの単一tokenは既存のname規則だけを認める。引用・escape済みはliteralのままとする。
 改行はinlineの正規化前も含めて許可しない。例えば `<question title>` と
 `<question body (optional)>` はpartialとなり、同じ入力の既知コマンドと参照は引き続き検査する。
-`cat < input > output` のredirection扱い、sh / bash / shell fenceと実行用shellの既存解釈は変更しない。
+`cat <in.txt>out.txt` と `cat < input > output` はredirectionとして評価する。
+弱い文書区分では、対応する語句はshellとしても有効な場合にplaceholderを優先する
+（例えば `cat <question title>output`）。sh / bash / shell fenceと実行用shellの既存解釈は変更しない。
 不一致の構文をproseと推測して除外することはない。
 
 inline / 言語指定なし fence / console は次の順序で分類する。

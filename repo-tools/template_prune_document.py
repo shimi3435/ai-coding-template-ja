@@ -126,6 +126,9 @@ class Prepared:
 
         def placeholder(match):
             nonlocal changed
+            # 単一tokenは旧文法を維持し、説明語句の拡張だけ空白を必須にする。
+            if " " not in match[1] and PLACEHOLDER.fullmatch(match[0]) is None:
+                return None
             before = self.text[: match.start()]
             start, end = len(before.encode()), len(self.text[: match.end()].encode())
             if error_offset is not None and not start <= error_offset <= end:

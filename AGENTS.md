@@ -26,6 +26,7 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - 用語集・ADR の参照先は [docs/agents/domain.md](docs/agents/domain.md)、Issue と仕様の参照先は
   [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md) に定める。
 - 上流Skillが要求するrepository設定の欠落・変更は[設定の復旧手順](docs/agents/workflow.md#上流skillのrepository設定と復旧)に従う。
+- Skill間の呼出は[host共通の呼出手順](docs/agents/workflow.md#skill間の呼出とhost差)に従う。
 
 ## Workflow（OpenSpec 直接実行 / ADR-0010・0009）
 - 外部挙動、公開 interface、security / trust boundary、永続データ、dependency / lockfile、build / CI、

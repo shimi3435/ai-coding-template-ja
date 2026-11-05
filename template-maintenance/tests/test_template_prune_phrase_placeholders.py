@@ -52,7 +52,7 @@ def test_phrase_placeholders_preserve_source_positions(kind: str, newline: str) 
 
 
 @pytest.mark.parametrize("kind", ["inline", "", "console"])
-@pytest.mark.parametrize("phrase", ["a", "_", "a.", "_name 2", "a  b"])
+@pytest.mark.parametrize("phrase", ["a", "_", "a b", "_name 2", "a  b"])
 def test_phrase_boundary_values(kind: str, phrase: str) -> None:
     rows = shell.commands("task <" + phrase + "> check:template", doc_kind=kind)
     assert rows[0][1].opaque_kind == "placeholder"
@@ -116,6 +116,54 @@ def test_spaced_redirection_remains_a_redirection(kind: str) -> None:
     rows = shell.commands("cat < input > output", doc_kind=kind)
     assert [word.value for word in rows[0]] == ["cat"]
     assert all(word.opaque_kind is None for row in rows for word in row)
+
+
+@pytest.mark.parametrize("kind", ["inline", "", "console", "sh"])
+@pytest.mark.parametrize("name", ["in.txt", "a.", "in,name"])
+def test_compact_redirection_remains_a_redirection(kind: str, name: str) -> None:
+    rows = shell.commands("cat <" + name + ">out.txt", doc_kind=kind)
+    assert [word.value for word in rows[0]] == ["cat"]
+    assert all(word.opaque_kind is None for row in rows for word in row)
+
+
+@pytest.mark.parametrize("kind", ["inline", "", "console"])
+@pytest.mark.parametrize("name", ["input", "question title"])
+def test_supported_placeholder_still_takes_precedence(kind: str, name: str) -> None:
+    rows = shell.commands("cat <" + name + ">output", doc_kind=kind)
+    assert any(word.opaque_kind == "placeholder" for row in rows for word in row)
+
+
+@pytest.mark.parametrize("bundled", [True, False])
+@pytest.mark.parametrize("kind", ["inline", "", "console"])
+@pytest.mark.parametrize(
+    ("source", "coverage"),
+    [
+        ("cat <in.txt>out.txt", "evaluated"),
+        ("cat < input > output", "evaluated"),
+        ("cat <input>output", "partial"),
+        ("cat <question title>output", "partial"),
+    ],
+)
+def test_redirection_and_placeholder_coverage(
+    tmp_path: Path, bundled: bool, kind: str, source: str, coverage: str
+) -> None:
+    fixture(tmp_path, bundled)
+    document = (
+        "`" + source + "`\n"
+        if kind == "inline"
+        else "```" + kind + "\n" + source + "\n```\n"
+    )
+    (tmp_path / "docs/guide.md").write_text(document)
+
+    result = inspect(tmp_path)
+
+    assert not result["analysis_errors"]
+    assert result["state"] == ("bundled" if bundled else "pruned")
+    assert result["coverage"] == coverage
+    if coverage == "evaluated":
+        assert result["unevaluated"] == []
+    else:
+        assert any(row["kind"] == "placeholder" for row in result["unevaluated"])
 
 
 @pytest.mark.parametrize("kind", ["inline", "", "console"])

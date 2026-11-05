@@ -268,6 +268,23 @@ code-review等の既存結果は、対象差分・仕様・独立性が当該cyc
 上流 engineering Skills の repository 設定は [Issue tracker](issue-tracker.md) と
 [用語集・ADR](domain.md) を参照する。用語集の正本は `GLOSSARY.md` である。
 
+### Skill間の呼出とhost差
+
+上流Skillの「Call the Skill tool」は、次の手順で同じrepository Skillへ到達させる。
+remote-owned本文の書き換えや、新しいrouter Skillの追加は行わない。
+
+1. 呼出先を `.agents/skills/<name>/SKILL.md` の同名Skillに解決する。両hostのlinkは同じ実体を指す。
+   同名のuser Skillや類似Skillで代替しない。未同梱・読込不能・明示的な利用禁止の場合は、
+   不足または制約を報告して依存作業を止める。自動installで補完しない。
+2. hostがSkill toolを提供していれば、その通常の呼出方法を使う。tool自体が未提供の場合だけ、
+   対象のSKILL.mdを読み、必要な参照と指示を同じ作業内で適用する。
+   tool呼出の失敗や権限拒否を、ファイル直接読込によって迂回しない。
+3. 呼出元の操作範囲、read-only、利用者承認待ち、停止条件を引き継ぐ。参照資料としての呼出は
+   参照のままとし、別セッションの開始や実装委譲へ変えない。
+   `tdd` からの `codebase-design` は設計用語の参照であり、独立した実行セッションではない。
+4. 呼出先の指示を適用してから依存作業へ戻る。`grill-me` は `grilling`、`grill-with-docs` は
+   `grilling` と `domain-modeling` の両方を適用し、質問への回答や合意が必要ならそこで待つ。
+
 ### 上流Skillのrepository設定と復旧
 
 本テンプレートはIssue trackerと用語文書の設定を同梱し、setup-matt-pocock-skillsは配布しない。
