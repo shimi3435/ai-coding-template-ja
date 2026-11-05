@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from template_prune_fixture import fixture, inspect
+from template_prune_fixture import ROOT, fixture, inspect
 
 
 @pytest.mark.parametrize("bundled", [True, False])
@@ -144,9 +144,7 @@ def test_nested_syntax_error_keeps_outer_source_range(
 
 @pytest.mark.parametrize(
     "case",
-    json.loads(
-        (Path(__file__).parent / "fixtures/template_prune/protocol.json").read_text()
-    ),
+    json.loads((ROOT / "tests/fixtures/template_prune/protocol.json").read_text()),
     ids=lambda case: case["name"],
 )
 def test_shared_protocol_corpus(case: dict) -> None:

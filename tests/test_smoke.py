@@ -545,7 +545,7 @@ def _make_prune_fixture(tmp_path: Path) -> Path:
     スクリプトは自身の位置から REPO_ROOT を導出するため、実リポジトリを
     触らずに --apply の実削除まで検証できる。
     """
-    from template_prune_fixture import commit_fixture, copy_runtime, fixture
+    from downstream_repository_fixture import commit_fixture, copy_runtime, fixture
 
     fixture(tmp_path)
     copy_runtime(tmp_path)

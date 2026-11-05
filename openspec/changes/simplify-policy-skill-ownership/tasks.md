@@ -2,8 +2,8 @@
 
 ## Execution Constraints
 
-- 最初のCI parity: Task 1の先行検証でNode.js 24、Python 3.14、locked dependencies、shell parserを準備し、./scripts/check.shを確認する。
-- 停止・再計画条件: 承認済み仕様を拡張する判断、必須検証の失敗、共通workflowの停止条件では未完了を保持する。2026-10-30の利用者依頼によりTask 2–4も実行する。既存のTask 1成果を保持する。実装・検証完了後の利用者依頼により作業branchへのcommit・pushを行う。PR作成・mergeは行わない。
+- 最初のCI parity: 修正cycleのTask 5でNode.js 24、Python 3.14、locked dependencies、shell parserを確認し、統合後の通常test collectionと保守側型検査・focused testsを全修正完了前に実行する。最終判定は両gateのfresh実行とする。
+- 停止・再計画条件: 承認済み仕様を拡張する判断、必須検証の失敗、共通workflowの停止条件では未完了を保持する。2026-10-30の利用者依頼によりTask 2–4も実行する。既存のTask 1成果を保持する。実装・検証完了後の利用者依頼により作業branchへのcommit・pushを行う。2026-11-04の修正依頼では最新mainの作業branchへのmergeを承認済みとする。PR作成・mainへのmergeは行わない。
 - 一時artifact cleanup: 隔離clone・一時log・比較artifactを品質の正本とせず、結果を本書に要約する。利用者所有の docs/template/issue-71-ownership-poc.md は変更しない。
 
 ## Tasks
@@ -96,3 +96,56 @@
 - 最終証跡更新後のtask openspec:validateは1 passed、git diff --checkは成功。OpenSpec検証の初回はPATHに既存CLIの配置先が含まれずexit 1となったが、配置先を補った再実行はexit 0だった。新規installや依存変更は行っていない。
 - 一時artifact cleanup: gate入力からの変更が本書だけであることを再確認し、今回所有の一時snapshotとlogを削除した。再開前の一時directoryは既に存在しなかった。検証結果は本書へ要約し、利用者所有PoCを保持した。
 - Task 1–4のローカル実装と必須検証を完了した。実装・検証完了時点ではcommit、PR、外部Issueの更新・close、mergeは未実行だった。後続の利用者依頼により、利用者所有PoCを除く検証済み成果を作業branchへcommit・pushする。change directoryはpre-merge closeまで保持する。
+
+
+### 5. 現行mainと保守テスト配置を統合する
+
+- 成果: PR #92の配布境界を維持し、R06とGLOSSARY回帰が正しいgateで動作する。
+- 依存: 4。
+- 対象: `tests`, `template-maintenance`, `repo-tools/template_prune_state.py`, `repo-tools/template_prune_manifest.py`, `Taskfile.yml`, `pyproject.toml`, `docs/reference/prune-template-assets.md`, `docs/template/release.md`, `openspec/changes/simplify-policy-skill-ownership`。
+- [x] 実装 checkbox: mainをmergeし、placeholder回帰とGLOSSARY回帰を移設先へ統合してmanifestを更新する。
+- [x] 検証 checkbox: 統合直後のcollection、保守側型検査、bundled/prunedのfocused testsを確認する。
+
+外部レビューP1/P2とgrilling Q1–Q4の合意に基づく新cycle。過去のTask 1–4の成功は旧入力の履歴であり、現在の完了判定には再利用しない。開始HEADはd2f687baea0bf151aed8e84629d407542ccd81de、統合mainは3e25fd1ab735fc43ae76944b80e4142b84f8e41c。既存の非追跡PoCは対象外として保持する。
+
+Task 5 evidence（fresh、source commit d2f687baea0bf151aed8e84629d407542ccd81deとmain 3e25fd1ab735fc43ae76944b80e4142b84f8e41cの未commit統合差分）:
+
+- merge --no-commitは自動統合に成功し、GLOSSARY回帰も移設先へ保持された。merge commitは全体検証後に作成する。
+- RED: 通常側に残ったphraseテストのpytest collectionはModuleNotFoundError: No module named 'template_prune_fixture'でexit 2。移設後の通常collectionは766 tests、exit 0。
+- manifestへの追加後、独立したdownstream fixtureの固定資産一覧が不足し、test_complete_configuration[True]がinconsistentで失敗した。失敗が判明した広いfocused実行は中断し、最小再現を確認して同fixtureへ新資産を追加した。
+- .venv/bin/basedpyright template-maintenance/tests: 0 errors。phrase / corpus / complete_configuration / glossary / downstream公開CLIのfocused pytest: 109 passed（4.72秒）。bundled/prunedのR06・GLOSSARYと保守corpusを持たない下流を確認した。
+
+### 6. setup配布を撤回し設定復旧をprojectへ戻す
+
+- 成果: 不要なsetup入口を除去し、共有設定のownerを維持したまま上流Skillの前提を満たす。
+- 依存: 5。
+- 対象: `.agents/skills/setup-matt-pocock-skills`, `.agents/skills/skills.sources.json`, `.agents/skills/skills.lock.json`, `.claude/skills/setup-matt-pocock-skills`, `.codex/skills/setup-matt-pocock-skills`, `AGENTS.md`, `docs/agents`, `docs/template/release.md`, `openspec/changes/simplify-policy-skill-ownership`。
+- [x] 実装 checkbox: setup本体・登録・link・利用案内を除去し、復旧ownerと入口を明記する。
+- [x] 検証 checkbox: offline整合、他上流Skillの不変、AGENTS/CLAUDE共存fixtureの設定あり/欠落behaviorを確認する。
+
+Task 6 evidence（fresh、source commitと統合差分はTask 5と同じ）:
+
+- skills:verify --jsonはexit 0、errors/warningsなし。sourceとlockはsetup entryの除去以外に構造差分なし。setup以外の38 Skill pathsのbytes/modeを開始snapshotと照合し不変を確認した。
+- AGENTS.md/CLAUDE.mdが共存する独立fixtureを設定あり・設定欠落の2ケースで手動agent検証した。設定ありではproject remoteと設定文書からIssue/仕様入力を選び、setup不要と判断した。欠落ではtrackerを推測せず利用者確認とdocs/agentsの復旧案へ進み、CLAUDE共通設定追加・setup案内・外部アクセス・編集を行わなかった。両fixtureのGit状態も不変だった。少数の準備段階のbehavior確認であり、全reviewセッションの統計的保証ではない。
+- 既存workflow contract testsは54 passed。ruff check / format、OpenSpec検証、git diff --checkは成功。
+
+### 7. 修正cycleの受入を完了する
+
+- 成果: 最新統合入力で外部レビューのP1/P2を解消し、必須検証を完了する。
+- 依存: 6。
+- 対象: `openspec/changes/simplify-policy-skill-ownership`。
+- [x] 実装 checkbox: self-review、独立reviewとfinding修正を完了する。
+- [x] 検証 checkbox: ./scripts/check.sh、task check:template、OpenSpec検証、初回reviewerと別のverifierを完了する。
+
+- self-review: 自動mergeが保持したGLOSSARY回帰、runtimeのcorpus非依存、phraseテスト本文のbytes同一移設、source/lock/linkの除去範囲、AGENTSから欠落時にも到達できる復旧手順、read-only境界を確認した。新規manifest項目により保守資産が31から32へ増えるため、公開文書の件数を修正した。manifest件数との照合で確認し、proseの数値修正なので新テストは追加しない。前cycleの歴史記録やPoCは保持する。
+
+- initial independent review（repair_review）: blocking findingなし。P1/P2、manifest32資産、残存38 Skill paths、PoC保護、phrase本文同一移設を確認した。fresh focused testsは107 passed、skills:verify / git diff --checkは成功。検証source commitはTask 5と同じで、全体両gateと別verifierは後続で実施する。
+
+- ./scripts/check.sh: fresh実行でexit 0。Node tests 638 passed、Python tests 640 passed / 126 skipped（16.80秒）、ruff / TypeScript / basedpyright成功。source commitはd2f687baea0bf151aed8e84629d407542ccd81deとmain 3e25fd1ab735fc43ae76944b80e4142b84f8e41cの統合差分。通常gateから保守回帰を分離した結果であり、件数減少を検証省略の代替にしない。task check:templateと別verifierは未完了。
+
+- task check:template: fresh実行でexit 0、955 passed（403.88秒）。保守側型検査0 errors、実setup・rename・offline prune・再setupと各段階の通常gateを含む。再開後に終了結果と入力snapshotを照合し、変更が本書の証跡だけであることを確認した。source commitと統合差分はTask 5と同じ。残る完了条件は別verifierと最終のOpenSpec形式検証である。
+
+- 2026-11-05の別担当repair_verifier: blocking findingなし。fresh focused pytestは109 passed、skills:verify / git diff --checkは成功。271 pathsのsnapshot照合で変更が本書の証跡だけであること、Node.js 24.14.1 / Python 3.14.6とdependency metadataの不変を確認し、両gateのgreen evidenceを再利用した。PR #92の境界、setup廃止、設定復旧、残存Skill/PoC保護も独立確認した。
+- Task 5–7の実装・必須検証を完了した。最終のOpenSpec形式検証は1 passed。検証後に作業branchへのmain取込みをmerge commitとして確定し、承認済みのcommit/push範囲で公開する。PR作成、mainへのmerge、外部Issueの更新・closeは行わない。change directoryはpre-merge closeまで保持する。
+
+- cleanup: 入力同一性の再確認後、今回所有の一時log・snapshot・behavior fixtureを削除した。結果は本書に要約済みで、利用者所有PoCは変更していない。

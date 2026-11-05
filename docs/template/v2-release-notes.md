@@ -44,6 +44,13 @@ v2 は GSD 固有 integration をコアから削除した。次の入口は存�
 旧入口を呼ぶと、module / file / task の通常の不存在 error になる。deprecated alias や説明専用 shim は
 提供しない。
 
+## prune回帰資産の配布範囲
+
+参照corpusと詳細回帰は保守領域へ移し、保守gateで型検査とpytestを実行する。
+新規pruneでは旧K05（`tests/fixtures/template_prune/references.json`）を配布しない。
+既にprune済みの下流に残る旧ファイルは自動削除しない。独自参照を確認したうえでの手動整理は利用者判断とし、
+自動migrationが必要なら別Issueで扱う。詳細は[旧参照corpusの扱い](../reference/prune-template-assets.md#旧参照corpusの扱い)を参照する。
+
 ## 移行
 
 OpenSpec 直接実行へ移行する。

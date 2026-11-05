@@ -70,6 +70,8 @@ select = ["E", "F", "I", "UP", "B"]
 typeCheckingMode = "basic"
 pythonVersion = "3.14"
 include = ["src", "tests", "scripts"]
+# 保守helperからの静的importを解決する。通常の検査対象includeは拡張しない。
+extraPaths = ["repo-tools"]
 
 [tool.bandit]
 # ハードゲート対象は src のみ（CI audit ジョブ / task security が `-r src -ll` で実行）。

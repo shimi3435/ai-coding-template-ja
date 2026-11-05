@@ -13,8 +13,7 @@ OpenSpec change がある場合、承認済み proposal・design・spec delta �
 仕様が特定できない場合は利用者へ確認し、欠落を検証済みと扱わない。
 
 Issue の作成・編集・コメント・ラベル・close は [AGENTS.md](../../AGENTS.md) の外部 write 方針に従う。
-setup-matt-pocock-skills の同梱や、他 Skill の呼出だけで外部 write を許可したとはみなさない。
+Skill の呼出だけで外部 write を許可したとはみなさない。
 PR は既定で実装差分のレビュー対象とし、Issue に代わる要求受付の入口にはしない（PRs as a request surface: no）。
 
-tracker や用語文書の配置を変更する場合は setup-matt-pocock-skills を使える。共通設定の参照先は
-AGENTS.md に置き、CLAUDE.md には Claude Code 固有の補足だけを書く。
+設定の欠落やtracker・用語文書の配置変更は、[workflowの設定復旧手順](workflow.md#上流skillのrepository設定と復旧)に従う。

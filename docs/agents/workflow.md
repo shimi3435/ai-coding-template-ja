@@ -253,7 +253,6 @@ vendoring しているコア skill の用途:
 - `grill-me` / `grill-with-docs` / `grilling` — 設計の質問と絞り込み。
 - `domain-modeling` — ドメインモデル、ADR、用語整備。
 - `codebase-design` — module・interface・seam の設計用語と設計原則。
-- `setup-matt-pocock-skills` — Issue tracker と用語文書の配置設定。
 - `tdd` — failing test 先行の実装。
 - `code-review` — 利用者が明示的に呼ぶStandards / Specの2軸review。必須工程には追加しない。
 - `diagnosing-bugs` — 不具合の再現と切り分け。
@@ -268,6 +267,23 @@ code-review等の既存結果は、対象差分・仕様・独立性が当該cyc
 
 上流 engineering Skills の repository 設定は [Issue tracker](issue-tracker.md) と
 [用語集・ADR](domain.md) を参照する。用語集の正本は `GLOSSARY.md` である。
+
+### 上流Skillのrepository設定と復旧
+
+本テンプレートはIssue trackerと用語文書の設定を同梱し、setup-matt-pocock-skillsは配布しない。
+code-reviewに残る「tracker未提供ならsetupを案内する」という条件付きの入口は、このprojectでは次の手順で満たす。
+
+1. AGENTS.mdからdocs/agents/issue-tracker.mdとdomain.mdを読み、利用者指定のrepository・仕様・配置があれば優先する。
+   設定が揃っていればその入力で作業を進める。setupの実行や再設定は不要である。
+2. 設定が欠落している場合、利用者指定と既存のproject情報・Git履歴から復旧内容を確認する。
+   trackerを特定できない場合は利用者へ確認し、trackerに依存する操作を止める。配布元repositoryを作業対象と推測しない。
+3. 確定した内容でdocs/agents/の設定文書を復旧・編集する。trackerや用語配置を変更する場合も同じownerを使う。
+   共有設定の参照入口はAGENTS.mdに置き、CLAUDE.mdには共通設定を追加しない。
+4. 復旧後に参照先と入力を再確認して依存作業へ戻る。setupの自動導入や、設定を理由としたIssue・ラベル等への
+   外部writeは行わない。設定文書への編集と、レビュー自体のreport-only等の操作範囲は区別する。
+   read-onlyで呼ばれた場合は復旧案と不足入力を報告し、呼出範囲を超えて文書を変更しない。
+
+### Skill配布の管理
 
 review済み供給元、ref、subtree、license、ownershipは [`.agents/skills/skills.sources.json`](../../.agents/skills/skills.sources.json)、
 remoteだけのresolved commit、tree hash、legal hashは [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する。

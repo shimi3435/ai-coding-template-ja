@@ -8,8 +8,8 @@ PR #91 のレビューに対する計測記録。artifact 検証の再利用と 
 setup 済みの Ubuntu amd64、Node 24、Python 3.14 で repository root から実行する。
 
 ```bash
-uv run --no-sync pytest tests/test_shell_parser_cost.py -q -s
-uv run --no-sync python tests/test_shell_parser_cost.py
+uv run --no-sync pytest template-maintenance/tests/test_shell_parser_cost.py -q -s
+uv run --no-sync python template-maintenance/tests/test_shell_parser_cost.py
 ```
 
 計測はテスト側で parse、artifact 検証、binary hash、parser subprocess を包み、終了時に元へ戻す。

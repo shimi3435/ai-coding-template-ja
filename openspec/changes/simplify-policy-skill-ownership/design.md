@@ -82,3 +82,19 @@ GLOSSARY.mdの既存語義を保持し、手順・規則列挙はownerへの参�
 検証は恒久contract testsを「各ファイルに同じ文章がある」確認から「正本に契約があり、利用側から到達できる」確認へ変更する。12分類・停止条件・境界fixtureは保持する。変更した4 Skillについて、使い捨てworkspaceで同じ入力をSkillなし / ありの独立agentへ与える手動比較を行い、内容の違い・file変更・状態判定を確認する。通常CIへ実agent評価器や新parserは追加しない。これは実装の委譲ではなく、承認済みの手動behavior検証である。
 
 R3の12分類auditは上記のとおり維持する。欠落・形式・順序・重複はowner/navigationと既存preflight fixtures、エラー・再実行・状態遷移はreport-only、dirty/resume、unverifiedの対照scenarioへ対応させる。表記・数値は旧規則名除去とreview上限保持のcontractで検証する。時刻は非該当（実行順序で決まり時刻を参照しない）、巨大入力は固定size capを導入せず読めないrequired evidenceを未検証とする既存規則で扱う。
+
+## 外部レビュー後の修正cycle（2026-11-04）
+
+初回cycleのsetup同梱判断を撤回する。code-reviewのsetup参照はtracker未提供時に限られ、標準checkoutには必要な設定文書とAGENTS.mdからの入口がある。Issue #73の「不足実証時だけ最小補助」という採用条件を満たす独立した必要性は確認できなかった。setup Step 4のCLAUDE.md優先編集もprojectの共有policy ownershipと衝突する。remote本文をlocal化せず、配布本体・source/lock entry・両host linkを一体で除去する。他のremote本文・legal・固定先は保持する。これはSkill廃止であり、既存entryのhash再計算やupdaterの新機能追加を行わない。
+
+設定の復旧手順はdocs/agents/workflow.mdが所有し、AGENTS.mdから直接到達させる。設定が存在する場合はその内容を使い、欠落した場合は利用者指定・既存のproject情報から復旧内容を確定する。trackerを特定できなければ利用者へ確認し、依存作業を停止する。復旧・変更はdocs/agentsを編集し、共有参照はAGENTS.mdに保持する。上流の条件付きsetup案内を自動導入の指示として扱わない。CLAUDE.mdには共有設定を追加しない。
+
+統合対象はorigin/mainの3e25fd1ab735fc43ae76944b80e4142b84f8e41c。公開branchの履歴を保持するmergeを選び、mainへのmergeは行わない。PR #92のfixture / corpus / gate分離を維持し、placeholderテストを保守側へ移しmanifestへ登録する。GLOSSARYの追加回帰を移設先に統合し、runtimeへcorpus依存を戻さない。旧mainでのgreen evidenceは履歴として保持し、統合後の完了判定には使わない。
+
+### 修正cycleのspec-holes
+
+- R1: 1 欠落はsetupだけを除外し残りをoffline検証、2 最終Matt cohortは8件、3 source/lock/linkの余剰・重複を拒否、4 本体とmetadata/linkを一体で変更、5 schema v2を維持、6 部分除去は検証失敗、7 再実行で他Skillを変更しない、9 上流bytes/modeを保持、12 remote ownershipを維持する。8 時刻・10 数値・11 巨大入力は非該当（固定された配布集合の除去で時刻・数値・容量の新しい入力はない）。候補: skills:verify、既存tree・metadataとの比較、廃止物の不在確認。
+- R5: 1 fixture欠落はcollectionで失敗、2 bundled/pruned両構成、3 rename競合はmain配置へ統合、4 main取込み後に両gateを実行、5 fixture/corpus/manifest形式を保持、6 検証失敗は未完了、7 prune再実行を既存lifecycleで確認、9 日本語GLOSSARYと既存placeholder位置回帰を保持、12 prune後に保守資産へ依存しない。8 時刻・10 数値・11 巨大入力は非該当（テスト配置と参照の統合で新しい時刻・数値・容量契約はない）。候補: collection、移設したfocused tests、両gate、既存downstream契約。
+- R6: 1 設定欠落時は復旧内容を確定、不明なら確認、2 設定あり/欠落を確認、3 AGENTSとCLAUDE共存でも共有ownerを分けない、4 設定確定後に依存作業、5 設定内容を推測せず不足を明示、6 tracker不明を成功扱いしない、7 再実行で設定を二重生成しない、9 用語・パスを保持、12 tracker変更も同じownerで扱う。8 時刻・10 数値・11 巨大入力は非該当（prompt-drivenな設定復旧で新しい時刻・数値・容量入力はない）。候補: AGENTS/CLAUDE共存fixtureでcode-reviewへの設定あり/欠落の手動behavior確認。通常CIにagent評価器は追加しない。
+
+未解決判断はない。既存R2–R4の仕様と境界は保持する。旧cycleの完了は当時の状態を表し、現在の受入はTask 5–7で再判定する。

@@ -210,32 +210,6 @@
       ]
     },
     {
-      "name": "setup-matt-pocock-skills",
-      "ownership": "remote",
-      "license": "MIT",
-      "redistribution": "allowed",
-      "target": ".agents/skills/setup-matt-pocock-skills",
-      "repository": "mattpocock/skills",
-      "ref": {
-        "branch": "main"
-      },
-      "subtree": {
-        "path": "skills/engineering/setup-matt-pocock-skills"
-      },
-      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
-      "verification": "verified",
-      "treeHash": "ba0f027364ca49671ec11435ce9f3ad200b1b5ca4be13ee9c83bcf61b8f001fa",
-      "fileCount": 8,
-      "byteCount": 22716,
-      "legalFiles": [
-        {
-          "sourcePath": "LICENSE",
-          "targetPath": "LICENSE",
-          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
-        }
-      ]
-    },
-    {
       "name": "tdd",
       "ownership": "remote",
       "license": "MIT",
