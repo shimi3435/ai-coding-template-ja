@@ -35,6 +35,7 @@ MAINTENANCE_FILES = (
     "template-maintenance/tests/test_template_prune_git.py",
     "template-maintenance/tests/test_template_prune_hardlinks.py",
     "template-maintenance/tests/test_template_prune_tokens.py",
+    "template-maintenance/tests/test_template_prune_phrase_placeholders.py",
     "template-maintenance/tests/test_shell_parser_cost.py",
     "template-maintenance/tests/template_prune_fixture.py",
     "template-maintenance/tests/prune_corpus.py",

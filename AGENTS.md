@@ -1,6 +1,6 @@
 # Global Project Instructions
 
-このファイルは全エージェント共通の**作業方針（意図・自然言語）の単一の正**（CONTEXT.md）。
+このファイルは全エージェント共通の**作業方針（意図・自然言語）の単一の正**。
 Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モード・サンドボックス等の
 **ツール固有の機構設定はここに書かない**（`.mcp.json` / `.codex/config.toml` が担う）。
 
@@ -23,48 +23,34 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 ## Agents
 - Codex / Claude Code の両方がこのファイルを正とする。
 - Claude Code 固有の補足のみ CLAUDE.md にある。
+- 用語集・ADR の参照先は [docs/agents/domain.md](docs/agents/domain.md)、Issue と仕様の参照先は
+  [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md) に定める。
+- 上流Skillが要求するrepository設定の欠落・変更は[設定の復旧手順](docs/agents/workflow.md#上流skillのrepository設定と復旧)に従う。
+- Skill間の呼出は[host共通の呼出手順](docs/agents/workflow.md#skill間の呼出とhost差)に従う。
 
 ## Workflow（OpenSpec 直接実行 / ADR-0010・0009）
 - 外部挙動、公開 interface、security / trust boundary、永続データ、dependency / lockfile、build / CI、
-  または複数の恒久成果を変更する場合、OpenSpec change を作り、仕様と最終完了を確定する。
-- 独立して受け入れ、review、merge できる成果は別 changes に分割する。一体の成果は task 数、行数、
-  セッション数で分割せず、同じ `tasks.md` の依存付き section とする。
-- コア経路は OpenSpec 直接実行だけとする。proposal / design / spec delta / `spec-holes` が仕様の正本、
-  `tasks.md` が詳細タスク、依存順、進捗、検証状態、セッション復帰の正本である。
-- 各 task は成果、依存、対象、実装 checkbox、検証 checkbox を持つ。実行制約は最初の CI parity、
-  停止・再計画条件、一時 artifact cleanup の3項目だけを `tasks.md` 冒頭に置く。
-- 依存が全て完了した先頭の未完了 task から実行する。実装と指定検証の成功後、対応 checkbox を順に
-  `- [x]` へ更新する。環境制約や検証失敗による未実行を完了扱いせず、change close を禁止する。
-- OpenSpec CLI は任意の discovery / validation engine とする。不在時も同じ Markdown artifacts と
-  checkbox 規律で実装・検証・再開する。
-- agent は外部 orchestrator を一般的な候補として提案できる。ただし、利用者が特定の名前を選ぶ前の
-  read-only 探索、在席確認、plugin 検索、version probe、install、起動は禁止する。明示選択後に使う
-  場合も仕様を複製せず、各 task の進捗と検証状態を `tasks.md` へ同期する。
-- plan / evidence / test / review は distinct failure / seam / risk の検出、セッション復帰、レビュー判断の
-  いずれかへ価値を持つ場合だけ追加する。通常 CI を削除予定 artifacts や到達不能な Git 履歴へ依存させない。
-- 全変更で self-review と適用可能な focused validation を行う。独立 review / verifier は下記
-  OSWF-5 の列挙条件に該当する場合だけ起動する。
-- 仕様判断または material expansion が必要なら、完了済み checkbox を保持して利用者承認まで停止する。
-  承認後に仕様、`spec-holes`、validation、tasks を更新し、新しい cycle を開始する。
-- 検証は高リスクな実動作 / safe dry-run、公開 interface、security property、静的 prose contract の順に
-  優先する。最初の環境依存 vertical slice で該当 CI parity を全実装完了前に確認する。
-- テンプレート自身では一つの PR に一つの active change だけを置く。依存 changes は先行 change の
-  close / merge 後を base とし、main の `openspec/changes/` に blocked proposal を残さない。
-- 一体の change は原則として同じ executor が継続する。独立・非重複・個別検証可能な実装単位だけ、
-  `tasks.md` へ統合方法を記録し、別の利用者承認後に追加 executor へ委譲できる。
-- OpenSpec で仕様を確定する前に `spec-holes` で未定義の振る舞いを列挙して潰す。
-- 列挙した穴は可能なら例示テスト / Hypothesis property に落とす。
-- 可能なら `tdd` skill でテストから始める。
-- 設計が曖昧なら `grill-me` / `grill-with-docs` で確認する。
-- 複雑化しそうなら `caveman` で単純化する。
-- エラー調査では `diagnosing-bugs` skill を使う。
-- まとまった変更後は可能なら `verify-change` で実動作を確認する。
-- 詳細は [docs/agents/workflow.md](docs/agents/workflow.md)。
+  または複数の恒久成果を変更する場合、OpenSpec changeを作る。独立して受け入れ・review・mergeできる成果は別changesとする。
+- コア経路はOpenSpec 直接実行だけとする。proposal / design / spec delta / spec-holesが仕様の正本、
+  `tasks.md` が詳細タスク、依存順、進捗、検証状態、セッション復帰の正本である。OpenSpec CLIは任意とする。
+- 全変更で self-reviewと適用可能なfocused validationを行う。未実行・検証失敗を完了扱いせず、change closeを禁止する。
+- 仕様判断またはmaterial expansionが必要なら、完了済みcheckboxを保持して利用者承認まで停止する。
+- 外部 orchestratorは一般的な候補として提案できる。ただし利用者が特定の名前を選ぶ前の
+  read-only 探索、在席確認、plugin 検索、version probe、install、起動は禁止する。
+- 追加 executorには別の利用者承認を必要とする。実装の分担と統合方法はtasks.mdへ記録する。
+- plan / evidence / test / reviewは、異なる失敗・境界・riskの検出、セッション復帰、レビュー判断へ価値がある場合だけ追加する。
+  通常CIを削除予定artifactsや配布後に到達不能なGit履歴へ依存させない。
+- 仕様確定前にspec-holesで未定義の振る舞いを確認する。用いるSkillは作業に応じて
+  [workflowのSkill一覧](docs/agents/workflow.md#skillsvendoringコア候補のうち再配布可のもの)から選ぶ。
+- task形式・実行順序・review・証跡・停止・完了の共通手順は[workflow](docs/agents/workflow.md)、
+  preflight・既存差分保護・再開は[executor Skill](.agents/skills/execute-openspec-change/SKILL.md)、
+  artifact配置とテンプレート固有close規約は[OpenSpec規約](openspec/project.md)を正とする。
 
-### OSWF-5 review 発火条件
+### 独立レビュー必須条件
 
-次のいずれかを変更する場合だけ、独立 review / verifier を必須とする。本列挙を発火条件の単一の正とし、
-design、tasks、workflow、skills は OSWF-5 を参照して列挙を複製しない。
+次のいずれかを変更する場合だけ、独立review / verifierを必須とする。本列挙を発火条件の単一の正とし、
+他文書へ列挙を複製しない。適用時の順序・上限・再試行・停止は
+[共通review手順](docs/agents/workflow.md#bounded-review-convergence)に従う。
 
 - security / trust boundary
 - 外部 write
@@ -73,15 +59,6 @@ design、tasks、workflow、skills は OSWF-5 を参照して列挙を複製し�
 - dependency / lockfile
 - build / CI
 - 削除 / migration
-
-該当時は self-review、initial independent review、finding 修正、最新入力の `./scripts/check.sh`、initial reviewer と
-別の独立 verifier の順に実行する。finding 修正は fix、focused validation、diff review を一組として
-最大3 iterations。verifier blocker は soft stop し、利用者承認後の新 cycle で fix、独立 review、
-project checks、前 cycle と別の verifier を実行する。同一役割・task の agent が連続2回失敗した場合、
-または固定した環境・command・入力で infrastructure failure が2回再現した場合も停止する。
-
-検証証跡は command、結果、source commit、fresh実行 / green evidence再利用の別、未検証理由の要約だけを
-`tasks.md` へ記録する。生 log、一時 report、tool 固有 state を品質判定や完了判定に使わない。
 
 ## Tools
 - 実装前に Context7 でライブラリ / CLI の最新仕様を確認する。

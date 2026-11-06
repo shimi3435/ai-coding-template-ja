@@ -10,18 +10,8 @@ OpenSpec CLI や外部 tool 固有 state の有無は品質条件にしない。
 
 ### OpenSpec change の適用範囲と分割
 
-次のいずれか一つでも該当する変更は OpenSpec change を必要とする。
-
-- 外部挙動。
-- 公開 interface。
-- security / trust boundary。
-- 永続データ。
-- dependency / lockfile。
-- build / CI。
-- 複数の恒久成果。
-
-どれにも該当しない局所 bugfix、内部 refactor、軽微な文書修正は change を作らず直接変更できる。
-直接変更中に列挙条件への該当が判明した場合は作業を停止し、change を確定してから再開する。
+changeが必要となる条件は[AGENTS.md](../../AGENTS.md)を正とする。直接変更中に条件への該当が
+判明した場合は停止し、changeを確定してから再開する。
 
 独立して受け入れ、review、mergeできる成果は、実行 engine を選ぶ前に別 changes へ分割する。一体の
 受け入れ結果に必要な成果は、task 数、行数、セッション数を分割基準にせず、同じ `tasks.md` の
@@ -29,48 +19,52 @@ OpenSpec CLI や外部 tool 固有 state の有無は品質条件にしない。
 
 ### tasks.md の最小契約
 
-各 task は次の項目を持つ。
+`## Execution Constraints` から次のheadingまでをExecution Constraints sectionとし、exactly 3 項目を置く。
+最初の CI parity、停止・再計画条件、一時 artifact cleanupをそれぞれ1回だけ要求し、欠落、重複、余剰を拒否する。
+固定token、行数、commit、task数、セッション数を品質判定や分割の代理にしない。
 
-- 成果。
-- 依存。
-- 対象。
-- 実装 checkbox。
-- 検証 checkbox。
+`## Tasks` sectionに番号付きtask entry を1件以上置く。task が0件なら実装前に拒否する。
+各taskは成果、依存、対象、実装 checkbox、検証 checkboxを持つ。
+task IDの重複、未知の依存、自己依存、循環依存、壊れたcheckboxを拒否する。
 
-冒頭の実行制約は、最初の CI parity、停止・再計画条件、一時 artifact cleanup の3項目だけとする。
-固定 token、行数、commit、task 数、セッション数は品質判定や分割の代理にしない。
+対象pathの各項目は単一の Markdown inline code spanとし、repository-relative pathとして解決する。
+Unicodeと空白を許可し、trim または Unicode 正規化をせず exact に保持する。
+閉じていない code span、code span外のpath値、一項目内の複数の code span、曖昧なpath、repository外pathを拒否する。
+異なるtaskの対象pathがexact match または directory containmentで重なる場合、一方から他方への
+推移的な依存 pathを要求し、依存関係で順序化されない重複を拒否する。
 
-`## Tasks` sectionにはtask entryを1件以上置く。各対象pathは単一の Markdown inline code span とし、
-Unicodeと空白を含むcode span内の値をtrimまたはUnicode正規化せずexactに保持する。閉じていないcode span、
-code span外のpath値、一項目内の複数code spanはpreflightで拒否する。異なるtaskの対象pathがexact matchまたは
-directory containmentで重なる場合、一方から他方への推移的な依存 pathを要求し、依存関係で順序化されない
-重複を拒否する。task entryが0件の場合もrepository変更前に拒否する。
+### 実行・進捗・blocker記録
 
-通常 CI が検証する preflight 境界は、`execute-openspec-change` の static skill / instruction fixtures と
-恒久 contract tests までとする。実 agent session の preflight は manual / out-of-scope とし、runtime parser
-または実 agent CI を追加する場合は、新しい OpenSpec change で仕様、`spec-holes`、検証、実行制約を再設計する。
+preflight、dirty ownership、再開時のsnapshot照合は
+[execute-openspec-change](../../.agents/skills/execute-openspec-change/SKILL.md)が所有する。
+この確認に失敗した段階はreport-onlyであり、tasks.mdを含めrepositoryを変更しない。
+両確認に成功したsafe boundary後、以下を順に行う。
 
-依存が全て完了した先頭の未完了 task を再開点とする。文書順の先頭 task の依存が未完了なら skip し、
-次の実行可能 task を選ぶ。preflight と dirty ownership 確認の失敗は report-only とし、repository を変更しない。
-両確認が成功した後に実行可能 task がなければ、文書順で先頭の未解決 task 直下へ blocker と再開条件を記録して
-停止する。実装、検証、review、project check の blocker も、選択中 task または先頭の未完了 validation task
-直下へ記録する。未完了 validation task がなければ、文書順で最後の task 直下へ記録する。実装と指定検証が成功した
-順に対応 checkbox を更新する。環境制約または失敗で検証できない場合、実装 checkbox だけを完了できるが、
-検証 checkbox は未完了に保ち change close を禁止する。focused validation と代替静的検証が構造上
-存在しない場合だけ、N/A 理由を記録して検証 checkbox を完了できる。
+1. 依存が全て完了した先頭の未完了 taskを選ぶ。文書順の先頭が実行不能ならskipし、次の実行可能taskを選ぶ。
+   未完了taskがあるのに実行可能 task がない場合は、文書順で先頭の未解決 task直下にblockerと再開条件を記録して停止する。
+2. taskの成果・対象・受入条件に必要な最小実装を行う。適用可能なら一つのvertical sliceの失敗テストから始める。
+3. diffと成果を確認して実装 checkboxを完了にし、指定のfocused validationを実行する。
+4. 指定検証が成功したら検証 checkboxを完了にする。両checkboxが完了した場合だけ親taskを完了にし、
+   tasks.mdを保存して次の依存済みtaskへ進む。完了済みtaskの再実行は不要である。
 
-safe boundary 後に file を変更し、実装 checkbox 完了前に `orderly stop` する場合、実装途中 task の
-変更 path と digest を `implementation-in-progress` 状態で累積 ownership snapshot へ記録する。再呼出時に
-path 集合と digest が一致すれば同じ task の実装を継続する。不一致なら変更前に停止する。process kill や
-host crash による `abrupt termination` では snapshot 更新を保証できないため、未記録差分を executor 所有と
-推測せず dirty overlap として fail-closed で停止する。
+環境制約または検証失敗の場合、実装だけを完了にできるが、検証 checkbox は未完了に保ちchange close を禁止する。
+focused validationと代替静的検証が構造上非該当の場合だけ、N/A 理由を記録して検証を完了できる。
+実装・検証のblockerは選択中taskへ、review / project checkのblockerは先頭の未完了 validation taskへ記録する。
+未完了validation taskがなければ、文書順で最後の taskへ記録する。
+
+initial / diff review、project check、verifierのblockerを記録するtaskに完了済みの検証 checkboxがある場合、
+停止前に検証 checkbox と親 task を未完了へ戻す。blocker 解消後の新しい evidenceが成功した場合だけ再度完了にする。
+中断・再開のownership詳細はexecutor Skillへ戻る。
+
+通常 CIのpreflight検証範囲はstatic skill / instruction fixturesと恒久contract testsまでである。
+実 agent session の preflightはmanual / out-of-scopeとし、通常CIへ含めない。runtime parserまたは実agent CIを
+追加する場合は、新しい OpenSpec changeで仕様、spec-holes、検証、実行制約を再設計する。
 
 ### 外部 orchestrator の opt-in 境界
 
-agent は外部 orchestrator を一般的な候補として提案できる。ただし、利用者が特定の名前を選ぶ前の
-read-only 探索、在席確認、plugin 検索、version probe、install、起動は禁止する。明示選択後に使う
-場合も OpenSpec の仕様を複製せず、各 task の進捗と検証状態を同じ `tasks.md` へ同期する。外部 tool
-state と tasks が競合する場合は tasks を優先し、外部 tool の完了だけでは change close を許可しない。
+利用前のopt-in境界は[AGENTS.md](../../AGENTS.md)に従う。明示選択後も仕様を複製せず、
+各taskの進捗と検証状態を同じtasks.mdへ同期する。外部tool stateとtasksが競合する場合はtasksを優先し、
+外部toolの完了だけではchange closeを許可しない。
 
 ### 停止・再計画
 
@@ -101,13 +95,13 @@ blocker でない nit、独立 hardening、測定 tooling は別 change 候補�
 ## bounded review convergence
 
 全変更で self-review と適用可能な focused validation を行う。独立 review / verifier の発火条件は
-`AGENTS.md` の OSWF-5 だけを単一の正とし、本書では列挙を複製しない。
+[AGENTS.mdの独立レビュー必須条件](../../AGENTS.md#独立レビュー必須条件) だけを単一の正とし、本書では列挙を複製しない。
 
 ### Review topology と iteration
 
-OSWF-5 の高リスク条件に該当する change は、次の順序で実行する。
+独立レビュー必須条件に該当する change は、次の順序で実行する。
 
-1. self-review（cycle の先頭に1回）。
+1. self-review（cycle の先頭に1回）。standalone時もreport-onlyとし、修正は実行担当が行う。
 2. initial independent review。
 3. fix → focused validation → diff review（最大3 iterations）。
 4. 最新入力の `./scripts/check.sh`。
@@ -161,22 +155,29 @@ command、結果、source commit、fresh実行 / green evidence再利用の別�
 full identity bundleは永続化しない。最新入力でfresh実行する場合は旧green evidenceを再利用しない。
 
 入力同一性が1項目でも不明なら再実行する。別 command の evidence は代用しない。focused tests と
-実動作 seam は毎 cycle 実行する。source 変更のない infrastructure failure は同じ環境、command、入力を
+実動作 seam は毎 cycle 実行する。証跡だけの変更も対象commandが読む場合はevidenceを無効にする。source 変更のない infrastructure failure は同じ環境、command、入力を
 固定して1回だけ再試行でき、再現したら soft stop する。
 
 verifier は initial reviewer と別の独立 agent とする。verifier が blocker を報告した場合、change を
 未完了へ戻して soft stop する。利用者が新 cycle を承認した後だけ fix、独立 review、project checks、
 前 cycle と別の verifier を実行する。
 
-initial / diff review、project check、verifier のblockerを記録するtaskで検証checkboxが完了済みなら、
-停止前にその検証checkboxと親taskを未完了へ戻す。blocker解消後の新しいevidenceが成功した場合だけ、
-両checkboxを再度完了へ更新する。
+### Required evidenceと結果の分類
+
+受入条件、MUST / SHALL、project gateに必要なrequired evidenceが欠落する場合、またはrequired性が不明な場合は
+blockerとする。未検証をnon-blockerにできるのはoptional seam、明示的scope外、研究環境制約だけであり、理由と影響を示す。
+研究環境制約であっても必須検証の欠落を完了扱いしない。
+
+検証結果はverified（成功したcommandと挙動）、not applicable（構造上非該当とN/A 理由）、
+unverified（環境制約・失敗・未確認範囲と影響）を区別する。環境制約や失敗による未実行は完了にできない。
+実行担当が結果と進捗をtasks.mdへ記録し、report-onlyのself-reviewやspec-holesへ更新を委譲しない。
 
 ### Agent allocation
 
 一体の change の material 実装と finding 修正は原則1 executor が継続する。追加 executor は
 `tasks.md` に記録した独立・非重複・個別検証可能な実装単位、agent failure、context contamination に
-限り、起動前に別の利用者承認を必要とする。finding ごとに fresh agent を作らない。
+限り、起動前に別の利用者承認を必要とする。finding ごとに fresh agent を作らない。依存tasks、review / fix / verificationは直列にする。
+新しい設計判断はpromptだけに置かず、canonical artifactsへ反映する。
 
 main は各 material task の成果を検証してから `tasks.md` を更新する。checkbox や report path の
 機械的補正は main が処理する。成果ゼロ、無応答、採用しない部分差分は iteration を消費しない。
@@ -207,6 +208,8 @@ retrospective と tasks 更新後は、変更入力に影響する command だ�
 ## OpenSpec engine と Markdown fallback（ADR-0010）
 
 OpenSpec engine は任意の discovery / validation 補助であり、実装や checkbox 更新を所有しない。
+`openspec` CLIはterminalで、`/opsx:*` スラッシュコマンドは対応するAI assistantのchatで使う別の入口である。
+詳細は[上流のコマンド説明](https://github.com/Fission-AI/OpenSpec/blob/main/docs/how-commands-work.md)を参照する。
 
 - `openspec list` — change / spec 一覧。
 - `openspec instructions apply --change <id>` — 対象 change の context と checkbox 進捗。
@@ -216,13 +219,9 @@ OpenSpec engine は任意の discovery / validation 補助であり、実装や 
 
 CLI がない場合も固定ディレクトリから Markdown files を読み、同じ順序と完了条件で直接実行する。
 
-- 各 change は `proposal.md`、`tasks.md`、必要な `design.md` を持つ。振る舞い変更時は
-  `specs/<capability>/spec.md` も持つ。
-- spec delta の各 requirement 本文は1行目に SHALL / MUST を置く。
-- proposal、design、spec delta の `spec-holes` に未解決判断を残さない。
-- `tasks.md` は上記の実行制約3項目と、成果、依存、対象、実装 checkbox、検証 checkbox を持つ
-  番号付き task で構成する。
-- 実行主体は依存完了済みの先頭未完了 task から実装・検証し、結果に対応する checkbox を更新する。
+artifact配置と必須fileは[openspec/project.md](../../openspec/project.md)に従う。
+spec deltaのrequirement本文は先頭行にSHALL / MUSTを置く。spec-holesに未解決判断を残さず、
+task形式・実行順序は上記の共通契約に従う。engineの有無で完了条件を変えない。
 
 `openspec init` は新規プロジェクト用である。既存テンプレートでは `openspec/project.md` からの移行を
 伴うため実行しない。engine 生成物もコミットしない。
@@ -244,15 +243,6 @@ CLI がない場合も固定ディレクトリから Markdown files を読み、
 テンプレート自身の close では[保守側のふりかえり手順](../template/release.md#change-close-時の軽量ふりかえりテンプレート自身の運用)に従う。
 <!-- template-maintenance:end -->
 
-## material task の executor 配分
-
-一体の change では一つの executor が canonical artifacts 一式を読み、material tasks を継続する。
-main は task ごとに diff と必要な focused validation を確認し、合格後だけ `tasks.md` を更新する。
-
-独立・非重複・個別検証可能な実装単位だけ、`tasks.md` へ単位と統合方法を記録して追加 executor へ
-委譲できるが、起動前に別の利用者承認を得る。依存 tasks、review / fix / verification は直列にする。成果や設計判断に影響する新しい決定は
-prompt だけに置かず、proposal、design、spec delta へ戻してから再開する。
-
 ## Skills（vendoring・コア候補のうち再配布可のもの）
 
 skill 実体は `.agents/skills/<name>/` が単一の正。Claude Code 用 `.claude/skills/` と Codex 用
@@ -262,14 +252,55 @@ vendoring しているコア skill の用途:
 
 - `grill-me` / `grill-with-docs` / `grilling` — 設計の質問と絞り込み。
 - `domain-modeling` — ドメインモデル、ADR、用語整備。
+- `codebase-design` — module・interface・seam の設計用語と設計原則。
 - `tdd` — failing test 先行の実装。
-- `code-review` — Standards / Spec の2軸 review。
+- `code-review` — 利用者が明示的に呼ぶStandards / Specの2軸review。必須工程には追加しない。
 - `diagnosing-bugs` — 不具合の再現と切り分け。
 - `caveman` — 過度な複雑化の抑制。
-- `self-review` — コミット / PR 前の自己 diff 検査。
+- `self-review` — 自己diffの検査と指摘。全モードreport-only。
 - `verify-change` — 全体 check、focused test、実動作確認。
-- `spec-holes` — 未定義の振る舞いの列挙とテスト対応。
+- `spec-holes` — 未定義の振る舞いの列挙と検証候補。実行は実行担当が所有する。
 - `execute-openspec-change` — OpenSpec change の preflight、直接実装、検証、進捗更新。
+
+code-review等の既存結果は、対象差分・仕様・独立性が当該cycleと一致する場合に独立reviewとして利用できる。
+必要なreview結果が欠ける場合は共通review手順で補い、同じ根拠のreviewを重ねない。
+
+上流 engineering Skills の repository 設定は [Issue tracker](issue-tracker.md) と
+[用語集・ADR](domain.md) を参照する。用語集の正本は `GLOSSARY.md` である。
+
+### Skill間の呼出とhost差
+
+上流Skillの「Call the Skill tool」は、次の手順で同じrepository Skillへ到達させる。
+remote-owned本文の書き換えや、新しいrouter Skillの追加は行わない。
+
+1. 呼出先を `.agents/skills/<name>/SKILL.md` の同名Skillに解決する。両hostのlinkは同じ実体を指す。
+   同名のuser Skillや類似Skillで代替しない。未同梱・読込不能・明示的な利用禁止の場合は、
+   不足または制約を報告して依存作業を止める。自動installで補完しない。
+2. hostがSkill toolを提供していれば、その通常の呼出方法を使う。tool自体が未提供の場合だけ、
+   対象のSKILL.mdを読み、必要な参照と指示を同じ作業内で適用する。
+   tool呼出の失敗や権限拒否を、ファイル直接読込によって迂回しない。
+3. 呼出元の操作範囲、read-only、利用者承認待ち、停止条件を引き継ぐ。参照資料としての呼出は
+   参照のままとし、別セッションの開始や実装委譲へ変えない。
+   `tdd` からの `codebase-design` は設計用語の参照であり、独立した実行セッションではない。
+4. 呼出先の指示を適用してから依存作業へ戻る。`grill-me` は `grilling`、`grill-with-docs` は
+   `grilling` と `domain-modeling` の両方を適用し、質問への回答や合意が必要ならそこで待つ。
+
+### 上流Skillのrepository設定と復旧
+
+本テンプレートはIssue trackerと用語文書の設定を同梱し、setup-matt-pocock-skillsは配布しない。
+code-reviewに残る「tracker未提供ならsetupを案内する」という条件付きの入口は、このprojectでは次の手順で満たす。
+
+1. AGENTS.mdからdocs/agents/issue-tracker.mdとdomain.mdを読み、利用者指定のrepository・仕様・配置があれば優先する。
+   設定が揃っていればその入力で作業を進める。setupの実行や再設定は不要である。
+2. 設定が欠落している場合、利用者指定と既存のproject情報・Git履歴から復旧内容を確認する。
+   trackerを特定できない場合は利用者へ確認し、trackerに依存する操作を止める。配布元repositoryを作業対象と推測しない。
+3. 確定した内容でdocs/agents/の設定文書を復旧・編集する。trackerや用語配置を変更する場合も同じownerを使う。
+   共有設定の参照入口はAGENTS.mdに置き、CLAUDE.mdには共通設定を追加しない。
+4. 復旧後に参照先と入力を再確認して依存作業へ戻る。setupの自動導入や、設定を理由としたIssue・ラベル等への
+   外部writeは行わない。設定文書への編集と、レビュー自体のreport-only等の操作範囲は区別する。
+   read-onlyで呼ばれた場合は復旧案と不足入力を報告し、呼出範囲を超えて文書を変更しない。
+
+### Skill配布の管理
 
 review済み供給元、ref、subtree、license、ownershipは [`.agents/skills/skills.sources.json`](../../.agents/skills/skills.sources.json)、
 remoteだけのresolved commit、tree hash、legal hashは [`.agents/skills/skills.lock.json`](../../.agents/skills/skills.lock.json) に記録する。

@@ -31,7 +31,7 @@ def _make_rename_fixture(tmp_path: Path) -> tuple[Path, Path]:
         (tmp_path / metadata).write_text(
             f'{{"name":"{OLD_DISTRIBUTION}-repo-tools"}}\n', encoding="utf-8"
         )
-    (tmp_path / "CONTEXT.md").write_text(
+    (tmp_path / "GLOSSARY.md").write_text(
         f"# {OLD_DISTRIBUTION}\n\n由来: {OLD_DISTRIBUTION}\n", encoding="utf-8"
     )
 
@@ -43,7 +43,7 @@ def _make_rename_fixture(tmp_path: Path) -> tuple[Path, Path]:
     return tmp_path, fake_bin
 
 
-def test_rename_updates_all_project_names_in_context(tmp_path: Path) -> None:
+def test_rename_updates_all_project_names_in_glossary(tmp_path: Path) -> None:
     root, fake_bin = _make_rename_fixture(tmp_path)
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
@@ -63,9 +63,10 @@ def test_rename_updates_all_project_names_in_context(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (root / "CONTEXT.md").read_text(encoding="utf-8") == (
+    assert (root / "GLOSSARY.md").read_text(encoding="utf-8") == (
         "# sample-project\n\n由来: sample-project\n"
     )
+    assert not (root / "CONTEXT.md").exists()
     for metadata in ("package.json", "package-lock.json"):
         assert OLD_DISTRIBUTION not in (root / metadata).read_text(encoding="utf-8")
         assert "sample-project-repo-tools" in (root / metadata).read_text(

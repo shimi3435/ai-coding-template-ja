@@ -40,11 +40,37 @@
       "subtree": {
         "path": "skills/engineering/code-review"
       },
-      "resolvedCommit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
-      "verification": "unknown",
-      "treeHash": "6e6c210b1d73378924a9305b4f1ca3c1888d70dad58501253653fb0eab82b70a",
-      "fileCount": 2,
-      "byteCount": 7808,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "85f0c2873f60cf1b15585445f26254006b62047c1fe623e54d77006cef3791ce",
+      "fileCount": 3,
+      "byteCount": 7838,
+      "legalFiles": [
+        {
+          "sourcePath": "LICENSE",
+          "targetPath": "LICENSE",
+          "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
+        }
+      ]
+    },
+    {
+      "name": "codebase-design",
+      "ownership": "remote",
+      "license": "MIT",
+      "redistribution": "allowed",
+      "target": ".agents/skills/codebase-design",
+      "repository": "mattpocock/skills",
+      "ref": {
+        "branch": "main"
+      },
+      "subtree": {
+        "path": "skills/engineering/codebase-design"
+      },
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "60145a9545eb17b68c16003de840ec8f4fbbaf1072a8345cf9c049f779240dcd",
+      "fileCount": 5,
+      "byteCount": 12834,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",
@@ -66,11 +92,11 @@
       "subtree": {
         "path": "skills/engineering/diagnosing-bugs"
       },
-      "resolvedCommit": "ee8bae40062cd6b435073368ed0c540f48c35862",
-      "verification": "unknown",
-      "treeHash": "494c86bb546efe1e5eaa64531822485d5545c40537a58b0e372b6613a2dfc6e4",
-      "fileCount": 3,
-      "byteCount": 10768,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "a76ccc0f10751122c240814002b657b35bae712234810312042243bcca6c9b47",
+      "fileCount": 4,
+      "byteCount": 11151,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",
@@ -92,11 +118,11 @@
       "subtree": {
         "path": "skills/engineering/domain-modeling"
       },
-      "resolvedCommit": "ee8bae40062cd6b435073368ed0c540f48c35862",
-      "verification": "unknown",
-      "treeHash": "3a2f165f64dd19c1f109e52efa86658e4e4dff8098a5b94ebdb1a3f1a385ef56",
-      "fileCount": 4,
-      "byteCount": 9560,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "9fb4b08eb068face46dd73c4bf2dc2a2c8a8928eff7ba0ed6eab4d26812a56df",
+      "fileCount": 5,
+      "byteCount": 9548,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",
@@ -118,11 +144,11 @@
       "subtree": {
         "path": "skills/productivity/grill-me"
       },
-      "resolvedCommit": "cbf6db4233c7e4202abaf79643f7ab395c75a2df",
-      "verification": "unknown",
-      "treeHash": "9dc78a7441a512a0e7719488537224edea6737c0af7a8ac1861655c53064aabc",
-      "fileCount": 2,
-      "byteCount": 1215,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "e6548288447a31d4e1dd3b029187e733a446269b69461f820219279b446d5de7",
+      "fileCount": 3,
+      "byteCount": 1362,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",
@@ -144,11 +170,11 @@
       "subtree": {
         "path": "skills/engineering/grill-with-docs"
       },
-      "resolvedCommit": "658d53e6ded8cc0eaa26a96e0580bee9381ca0e3",
-      "verification": "unknown",
-      "treeHash": "74ce49ee2ee70fa0988e978399acb92e64bcd7e864f67790b11dd27037d327cf",
-      "fileCount": 2,
-      "byteCount": 1313,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "8a824bdc428f05a4ec2c7d45898bc968eb29485d9de053d17da9ea5589cee110",
+      "fileCount": 3,
+      "byteCount": 1460,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",
@@ -170,11 +196,11 @@
       "subtree": {
         "path": "skills/productivity/grilling"
       },
-      "resolvedCommit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
-      "verification": "unknown",
-      "treeHash": "0ab783d160ed54cd24e93b5b47f6d34310fe215603431e7d2862d497501dc191",
-      "fileCount": 2,
-      "byteCount": 1889,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "46c31e3805e6c28150bf7fc336b73193826f0b33837c38a033a94b9e26f40bc6",
+      "fileCount": 3,
+      "byteCount": 3230,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",
@@ -196,11 +222,11 @@
       "subtree": {
         "path": "skills/engineering/tdd"
       },
-      "resolvedCommit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
-      "verification": "unknown",
-      "treeHash": "9d80ba97c669af09961a1d21ab6e54a6aa0af061e957c8f0c5ff53438b4608e5",
-      "fileCount": 4,
-      "byteCount": 7976,
+      "resolvedCommit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "verification": "verified",
+      "treeHash": "88a058685090a1f0bef32df7bbccc98764d6575eb31eacf61fff12213e761a36",
+      "fileCount": 5,
+      "byteCount": 8479,
       "legalFiles": [
         {
           "sourcePath": "LICENSE",

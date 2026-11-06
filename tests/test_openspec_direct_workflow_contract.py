@@ -9,7 +9,7 @@ LEGACY_TOKEN = "g" + "sd"
 EXECUTOR_SKILL = Path(".agents/skills/execute-openspec-change/SKILL.md")
 CURRENT_POLICY_PATHS = (
     Path("AGENTS.md"),
-    Path("CONTEXT.md"),
+    Path("GLOSSARY.md"),
     Path("openspec/project.md"),
     Path("docs/agents/workflow.md"),
 )
@@ -37,6 +37,7 @@ def test_project_policy_references_only_current_direct_execution_rationale() -> 
 
 def test_scope_and_change_split_use_enumerated_shipping_boundaries() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
+    agents = _read(Path("AGENTS.md"))
 
     for scope_trigger in (
         "外部挙動",
@@ -47,15 +48,15 @@ def test_scope_and_change_split_use_enumerated_shipping_boundaries() -> None:
         "build / CI",
         "複数の恒久成果",
     ):
-        assert scope_trigger in workflow
-    assert "一つでも該当" in workflow
+        assert scope_trigger in agents
+    assert "[AGENTS.md](../../AGENTS.md)" in workflow
     assert "独立して受け入れ、review、mergeできる成果" in workflow
     assert "task 数、行数、セッション数" in workflow
 
 
 def test_tasks_contract_is_self_contained_and_has_three_execution_constraints() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
-    context = _read(Path("CONTEXT.md"))
+    context = _read(Path("GLOSSARY.md"))
     executor_skill = _read(EXECUTOR_SKILL)
 
     for required_field in (
@@ -70,25 +71,22 @@ def test_tasks_contract_is_self_contained_and_has_three_execution_constraints() 
     assert "最初の CI parity" in workflow
     assert "停止・再計画条件" in workflow
     assert "一時 artifact cleanup" in workflow
-    assert "3項目" in workflow
-    assert "最初の CI parity、停止・再計画条件、一時 artifact cleanup" in context
-    assert "exactly 3 項目" in executor_skill
-    assert "最初の CI parity、停止・再計画条件、一時 artifact cleanup" in executor_skill
+    assert "docs/agents/workflow.md#tasksmd-の最小契約" in context
+    assert "exactly 3 項目" in workflow
+    assert "../../../docs/agents/workflow.md#tasksmd-の最小契約" in executor_skill
 
 
 def test_task_targets_require_exact_code_spanned_paths() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
     executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (workflow, executor_skill):
-        assert "Markdown inline code span" in text
-        assert "exact" in text
-        assert "Unicode" in text
-        assert "空白" in text
+    assert "../../../docs/agents/workflow.md#tasksmd-の最小契約" in executor_skill
+    for token in ("Markdown inline code span", "exact", "Unicode", "空白"):
+        assert token in workflow
 
 
 def test_external_orchestrator_requires_named_user_opt_in_before_discovery() -> None:
-    for path in (Path("AGENTS.md"), Path("docs/agents/workflow.md")):
+    for path in (Path("AGENTS.md"),):
         policy = _read(path)
         assert "外部 orchestrator" in policy, path
         assert "利用者が特定の名前を選ぶ前" in policy, path
@@ -122,16 +120,18 @@ def test_blocker_persistence_begins_after_preflight_and_dirty_ownership() -> Non
         assert "dirty ownership" in text or "dirty overlap" in text
         assert "report-only" in text
         assert "repositoryを変更しない" in text.replace(" ", "")
-        assert "先頭の未解決 task" in text or "先頭の未解決task" in text
-        assert "未完了 validation task" in text or "未完了validation task" in text
-        assert "文書順で最後の task" in text or "文書順で最後のtask" in text
+    assert "先頭の未解決 task" in workflow
+    assert "未完了 validation task" in workflow
+    assert "文書順で最後の task" in workflow
+    assert "#実行進捗blocker記録" in executor_skill
 
 
 def test_review_blocker_reopens_its_validation_and_parent_task() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
     executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (workflow, executor_skill):
+    assert "#実行進捗blocker記録" in executor_skill
+    for text in (workflow,):
         normalized = text.replace(" ", "")
         assert "initial/diffreview" in normalized
         assert "projectcheck" in normalized
@@ -145,7 +145,8 @@ def test_partial_implementation_resume_is_owned_only_after_orderly_stop() -> Non
     workflow = _read(Path("docs/agents/workflow.md"))
     executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (workflow, executor_skill):
+    assert "../../.agents/skills/execute-openspec-change/SKILL.md" in workflow
+    for text in (executor_skill,):
         assert "orderly stop" in text
         assert "implementation-in-progress" in text
         assert "実装を継続" in text
@@ -154,11 +155,12 @@ def test_partial_implementation_resume_is_owned_only_after_orderly_stop() -> Non
         assert "fail-closed" in text
 
 
-def test_preflight_spec_holes_are_owned_by_permanent_workflow_and_skill() -> None:
+def test_task_schema_is_owned_by_workflow_and_referenced_by_executor() -> None:
     workflow = _read(Path("docs/agents/workflow.md"))
     executor_skill = _read(EXECUTOR_SKILL)
 
-    for text in (workflow, executor_skill):
+    assert "#tasksmd-の最小契約" in executor_skill
+    for text in (workflow,):
         normalized = text.replace(" ", "")
         assert "taskentryが0件" in normalized or "taskが0件" in normalized
         assert "推移的な依存 path" in text

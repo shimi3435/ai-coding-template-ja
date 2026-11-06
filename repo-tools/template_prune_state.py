@@ -78,7 +78,7 @@ def in_surface(path: str, surface: str) -> bool:
             and p.suffix == ".py"
         )
     return (
-        path in ("README.md", "AGENTS.md", "CLAUDE.md", "CONTEXT.md", "docs/guide.md")
+        path in ("README.md", "AGENTS.md", "CLAUDE.md", "GLOSSARY.md", "docs/guide.md")
         or p.suffix == ".md"
         and path.startswith(("docs/agents/", "docs/reference/", "docs/optional/"))
         or len(p.parts) == 4
@@ -168,7 +168,7 @@ def inspect(root: Path, node: str = "node") -> dict:
         "README.md",
         "AGENTS.md",
         "CLAUDE.md",
-        "CONTEXT.md",
+        "GLOSSARY.md",
         "docs/guide.md",
     ):
         if p in SHARED or p == "package.json" or os.path.lexists(root / p):

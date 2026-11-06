@@ -71,7 +71,7 @@ GitHub や host 登録解除は操作しない。#74 の Skill 除去・host 操
 ## 判定契約
 
 [固定 manifest](../../repo-tools/template_prune_manifest.py) の D / M に相当する
-6 directory と31 regular file、専用 task と2つの marker pair がすべて存在する場合に同梱となる。
+6 directory と32 regular file、専用 task と2つの marker pair がすべて存在する場合に同梱となる。
 必須 file は空を許可しない。削除資産と専用区画がすべて不在で、保持資産が健全な場合が完全除去であり、
 その他は不整合となる。内容の歴史的な意味検証は同梱側の保守 gate が担当する。
 削除 subtree に追加した通常 file は必須集合に昇格しないが、追跡済み・差分なしなら削除対象に含む。
@@ -174,6 +174,17 @@ name は `[A-Za-z_][A-Za-z0-9_-]*`。語中も対象、引用・escape 済みは
 placeholder に依存する範囲は partial とし、同じ入力の既知参照を検査し続ける。
 placeholder は redirection より優先するが、空白を含む `"< input >"` は redirection のままである。
 実行用 shell にこの読み替えは適用しない。
+
+inline / 言語指定なし fence / console では、複数語の説明placeholderも扱う。
+山括弧内はASCII英字またはunderscoreで始まり、ASCII英数字、underscore、hyphen、space、comma、
+period、parenthesesだけを含み、ASCII spaceを1個以上含むものとし、末尾spaceを認めない。
+空白なしの単一tokenは既存のname規則だけを認める。引用・escape済みはliteralのままとする。
+改行はinlineの正規化前も含めて許可しない。例えば `<question title>` と
+`<question body (optional)>` はpartialとなり、同じ入力の既知コマンドと参照は引き続き検査する。
+`cat <in.txt>out.txt` と `cat < input > output` はredirectionとして評価する。
+弱い文書区分では、対応する語句はshellとしても有効な場合にplaceholderを優先する
+（例えば `cat <question title>output`）。sh / bash / shell fenceと実行用shellの既存解釈は変更しない。
+不一致の構文をproseと推測して除外することはない。
 
 inline / 言語指定なし fence / console は次の順序で分類する。
 

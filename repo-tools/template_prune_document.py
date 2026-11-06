@@ -11,6 +11,10 @@ from dataclasses import dataclass, field
 EXPRESSION = re.compile(
     r"\b[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*\([^();\n]*\)(?!\s*\{)"
 )
+PLACEHOLDER = re.compile(r"<([A-Za-z_][A-Za-z0-9_-]*)>")
+PHRASE_PLACEHOLDER = re.compile(
+    r"<([A-Za-z_](?:[A-Za-z0-9_ ,().-]*[A-Za-z0-9_,().-])?)>"
+)
 
 
 @dataclass
@@ -23,6 +27,8 @@ class Prepared:
     leading_operator: bool = False
     expression_prefix: str | None = None
     placeholder_prefix: str | None = None
+    phrase_placeholders: bool = False
+    linebreak_offsets: tuple[int, ...] = ()
 
     def offset(self, value: int) -> int:
         if type(value) is not int or not 0 <= value < len(self.origins):
@@ -120,6 +126,9 @@ class Prepared:
 
         def placeholder(match):
             nonlocal changed
+            # 単一tokenは旧文法を維持し、説明語句の拡張だけ空白を必須にする。
+            if " " not in match[1] and PLACEHOLDER.fullmatch(match[0]) is None:
+                return None
             before = self.text[: match.start()]
             start, end = len(before.encode()), len(self.text[: match.end()].encode())
             if error_offset is not None and not start <= error_offset <= end:
@@ -133,12 +142,20 @@ class Prepared:
                 return None
             if (len(before) - len(before.rstrip("\\"))) % 2:
                 return None
-            token = self.placeholder_prefix + "PLACEHOLDER_" + match[1] + "_END"
+            if any(
+                self.origins[start] <= offset < self.origins[end]
+                for offset in self.linebreak_offsets
+            ):
+                return None
+            # 語句の空白や括弧をshell構文へ漏らさず、引用復元時の区別も保つ。
+            name = hashlib.sha256(match[1].encode()).hexdigest()
+            token = self.placeholder_prefix + "PLACEHOLDER_" + name + "_END"
             self.marks[token] = match[0]
             changed = True
             return token
 
-        self.replace(re.compile(r"<([A-Za-z_][A-Za-z0-9_-]*)>"), placeholder)
+        pattern = PHRASE_PLACEHOLDER if self.phrase_placeholders else PLACEHOLDER
+        self.replace(pattern, placeholder)
         return changed
 
     def mask_expression(self, error_offset: int | None) -> bool:
@@ -254,9 +271,13 @@ def prepare(source: str, kind: str | None) -> Prepared:
     if kind is None:
         return result
     if kind == "inline":
+        result.linebreak_offsets = tuple(
+            index for index, byte in enumerate(source.encode()) if byte in (10, 13)
+        )
         result.replace(re.compile(r"\r\n?|\n"), lambda match: " ")
         source = result.text
     weak = kind not in ("sh", "bash", "shell")
+    result.phrase_placeholders = weak
     if weak:
         if re.fullmatch(r"\s*<!--.*?-->\s*", source, re.S) or re.fullmatch(
             r"\s*printf\s+\[[^]\n]*\]\([^()\n]*\)\s*", source

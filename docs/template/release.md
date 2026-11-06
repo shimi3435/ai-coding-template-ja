@@ -158,6 +158,18 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
      # （出力が複数行になると比較が常に失敗し、再開が dead-end になるため）。
      ```
 
+## v2 policy / Skill の責務整理（Issue #73）
+
+- 共通方針と[独立レビュー必須条件](../../AGENTS.md#独立レビュー必須条件)はAGENTS.mdを正とする。
+  手順・証跡・完了判定は[workflow](../agents/workflow.md)、preflight・dirty保護・再開はexecutor Skillへ集約した。
+- self-reviewはすべての呼出形態でreport-onlyである。修正とtasks.mdの更新は実行担当が所有する。
+  spec-holesは12分類の評価と検証候補、verify-changeは実際の検証と結果分類を担当する。
+- 用語集はGLOSSARY.mdを使用する。Matt由来の既存7 Skillを更新し、codebase-designを追加した。
+  上流本文のownershipとlegalを維持し、固定commitはsource / lockで管理する。setupは配布せず、
+  repository設定の欠落・変更は[workflowの設定復旧手順](../agents/workflow.md#上流skillのrepository設定と復旧)で扱う。
+- completion semanticsを扱う後続Issueは共通workflowを参照する。cavemanの移行、vendor固有のagent配分、
+  retrospectiveのfeedback loopは本変更に含めない。
+
 ## スコープ外
 
 - tag の削除・打ち直しはスコープ外（通常の git 運用として扱う）。

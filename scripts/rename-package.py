@@ -6,7 +6,7 @@
 走査対象（ホワイトリスト固定 ＋ src/tests の *.py glob）:
 - pyproject.toml（[project].name=配布形 / hatch packages・pytest cov・
   coverage source=module 形）
-- package.json / package-lock.json / README.md / CONTEXT.md / .github/workflows/ci.yml
+- package.json / package-lock.json / README.md / GLOSSARY.md / .github/workflows/ci.yml
 - PR2 で追加されるファイル（openspec/project.md / AGENTS.md / CLAUDE.md /
   .codex/config.toml.template / .mcp.json.template）は存在時のみ処理
 - src/**/*.py と tests/**/*.py の import/from・パス文字列
@@ -38,7 +38,7 @@ WHITELIST_FILES = [
     "package.json",
     "package-lock.json",
     "README.md",
-    "CONTEXT.md",
+    "GLOSSARY.md",
     ".github/workflows/ci.yml",
     # 以下は PR2 で追加されるファイル（存在時のみ処理）
     "openspec/project.md",
