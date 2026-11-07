@@ -198,6 +198,18 @@ main は各 material task の成果を検証してから `tasks.md` を更新す
 未検証理由の要約だけを `tasks.md` へ記録する。生 log、専用 state、一時 report は追跡しない。利用者が継続を選んでも単純に追加3回を認めず、scope と実行制約を再計画した
 新しい cycle として開始する。
 
+## 完了操作の運用選択
+
+close/archiveの直前に、会話・承認済み仕様で選択された運用を確認する。選択済みなら引き継ぎ、毎回の再確認は
+要求しない。未選択でも実装・検証は進められるが、完了操作を推測して実行しない。
+
+- **下流archiveを選択**: [下流のarchiveフロー](#下流の-archive-フロー)に従い、同一PRでspec同期・履歴保存を行う。
+- **テンプレート保守を選択**: 明示された専用保守手順が提供されている場合だけ、その削除型closeを適用する。手順がなければ停止する。
+- **未選択**: close/archiveの前に停止し、運用の選択を求める。実装完了・検証結果と選択待ちを報告し、archive-ready判定は保留する。
+
+選択は操作の実行許可と別である。運用選択済みでもreview・検証や明示操作の条件を省略しない。
+repository名・remote・保守文書の存在から選択せず、専用手順がない場合に別運用へ自動で切り替えない。
+
 ## 下流の archive フロー
 
 下流・通常のOpenSpecでは、同じ実装PRでdeltaをcanonical `openspec/specs/`へ同期し、changeを
@@ -208,7 +220,7 @@ repository名・remote・保守文書の存在から削除型closeを推測し�
 ### 完了状態と引き渡し
 
 - **implementation complete**: 実装checkboxが完了した状態。必須検証・reviewの完了とは別である。
-- **archive-ready**: 全taskの実装・検証checkbox、必要なローカルreview・verifier・project gateが完了し、
+- **archive-ready**: [運用選択](#完了操作の運用選択)を確認済みで、全taskの実装・検証checkbox、必要なローカルreview・verifier・project gateが完了し、
   既知の未解決blockerがない引き渡し状態。PRレビュー待ち・未確認でも報告できるが、その状態を必ず併記し、
   レビュー収束を確認するまでarchiveを実行しない。既知のPR blockerがあればreadyではない。
 - **archive complete**: spec同期・履歴保存に加え、archive後のreview・必要な再検証が成功した状態。
@@ -229,7 +241,8 @@ upstream CLIが警告だけで続行できてもarchive-readyにしない。
 5. **archive後diffをreview**する。canonical specs、保存したartifacts/tasks、移動先、最終diffを
    実装と照合する。移動前の承認だけで済ませず、適用される独立review条件も確認する。
 6. **影響する検証と最終CI**を成功させてからmergeする。証跡再利用は共通の入力同一性に従う。
-   `./scripts/check.sh`とrepositoryで必須のOpenSpec validationを満たす。archiveはreviewなしの最終追記ではない。
+   [archive後のcanonical検証](#archive後のcanonical検証)、`./scripts/check.sh`とrepositoryで必須のOpenSpec validationを満たす。
+   archiveはreviewなしの最終追記ではない。
 
 別PRを選べるのは、組織の完了条件がmainへのmerge済み・本番deploy済みである場合、spec管理の責任分離、
 またはspec同期の独立reviewが必要な場合だけである。理由、実装PR、担当、対象changeを引き継ぎ、
@@ -240,6 +253,8 @@ upstream CLIが警告だけで続行できてもarchive-readyにしない。
 1. 対象active changeとcanonical spec、予定archive先をrepository-relative pathで明示する。
    欠落・不正なartifacts、repository外・symlink越境・曖昧なpathは変更前に停止する。
    pathはUnicodeや空白を含めexactに扱い、正規化しない。日付は操作環境で確認し、実際の保存先を記録する。
+   change名は確認済みの単一active directory名に限る。空名、`.`、`..`、予約directoryの`archive`、
+   使用OSのpath separatorを含む名前を拒否する。利用するCLI版が非対応の名称も実行前に停止し、勝手に改名しない。
 2. 対象の既存差分と所有者を確認し、無関係な差分を保持する。既知の実装差分を含む開始前の三者の状態を
    復旧時に照合できるよう確保する。所有者不明の重複差分があれば変更前に停止する。
 3. 同名archiveだけでなく同じchangeの既存archive、activeの有無を確認する。既存先へ上書きしない。
@@ -248,24 +263,49 @@ upstream CLIが警告だけで続行できてもarchive-readyにしない。
 4. deltaのADDED / MODIFIED / REMOVED / RENAMEDをcanonicalに対応付け、未変更の要件・scenarioを保持する。
    不明な対象を推測したり、deltaファイルでcanonical全体を上書きしたりしない。deltaなしなら同期不要。
    全効果が内容から同期済みと確認できる場合も再適用せず、確認根拠をtasksの検証記録へ残す。
-5. CLIが利用できる場合は対象changeを明示して実行する。非対話環境では次の形を使う。
+5. CLIが利用できる場合は対象changeを明示して実行する。確認済みの実名を環境変数`change_name`に
+   データとして渡してから、次の非対話コマンドを使う。未設定・空ならCLIを起動せず停止する。
 
    ```bash
-   openspec archive <change-name> --yes
+   : "${change_name:?確認済みのchange名を環境変数に設定してください}" &&
+     openspec archive --yes -- "$change_name"
    ```
 
-   `<change-name>`は確認済みの実名に置換する。`--yes`は対話入力の省略だけであり、利用者の確認や
+   名前をコマンド本文へ直接埋め込んだり`eval`で解釈したりしない。引用は空白・Unicode・shell記号を保持し、
+   `--`は先頭ハイフンをoptionとして解釈させない。v1.3.1の新規作成は`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`を
+   要求するが、既存changeのarchiveには同じ命名制約はない。shellで安全に渡せることとCLIが受理することは別である。
+   `--yes`は対話入力の省略だけであり、利用者の確認や
    前段の完了条件を省略する許可ではない。同期済みを手順4で確認した場合だけ`--skip-specs`で履歴移動する。
-   `--no-validate`による検証省略は行わない。利用するCLI版のhelp・公式契約を確認する。
+   optionはすべて`--`の前に置く。`--no-validate`による検証省略は行わない。利用するCLI版のhelp・公式契約を確認する。
 6. canonicalの結果、activeからの移動、archive内の全artifactsとtasksの保持を照合する。
    保存先path、同期したcapability（または同期不要の理由）、commandと結果を対象tasksへ記録し、事後reviewへ進む。
 
+### archive後のcanonical検証
+
+CLIが利用できる場合、今回同期・修正したcapabilityを列挙し、仕様が要求するspecの存在・削除と照合する。
+存在すべきspecが欠落していれば停止する。同期済みdeltaの履歴移動だけの場合も、その同期先を対象とする。
+存在する各対象について、確認済みのcapability名を環境変数`capability`へデータとして渡し、次を実行する。
+
+```bash
+: "${capability:?確認済みのcapability名を環境変数に設定してください}" &&
+  openspec validate --type spec --strict --no-interactive -- "$capability"
+```
+
+同名changeとの曖昧性を`--type spec`で避ける。`--specs`を併用すると全spec検証になるため付けない。
+全specの検証を要求するかは既存repository policyに従う。この手順のためにCI gateを追加しない。
+deltaなしなどで対象がなければ理由を記録し、対象0件を検証成功に数えない。
+CLIの対象0件のexit 0や、`task openspec:validate`のactive-only gateの成功を完了根拠にしない。
+保存済みtasksに未完了・検証失敗がある場合も、activeが0件であることを理由にarchive completeへ戻さない。
+対象path、commandと結果、未検証理由を保存済みtasksに記録する。失敗・必須検証未実行なら完了を宣言しない。
+CLIがない場合は次節の手動確認を行い、CLI検証の未実施と手動確認結果を分けて記録する。
+repositoryで必須とされるCLI gateの未実行は、引き続き未完了として扱う。
+
 ### CLIなしのMarkdown fallback
 
-前節の事前確認と同一PRの順序を維持し、手順5を担当者の手作業に置き換える。
+[同期・移動前の確認と実行](#同期移動前の確認と実行)の事前確認と同一PRの順序を維持し、同手順5を担当者の手作業に置き換える。
 deltaの4種類を意味に沿ってcanonicalへ反映し、対応するrequirement・scenarioと未変更部分を照合する。
 同期済みまたはdeltaなしの場合はその根拠を記録し、specを書き換えない。
-同名先がないことを再確認してchange全体を予定archive先へ移動し、前節の手順6で結果を照合する。
+同名先がないことを再確認してchange全体を予定archive先へ移動し、同手順6で結果を照合する。
 自作の同期engineは追加しない。手動操作でも対象path、変更結果、検証結果を明示する。
 
 `task openspec:validate`はCLI必須のactive change向けgateであり、CLI不在時の失敗を手動確認成功へ
@@ -288,7 +328,8 @@ merge前に同scopeの修正が発生した場合は、次の順序を守る。
 2. 該当taskの検証checkboxと親taskを未完了へ戻し、blockerと再開条件を記録する。
 3. archiveの場所を維持し、実装・canonical specs・保存済みartifacts/tasksを再整合する。
    activeへ戻さず、active-onlyのexecute-openspec-changeを再呼出しない。本節の手順を直接適用する。
-4. 影響するfocused validation・review・project checksと最終CIを再実行する。stale evidenceは再利用しない。
+4. [archive後のcanonical検証](#archive後のcanonical検証)と、影響するfocused validation・review・project checks、最終CIを再実行する。
+   stale evidenceは再利用しない。
    新しい検証が成功した場合だけtaskとarchiveの完了状態を戻す。
 
 仕様判断・scope拡大が必要なら共通の停止・再計画に従う。新しい決定をarchiveへの追記だけで確定しない。
@@ -328,8 +369,9 @@ task形式・実行順序は上記の共通契約に従う。engineの有無で�
 5. `tasks.md` の依存完了済み先頭未完了 task から実装・検証し、checkbox を更新する。
 6. 全 requirements / scenarios / `spec-holes` を実装と検証へ対応付け、`./scripts/check.sh` と
    repositoryで必要なOpenSpec validationを実行する。未実行の必須gateは未完了とする。
-7. [下流のarchiveフロー](#下流の-archive-フロー)に従い、review収束後の同じ実装PRでspec同期・履歴保存、
-   archive後review・必要な再検証・最終CIを完了してからmergeする。executorの完了報告だけでarchiveしない。
+7. [完了操作の運用選択](#完了操作の運用選択)を確認する。下流を選択した場合は同一PRのarchive手順、
+   テンプレート保守を選択した場合は提供された専用close手順に進む。未選択・手順欠落なら操作前に停止する。
+   executorの完了報告だけでarchiveせず、選択した手順のreview・再検証・最終CIを完了してからmergeする。
 
 <!-- template-maintenance:start -->
 ## テンプレート保守のclose（明示選択時のみ）

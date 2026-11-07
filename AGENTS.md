@@ -45,7 +45,7 @@ Codex / Claude Code の両方がこれを正とする。MCP 接続・承認モ�
 - task形式・実行順序・review・証跡・停止・完了の共通手順は[workflow](docs/agents/workflow.md)、
   preflight・既存差分保護・再開は[executor Skill](.agents/skills/execute-openspec-change/SKILL.md)、
   artifact配置は[OpenSpec規約](openspec/project.md)、下流archiveは[workflow](docs/agents/workflow.md#下流の-archive-フロー)を正とする。
-  テンプレート固有closeはOpenSpec規約から参照する保守手順を明示選択した場合だけ適用する。
+  テンプレート固有closeは専用保守手順を明示選択し、その手順が提供されている場合だけ適用する。
 
 ### 独立レビュー必須条件
 

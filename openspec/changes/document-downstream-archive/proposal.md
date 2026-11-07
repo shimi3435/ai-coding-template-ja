@@ -15,6 +15,8 @@ Issue #66: https://github.com/shimi3435/ai-coding-template-ja/issues/66
 - executorはactive-onlyを維持し、implementation complete、archive-ready、archive completeを区別する。
 - 手動fallback、部分失敗、衝突、並行変更、同期済み、archive後修正を手順化する。
 - 最小限の恒久的な静的contract testsを追加する。CIやvalidatorの検査範囲は変更しない。
+- 外部review後の合意に基づき、完了操作前の運用選択、実prune後の参照整合、shell引数の保全、
+  CLI利用時の対象canonical specのstrict検証を追加する。CLI呼出と実pruneの回帰も検証する。
 
 ## Impact
 

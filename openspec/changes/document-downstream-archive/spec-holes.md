@@ -29,3 +29,19 @@
 
 実hostのagentによる手順遂行は後続#47のacceptance対象であり本changeでは未検証。
 本changeの必須検証は静的contract、文書review、対象OpenSpec validate、project gate、独立review/verifierとする。
+
+## 外部review後の再監査
+
+未解決判断: なし。R1〜R6の12分類を再評価し、元の処理を維持した上で以下を追補する。
+
+- 分類1/2/5（空・境界・不正形式）: 運用未選択、変数未設定/空、spec対象0件、必要spec欠落を区別する。
+  前二者は完了操作不可、対象0件は理由付き非該当、必要spec欠落はblocker。shell例の未設定/空入力でCLI未起動を確認する。
+- 分類3/4/7（衝突・順序・再実行）: 既定運用への自動fallbackを禁止する。復旧・同期済み・archive後修正でも対象strict検証を行う。
+  canonicalと同名changeの曖昧性は`--type spec`で除く。選択3ケースの文書contractとtarget argvを検証する。
+- 分類6/12（エラー・状態）: prune後は保守案内を残さず、専用手順欠落なら停止する。
+  実prune後のproject→workflow→下流手順、prune前のworkflow→release→close節をfile/headingまで検証する。
+- 分類9（文字列）: 空白・Unicode・引用符・$()/backtick・先頭ハイフンを再解釈しない。
+  掲載shellを一時CLI stubに対して実行し、argv往復と副作用なしを確認する。path越境停止は元の文書reviewも維持する。
+- 分類8/10/11（時刻・数値・資源）: 元の判定から変更なし。新しい時刻処理・数値処理・資源管理機構を追加しない。
+
+今回の追加テストも実agentの運用選択能力を証明するものではない。実host acceptanceは引き続き#47の対象である。

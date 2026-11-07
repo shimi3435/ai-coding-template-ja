@@ -26,8 +26,7 @@ CLIの有無でMarkdown artifactsと完了条件は変わらない。
 同じ実装PRでreview収束後にspec同期・履歴保存を行い、archive後diffのreview・再検証・最終CI後にmergeする。
 CLIなしの手動操作、衝突、archive後修正、別PRの例外も同手順を参照する。
 
-テンプレート自身の保守作業を明示選択する場合も、[workflow](../docs/agents/workflow.md)から専用手順を参照する。
-下流の通常運用へ削除型closeを適用しない。
+実行前の運用確認と未選択時の停止は[workflowの運用選択](../docs/agents/workflow.md#完了操作の運用選択)に従う。
 
 ## エンジン（任意）
 

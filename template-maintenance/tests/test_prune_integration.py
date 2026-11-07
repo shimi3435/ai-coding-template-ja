@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -73,8 +74,51 @@ def copy_repository(root: Path) -> None:
     run(root, "git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture")
 
 
+def assert_archive_routes(root: Path, *, maintenance: bool) -> None:
+    """今回の導線だけを、実際の保持tree上のリンクと最終headingへ解決する。"""
+    workflow = root / "docs/agents/workflow.md"
+    project = root / "openspec/project.md"
+    guide = root / "docs/guide.md"
+    release = root / "docs/template/release.md"
+
+    def links(source: Path) -> list[tuple[Path, str]]:
+        return [
+            ((source.parent / path).resolve() if path else source.resolve(), anchor)
+            for path, anchor in re.findall(
+                r"\]\(([^\s)#]*)(?:#([^\s)]*))?\)", source.read_text()
+            )
+            if "://" not in path
+        ]
+
+    routes = [
+        (project, workflow, "下流の-archive-フロー"),
+        (project, workflow, "完了操作の運用選択"),
+        (guide, workflow, "下流の-archive-フロー"),
+        (workflow, workflow, "下流の-archive-フロー"),
+        (workflow, workflow, "完了操作の運用選択"),
+    ]
+    if maintenance:
+        routes.append((workflow, release, "テンプレート自身の削除型close"))
+    else:
+        assert not release.exists()
+        for source in (project, guide, workflow):
+            assert all(
+                not target.is_relative_to(root / "docs/template")
+                for target, _ in links(source)
+            )
+    for source, target, anchor in routes:
+        assert (target.resolve(), anchor) in links(source), (source, target, anchor)
+        assert target.is_file(), target
+        headings = re.findall(r"^#+ (.+)$", target.read_text(), re.MULTILINE)
+        anchors = {
+            re.sub(r"[^\w\s-]", "", h.lower()).replace(" ", "-") for h in headings
+        }
+        assert anchor in anchors, (target, anchor)
+
+
 def execute_smoke(tmp_path: Path) -> None:
     copy_repository(tmp_path)
+    assert_archive_routes(tmp_path, maintenance=True)
     run(tmp_path, "task", "setup")
     run(tmp_path, "./scripts/check.sh")
     run(tmp_path, "task", "doctor")
@@ -111,6 +155,7 @@ def execute_smoke(tmp_path: Path) -> None:
         assert not (tmp_path / "template-maintenance").exists()
         assert not (tmp_path / ".github/workflows/template-maintenance.yml").exists()
         assert (tmp_path / ".github/workflows/ci.yml").is_file()
+        assert_archive_routes(tmp_path, maintenance=False)
         run(tmp_path, "./scripts/check.sh", offline=isolated)
         run(tmp_path, "task", "doctor", offline=isolated)
         rerun = run(
@@ -166,6 +211,9 @@ def test_smoke_cleans_its_repository_on_all_exit_paths(
 
     monkeypatch.setitem(globals(), "copy_repository", copy)
     monkeypatch.setitem(globals(), "run", command)
+    monkeypatch.setitem(
+        globals(), "assert_archive_routes", lambda *args, **kwargs: None
+    )
     if phase == "success":
         test_full_lifecycle_uses_the_real_common_gate(tmp_path)
     else:

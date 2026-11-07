@@ -39,6 +39,7 @@ def test_archive_entrypoints_survive_without_template_maintenance() -> None:
     assert ARCHIVE_ANCHOR in project
     assert ARCHIVE_ANCHOR in guide
     assert project == _downstream(project)
+    assert "専用手順" not in project
     assert "changes/archive/YYYY-MM-DD-<change-name>/" in project
     for text in (workflow, project):
         assert "ディレクトリ削除で行う" not in text
@@ -136,3 +137,42 @@ def test_executor_hands_off_without_promoting_unverified_state_or_archiving() ->
     ):
         assert boundary in report
     assert "既知のPR blockerがあればreadyではない" in handoff
+
+
+def test_completion_mode_is_explicit_without_blocking_implementation() -> None:
+    workflow = _read(WORKFLOW)
+    selection = _section(workflow, "## 完了操作の運用選択")
+    quickstart = _section(workflow, "## 初めての change（quickstart）")
+    report = _section(
+        _read(".agents/skills/execute-openspec-change/SKILL.md"),
+        "## 4. review・検証・報告",
+    )
+
+    for case, effect in (
+        ("下流archiveを選択", "#下流の-archive-フロー"),
+        ("テンプレート保守を選択", "専用保守手順が提供されている場合だけ"),
+        ("未選択", "close/archiveの前に停止"),
+    ):
+        row = next(line for line in selection.splitlines() if f"**{case}**" in line)
+        assert effect in row
+    assert "実装・検証は進められる" in selection
+    assert "会話・承認済み仕様" in selection
+    assert "#完了操作の運用選択" in quickstart
+    assert "未選択ならarchive-ready判定を保留" in report
+
+
+def test_post_archive_validation_checks_targets_not_active_change_count() -> None:
+    validation = _section(_read(WORKFLOW), "### archive後のcanonical検証")
+    recovery = _section(_read(WORKFLOW), "### 部分失敗・再実行とarchive後修正")
+
+    for boundary in (
+        "今回同期・修正したcapability",
+        "--type spec --strict --no-interactive",
+        "存在すべきspecが欠落",
+        "対象0件を検証成功に数えない",
+        "active-only gateの成功を完了根拠にしない",
+        "CLIがない場合",
+        "既存repository policy",
+    ):
+        assert boundary in validation
+    assert "#archive後のcanonical検証" in recovery

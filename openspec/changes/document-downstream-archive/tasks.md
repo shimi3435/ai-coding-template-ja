@@ -30,10 +30,20 @@
 
 - [x] 3. 独立reviewと最終検証を完了し引き渡す
   - 成果: self-review、initial independent review、必要なfix/差分review、project gate、別verifierを完了する。
-  - 依存: 2
+  - 依存: 4
   - 対象: `tests/test_openspec_archive_contract.py`
   - [x] 実装
   - [x] 検証: `./scripts/check.sh`、`task openspec:validate`、対象strict validate、関連保守テスト、独立verifier。
+  - 新cycleの最終結果（source commit: 2f553a8d1a9c76c29c16aceaa932c1e3a02a3dd4）:
+    `./scripts/check.sh`はfresh実行でexit 0（Node 638 passed、Python 660 passed / 126 skipped）。
+    `uv run --no-sync pytest template-maintenance/tests/test_prune_integration.py --no-cov -q`は最終入力で5 passed。
+    実prune前の保守導線、実prune後に残る通常導線を実ファイルとheadingまで検証した。
+    `task openspec:validate`と対象strict validationもexit 0。実行環境は下記と同じNode 24 / Python 3.14。
+  - 新cycleの独立verifier: archive_revision_verifierが49 focused tests、strict validation、OpenSpec gate、diff checkをfresh実行し成功。
+    一時環境の実CLIでもcanonical正常/不正/欠落のexit 0/1/1、bulk対象0件のexit 0を確認した。
+    HEAD・diff・新規test・runtimeを照合し、今回cycleのproject gateと最終pruneの成功証跡を確認。blockerなし。
+    初回は利用上限で中断したが、再開後に上記検証を完了した。前cycleのverifierとは別agentである。
+  - 以下は初回cycleの履歴であり、新cycleの検証結果とは区別する。
   - self-review: 対象6 tracked files、新規contract test、全OpenSpec artifactsと呼出元を検査。
     R1〜R6とspec-holes全12分類の対応を確認し、blockerなし。実host運用は対象外の未検証として維持する。
   - initial review: archive_initial_reviewから2 blocker。projectの新規markerは実prune対象外、retrospectivesの正本案内が旧workflow節を指す。
@@ -56,17 +66,42 @@
     HEAD・diff・新規test・環境・入力無変更を照合してproject gateのgreen evidenceを再利用し、保守検証logも確認した。
     R1〜R6・spec-holes全12分類を検証しblockerなし。initial reviewerとは別agentで完了した。
 
+- [x] 4. 外部reviewで合意した境界と回帰検証を追加する
+  - 成果: P2-1〜P2-3、P3-1を修正し、運用3ケース、実prune後参照整合、掲載shellのargv、対象canonical検証を確認する。
+  - 依存: 2
+  - 対象: `AGENTS.md`, `docs/agents/workflow.md`, `docs/guide.md`, `openspec/project.md`, `.agents/skills/execute-openspec-change/SKILL.md`, `tests/test_openspec_archive_contract.py`, `tests/test_openspec_archive_commands.py`, `template-maintenance/tests/test_prune_integration.py`
+  - [x] 実装
+  - [x] 検証: 回帰RED→GREEN、archive/executor/workflow focused tests、prune cleanupと導線helperのfocused確認、対象strict validate。
+  - 検証順序: 実prune integration全経路はtask 3の最終検証として、review修正後の入力でfresh実行する。
+    task 4では変更に近いshell argv、3運用の文書contract、導線の最終target照合と欠落時の拒否、cleanupを確認した。
+  - 新cycle: 利用者がgrilling修正Q1〜Q5と最終合意を承認。task 1/2の履歴を保持し、task 3の検証完了を取り消す。
+    task 4の完了後、task 3でself-review→新しい独立review→必要なfix/diff review→fresh project gate→別verifierを行う。
+    本cycleのsource commitは2f553a8d1a9c76c29c16aceaa932c1e3a02a3dd4。前cycleのgreenを今回の結果に代用しない。
+  - preflight: active exactly one、必須artifacts、追補spec-holes12分類解決、3 constraintsと依存1→2→4→3、対象重複順序を確認。
+    利用者差分は前回と同じ対象外untracked fileだけ。仕様・tasks更新は本セッションの承認済み再計画である。
+  - focused: 回帰REDは13 failed / 7 passed。修正後のarchive/executor/workflow 4 filesは49 passed。
+    prune cleanupを含むfocusedは53 passed / 1 deselected。ruffと対象basedpyrightは成功。
+    実prune初回は整形前snapshotのruff format失敗（1 failed / 4 passed）。整形後の最終入力では5 passed。
+  - 実動作probe: 一時repositoryとinstalled CLI 1.3.1で対象canonicalの正常exit 0、不正exit 1、欠落exit 1、
+    bulk対象0件exit 0を確認した。本repositoryのcanonical/archiveは変更していない。
+  - self-review: 今回の差分と新規shell test、全仕様追補を検査。canonical検証節の追加によりfallbackの
+    「前節の事前確認」が誤った節を指すprose defectを検出。明示リンクへ置換する。
+    純proseの参照位置修正のため専用RED testは作らず、見出しとリンク先を照合する。他にblockerなし。
+    明示リンクへ修正後、focused 4 filesは49 passed、対象strict validateとdiff check成功。
+  - 新cycle initial review: archive_initial_reviewが現差分と仕様追補を検査しblockerなし。
+    独立実行したarchive contract + shell testsは20 passed。修正iterationは不要。
+
 ## 引き渡し
 
-- implementation complete / archive-ready。全taskとローカル必須検証は完了、既知blockerなし。
-- PRレビューは未確認、hosted CIは未実行。archive complete、削除型close完了、merge済みとは報告しない。
-- 次の操作はPRレビュー収束後、明示選択した保守手順による削除型close。commit・push・PR作成・closeは別の明示依頼まで実行しない。
-- 実host acceptanceは後続#47へ引き渡す。実agent動作を静的テストで検証済みとはしない。
+- implementation complete。外部reviewのP2-1〜P2-3とP3-1を修正し、新cycleのローカル必須検証・独立review/verifierを完了した。
+- 完了操作の運用を明示選択するまではarchive-ready判定を保留する。実装・検証完了をclose/archiveの実行許可と扱わない。
+- PRレビュー収束・hosted CI・実host acceptanceは未確認。close/archive/mergeは実行しない。
 
 ## 実行情報
 
 - 実装担当: main executorのみ。追加executorなし。initial reviewerとverifierは別agentで順次起動する。
-- source commit: 4b9fdc193a282696936da0e1ca82498f4afcbb25。mainの検証はfresh実行、verifierのproject gateだけgreen evidence再利用。
+- 初回source commit: 4b9fdc193a282696936da0e1ca82498f4afcbb25。新cycleは2f553a8d1a9c76c29c16aceaa932c1e3a02a3dd4。
+  mainの検証はfresh実行、verifierは今回cycle内のproject gate / prune成功証跡だけを入力照合して再利用した。
 - preflight: active exactly one、必須artifactsとstrict validation、12分類解決、3 constraints・task依存・対象pathを確認済み。
   初回dirty overlapなし。作成した仕様artifactsは本セッション所有、利用者差分は下記の対象外pathのみ。
   CLIは1.3.1。archive --helpと公式契約が一致することを確認した。

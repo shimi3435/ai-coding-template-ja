@@ -101,6 +101,9 @@ archive-ready、archive completeを区別する。必要なreview・verifier・p
 
 次のclose/archive操作は明示されたrepository policyに沿って案内する。下流では
 [同一PRのarchive手順](../../../docs/agents/workflow.md#下流の-archive-フロー)へ引き渡す。
+会話・承認済み仕様の運用選択を引き継ぎ、未選択ならarchive-ready判定を保留する。
+その場合は実装完了・検証結果と完了操作の選択待ちを報告し、close/archiveの前に停止する。
+実装・検証の開始条件は変更しない。選択と必要手順の存在は[運用選択](../../../docs/agents/workflow.md#完了操作の運用選択)に従う。
 テンプレート自身の削除型closeは専用保守手順を明示選択した場合だけ案内し、repository名・remote・
 保守文書の存在から推測しない。自動archive・自動削除は行わず、利用者の明示操作またはarchive workflowへ委ねる。
 本Skillはactive change専用であり、archive後修正はworkflowの手順で保存済みchangeを直接扱う。
