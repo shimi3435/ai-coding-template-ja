@@ -14,24 +14,20 @@ CLIの有無でMarkdown artifactsと完了条件は変わらない。
 
 ## ディレクトリ
 
-- `specs/` … capability 仕様（出荷時は空。コピー先が自分の能力仕様を書く）。
-- `changes/` … 変更提案（出荷時は空）。各 change は `proposal.md` と `tasks.md` を必須とし、
+- `specs/<capability>/spec.md` … 現在のcanonical仕様。changeのdeltaを同期して維持する。
+- `changes/<change-name>/` … activeな変更提案。各 change は `proposal.md` と `tasks.md` を必須とし、
   必要な設計判断を `design.md` に記録する。振る舞いが変わる場合のみ `specs/<capability>/spec.md` を持つ。
+- `changes/archive/YYYY-MM-DD-<change-name>/` … 同期・完了したchangeのartifactsを保存する履歴。
+  archive後修正中は未完了状態も保持する。directoryの存在だけでは完了の証拠にならない。
 
-## テンプレート自身の change 運用
+## 下流の完了操作
 
-テンプレート自身が change を切る場合:
+下流では[workflowのarchive手順](../docs/agents/workflow.md#下流の-archive-フロー)を正とする。
+同じ実装PRでreview収束後にspec同期・履歴保存を行い、archive後diffのreview・再検証・最終CI後にmergeする。
+CLIなしの手動操作、衝突、archive後修正、別PRの例外も同手順を参照する。
 
-- spec delta は `changes/<id>/specs/` に置く（`openspec validate` green と `specs/` の出荷時空が両立）。
-- 一つの PR は一つの active change だけを運ぶ。依存 changes は専用 branches に保持し、先行 change の
-  close / merge 後を base として段階的に実装する。blocked proposal を main や backlog へ複製しない。
-- close は archive ではなくマージ前の最終コミットでのディレクトリ削除で行う（main に change ディレクトリを載せない）。
-- これにより `specs/` / `changes/` の出荷時空と validate green を維持する。経緯は PR とブランチ履歴が保持する。
-- close までに軽量ふりかえり（逃した欠陥の件数と発見経路）を 1 行記録する
-  （記録先・形式は [docs/agents/workflow.md](../docs/agents/workflow.md) の
-  「change close 時の軽量ふりかえり」節）。
-- changeの要否はfile種別ではなく振る舞い・規約への影響で判定する。複数修正を束ねても一つが条件に該当すれば
-  changeを必要とする。迷う場合はchangeを作る側に倒し、直接変更中に該当した場合はworkflowに従って切り直す。
+テンプレート自身の保守作業を明示選択する場合も、[workflow](../docs/agents/workflow.md)から専用手順を参照する。
+下流の通常運用へ削除型closeを適用しない。
 
 ## エンジン（任意）
 

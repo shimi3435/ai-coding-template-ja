@@ -50,8 +50,7 @@ Issue #52のNode installer撤去は、#70の出荷判定でも次を確認する
    通常gateだけの成功では、保守側へ移設したprune詳細回帰を検証したことにならない。
 2. `task openspec:validate` が green（engine 必須のゲート。CI の `openspec-validate`
    ジョブでも同じ gate が走る）。
-3. `openspec/changes/` が `.gitkeep` のみ（pre-merge close 規約の帰結。規約本文は
-   [openspec/project.md](../../openspec/project.md)）。
+3. `openspec/changes/` が `.gitkeep` のみ（[削除型close](#テンプレート自身の削除型close)の帰結）。
 4. バージョン結合記述の陳腐化点検を**実施済み**（必須なのは点検の実施であり、
    乖離ゼロではない。検出された乖離への対応＝更新か据え置きかは人判断で、
    据え置きのままのリリースを妨げない）。点検対象は次の 3 点。
@@ -173,6 +172,28 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
 ## スコープ外
 
 - tag の削除・打ち直しはスコープ外（通常の git 運用として扱う）。
+
+## テンプレート自身の削除型close
+
+この手順はテンプレート自身の保守作業として明示選択された場合だけ適用する。
+repository名・remote・本書の存在から選択しない。下流の通常運用は
+[workflowのarchiveフロー](../agents/workflow.md#下流の-archive-フロー)に従う。
+
+- 出荷時の`openspec/specs/`と`openspec/changes/`は空（`.gitkeep`のみ）に保つ。
+  spec deltaは`changes/<id>/specs/`に置き、canonicalへ同期しない。
+- 一つのPRは一つのactive changeだけを運ぶ。依存changesは専用branchesに保持し、先行changeの
+  close / merge後をbaseとして段階的に実装する。blocked proposalをmainやbacklogへ複製しない。
+- changeの要否はfile種別でなく[AGENTS.md](../../AGENTS.md)の変更条件に従う。
+  複数修正の一つが該当する場合もchangeを作り、直接変更中に判明したらworkflowに従って切り直す。
+
+1. 実装・検証・reviewを共通workflowに従って完了し、PRレビューを収束させる。
+2. close前に対象changeのstrict validate、`task openspec:validate`、`./scripts/check.sh`、必要なverifierを完了する。
+3. 次節の軽量ふりかえりとtasksを更新し、入力が変わった検証だけを再実行する。
+4. 明示されたclose操作として、同じPRのマージ前の最終コミットで対象change directoryを削除する。
+   archiveは行わず、経緯はPRとブランチ履歴へ保持する。executorは自動削除・commitしない。
+5. 削除後diffをreviewし、`task openspec:validate`でactive change 0 / greenと出荷時空を確認する。
+   削除したartifactsが通常CIの入力でなく、入力同一性を証明できる場合だけ`./scripts/check.sh`の
+   evidenceを再利用する。それ以外は再実行し、最終CI成功後にmergeする。
 
 ## change close 時の軽量ふりかえり（テンプレート自身の運用）
 

@@ -198,12 +198,105 @@ main は各 material task の成果を検証してから `tasks.md` を更新す
 未検証理由の要約だけを `tasks.md` へ記録する。生 log、専用 state、一時 report は追跡しない。利用者が継続を選んでも単純に追加3回を認めず、scope と実行制約を再計画した
 新しい cycle として開始する。
 
-### pre-merge close 後の検証
+## 下流の archive フロー
 
-close 前に strict target validate、`task openspec:validate`、`./scripts/check.sh`、必要な verifier を完了する。
-retrospective と tasks 更新後は、変更入力に影響する command だけを再実行する。change directory 削除後、
-`task openspec:validate` で active change 0 / green を確認する。削除した artifacts が通常 CI の入力でないと
-確認でき、入力同一性を証明できる場合だけ `./scripts/check.sh` evidence を再利用する。
+下流・通常のOpenSpecでは、同じ実装PRでdeltaをcanonical `openspec/specs/`へ同期し、changeを
+`openspec/changes/archive/YYYY-MM-DD-<change-name>/`へ移動して履歴を残す。
+実装と仕様の更新を一緒にreview・mergeできるため、archive専用PRを既定にしない。
+repository名・remote・保守文書の存在から削除型closeを推測しない。
+
+### 完了状態と引き渡し
+
+- **implementation complete**: 実装checkboxが完了した状態。必須検証・reviewの完了とは別である。
+- **archive-ready**: 全taskの実装・検証checkbox、必要なローカルreview・verifier・project gateが完了し、
+  既知の未解決blockerがない引き渡し状態。PRレビュー待ち・未確認でも報告できるが、その状態を必ず併記し、
+  レビュー収束を確認するまでarchiveを実行しない。既知のPR blockerがあればreadyではない。
+- **archive complete**: spec同期・履歴保存に加え、archive後のreview・必要な再検証が成功した状態。
+  archiveコマンドの成功だけでは宣言しない。最終CI、merge、deployの状態とは分けて報告する。
+
+executorは自動archiveせず、対象change、上記状態、PRレビューの確認済み/未完了/未確認、blocker、
+次の明示操作を報告する。利用者による明示操作または明示的に呼ばれたarchive workflowへ引き渡す。
+commit・push・PR作成・mergeの依頼とは区別する。未完了task・必須検証未実行・blockerがあれば、
+upstream CLIが警告だけで続行できてもarchive-readyにしない。
+
+### 同一実装PRでの手順
+
+1. **実装・focused validation**を完了する。
+2. **artifacts・tasks・実装の対応をverify**する。受入条件と必須検証の欠落がないことを確認する。
+3. **reviewを収束**させる。共通review手順のself-review、必要な独立review・verifierとproject checks、
+   PRレビュー指摘を確認する。PR状態を取得する新しいorchestratorは導入せず、不明ならarchive前で待つ。
+4. **同じPRでspec同期・archive**を行う。次節の事前確認後、明示対象だけを処理する。
+5. **archive後diffをreview**する。canonical specs、保存したartifacts/tasks、移動先、最終diffを
+   実装と照合する。移動前の承認だけで済ませず、適用される独立review条件も確認する。
+6. **影響する検証と最終CI**を成功させてからmergeする。証跡再利用は共通の入力同一性に従う。
+   `./scripts/check.sh`とrepositoryで必須のOpenSpec validationを満たす。archiveはreviewなしの最終追記ではない。
+
+別PRを選べるのは、組織の完了条件がmainへのmerge済み・本番deploy済みである場合、spec管理の責任分離、
+またはspec同期の独立reviewが必要な場合だけである。理由、実装PR、担当、対象changeを引き継ぎ、
+その条件を満たしてから別PRで手順4〜6を行う。別PRでもOpenSpec validationとarchive後reviewは省略しない。
+
+### 同期・移動前の確認と実行
+
+1. 対象active changeとcanonical spec、予定archive先をrepository-relative pathで明示する。
+   欠落・不正なartifacts、repository外・symlink越境・曖昧なpathは変更前に停止する。
+   pathはUnicodeや空白を含めexactに扱い、正規化しない。日付は操作環境で確認し、実際の保存先を記録する。
+2. 対象の既存差分と所有者を確認し、無関係な差分を保持する。既知の実装差分を含む開始前の三者の状態を
+   復旧時に照合できるよう確保する。所有者不明の重複差分があれば変更前に停止する。
+3. 同名archiveだけでなく同じchangeの既存archive、activeの有無を確認する。既存先へ上書きしない。
+   日付を変えて衝突を回避しない。同じcapabilityへの並行changeは、実装事実とdeltaの意図から順序を
+   確定して一件ずつ同期する。順序・競合解消が不明なら停止する。bulk処理や自動競合解決はこの手順に含めない。
+4. deltaのADDED / MODIFIED / REMOVED / RENAMEDをcanonicalに対応付け、未変更の要件・scenarioを保持する。
+   不明な対象を推測したり、deltaファイルでcanonical全体を上書きしたりしない。deltaなしなら同期不要。
+   全効果が内容から同期済みと確認できる場合も再適用せず、確認根拠をtasksの検証記録へ残す。
+5. CLIが利用できる場合は対象changeを明示して実行する。非対話環境では次の形を使う。
+
+   ```bash
+   openspec archive <change-name> --yes
+   ```
+
+   `<change-name>`は確認済みの実名に置換する。`--yes`は対話入力の省略だけであり、利用者の確認や
+   前段の完了条件を省略する許可ではない。同期済みを手順4で確認した場合だけ`--skip-specs`で履歴移動する。
+   `--no-validate`による検証省略は行わない。利用するCLI版のhelp・公式契約を確認する。
+6. canonicalの結果、activeからの移動、archive内の全artifactsとtasksの保持を照合する。
+   保存先path、同期したcapability（または同期不要の理由）、commandと結果を対象tasksへ記録し、事後reviewへ進む。
+
+### CLIなしのMarkdown fallback
+
+前節の事前確認と同一PRの順序を維持し、手順5を担当者の手作業に置き換える。
+deltaの4種類を意味に沿ってcanonicalへ反映し、対応するrequirement・scenarioと未変更部分を照合する。
+同期済みまたはdeltaなしの場合はその根拠を記録し、specを書き換えない。
+同名先がないことを再確認してchange全体を予定archive先へ移動し、前節の手順6で結果を照合する。
+自作の同期engineは追加しない。手動操作でも対象path、変更結果、検証結果を明示する。
+
+`task openspec:validate`はCLI必須のactive change向けgateであり、CLI不在時の失敗を手動確認成功へ
+読み替えない。またactiveが0件でgreenでもcanonical・archive内容を検証した証拠にはならない。
+手動確認では構成・Markdown形式・requirement/scenario・tasks完了・実装対応を対象ごとに検査する。
+repositoryがCLI gateを必須としている場合、実行可能な環境で成功するまで未検証・未完了とする。
+新しい完了条件の対象は今回作成・変更するarchiveであり、過去archive全件へ最新tasks形式の移行を要求しない。
+
+### 部分失敗・再実行とarchive後修正
+
+衝突、timeout、disk不足、途中失敗時は処理を止め、canonical・active・archiveの実状態を開始前と照合する。
+終了コードや表示だけで無変更・成功と推測しない。無条件再実行・自動rollbackは禁止する。
+既存差分を保護し、同期済みの部分と未処理部分を特定してから復旧する。方針が一意に決まらなければ利用者へ確認する。
+既存archiveがあっても再実行の成功とは扱わず、activeの残存・二重適用・artifactsの対応を確認する。
+復旧後は同期済み内容を再適用せず、残る移動と事後review・検証を完了する。
+
+merge前に同scopeの修正が発生した場合は、次の順序を守る。
+
+1. 対象archive pathと修正範囲を明示し、既存差分の所有者を確認する。不明な重複があれば停止する。
+2. 該当taskの検証checkboxと親taskを未完了へ戻し、blockerと再開条件を記録する。
+3. archiveの場所を維持し、実装・canonical specs・保存済みartifacts/tasksを再整合する。
+   activeへ戻さず、active-onlyのexecute-openspec-changeを再呼出しない。本節の手順を直接適用する。
+4. 影響するfocused validation・review・project checksと最終CIを再実行する。stale evidenceは再利用しない。
+   新しい検証が成功した場合だけtaskとarchiveの完了状態を戻す。
+
+仕様判断・scope拡大が必要なら共通の停止・再計画に従う。新しい決定をarchiveへの追記だけで確定しない。
+
+参考: [公式archive CLI（v1.3.1）](https://github.com/Fission-AI/OpenSpec/blob/v1.3.1/docs/cli.md#openspec-archive)、
+[公式sync](https://github.com/Fission-AI/OpenSpec/blob/main/docs/commands.md#opsxsync)。
+v1.3.1はcanonical更新後にarchive先の衝突を検出する経路があり、部分同期が残りうる
+（[実装](https://github.com/Fission-AI/OpenSpec/blob/v1.3.1/src/core/archive.ts)）。最新版のrollback保証を遡って適用しない。
 
 ## OpenSpec engine と Markdown fallback（ADR-0010）
 
@@ -233,14 +326,15 @@ task形式・実行順序は上記の共通契約に従う。engineの有無で�
 3. proposal 確定前に `spec-holes` で未定義の振る舞いを列挙して解決する。
 4. 独立出荷可能な成果を別 changes に分割し、一体成果の詳細 task と依存を `tasks.md` に書く。
 5. `tasks.md` の依存完了済み先頭未完了 task から実装・検証し、checkbox を更新する。
-6. 全 requirements / scenarios / `spec-holes` を実装と検証へ対応付け、`task openspec:validate` と
-   `./scripts/check.sh` を実行する。
-7. テンプレート自身ではマージ前の最終コミットで change directory を削除し、active change 0 を検証する。
-
-## change close 時の軽量ふりかえり（テンプレート自身の運用）
+6. 全 requirements / scenarios / `spec-holes` を実装と検証へ対応付け、`./scripts/check.sh` と
+   repositoryで必要なOpenSpec validationを実行する。未実行の必須gateは未完了とする。
+7. [下流のarchiveフロー](#下流の-archive-フロー)に従い、review収束後の同じ実装PRでspec同期・履歴保存、
+   archive後review・必要な再検証・最終CIを完了してからmergeする。executorの完了報告だけでarchiveしない。
 
 <!-- template-maintenance:start -->
-テンプレート自身の close では[保守側のふりかえり手順](../template/release.md#change-close-時の軽量ふりかえりテンプレート自身の運用)に従う。
+## テンプレート保守のclose（明示選択時のみ）
+
+テンプレート自身の保守作業として明示選択された場合だけ、[保守側の削除型close手順](../template/release.md#テンプレート自身の削除型close)に従う。
 <!-- template-maintenance:end -->
 
 ## Skills（vendoring・コア候補のうち再配布可のもの）

@@ -93,7 +93,17 @@ safe boundary通過後は[実行・進捗・blocker記録](../../../docs/agents/
 別の明示承認を得る。共通の停止条件に達した場合、ownership snapshotを保存して停止する。
 
 最終報告には完了task、未完了task / blocker、変更file、commandと結果、未検証項目を含める。
-全実装・検証checkboxが完了していない限りchange完了を宣言しない。
+全実装・検証checkboxが完了していない限りarchive-readyと報告しない。完了状態の定義は
+[workflowの引き渡し条件](../../../docs/agents/workflow.md#完了状態と引き渡し)に従い、implementation complete、
+archive-ready、archive completeを区別する。必要なreview・verifier・project gateの欠落や既知blockerが
+ある場合もarchive-readyではない。PRレビュー待ち・未確認の場合はその状態を併記し、レビュー収束を
+確認するまでarchive不可と報告する。全checkbox完了だけでarchive completeを宣言しない。
+
+次のclose/archive操作は明示されたrepository policyに沿って案内する。下流では
+[同一PRのarchive手順](../../../docs/agents/workflow.md#下流の-archive-フロー)へ引き渡す。
+テンプレート自身の削除型closeは専用保守手順を明示選択した場合だけ案内し、repository名・remote・
+保守文書の存在から推測しない。自動archive・自動削除は行わず、利用者の明示操作またはarchive workflowへ委ねる。
+本Skillはactive change専用であり、archive後修正はworkflowの手順で保存済みchangeを直接扱う。
 
 ## 5. 操作境界
 

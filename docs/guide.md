@@ -115,6 +115,10 @@ bootstrapの引数契約:
 初めて OpenSpec change を切るときの最小手順は [docs/agents/workflow.md](agents/workflow.md) の
 「初めての change（quickstart）」節を参照。
 
+下流では、実装とreviewが収束した同じPRでspec同期・archiveを行い、archive後のreview・再検証・最終CIを
+経てmergeする。executorの`archive-ready`は引き渡し状態であり、自動archiveではない。
+別PRの例外とCLIなしの手順は[下流のarchiveフロー](agents/workflow.md#下流の-archive-フロー)を参照。
+
 依存導入後の最終検証は、Taskfile の検査を Task から独立して先に実行する。
 
 ```bash
