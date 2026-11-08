@@ -124,11 +124,17 @@ def test_executor_hands_off_without_promoting_unverified_state_or_archiving() ->
 
     assert "#完了状態と引き渡し" in report
     assert ARCHIVE_ANCHOR in report
-    for state in ("implementation complete", "archive-ready", "archive complete"):
+    for state in (
+        "implementation complete",
+        "archive-ready",
+        "close-ready",
+        "archive complete",
+    ):
         assert state in report
         assert state in handoff
     for boundary in (
-        "全実装・検証checkboxが完了していない限りarchive-readyと報告しない",
+        "全実装・検証checkboxが完了していない限り"
+        "archive-ready / close-readyと報告しない",
         "既知blocker",
         "PRレビュー待ち・未確認",
         "全checkbox完了だけでarchive completeを宣言しない",
@@ -137,6 +143,10 @@ def test_executor_hands_off_without_promoting_unverified_state_or_archiving() ->
     ):
         assert boundary in report
     assert "既知のPR blockerがあればreadyではない" in handoff
+    for text in (report, handoff):
+        assert "運用モード" in text
+        assert "archive-ready / next: archive" in text
+        assert "close-ready / next: deletion close" in text
 
 
 def test_completion_mode_is_explicit_without_blocking_implementation() -> None:
@@ -158,7 +168,7 @@ def test_completion_mode_is_explicit_without_blocking_implementation() -> None:
     assert "実装・検証は進められる" in selection
     assert "会話・承認済み仕様" in selection
     assert "#完了操作の運用選択" in quickstart
-    assert "未選択ならarchive-ready判定を保留" in report
+    assert "未選択ならarchive-ready / close-ready判定を保留" in report
 
 
 def test_post_archive_validation_checks_targets_not_active_change_count() -> None:

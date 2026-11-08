@@ -91,10 +91,34 @@
   - 新cycle initial review: archive_initial_reviewが現差分と仕様追補を検査しblockerなし。
     独立実行したarchive contract + shell testsは20 passed。修正iterationは不要。
 
+- [x] 5. 再reviewのP3を修正しPRへ引き渡す
+  - 成果: 保守側のclose-readyと次操作を明確化し、既存の完了条件を維持する。
+  - 依存: 3
+  - 対象: `docs/agents/workflow.md`, `.agents/skills/execute-openspec-change/SKILL.md`, `docs/template/release.md`, `tests/test_openspec_archive_contract.py`
+  - [x] 実装
+  - [x] 検証: focused tests、文書3運用の照合、self-review、独立review、fresh project gate、OpenSpec validation、別verifier。
+  - source commit: 442d6dc144099b77b5d639bd7e0d61e2f2f1af03。利用者はP3修正とPR作成を依頼済み。
+    既存完了taskは履歴として保持する。追加executorは起動せず、mainが実装する。
+  - preflight: active exactly one、artifactsと12分類監査、依存1→2→4→3→5、対象外の利用者差分とdigestを確認した。
+    今回は報告表現のみを変え、CLIの呼出仕様は変更しない。
+  - self-review: 442d6dcからの9 files差分、呼出元guide、仕様・12分類監査を照合しblockerなし。
+    下流／保守／未選択、PR未確認、専用手順欠落、必須検証欠落時の条件を文書で確認した。
+    focused 4 filesはfresh実行で49 passed。実host acceptanceは引き続き#47で未検証。
+  - independent review: close_label_reviewerが仕様と差分を検査しblockerなし。独立fresh focusedも49 passed。
+  - 最終検証（source commit: 442d6dc144099b77b5d639bd7e0d61e2f2f1af03）:
+    Node 24.14.1 / Python 3.14.6環境のfresh `./scripts/check.sh`はexit 0（Node 638 passed、Python 660 passed / 126 skipped）。
+    fresh `uv run --no-sync pytest template-maintenance/tests/test_prune_integration.py --no-cov -q`は5 passed。
+    `openspec validate document-downstream-archive --strict --no-interactive`と`task openspec:validate`はexit 0。
+    focused ruffは長い文字列を行分割した後check/formatとも成功。CLI仕様・依存の変更はない。
+  - final verifier: 別agentのclose_label_verifierが49 focused、strict validation、OpenSpec gate、diff checkをfresh実行し成功。
+    HEAD・diff・runtimeと入力無変更を照合し、今回のproject gate・実pruneのgreen evidenceを再利用。blockerなし。
+    利用上限で一度中断したが、利用者の再開指示後に同じ役割で最終確認を完了した。
+    実host acceptance（#47）、hosted CI、PRレビュー収束は未確認として区別した。
+
 ## 引き渡し
 
-- implementation complete。外部reviewのP2-1〜P2-3とP3-1を修正し、新cycleのローカル必須検証・独立review/verifierを完了した。
-- 完了操作の運用を明示選択するまではarchive-ready判定を保留する。実装・検証完了をclose/archiveの実行許可と扱わない。
+- implementation complete。前cycleの修正は外部再reviewでAPPROVE。追加P3も修正し、task 5の必須検証・独立review/verifierを完了した。
+- 完了操作の運用を明示選択するまではarchive-ready / close-ready判定を保留する。実装・検証完了をclose/archiveの実行許可と扱わない。
 - PRレビュー収束・hosted CI・実host acceptanceは未確認。close/archive/mergeは実行しない。
 
 ## 実行情報

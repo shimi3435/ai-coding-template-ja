@@ -179,6 +179,10 @@ Python matrix の対象版は同ファイルが正）のリリース前の手動
 repository名・remote・本書の存在から選択しない。下流の通常運用は
 [workflowのarchiveフロー](../agents/workflow.md#下流の-archive-フロー)に従う。
 
+保守側の引き渡しは`テンプレート保守 / close-ready / next: deletion close`と報告し、archive-readyとは呼ばない。
+readyの検証・review条件と未確認PRの扱いは[共通の引き渡し条件](../agents/workflow.md#完了状態と引き渡し)に従う。
+この表現は削除の実行許可ではなく、以下の明示操作と完了条件を省略しない。
+
 - 出荷時の`openspec/specs/`と`openspec/changes/`は空（`.gitkeep`のみ）に保つ。
   spec deltaは`changes/<id>/specs/`に置き、canonicalへ同期しない。
 - 一つのPRは一つのactive changeだけを運ぶ。依存changesは専用branchesに保持し、先行changeの

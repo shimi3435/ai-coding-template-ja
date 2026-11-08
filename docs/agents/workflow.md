@@ -205,7 +205,7 @@ close/archiveの直前に、会話・承認済み仕様で選択された運用�
 
 - **下流archiveを選択**: [下流のarchiveフロー](#下流の-archive-フロー)に従い、同一PRでspec同期・履歴保存を行う。
 - **テンプレート保守を選択**: 明示された専用保守手順が提供されている場合だけ、その削除型closeを適用する。手順がなければ停止する。
-- **未選択**: close/archiveの前に停止し、運用の選択を求める。実装完了・検証結果と選択待ちを報告し、archive-ready判定は保留する。
+- **未選択**: close/archiveの前に停止し、運用の選択を求める。実装完了・検証結果と選択待ちを報告し、archive-ready / close-ready判定は保留する。
 
 選択は操作の実行許可と別である。運用選択済みでもreview・検証や明示操作の条件を省略しない。
 repository名・remote・保守文書の存在から選択せず、専用手順がない場合に別運用へ自動で切り替えない。
@@ -220,16 +220,21 @@ repository名・remote・保守文書の存在から削除型closeを推測し�
 ### 完了状態と引き渡し
 
 - **implementation complete**: 実装checkboxが完了した状態。必須検証・reviewの完了とは別である。
-- **archive-ready**: [運用選択](#完了操作の運用選択)を確認済みで、全taskの実装・検証checkbox、必要なローカルreview・verifier・project gateが完了し、
+- **archive-ready**: [運用選択](#完了操作の運用選択)で下流archiveを選択済みで、全taskの実装・検証checkbox、必要なローカルreview・verifier・project gateが完了し、
   既知の未解決blockerがない引き渡し状態。PRレビュー待ち・未確認でも報告できるが、その状態を必ず併記し、
   レビュー収束を確認するまでarchiveを実行しない。既知のPR blockerがあればreadyではない。
+- **close-ready**: テンプレート保守を明示選択し、専用保守手順が提供されている場合の引き渡し表現。
+  実装・検証・review・blockerの条件はarchive-readyと同じで、PRレビュー待ち・未確認も併記し、収束前はcloseしない。
+  archiveの許可を意味せず、次操作は専用手順に従う削除型closeとする。
 - **archive complete**: spec同期・履歴保存に加え、archive後のreview・必要な再検証が成功した状態。
   archiveコマンドの成功だけでは宣言しない。最終CI、merge、deployの状態とは分けて報告する。
 
-executorは自動archiveせず、対象change、上記状態、PRレビューの確認済み/未完了/未確認、blocker、
-次の明示操作を報告する。利用者による明示操作または明示的に呼ばれたarchive workflowへ引き渡す。
+executorは自動archiveせず、対象change、運用モード、上記状態、PRレビューの確認済み/未完了/未確認、blocker、
+次の明示操作を報告する。下流は`archive-ready / next: archive`、テンプレート保守は
+`close-ready / next: deletion close`とし、新しい状態管理機構は追加しない。
+利用者による明示操作または明示的に呼ばれたarchive workflowへ引き渡す。
 commit・push・PR作成・mergeの依頼とは区別する。未完了task・必須検証未実行・blockerがあれば、
-upstream CLIが警告だけで続行できてもarchive-readyにしない。
+upstream CLIが警告だけで続行できてもarchive-ready / close-readyにしない。
 
 ### 同一実装PRでの手順
 

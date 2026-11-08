@@ -17,7 +17,7 @@
 5. archive後修正はworkflowの明示対象手順で扱い、active-only executorを再呼出しない。
 6. 当初は追加自動検証を静的contract testsに限定した。外部review後の追補でshell引数と実pruneの回帰を加える。
    意味整合は対象review、必須gate未実行は未完了とする。
-7. PRレビュー待ち・未確認は条件付きarchive-readyとして報告可。既知blockerがあれば不可。
+7. 下流のPRレビュー待ち・未確認は条件付きarchive-readyとして報告可。既知blockerがあれば不可。
 8. 部分失敗・衝突時は三者の実状態を確認し、無条件再試行・自動rollbackをしない。不明なら停止する。
 9. 同一capabilityへの並行変更は実装事実と順序を確認して直列同期する。bulk手順は追加しない。
 10. deltaの効果が同期済みと内容で確認できた場合だけ、再適用せず履歴移動する。
@@ -43,6 +43,14 @@
 Context7とinstalled source/helpで再確認した。根拠は公式v1.3.1の
 [change-utils](https://github.com/Fission-AI/OpenSpec/blob/v1.3.1/src/utils/change-utils.ts)、
 [validate](https://github.com/Fission-AI/OpenSpec/blob/v1.3.1/src/commands/validate.ts)。
+
+## 再reviewのP3修正
+
+利用者の修正依頼に従い、下流の報告を`下流 / archive-ready / next: archive`、保守側を
+`テンプレート保守 / close-ready / next: deletion close`とする。close-readyは報告表現だけで、
+archive-readyと同じ実装・検証・review・blocker条件を使い、専用保守手順の存在も要求する。
+未選択時は両方のreadyを保留する。PRレビュー待ちは併記し、収束前のclose/archiveは禁止する。
+implementation completeとarchive completeの定義、自動操作禁止、明示操作の境界は維持する。
 
 ## 公式契約の確認
 

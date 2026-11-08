@@ -27,19 +27,23 @@ The repository MUST keep downstream archive in workflow, layout in project, and 
 - **THEN** projectには存在しない保守手順への案内を残さず、通常workflowへの参照を保持する。prune前は既存workflow markerから保守手順へ到達できる
 
 ### Requirement: Executorの引き渡し
-The executor MUST remain active-only and report implementation completion separately from archive readiness and archive completion, without automatically archiving or publishing Git changes.
+The executor MUST remain active-only and report the selected operation mode and next operation, distinguishing implementation completion, downstream archive readiness, template close readiness and archive completion, without automatically archiving or publishing Git changes.
 
 #### Scenario: PRレビュー待ち
-- **WHEN** 運用を選択済みで全taskと必須検証・reviewが完了し既知blockerがないがPRレビューは未完了または未確認である
+- **WHEN** 下流archiveを選択済みで全taskと必須検証・reviewが完了し既知blockerがないがPRレビューは未完了または未確認である
 - **THEN** archive-readyとPR状態を併記し、archiveはレビュー収束後の明示操作へ引き渡す
+
+#### Scenario: テンプレート保守の引き渡し
+- **WHEN** テンプレート保守を明示選択し、専用手順が提供され、下流のreadyと同じ実装・検証・review・blocker条件を満たす
+- **THEN** 運用モードと`close-ready / next: deletion close`を報告する。PRレビュー待ち・未確認は併記し、収束前はcloseしない。archive-readyとは報告せず、削除の実行許可とも扱わない
 
 #### Scenario: 未完了taskまたはblocker
 - **WHEN** 必須検証未実行・未完了task・既知の未解決blockerがある
-- **THEN** CLIが警告だけでもarchive-readyとは報告しない
+- **THEN** CLIが警告だけでもarchive-ready / close-readyとは報告しない
 
 #### Scenario: 運用未選択の引き渡し
 - **WHEN** 運用が未選択である
-- **THEN** 実装・検証は進められるが、完了操作の選択待ちを報告してarchive-ready判定を保留する
+- **THEN** 実装・検証は進められるが、完了操作の選択待ちを報告してarchive-ready / close-ready判定を保留する
 
 ### Requirement: 手動同期と検証境界
 The archive procedure MUST preserve unaffected canonical content, support a manual Markdown fallback with explicit paths and results, and never treat unexecuted required gates as passed.
