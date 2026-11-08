@@ -247,7 +247,10 @@ upstream CLIが警告だけで続行できてもarchive-ready / close-readyに�
    実装と照合する。移動前の承認だけで済ませず、適用される独立review条件も確認する。
 6. **影響する検証と最終CI**を成功させてからmergeする。証跡再利用は共通の入力同一性に従う。
    [archive後のcanonical検証](#archive後のcanonical検証)、`./scripts/check.sh`とrepositoryで必須のOpenSpec validationを満たす。
-   archiveはreviewなしの最終追記ではない。
+   merge直前にarchive・修正commitを含む最新HEADのPRレビュー状態を再確認する。repository規約とGitHub設定に
+   適用される必須review・承認、未解決review threadの条件を確認し、失効した必要承認は再取得する。
+   必須CIとreviewの両方が成立した場合だけmergeし、不明・未成立ならmergeしない。
+   ローカルreviewだけでGitHub上の必要承認を代替しない。archiveはreviewなしの最終追記ではない。
 
 別PRを選べるのは、組織の完了条件がmainへのmerge済み・本番deploy済みである場合、spec管理の責任分離、
 またはspec同期の独立reviewが必要な場合だけである。理由、実装PR、担当、対象changeを引き継ぎ、
@@ -257,7 +260,9 @@ upstream CLIが警告だけで続行できてもarchive-ready / close-readyに�
 
 1. 対象active changeとcanonical spec、予定archive先をrepository-relative pathで明示する。
    欠落・不正なartifacts、repository外・symlink越境・曖昧なpathは変更前に停止する。
-   pathはUnicodeや空白を含めexactに扱い、正規化しない。日付は操作環境で確認し、実際の保存先を記録する。
+   pathはUnicodeや空白を含めexactに扱い、正規化しない。
+   v1.3.1のarchive名はUTC日付であり、canonical更新後に算出される。CLI実行直前のUTC日付で予定先を確認する。
+   実行日時・報告は日本時間（JST、UTC+09:00）とし、UTC基準の保存先名と区別して記録する。
    change名は確認済みの単一active directory名に限る。空名、`.`、`..`、予約directoryの`archive`、
    使用OSのpath separatorを含む名前を拒否する。利用するCLI版が非対応の名称も実行前に停止し、勝手に改名しない。
 2. 対象の既存差分と所有者を確認し、無関係な差分を保持する。既知の実装差分を含む開始前の三者の状態を
@@ -268,6 +273,7 @@ upstream CLIが警告だけで続行できてもarchive-ready / close-readyに�
 4. deltaのADDED / MODIFIED / REMOVED / RENAMEDをcanonicalに対応付け、未変更の要件・scenarioを保持する。
    不明な対象を推測したり、deltaファイルでcanonical全体を上書きしたりしない。deltaなしなら同期不要。
    全効果が内容から同期済みと確認できる場合も再適用せず、確認根拠をtasksの検証記録へ残す。
+   canonicalに書き込む場合は、全対象について[書き込み先の保護](#canonical書き込み先の保護)を確認してから実行する。
 5. CLIが利用できる場合は対象changeを明示して実行する。確認済みの実名を環境変数`change_name`に
    データとして渡してから、次の非対話コマンドを使う。未設定・空ならCLIを起動せず停止する。
 
@@ -283,7 +289,26 @@ upstream CLIが警告だけで続行できてもarchive-ready / close-readyに�
    前段の完了条件を省略する許可ではない。同期済みを手順4で確認した場合だけ`--skip-specs`で履歴移動する。
    optionはすべて`--`の前に置く。`--no-validate`による検証省略は行わない。利用するCLI版のhelp・公式契約を確認する。
 6. canonicalの結果、activeからの移動、archive内の全artifactsとtasksの保持を照合する。
+   CLI出力と実際の保存先を予定先と照合する。処理中のUTC日付境界越えによる差なら、その根拠と実保存先を記録する。
+   日付差を自動改名・再archiveで直さない。不明・衝突・部分失敗は[復旧手順](#部分失敗再実行とarchive後修正)へ渡す。
    保存先path、同期したcapability（または同期不要の理由）、commandと結果を対象tasksへ記録し、事後reviewへ進む。
+
+### canonical書き込み先の保護
+
+canonical更新前に、書き込み対象を全て列挙し、次の順序で確認する。CLI同期・手動同期・復旧・archive後の
+canonical修正に同じ条件を適用する。v1.3.1の`writeFile`はaliasを辿るため、repository内への解決だけでは安全としない。
+
+1. real repository rootを確定し、そこから対象までの既存の全親componentと対象自身を`lstat`相当で確認する。
+   内部を指す場合もsymlinkは拒否する。dangling symlinkも拒否し、新規ファイルやdirectoryを作る場合も既存親を確認する。
+2. 既存対象は通常ファイルかつリンク数1（`st_nlink` / `nlink`）だけを許可する。hardlinkは共有先が対象内でも拒否する。
+   このリンク数条件は親directoryのリンク数には適用しない。親は通常directoryであることを確認する。
+3. filesystemのmetadataや対象対応が判定不能なら停止する。リンクの自動unlink・コピー置換などで条件を満たそうとせず、
+   既存内容と対象外ファイルを保護し、修復が必要なら別の明示判断へ戻す。
+4. 対象と親pathの並行変更を止め、書き込み直前に上記を再確認する。変化・確認不能なら書き込まず停止する。
+   文書上の事前確認だけで、確認後のpath差し替えを原子的に防ぐ保証はない。
+
+deltaなし・同期済み確認後の`--skip-specs`など、canonicalを書き込まない操作にはこの書込条件を課さない。
+既存のpath・所有者・衝突・事後検証の条件は省略しない。自動同期engineや検査runtimeは追加しない。
 
 ### archive後のcanonical検証
 
@@ -308,9 +333,11 @@ repositoryで必須とされるCLI gateの未実行は、引き続き未完了�
 ### CLIなしのMarkdown fallback
 
 [同期・移動前の確認と実行](#同期移動前の確認と実行)の事前確認と同一PRの順序を維持し、同手順5を担当者の手作業に置き換える。
+canonicalを書き換える前に[書き込み先の保護](#canonical書き込み先の保護)を確認する。
 deltaの4種類を意味に沿ってcanonicalへ反映し、対応するrequirement・scenarioと未変更部分を照合する。
 同期済みまたはdeltaなしの場合はその根拠を記録し、specを書き換えない。
-同名先がないことを再確認してchange全体を予定archive先へ移動し、同手順6で結果を照合する。
+保存先名はUTC、実行日時・報告はJSTとする。移動直前のUTC日付で予定先を再確認し、同名先がないことを確認して
+change全体を移動する。同手順6で結果を照合する。
 自作の同期engineは追加しない。手動操作でも対象path、変更結果、検証結果を明示する。
 
 `task openspec:validate`はCLI必須のactive change向けgateであり、CLI不在時の失敗を手動確認成功へ
@@ -324,6 +351,7 @@ repositoryがCLI gateを必須としている場合、実行可能な環境で�
 衝突、timeout、disk不足、途中失敗時は処理を止め、canonical・active・archiveの実状態を開始前と照合する。
 終了コードや表示だけで無変更・成功と推測しない。無条件再実行・自動rollbackは禁止する。
 既存差分を保護し、同期済みの部分と未処理部分を特定してから復旧する。方針が一意に決まらなければ利用者へ確認する。
+canonicalへの復旧書き込みも[書き込み先の保護](#canonical書き込み先の保護)を満たしてから行う。
 既存archiveがあっても再実行の成功とは扱わず、activeの残存・二重適用・artifactsの対応を確認する。
 復旧後は同期済み内容を再適用せず、残る移動と事後review・検証を完了する。
 
@@ -332,6 +360,7 @@ merge前に同scopeの修正が発生した場合は、次の順序を守る。
 1. 対象archive pathと修正範囲を明示し、既存差分の所有者を確認する。不明な重複があれば停止する。
 2. 該当taskの検証checkboxと親taskを未完了へ戻し、blockerと再開条件を記録する。
 3. archiveの場所を維持し、実装・canonical specs・保存済みartifacts/tasksを再整合する。
+   canonical修正前に[書き込み先の保護](#canonical書き込み先の保護)を再確認する。
    activeへ戻さず、active-onlyのexecute-openspec-changeを再呼出しない。本節の手順を直接適用する。
 4. [archive後のcanonical検証](#archive後のcanonical検証)と、影響するfocused validation・review・project checks、最終CIを再実行する。
    stale evidenceは再利用しない。

@@ -24,5 +24,7 @@ Issue #66: https://github.com/shimi3435/ai-coding-template-ja/issues/66
 公開運用interfaceと公開Skillの変更のため、共通workflowに従う独立reviewと別verifierを必須とする。
 design.md、specs/downstream-archive/spec.md、spec-holes.mdを必須artifactsとする。
 利用者の追加依頼により、再reviewのP3（保守側の引き渡し表現）を修正し、検証後にcommit・push・PR作成まで行う。
+PR #96の追加review後の合意に基づき、canonical書き込み先のalias保護、最新HEADの承認確認、UTC保存先と日本時間の記録を追補する。
+失敗CIの同HEADでの1回再実行、修正後の新HEADのCI確認とPR更新も行う。
 merge、change削除は今回の依頼に含めず、明示操作へ委ねる。
 テンプレート自身の空出荷規約、新しい設定・同期engine・archive Skill・外部orchestrator、bulk-archive実装は対象外。

@@ -115,11 +115,45 @@
     利用上限で一度中断したが、利用者の再開指示後に同じ役割で最終確認を完了した。
     実host acceptance（#47）、hosted CI、PRレビュー収束は未確認として区別した。
 
+- [x] 6. PR #96のalias保護・最新HEAD review・日付の指摘を修正する
+  - 成果: 合意Q1〜Q6を既存手順へ反映し、文書修正のローカル検証と旧HEADのCI再実行を完了する。新HEADのCIはpush後に確認しPRへ結果を記録する。
+  - 依存: 5
+  - 対象: `docs/agents/workflow.md`, `tests/test_openspec_archive_contract.py`
+  - [x] 実装
+  - [x] 検証: contract RED→GREEN、一時filesystem/実CLI probe、strict validation、focused tests、独立review、fresh project gate、実prune、別verifier。
+  - source commit: 89e791262b7dfeeef5f84be4a7b5b56e2e4b15dc。grilling Q1〜Q6と最終合意を利用者が承認済み。
+  - preflight: active exactly one、必須artifacts、12分類監査、3 constraints、依存1→2→4→3→5→6と重複順序を確認。
+    利用者所有untracked PoCは対象外でdigest不変。仕様・tasksは承認済み追補としてmainが更新する。
+  - CI: run 42465259323 attempt 1のcheck/rename-smokeがsetup-task取得HTTP 504で失敗。本体は未実行。
+    同HEADの失敗ジョブだけを1回再実行し、attempt 2はcheck/rename-smokeを含む全5 jobs成功。
+    ログ上のrunner 2.338.2、ubuntu-24.04 image 20261101.360.1、Node 24.22.2は両attemptで一致した。
+    CI設定は変更していない。新HEADの結果とは分けて記録する。
+  - focused: contractのREDは3 failed / 7 passed。修正後のarchive contract/shell/executor/workflow 4 filesは51 passed。
+    対象strict validation、ruff check/format、diff checkは成功。
+  - 実動作: repository外の使い捨てfixtureでOpenSpec 1.3.1のarchiveを5ケース実行し全てexit 0。
+    通常fileでは対象外betaは不変。内部file symlink、親directory symlink、hardlink（nlink=2）、
+    新規targetの親symlinkではbetaの変更/作成を再現した。lstat/リンク数から後4件が新手順の停止対象と確認した。
+    これはupstream副作用の確認であり、文書の自動強制の証明ではない。本repositoryのcanonical/archiveは無変更。
+    JST 00:00/08:59:59は前日UTC、09:00は同日UTCとなる例示も確認した。
+    installed ArchiveCommand.getArchiveDateへ固定時刻を与えたprobeでも同じ3境界を確認した。
+  - self-review: 89e7912からの7 files差分、呼出元・既存停止条件、spec-holes12分類の対応を検査しblockerなし。
+    CLI/手動/復旧/事後修正の全書込経路、手動保存先UTC、最新HEADのreview/CI条件を照合した。
+  - independent review: alias_revision_reviewerが仕様・差分・installed sourceとprobeを照合しblockerなし。
+    独立fresh focusedは51 passed、diff check成功。
+  - 最終検証（source commit: 89e791262b7dfeeef5f84be4a7b5b56e2e4b15dc）:
+    Node 24.14.1 / Python 3.14.6環境でfresh `./scripts/check.sh` exit 0（Node 638 passed、Python 662 passed / 126 skipped）。
+    fresh `uv run --no-sync pytest template-maintenance/tests/test_prune_integration.py --no-cov -q`は5 passed。
+    対象strict validationと`task openspec:validate`もexit 0。
+  - final verifier: alias_revision_verifierがfocused 51 passed、strict/taskgate/diff check、実CLI alias5ケースとUTC3境界をfresh確認。
+    HEAD・diff・runtime・入力無変更を照合して今回のproject gate/prune証跡を再利用し、blockerなし。
+    利用上限による中断後、利用者の再開指示に従い同じ役割で最終確認を完了した。
+    新HEADのhosted CIはpush後の確認対象、PRレビュー収束と実host acceptance（#47）は未確認として区別した。
+
 ## 引き渡し
 
-- implementation complete。前cycleの修正は外部再reviewでAPPROVE。追加P3も修正し、task 5の必須検証・独立review/verifierを完了した。
+- implementation complete。task 6の追加指摘を修正し、ローカル必須検証・独立review/verifierを完了した。
 - 完了操作の運用を明示選択するまではarchive-ready / close-ready判定を保留する。実装・検証完了をclose/archiveの実行許可と扱わない。
-- PRレビュー収束・hosted CI・実host acceptanceは未確認。close/archive/mergeは実行しない。
+- 旧HEADのCI再実行は成功。新HEADのhosted CIはpush後に確認してPRへ記録する。PRレビュー収束・実host acceptanceは未確認。close/archive/mergeは実行しない。
 
 ## 実行情報
 

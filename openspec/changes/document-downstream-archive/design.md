@@ -52,6 +52,29 @@ archive-readyと同じ実装・検証・review・blocker条件を使い、専用
 未選択時は両方のreadyを保留する。PRレビュー待ちは併記し、収束前のclose/archiveは禁止する。
 implementation completeとarchive completeの定義、自動操作禁止、明示操作の境界は維持する。
 
+## PR #96の追加review後の合意（Q1〜Q6）
+
+- 既存文書・仕様・検証へ限定し、同期engine、runtime検査ツール、CI設定の変更は追加しない。
+- canonical書き込み前にrepositoryのreal rootから既存の全親componentと対象をlstat相当で確認する。
+  内部を含むsymlinkは拒否し、既存対象ファイルは通常ファイルかつリンク数1だけを許可する。
+  未作成対象でも既存親を確認する。親directoryのリンク数にはこの条件を適用しない。
+  判定不能は停止し、自動unlink・コピー置換は行わない。並行変更を止め、直前に再確認する。
+- 同じ条件をCLI同期・手動同期・復旧・archive後canonical修正に適用する。canonicalに書き込まない操作には
+  新しい書込条件を課さない。文書手順だけで競合を原子的に防ぐ保証はしない。
+- merge直前に最新HEADのPRレビュー・必須承認・未解決thread・CIを照合する。失効した必要承認は再取得し、
+  不明・未成立ならmergeしない。適用されるrepository規約とGitHub設定に従い、新しい承認数要件は作らない。
+- 実行日時・報告は日本時間（JST、UTC+09:00）とし、CLIのarchive名はv1.3.1のUTC基準を維持する。
+  CLIなしの手動fallbackも保存先名はUTCに揃える。直前UTC日付と予定先を確認し、実行後はCLI出力と実pathを照合する。
+  日付はcanonical更新後に算出されるため、処理中の日付境界越えを確認・記録する。自動改名・再archiveは禁止する。
+- 一時環境で通常ファイル、内部file symlink、親symlink、hardlink、新規対象の親symlinkを確認する。
+  実CLIのalias副作用再現も一時環境だけとし、手順の自動強制を証明したとは扱わない。
+- 旧HEADの失敗2ジョブは1回再実行し、同じ取得障害が再発したら停止・切り分ける。旧HEADのgreenを新HEADへ流用しない。
+
+根拠: [v1.3.1 specs-apply](https://github.com/Fission-AI/OpenSpec/blob/v1.3.1/src/core/specs-apply.ts)は
+親mkdir後にwriteFileでcanonicalを書き換え、alias確認を行わない。REMOVED / RENAMEDもrequirement操作後に
+同じファイルへ書く。日付は[v1.3.1 archive](https://github.com/Fission-AI/OpenSpec/blob/v1.3.1/src/core/archive.ts)の
+getArchiveDateでtoISOStringから算出する。Context7とinstalled 1.3.1 sourceを事実調査agentが確認済み。
+
 ## 公式契約の確認
 
 Context7 /fission-ai/openspecと公式docs・v1.3.1実装を調査済み。CI pinと最新mainを混同しない。

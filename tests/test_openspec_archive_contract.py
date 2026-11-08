@@ -64,6 +64,55 @@ def test_same_pr_archive_is_reviewed_before_final_ci_and_merge() -> None:
         assert boundary in procedure
     assert "成功させてからmerge" in procedure
     assert "別PRでもOpenSpec validationとarchive後reviewは省略しない" in procedure
+    for boundary in (
+        "最新HEAD",
+        "失効した必要承認は再取得",
+        "未解決review thread",
+        "不明・未成立ならmergeしない",
+    ):
+        assert boundary in procedure
+
+
+def test_canonical_writes_reject_aliases_in_every_write_path() -> None:
+    workflow = _read(WORKFLOW)
+    safety = _section(workflow, "### canonical書き込み先の保護")
+    for boundary in (
+        "real repository root",
+        "既存の全親component",
+        "lstat",
+        "内部を指す場合もsymlinkは拒否",
+        "通常ファイルかつリンク数1",
+        "親directoryのリンク数には適用しない",
+        "判定不能なら停止",
+        "自動unlink・コピー置換",
+        "並行変更を止め",
+        "原子的に防ぐ保証はない",
+        "canonicalを書き込まない操作には",
+    ):
+        assert boundary in safety
+    for heading in (
+        "### 同期・移動前の確認と実行",
+        "### CLIなしのMarkdown fallback",
+        "### 部分失敗・再実行とarchive後修正",
+    ):
+        assert "#canonical書き込み先の保護" in _section(workflow, heading)
+
+
+def test_archive_date_separates_utc_destination_from_jst_reporting() -> None:
+    workflow = _read(WORKFLOW)
+    preparation = _section(workflow, "### 同期・移動前の確認と実行")
+    fallback = _section(workflow, "### CLIなしのMarkdown fallback")
+    for boundary in (
+        "v1.3.1",
+        "UTC日付",
+        "canonical更新後",
+        "JST、UTC+09:00",
+        "CLI出力と実際の保存先",
+        "日付境界越え",
+        "自動改名・再archive",
+    ):
+        assert boundary in preparation
+    assert "保存先名はUTC" in fallback
 
 
 def test_cli_fallback_does_not_turn_missing_gates_into_success() -> None:

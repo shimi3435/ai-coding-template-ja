@@ -7,6 +7,10 @@ The workflow SHALL define implementation, verification, review convergence, same
 - **WHEN** 実装・検証・必要なreviewが完了する
 - **THEN** 明示操作で同一PRのspec同期とarchiveを行い、canonical・archive・最終diffをreviewし、必要な再検証と最終CI成功後にmergeする
 
+#### Scenario: archive後の承認失効
+- **WHEN** archiveまたは修正commitによってPRのHEADが更新される
+- **THEN** merge直前に最新HEADのPRレビュー状態と適用される必須承認・thread・CI条件を確認し、失効した必要承認を再取得する。不明・未成立ならmergeしない
+
 #### Scenario: 別PRが必要な組織
 - **WHEN** merge/deploy済みが完了条件、またはspec管理・reviewの責任分離が必要である
 - **THEN** 理由と引き渡し対象を明記して別PRで同じvalidationとreviewを行う
@@ -48,6 +52,14 @@ The executor MUST remain active-only and report the selected operation mode and 
 ### Requirement: 手動同期と検証境界
 The archive procedure MUST preserve unaffected canonical content, support a manual Markdown fallback with explicit paths and results, and never treat unexecuted required gates as passed.
 
+#### Scenario: canonical書き込み先のalias
+- **WHEN** CLI・手動同期・復旧・archive後修正でcanonicalに書き込む
+- **THEN** real repository rootから既存親componentと対象をlstat相当で確認し、内部を含むsymlinkを拒否する。既存対象は通常ファイルかつリンク数1だけを許可し、親directoryのリンク数は制限しない。新規対象の既存親も確認し、判定不能なら停止する。自動リンク修復はせず、並行変更を止めて直前再確認する
+
+#### Scenario: canonicalへの書き込みなし
+- **WHEN** deltaなしまたは同期済みを確認し、canonicalを書き換えず履歴を移動する
+- **THEN** 新しい書き込み先条件は適用しないが、既存のpath・衝突・検証条件は維持する
+
 #### Scenario: CLI不在
 - **WHEN** CLIを使用できない
 - **THEN** 同じ順序でdeltaの意味を反映し履歴を移動・照合するが、必須gate未実行なら完了としない
@@ -70,6 +82,10 @@ The procedure MUST check destination conflicts and implementation-based synchron
 #### Scenario: 同一capabilityへの並行変更
 - **WHEN** 複数changeが同じspecを変更する
 - **THEN** 実装と順序を確定して一件ずつ同期し、不明なら停止する
+
+#### Scenario: UTC日付境界を跨ぐarchive
+- **WHEN** 実行直前のUTC日付とCLIが算出したarchive日付が異なる
+- **THEN** CLI出力と実保存先、UTC境界越えと処理結果を照合して記録する。実行日時・報告はJST、保存先名はUTCとし、手動fallbackも同じ命名に従う。不明・衝突・部分失敗は復旧手順へ渡し、自動改名や再archiveで差を解消しない
 
 #### Scenario: 同名衝突・部分失敗・再実行
 - **WHEN** 既存archiveまたは途中書込がある
