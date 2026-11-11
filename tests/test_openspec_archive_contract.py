@@ -1,0 +1,237 @@
+"""下流に残るarchive手順の責務・順序・停止境界を守る静的contract。"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+WORKFLOW = "docs/agents/workflow.md"
+ARCHIVE_ANCHOR = "#下流の-archive-フロー"
+
+
+def _read(path: str) -> str:
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def _section(text: str, heading: str) -> str:
+    level = len(heading) - len(heading.lstrip("#"))
+    body = text.split(heading + "\n", 1)[1]
+    return re.split(rf"\n#{{1,{level}}} ", body, maxsplit=1)[0]
+
+
+def _downstream(text: str) -> str:
+    return re.sub(
+        r"<!-- template-maintenance:start -->.*?<!-- template-maintenance:end -->",
+        "",
+        text,
+        flags=re.DOTALL,
+    )
+
+
+def test_archive_entrypoints_survive_without_template_maintenance() -> None:
+    workflow = _downstream(_read(WORKFLOW))
+    # 実pruneがmarkerを除く文書はworkflowとREADMEだけ。projectはそのまま残る。
+    project = _read("openspec/project.md")
+    guide = _read("docs/guide.md")
+
+    assert "## 下流の archive フロー" in workflow
+    assert ARCHIVE_ANCHOR in project
+    assert ARCHIVE_ANCHOR in guide
+    assert project == _downstream(project)
+    assert "専用手順" not in project
+    assert "changes/archive/YYYY-MM-DD-<change-name>/" in project
+    for text in (workflow, project):
+        assert "ディレクトリ削除で行う" not in text
+        assert "change directory を削除" not in text
+        assert "出荷時は空" not in text
+    assert "明示選択" in _read("AGENTS.md")
+
+
+def test_same_pr_archive_is_reviewed_before_final_ci_and_merge() -> None:
+    procedure = _section(_read(WORKFLOW), "### 同一実装PRでの手順")
+    stages = (
+        "1. **実装・focused validation**",
+        "2. **artifacts・tasks・実装の対応をverify**",
+        "3. **reviewを収束**",
+        "4. **同じPRでspec同期・archive**",
+        "5. **archive後diffをreview**",
+        "6. **影響する検証と最終CI**",
+    )
+    positions = [procedure.index(stage) for stage in stages]
+    assert positions == sorted(positions)
+    for boundary in ("canonical specs", "保存したartifacts/tasks", "最終diff"):
+        assert boundary in procedure
+    assert "成功させてからmerge" in procedure
+    assert "別PRでもOpenSpec validationとarchive後reviewは省略しない" in procedure
+    for boundary in (
+        "最新HEAD",
+        "失効した必要承認は再取得",
+        "未解決review thread",
+        "不明・未成立ならmergeしない",
+    ):
+        assert boundary in procedure
+
+
+def test_canonical_writes_reject_aliases_in_every_write_path() -> None:
+    workflow = _read(WORKFLOW)
+    safety = _section(workflow, "### canonical書き込み先の保護")
+    for boundary in (
+        "real repository root",
+        "既存の全親component",
+        "lstat",
+        "内部を指す場合もsymlinkは拒否",
+        "通常ファイルかつリンク数1",
+        "親directoryのリンク数には適用しない",
+        "判定不能なら停止",
+        "自動unlink・コピー置換",
+        "並行変更を止め",
+        "原子的に防ぐ保証はない",
+        "canonicalを書き込まない操作には",
+    ):
+        assert boundary in safety
+    for heading in (
+        "### 同期・移動前の確認と実行",
+        "### CLIなしのMarkdown fallback",
+        "### 部分失敗・再実行とarchive後修正",
+    ):
+        assert "#canonical書き込み先の保護" in _section(workflow, heading)
+
+
+def test_archive_date_separates_utc_destination_from_jst_reporting() -> None:
+    workflow = _read(WORKFLOW)
+    preparation = _section(workflow, "### 同期・移動前の確認と実行")
+    fallback = _section(workflow, "### CLIなしのMarkdown fallback")
+    for boundary in (
+        "v1.3.1",
+        "UTC日付",
+        "canonical更新後",
+        "JST、UTC+09:00",
+        "CLI出力と実際の保存先",
+        "日付境界越え",
+        "自動改名・再archive",
+    ):
+        assert boundary in preparation
+    assert "保存先名はUTC" in fallback
+
+
+def test_cli_fallback_does_not_turn_missing_gates_into_success() -> None:
+    workflow = _read(WORKFLOW)
+    fallback = _section(workflow, "### CLIなしのMarkdown fallback")
+    preparation = _section(workflow, "### 同期・移動前の確認と実行")
+
+    for boundary in (
+        "CLI不在時の失敗を手動確認成功へ",
+        "未検証・未完了",
+        "過去archive全件へ最新tasks形式の移行を要求しない",
+        "canonical・archive内容を検証した証拠にはならない",
+    ):
+        assert boundary in fallback
+    for boundary in (
+        "ADDED / MODIFIED / REMOVED / RENAMED",
+        "未変更の要件・scenarioを保持",
+        "deltaなしなら同期不要",
+        "全効果が内容から同期済み",
+        "--yes",
+        "--skip-specs",
+        "`--no-validate`による検証省略は行わない",
+    ):
+        assert boundary in preparation
+
+
+def test_partial_archive_failure_requires_state_inspection_before_retry() -> None:
+    workflow = _read(WORKFLOW)
+    recovery = _section(workflow, "### 部分失敗・再実行とarchive後修正")
+    preparation = _section(workflow, "### 同期・移動前の確認と実行")
+
+    assert "canonical・active・archiveの実状態を開始前と照合" in recovery
+    assert "無条件再実行・自動rollbackは禁止" in recovery
+    assert "既存先へ上書きしない" in preparation
+    assert "日付を変えて衝突を回避しない" in preparation
+    assert "一件ずつ同期" in preparation
+
+
+def test_post_archive_corrections_reopen_verification_in_place() -> None:
+    recovery = _section(_read(WORKFLOW), "### 部分失敗・再実行とarchive後修正")
+
+    for boundary in (
+        "既存差分の所有者",
+        "検証checkboxと親taskを未完了へ戻",
+        "archiveの場所を維持",
+        "active-onlyのexecute-openspec-changeを再呼出しない",
+        "stale evidenceは再利用しない",
+        "新しい検証が成功した場合だけ",
+        "仕様判断・scope拡大",
+    ):
+        assert boundary in recovery
+
+
+def test_executor_hands_off_without_promoting_unverified_state_or_archiving() -> None:
+    skill = _read(".agents/skills/execute-openspec-change/SKILL.md")
+    report = _section(skill, "## 4. review・検証・報告")
+    handoff = _section(_read(WORKFLOW), "### 完了状態と引き渡し")
+
+    assert "#完了状態と引き渡し" in report
+    assert ARCHIVE_ANCHOR in report
+    for state in (
+        "implementation complete",
+        "archive-ready",
+        "close-ready",
+        "archive complete",
+    ):
+        assert state in report
+        assert state in handoff
+    for boundary in (
+        "全実装・検証checkboxが完了していない限り"
+        "archive-ready / close-readyと報告しない",
+        "既知blocker",
+        "PRレビュー待ち・未確認",
+        "全checkbox完了だけでarchive completeを宣言しない",
+        "自動archive・自動削除は行わず",
+        "active change専用",
+    ):
+        assert boundary in report
+    assert "既知のPR blockerがあればreadyではない" in handoff
+    for text in (report, handoff):
+        assert "運用モード" in text
+        assert "archive-ready / next: archive" in text
+        assert "close-ready / next: deletion close" in text
+
+
+def test_completion_mode_is_explicit_without_blocking_implementation() -> None:
+    workflow = _read(WORKFLOW)
+    selection = _section(workflow, "## 完了操作の運用選択")
+    quickstart = _section(workflow, "## 初めての change（quickstart）")
+    report = _section(
+        _read(".agents/skills/execute-openspec-change/SKILL.md"),
+        "## 4. review・検証・報告",
+    )
+
+    for case, effect in (
+        ("下流archiveを選択", "#下流の-archive-フロー"),
+        ("テンプレート保守を選択", "専用保守手順が提供されている場合だけ"),
+        ("未選択", "close/archiveの前に停止"),
+    ):
+        row = next(line for line in selection.splitlines() if f"**{case}**" in line)
+        assert effect in row
+    assert "実装・検証は進められる" in selection
+    assert "会話・承認済み仕様" in selection
+    assert "#完了操作の運用選択" in quickstart
+    assert "未選択ならarchive-ready / close-ready判定を保留" in report
+
+
+def test_post_archive_validation_checks_targets_not_active_change_count() -> None:
+    validation = _section(_read(WORKFLOW), "### archive後のcanonical検証")
+    recovery = _section(_read(WORKFLOW), "### 部分失敗・再実行とarchive後修正")
+
+    for boundary in (
+        "今回同期・修正したcapability",
+        "--type spec --strict --no-interactive",
+        "存在すべきspecが欠落",
+        "対象0件を検証成功に数えない",
+        "active-only gateの成功を完了根拠にしない",
+        "CLIがない場合",
+        "既存repository policy",
+    ):
+        assert boundary in validation
+    assert "#archive後のcanonical検証" in recovery

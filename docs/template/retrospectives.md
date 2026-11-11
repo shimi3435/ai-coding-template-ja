@@ -2,8 +2,8 @@
 
 change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。規約と形式の定義
 （「逃した欠陥」の定義・発見経路 4 分類・更新規則）は
-[docs/agents/workflow.md](../agents/workflow.md) の
-「change close 時の軽量ふりかえり」節が owner（ここに二重化しない）。
+[release.mdの「change close 時の軽量ふりかえり」節](release.md#change-close-時の軽量ふりかえりテンプレート自身の運用)
+が owner（ここに二重化しない）。
 
 1 change = 1 行。マージ後の発見は該当行を更新する（新行を足さない）。
 
@@ -37,3 +37,4 @@ change close 時に 1 行ずつ追記する軽量ふりかえりの記録先。�
 - 2026-10-25 update-filelock-security-fixes（PR #94）: 逃した欠陥 0 件（self-review=0 / review=0 / CI=0 / merge後=0）— filelockだけを4.2.4へ更新し、上流修正の包含と実consumerの排他・失敗回復・共有cache並列生成を検証。独立review / verifierで指摘なし
 - 2026-10-27 separate-prune-maintenance-regressions（PR #92）: 逃した欠陥 4 件（self-review=1 / review=3 / CI=0 / merge後=0）— reviewで保守Pythonの型検査欠落・解析失敗の公開CLI拒否検証不足・リリース必須gateの欠落、self-reviewで固定資産数の古い記述を検出して修正。詳細回帰8 modulesとcorpus269件を保持して保守側へ分離
 - 2026-11-06 simplify-policy-skill-ownership（PR #95）: 逃した欠陥 10 件（self-review=6 / review=4 / CI=0 / merge後=0）— self-reviewで上流質問構文との非互換・不完全shell例・テストimportの型解決・CLI入口説明脱落・design必須記述脱落・保守資産件数を検出。reviewでmain統合時のテスト配置不整合・setupの共有policy違反・必要性未実証の配布・R06の正常なredirection誤判定を検出し修正
+- 2026-11-09 document-downstream-archive（PR #96）: 逃した欠陥 10 件（self-review=1 / review=9 / CI=0 / merge後=0）— self-reviewでfallback参照ずれ、reviewでprune導線2件・保守正本参照・運用未選択・shell引用・保守ready表現・canonical alias・最新HEAD承認・UTC日付を検出し修正。canonical strict検証の追加改善とCI取得HTTP 504は欠陥計上から除外
