@@ -17,6 +17,8 @@ Genshijinの専用配置、選択的取得、root `SKILL.md` を持たない構�
 - bundleの配置先を `.agents/vendor/<name>` に限定する。通常Skillの配置・root Skill検証は維持する。
 - 正確なpath一覧をallowlist兼required listとして宣言し、全fileの取得前上限・mode・legalを検査する。
 - upstream modeと宣言した実行bitの一致を要求し、権限overrideとbundleのlegacyRefを拒否する。
+- bundleのlive権限は制限的なmodeを許容し、applyの生成権限はumaskを反映する。verifyはchmodしない。
+- path衝突は全祖先directoryを含むbundle専用inventoryで検査し、既存host linkの修復・保持契約を維持する。
 - GitHubのstable release tagを指定し、resolved commitを固定する。既存adapterと隔離更新手順を再利用する。
 - 既存tree hashに加え、bundleだけにper-file SHA-256／bytes／実行bitをlockへ記録する。
 - offline verify、snapshot、update／repin、links、既存template資産pruneとの整合を同じ管理経路へ統合する。
@@ -37,6 +39,8 @@ GitHub Issueの発行、PR作成、mergeは未依頼である。
 以下の具体仕様は設計案として提示し、実装開始前に利用者の合意を確認する。
 外部レビュー後、利用者は実行権限一致、既存上限継承、GitHub属性によるstable定義、metadata feasibility、
 Git変更による撤去手順の修正方針と独立再レビューを承認した。製品実装の開始とは区別する。
+再レビューのfilesystem／isolation指摘3件についてもgrillingで判断を確定し、
+host link例外、live権限とumask、全祖先path検査の仕様修正・再レビューを承認した。
 別worktree／branch `design/genshijin-bundle-support` を基点
 `f74c99a9c355648f4580f78b0504007ce2d8c67f` から作成し、active changeは本件1つだけにする。
 #74の草案を本worktreeへ複製せず、元の作業ツリーに保持する。

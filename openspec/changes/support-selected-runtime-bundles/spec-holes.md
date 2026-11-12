@@ -63,6 +63,27 @@ BD-1〜BD-6について固定12分類を確認した。以下は仕様案と検�
 12. BD-6（1〜7,9,11,12）: 固定版の候補一覧をmetadataだけで照合し、path／祖先／type／mode／件数／bytesを確認する。
     candidate欠落や制約不適合をsynthetic test成功で代替しない。本文・runtime・最終closureは本確認のscope外とする。
     処理先: feasibility、Task 1/6。
+13. BD-4/5（1,3〜7,9,11,12）: 正常な宣言host link、誤targetの宣言link、Git追跡済み宣言外linkを分ける。
+    bundle変更ありapplyでは正規link維持・誤target修復・宣言外link保持を確認する。
+    変更なしupdate／adopt-localの誤target拒否、skills:linksの修復も通常Skillの既存契約として固定する。
+    vendor／Skill実体内、管理root／親、hostの深い階層のsymlink、untracked／ignored link、
+    宣言名の非symlink衝突は全write前に拒否する。処理先: designのhost link境界、Task 4/5。
+14. BD-3/4（2,4〜7,10,12）: POSIX modeのbitごとの許容／拒否を確認する。
+    非実行fileの0600／0644／0444、実行fileとdirectoryの0700／0755／0555は許可する。
+    非実行fileのexecute、実行fileのowner execute欠落（0641等）、owner read欠落、directory execute欠落、
+    group／other write、setuid／setgid／stickyは拒否する。verify前後のmode不変を比較する。
+    処理先: metadataのPOSIX権限契約、Task 4。
+15. BD-3/4（2,4,6,7,10,12）: 同じcommitをumask 022／077でfresh cloneし、bundleのoffline verifyと論理hash一致を確認する。
+    両umaskで新規／更新applyを行い、生成file／directoryが0644／0755または0600／0700になることを確認する。
+    再利用する既存directoryはmode不変とする。umask 0400／0100でowner read／必要executeが欠ける予定は全write前に拒否する。
+    子processでumaskを変え、test runnerの状態を他testへ漏らさない。通常Skillの既存生成modeを回帰確認する。
+    処理先: metadataの生成式、designのcloneとapply、Task 4/5。
+16. BD-1/2/3（1〜7,9,11,12）: `Lib/a.txt`＋`Lib/b.txt`は受理する。
+    `Lib/a.txt`＋`lib/b.txt`と`Lib/A/a.txt`＋`lib/a/b.txt`は祖先表記衝突、
+    `Lib/a.txt`＋`lib/a.txt`はfile衝突、`Lib`＋`lib/a.txt`はfile／directory衝突として拒否する。
+    同じfileの重複を祖先共有と混同しない。宣言順を入れ替えても判定が変わらないpropertyを検証する。
+    decoder、取得前metadata、live、snapshotで同じbundle規則を適用し、通常Skillの受理範囲は変えない。
+    処理先: metadataのpath inventory、Task 2/3/4。
 
 ## 判断状態
 
@@ -73,4 +94,6 @@ BD-1〜BD-6について固定12分類を確認した。以下は仕様案と検�
 外部レビューへの上記修正方針と独立再レビューは利用者が承認した。
 操作全体の累積予算を今回追加しない残存リスクと、stableをGitHub属性だけで定義する判断もこの承認に含む。
 これは製品実装開始の承認ではない。Task 2〜7の検証候補は未実行である。
+再レビューのfilesystem指摘についても、grillingでhost linkの修復・保持契約、制限的なlive権限、
+umaskを反映する生成権限、全祖先directoryの表記衝突拒否を合意し、最終認識合わせで仕様修正を承認した。
 実装時に新しい仕様判断が必要になった場合は完了済みcheckboxを保持して停止する。

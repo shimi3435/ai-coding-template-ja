@@ -24,7 +24,16 @@ bundle entryは既存remoteの共通fieldと次の制約を持つ。
 pathは既存のcanonical relative POSIX path規則に従い、source repository rootおよびtarget内の同じpathを表す。
 全pathがallowlistかつrequiredであり、任意fileやdirectoryを表す要素はない。
 重複、ASCII case-fold衝突、file／directory prefix衝突を拒否する。
-`executable` はboolean必須であり、trueのpathだけを0755、falseを0644へ配置する。
+衝突検査は選択fileだけでなく、その全祖先directoryを含むpath inventoryに対して行う。
+ASCII case-foldしたkeyに元のpath表記と種別を対応させ、異なる表記またはfile／directoryの種別衝突を拒否する。
+同じ表記・同じ種別の祖先directoryだけは複数fileから共有できる。fileの重複宣言は共有として受理しない。
+例えば `Lib/a.txt` と `Lib/b.txt` は許可し、`Lib/a.txt` と `lib/b.txt` は祖先表記衝突として拒否する。
+`Lib/a.txt` と `lib/a.txt` のfile衝突、`Lib` と `lib/a.txt` のfile／directory衝突も拒否する。
+宣言のdecode、取得前metadata、live tree、committed snapshotで同じbundle専用規則を使い、
+通常Skillの既存helperの受理条件を厳格化しない。自動的な表記統合・改名は行わない。
+
+`executable` はboolean必須であり、upstream／snapshotのGit実行属性とlive filesystemのPOSIX権限を区別する。
+liveの受理条件とumaskを反映した生成規則は[権限契約](#bundleのposix権限契約)に定める。
 これはupstream modeのoverrideではない。取得する固定commitのGit treeで、
 100644はfalse、100755はtrueとの一致を必須とする。どちら向きの不一致も同じcohortの本文取得前に拒否する。
 upstream modeを変更した版の採用には、対応する宣言変更と明示repinを必要とする。
@@ -96,14 +105,15 @@ previewとapplyは別々にrelease／refを観測する。各取得処理でも�
 同じcohort内の各bundle上限と既存cohort上限を全対象分確認した後にだけ、選択blob本文を取得する。
 別cohortの後続検査で失敗した場合も操作全体をfailedとし、先行取得分だけを適用しない。
 選択外の正常entryは無視し、本文は取得・保存しない。応答全体のpath重複等の構造不正は拒否する。
-upstream modeと宣言値の一致を確認し、配置時もその実行bitを保持する。
+upstream modeと宣言値の一致を確認し、配置時も論理的な実行属性を保持する。
 取得した本文はmetadataのsizeとGit object SHAに照合し、legal hashを検証してから候補treeを作る。
 
 ## Offline検証とfilesystem
 
 bundleにroot `SKILL.md` は要求せず、nested Skillを自動実行入口として登録しない。
 live treeは宣言fileとその親directoryだけで構成する。余剰file／余剰directoryを拒否する。
-target／内部directoryは0755、fileは宣言に従う0644／0755とし、特殊bit・別modeを拒否する。
+存在するvendor root、target、内部directoryとfileには下記のbundle権限契約を適用する。
+0644／0755との完全一致は要求せず、verifyはread-onlyとし、暗黙のchmodを行わない。
 regular fileでもlink countが1以外ならhardlinkとして拒否する。symlink／device等も拒否する。
 読込前metadata検査、bounded read、読込前後のidentity／size確認を既存readerの方針で行う。
 committed snapshotではGitの通常file modeとpath／本文／実行bitを確認し、live権限検査とは区別する。
@@ -113,6 +123,38 @@ committed snapshotではGitの通常file modeとpath／本文／実行bitを確�
 ASCII case-fold衝突とfile／directory prefix衝突も拒否する。
 committed snapshotでも宣言外のvendor pathを列挙して拒否し、宣言済みtargetだけの読込で見落とさない。
 通常Skillとbundleの宣言集合はそれぞれのrootで照合し、別形式の宣言名で未宣言実体を正当化しない。
+
+## BundleのPOSIX権限契約
+
+liveの権限判定は通常file／directoryの種別確認後、`mode & 07777` に対して行う。
+全対象でgroup／other write（0022）とsetuid／setgid／sticky（07000）を拒否する。
+
+- 非実行file: 所有者read（0400）が必須。owner／group／otherの全execute（0111）を禁止する。
+- 実行file: 所有者readとexecute（0500）が必須。
+- directory: 所有者readとexecute（0500）が必須。
+- 所有者write、group／otherのread、および実行file／directoryのgroup／other executeは任意とする。
+
+例えば非実行fileの0600／0644／0444、実行fileとdirectoryの0700／0755／0555は受理する。
+非実行fileの0700、実行fileの0600／0641、group writeを持つ0664／0775、特殊bitを持つmodeは拒否する。
+read-only配置のverify成功はapplyの書込み可能性を保証しない。I/O失敗は既存の失敗契約で扱い、
+verifyやapplyが既存directoryの権限を広げて回復しない。
+
+lock／canonical treeが記録するのは論理的なexecutableだけであり、umaskや全POSIX modeは記録しない。
+bundleのlive fileは上記の条件を満たした上でowner executeからその属性を得る。
+snapshotは従来どおりGit modeの100644／100755から属性を得る。同じ本文・path・宣言なら、
+umask 022と077のcloneで同じinventory／treeHashになる。通常Skillのmode／hash契約は変更しない。
+
+### Applyで生成する権限
+
+bundleを書き込む操作では、書込開始前に現在のumaskを読み、予定する全新規・置換fileと新規directoryのmodeを決める。
+非実行fileの基準を0644、実行fileとdirectoryの基準を0755とし、生成modeは `基準 & (~umask & 0777)` とする。
+umask自体は変更せず、通常Skill、source／lock、host link領域の既存書込規則を変更しない。
+bundleの置換時に削除・再生成するdirectoryも新規生成に含む。再利用する既存directoryはchmodしない。
+
+予定modeが上記の所有者read／executeを欠くなら、candidateへの最初のwriteより前に操作全体を拒否する。
+生成後のfile／directoryは予定modeを満たすように設定・確認し、fileを後から一律0644／0755へ戻さない。
+umask 022では0644／0755、077では0600／0700となる。生成・確認途中のI/O失敗は候補を保持して停止し、
+自動rollbackや既存directoryのchmodで成功扱いにしない。
 
 ## 非対応操作と互換性
 

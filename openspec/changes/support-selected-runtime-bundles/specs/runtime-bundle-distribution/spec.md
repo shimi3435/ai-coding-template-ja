@@ -7,6 +7,7 @@ schemaVersion 2を維持し、bundleのtargetは `.agents/vendor/<name>`、subtr
 exact file一覧をallowlist兼required listとし、全bundleを100 files／単一1 MiB／全体2 MiB以下に制限する。
 旧entryの意味とserialize結果を変えず、未知field・不正値・衝突は拒否する。
 bundleのsource／lockにlegacyRefを認めず、通常Skillのmigration契約は維持する。
+bundleの衝突検査は全fileと全祖先directoryの表記・種別を含める。祖先表記の自動統合は行わない。
 
 #### Scenario: Existing Skills mixed with a bundle
 - **WHEN** 通常remote/local/pluginとbundleを同じsourceで宣言する
@@ -15,6 +16,14 @@ bundleのsource／lockにlegacyRefを認めず、通常Skillのmigration契約�
 #### Scenario: Bundle claims legacy migration provenance
 - **WHEN** bundle sourceまたはlockにlegacyRefが存在する
 - **THEN** 値にかかわらず拒否し、v1 migration由来として扱わない
+
+#### Scenario: Ancestor directories differ only by ASCII case
+- **WHEN** Lib/a.txtとlib/b.txt、またはLib/A/a.txtとlib/a/b.txtを同じbundleで宣言する
+- **THEN** 祖先directoryの表記衝突として拒否し、通常Skillの既存受理条件は変更しない
+
+#### Scenario: Files share an ancestor with identical spelling
+- **WHEN** Lib/a.txtとLib/b.txtを同じbundleで宣言する
+- **THEN** 同じ表記・同じ種別の祖先だけを共有して受理する
 
 ### Requirement: BD-2 Metadata preflight before selected blob acquisition
 Acquisition MUST validate the stable release, selected paths, legal mappings, and applicable limits for the entire cohort before requesting its selected blob bodies.
@@ -51,13 +60,16 @@ stableはGitHub releaseのdraft=false、prerelease=false、tag一致を意味し
 - **THEN** 後続cohortのblob取得と操作全体のapplyを行わず、status=failed、exit code=1、changes=[]とする
 
 ### Requirement: BD-3 Exact offline inventory and legal integrity
-Offline verification MUST match the bundle's declared file set, per-file digests, canonical tree, modes, and approved legal content without network or upstream execution.
+Offline verification MUST match the bundle's declared file set, per-file digests, canonical tree, executable attributes, and approved legal content, and enforce its live permission policy without network, upstream execution, or chmod.
 
 root Skillを要求しない一方、欠落・余剰・改ざん・orphan・symlink・hardlink・特殊fileを拒否する。
-通常Skillのroot Skill検証とgolden hashは維持する。file modeとsizeは宣言と一致させる。
+通常Skillのroot Skill検証とgolden hashは維持する。論理的な実行属性とsizeは宣言／lockに一致させる。
+live側の全対象は所有者read、実行file／directoryは所有者executeを必須とする。
+非実行fileは全executeを禁止する。group／other writeとsetuid／setgid／stickyは全対象で拒否する。
+その他の権限はmetadataの範囲で任意とし、制限的な権限を完全一致違反として拒否しない。
 
 #### Scenario: Nested Skills without a root Skill
-- **WHEN** bundleの全file・mode・hash・legalが一致し、root `SKILL.md` はない
+- **WHEN** bundleの全file・実行属性・hash・legalが一致して権限条件を満たし、root `SKILL.md` はない
 - **THEN** bundleは検証成功し、同じ構造を通常Skillとして渡した場合は拒否する
 
 #### Scenario: Same bytes exposed through a hardlink
@@ -68,6 +80,18 @@ root Skillを要求しない一方、欠落・余剰・改ざん・orphan・syml
 - **WHEN** vendor root直下に通常file・symlink・特殊file・未宣言directory、またはpathのcase-fold／prefix衝突がある
 - **THEN** offline verifyは拒否し、snapshot検証でも宣言外のvendor pathを見落とさない
 
+#### Scenario: Fresh clones use different umasks
+- **WHEN** 同じbundle入りcommitをumask 022と077の環境で独立cloneする
+- **THEN** それぞれの0644／0755と0600／0700を受理し、同じinventory／treeHashを得て、verifyは権限を変更しない
+
+#### Scenario: A bundle is read-only
+- **WHEN** 非実行fileが0444、実行fileとdirectoryが0555で他の制約も満たす
+- **THEN** offline verifyは成功し、その成功をapplyの書込み可能性の保証には使わない
+
+#### Scenario: Permissions violate executable or access constraints
+- **WHEN** 非実行fileにexecuteがある、実行fileのowner executeがない、必要なowner read／directory executeがない、またはgroup／other write・特殊bitがある
+- **THEN** live検証は拒否し、chmodによって修復しない
+
 ### Requirement: BD-4 Explicit policy changes and isolated application
 Updates MUST preserve bundle policy unless a named repin explicitly approves its change, and application MUST remain confined to an independently cloned candidate.
 
@@ -75,6 +99,8 @@ Updates MUST preserve bundle policy unless a named repin explicitly approves its
 新treeを新sourceで検証し、name／target／ownership／形式を変更しない。
 previewは無変更、apply失敗時は候補を保持して停止し、元repositoryへ波及させない。
 release／refはpreviewとapplyで別々に観測し、各取得処理の本文取得後にも再確認する。
+candidateのsymlink拒否はhost link領域直下の既存例外を除く。正常・修復対象・保持対象をdesignの境界で区別する。
+bundleの新規・置換fileと新規directoryは基準0644／0755にumaskを反映して生成し、再利用するdirectoryはchmodしない。
 
 #### Scenario: Only upstream mode changes in a new version
 - **WHEN** 同じ本文でupstream modeだけが異なる新commitを採用する
@@ -97,14 +123,30 @@ release／refはpreviewとapplyで別々に観測し、各取得処理の本文�
 - **THEN** 旧treeを新file集合で誤判定せず、新候補の正確な集合を検証して適用する
 
 #### Scenario: Conflicting untracked file in the vendor target
-- **WHEN** candidateの管理領域にuntracked／ignored fileまたは不正なlinkがある
+- **WHEN** candidateの管理領域にuntracked／ignored file・link、vendor／Skill実体内のsymlink、管理領域の親／root symlink、またはhost領域の深いsymlinkがある
 - **THEN** 全writeの開始前に拒否し、既存fileを置換しない
+
+#### Scenario: Apply preserves normal host links
+- **WHEN** candidateに宣言済み通常Skillの正規host linkとGit追跡済みの宣言外leaf linkがあり、bundleの変更を適用する
+- **THEN** applyは成功し、正規linkと宣言外linkを維持し、bundle用host linkを生成しない
+
+#### Scenario: A declared host link needs repair
+- **WHEN** 通常Skillの宣言名にGit追跡済みの誤target leaf symlinkがあり、変更ありapply経路を実行する
+- **THEN** 既存契約どおり正規targetへ修復する。変更なしupdateのverify経路とadopt-localは従来どおり誤targetを拒否する
+
+#### Scenario: Apply respects the bundle umask
+- **WHEN** umask 022または077でbundleの新規・置換fileと新規directoryを生成する
+- **THEN** それぞれ0644／0755または0600／0700になり、offline verifyが成功し、通常Skillの書込規則と再利用するdirectoryのmodeは変えない
+
+#### Scenario: Umask removes required permissions
+- **WHEN** bundleの予定生成modeに必要なowner read／executeが残らない
+- **THEN** candidateへの全writeより前に拒否し、umaskや既存directoryを変更して続行しない
 
 ### Requirement: BD-5 No implicit host registration
 Link repair and ordinary setup MUST NOT generate host links or activate plugins for bundle entries.
 
 bundleの本文所有をplugin managerへ転嫁しない。既存の通常Skill linkは検証・修復を維持する。
-利用者やhostが別途作ったlinkを自動撤去しない。
+通常Skillの管理対象でない利用者・host由来linkを自動撤去しない。宣言名のlink修復は既存契約を維持する。
 
 #### Scenario: Link repair with a valid bundle present
 - **WHEN** 通常Skillとbundleが併存するcheckoutでlinksを実行する

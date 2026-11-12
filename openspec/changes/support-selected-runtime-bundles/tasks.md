@@ -14,8 +14,8 @@
   - 対象:
     - `openspec/changes/support-selected-runtime-bundles/`
   - [x] 実装: authoringとして設計草案を作成した。製品実装は未開始。
-  - [x] 検証: 外部レビュー修正後のstrict validate、task gate、self-review、独立draft review、project gate、別draft verifierを確認した。
-  - 再開状態: 修正方針は承認済み。旧草案の証跡を保持し、最新草案の検証完了により親taskを再度完了とした。
+  - [x] 検証: filesystem再レビュー修正後のstrict validate、task gate、self-review、独立diff review、project gate、別draft verifierを確認した。
+  - 再開状態: grillingの最終認識合わせで修正を承認済み。旧草案の証跡を保持し、新cycleの検証完了により親taskを再度完了とした。
 
 - [ ] 2. Bundle schemaとcanonical inventoryを実装する
   - 成果: BD-1/3の厳密なdescriptor、limits、fileDigestsを既存v2へ追加する。
@@ -28,7 +28,7 @@
     - `repo-tools/skill-updater/metadata.ts`
     - `repo-tools/skill-updater-bundle-schema.test.ts`
   - [ ] 実装: 通常Skillのserialized bytes／hashを変えずbundleだけを拡張する。
-  - [ ] 検証: spec-holes項目1/4と既存golden fixtureを確認する。
+  - [ ] 検証: spec-holes項目1/4/16と既存golden fixtureを確認する。
     bundle source／lockのlegacyRef拒否も含める。
   - 開始条件: 利用者の具体仕様承認、executor preflightとdirty ownership確認。現時点では未成立。
 
@@ -40,7 +40,7 @@
     - `repo-tools/skill-updater/bundle.ts`
     - `repo-tools/skill-updater-bundle-github.test.ts`
   - [ ] 実装: 既存runner・固定commit・credential保護・legal検証を再利用する。
-  - [ ] 検証: spec-holes項目2/3/9/10のrequest順序、mode両方向不一致、cohort内blob requestゼロ、
+  - [ ] 検証: spec-holes項目2/3/9/10/16のrequest順序、mode両方向不一致、祖先表記衝突、cohort内blob requestゼロ、
     SHA/size不一致、GitHub属性によるstable判定、取得後release再確認をfake応答で確認する。
 
 - [ ] 4. Offline／snapshot／linksとownership操作を統合する
@@ -48,14 +48,15 @@
   - 依存: 3。
   - 対象:
     - `repo-tools/skill-updater/repository.ts`
+    - `repo-tools/skill-updater/bundle.ts`
     - `repo-tools/skill-updater/ownership.ts`
     - `repo-tools/skill-updater/planner.ts`
     - `repo-tools/skill-updater/links.ts`
     - `repo-tools/skill-updater/migration/index.ts`
     - `repo-tools/skill-updater-bundle-repository.test.ts`
   - [ ] 実装: 未宣言vendor・mode・hardlink等を検査し、bundle adopt-localを拒否する。
-  - [ ] 検証: spec-holes項目4/5/7/8/11のoffline・混在・互換・no-op、vendor直下の種別不正、
-    source／lock／実体の部分残存をliveとsnapshotの適用可能な範囲で確認する。
+  - [ ] 検証: spec-holes項目4/5/7/8/11/13/14/15/16のoffline・混在・互換・no-op、vendor直下の種別不正、
+    部分残存、全祖先path衝突、umask別clone／制限的権限のverifyをliveとsnapshotの適用可能な範囲で確認する。
 
 - [ ] 5. 指名repinと隔離applyを統合する
   - 成果: BD-4の旧／新policy分離、最小preview差分、vendor衝突検査を提供する。
@@ -67,8 +68,8 @@
     - `repo-tools/skill-updater/apply.ts`
     - `repo-tools/skill-updater-bundle-command.test.ts`
   - [ ] 実装: 既存command／independent candidate契約を維持してbundleを追加する。
-  - [ ] 検証: spec-holes項目3/5/6/9、元repository不変、後続cohort失敗時のno-apply、
-    mode変更repin、policy-only変更と再実行を公開commandで確認する。
+  - [ ] 検証: spec-holes項目3/5/6/9/13/15、元repository不変、後続cohort失敗時のno-apply、
+    mode変更repin、policy-only変更、host linkの維持／修復／保持／拒否、umask別生成と再実行を公開commandで確認する。
 
 - [ ] 6. 配布契約・prune・文書を整合させる
   - 成果: BD-6の下流検証、公開schema／更新手順、#74への引渡しを完成させる。
@@ -189,3 +190,45 @@ authoring差分を自動的にexecutor-owned snapshotと読み替えず、開始
 - `issue74_draft_verify` は最初の試行でusage limitにより成果を返せなかったが、利用者の再開指示後の再試行で完了した。
   reviewerとは別の独立verifierとして7文書・外部5指摘・追加5確認・承認範囲を確認し、新規blockerなし、草案引渡し可と判定した。
   独自の構造検証とfeasibility表の再集計も成功した。製品実装は未承認、Task 2〜7は未完了、製品close不可である。
+
+## Filesystem再レビュー後の修正cycle
+
+基点は `421d40795e972775e8ad94fd8f94399427beac52`。開始時の本worktreeはcleanだった。
+利用者が提示した再レビューは、前回指摘をRESOLVEDとし、新規P2 3件をREQUEST CHANGESとした。
+grillingの質問への回答と最終認識合わせで、下記の仕様修正・独立再レビューを承認した。
+製品実装開始、通常Skillの契約変更、新しい配布機構の追加は含まない。
+
+### 修正前evidenceと合意
+
+- 再レビューP2-1: 旧designはhost leaf linkを許可する一方、管理領域の全symlinkを拒否する文章を含んでいた。
+  既存の正常link維持、変更ありapplyでの宣言名誤target修復、追跡済み宣言外link保持を区別した。
+  vendor／Skill実体・管理root／親・hostの深いlink・未追跡／ignored衝突の拒否は維持する。
+  designのhost link境界、BD-4/5、spec-holes項目13、Task 4/5へ対応させた。
+- 再レビューP2-2: 旧metadataはliveの0644／0755完全一致を要求し、正常なumask 077 cloneと両立しなかった。
+  制限的な権限を受理し、owner read／必要executeを必須、group／other writeと特殊bitを拒否する。
+  verifyはchmodしない。bundle生成時はumaskを反映し、予定modeの必須権限欠落は全write前に拒否する。
+  metadataの権限契約、BD-3/4、spec-holes項目14/15、Task 4/5へ対応させた。
+- 再レビューP2-3: 旧metadataはcase-fold拒否だけを記し、既存helperでは祖先表記違いを受理し得た。
+  全file・全祖先directoryの表記と種別をbundle専用inventoryで照合し、同じ表記の祖先だけ共有する。
+  通常Skillのhelperを厳格化しない。BD-1/2/3、spec-holes項目16、Task 2/3/4へ対応させた。
+
+`issue74_facts` の自作一時fixtureによる既存挙動probeでは、host linkの維持／修復／保持と禁止linkのwrite 0件を確認した。
+umask 022 cloneはdirectory／実行file0755・非実行file0644、077 cloneは0700・0600だった。Git modeは共通だった。
+既存path helperは `Lib/a.txt`＋`lib/b.txt` を受理し、file重複とfile／directory prefix衝突は拒否した。
+調査probeはNode 26で行われたもので、Node 24のproject gateや未実装bundleの受入testには読み替えない。
+製品codeは未実装のため、RED runtime testの代わりに上記の旧文書の矛盾・欠落と既存挙動を修正前evidenceとする。
+
+### 最新の検証状態
+
+- self-reviewで6文書の差分と既存契約への接続を確認した。論理的実行属性とPOSIX mode、
+  tracked誤target・baseにもないlink欠落・candidateだけのdirty削除を区別し、未解決指摘はなかった。
+- `openspec validate support-selected-runtime-bundles --strict --no-interactive` と `task openspec:validate` はfresh実行exit 0。
+  diff空白検査、7 Markdownのlinks／anchors、既存feasibility表のfileと全祖先33 entriesの表記・種別照合も成功した。
+- `issue74_draft_review` の独立diff reviewで新規P2 3件の仕様上の解消と、scenario／spec-holes13〜16／tasksの対応を確認した。
+  新規blockerなし、承認範囲逸脱なしと判定され、このcycleで追加fix iterationは発生していない。
+- 最新入力の `./scripts/check.sh` はNode.js 24.14.1／Python 3.14.6のPATHでfresh実行exit 0。
+  Node tests 638 passed、Python tests 662 passed / 126 skipped、format／lint／typecheck成功。
+- reviewerとは別の `issue74_draft_verify` が仕様・scenario・tasks・合意と既存コードの境界を確認し、
+  新規blockerなし、草案引渡し可と判定した。独自の文書構造検証とfeasibilityの33 entries照合も成功した。
+  製品実装は未承認、Task 2〜7は未完了、製品close不可を維持する。
+- Task 2〜7の新しい機能testは未実施であり、既存probeからbundle実装の成功を主張しない。

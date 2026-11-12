@@ -29,9 +29,12 @@ legal fileも同じ一覧に含め、legalMappingsによる一覧外取得・別
 本changeでは100 files／単一1 MiB／全体2 MiBを各bundleの上限とする。
 sourceはこれを引き下げられるが引き上げられない。より大きな汎用bundleへの拡張は本changeの対象外とする。
 directoryはfile一覧の親から導出する。rootや末端に不要なdirectoryを追加しない。
+bundle専用のpath inventoryは全fileと全祖先directoryの元表記・種別を保持する。
+同じ表記の祖先は共有できるが、ASCII case-fold後に一致する別表記は共有しない。
+通常Skillのhelperだけでは祖先表記の衝突を検出できないため、共有helperを厳格化せずbundle側で補う。
 
 `executable` はupstream Git modeと一致させ、overrideを認めない。
-原本のmode変更を必要とするhost adapterは#74のproject-owned側で設計し、bundle原本の権限を書き換えない。
+原本の実行属性変更を必要とするhost adapterは#74のproject-owned側で設計し、bundle原本の論理的な実行属性を上書きしない。
 upstreamのmodeが変わった版へ更新する場合は、宣言変更と明示repinを経て、lockとpreviewにもmode差分を残す。
 通常updateは移動tagを拒否するため、mode変更を含む別commitへのtag移動も黙って採用しない。
 
@@ -55,13 +58,15 @@ bundle専用の累積予算も今回は追加せず、通常Skillと共通のcoh
 - `github.ts`: 同じcohortのref／release／tree metadataを全対象分検査した後、選択blobだけを既存runnerで取得する。
   truncated tree、Git SHA／size不一致、許可されないmodeの拒否とcredential redactを継承する。
 - `metadata.ts`／`repository.ts`: 通常Skillは既存root Skill検証、bundleはexact file集合・mode・limits検証を使う。
-  live filesystemとcommitted snapshotの両方で、同じ宣言に対して同じ論理treeを得る。
+  bundleのlive権限は[metadataの権限契約](metadata.md#bundleのposix権限契約)に従い、制限的なmodeを受理する。
+  全POSIX modeをhashへ含めず、liveとsnapshotで同じ論理treeを得る。read-only verifyでchmodしない。
   通常Skill名とbundle名をrootごとに照合し、bundle宣言を理由に同名の未宣言Skill実体を許可しない。
 - `planner.ts`／`ownership.ts`: 通常updateはbundle policyを変更しない。指名repinだけが承認済みpolicy差分を扱う。
   他の通常Skillをadopt-localする際、併存bundleを壊さず検証して保持する。
 - `isolation.ts`／`apply.ts`: `.agents/vendor` を管理領域へ追加し、source／candidateのfingerprintと衝突検査へ含める。
-  symlinkを許すのは既存のhost link領域だけとし、vendor領域へその例外を広げない。
-- `links.ts`: bundleをlink生成対象から除外する。既存の利用者・host由来linkを削除したり所有したりしない。
+  symlink例外は下記のhost link境界に限定し、vendor領域へ広げない。
+  bundleの生成modeはumaskを反映し、通常Skill向けの一律fchmodをbundleへ流用しない。
+- `links.ts`: bundleをlink生成対象から除外する。通常Skillの管理対象でない利用者・host由来linkを削除したり所有したりしない。
 
 `CanonicalTree`と `skill-tree-v1` のhash定義は変更しない。bundleにも同じbyte順序・hash算法を使い、
 per-file inventoryはその同じtreeから導出する。独立した第二のhash実装を作らない。
@@ -92,7 +97,42 @@ bundleの変更entryには旧／新lock inventoryから導出した `bundleFileC
 書込は既存のindependent cloneだけへ、明示 `--apply` で行う。linked worktreeを更新candidateにしない。
 全metadata／旧状態／新取得物を検証してから書込み、最後に全体offline verifyを必須とする。
 失敗したcandidateは診断用に保持し、再試行は新candidateから行う。transaction／rollbackは追加しない。
-apply前のcandidate管理領域にuntracked／ignored file、hardlink、symlinkがあれば書込開始前に停止する。
+apply前のcandidate管理領域のuntracked／ignored file・link、hardlink、下記で禁止するsymlinkは書込開始前に拒否する。
+既存契約で許可するhost linkを、symlinkという理由だけで拒否しない。
+
+## Candidateのhost link境界
+
+`.agents/skills` と `.agents/vendor` は、root自身と内部のsymlinkを禁止する。
+解決済みrepository rootから管理領域へ至る親directoryのsymlinkも禁止する。
+repository引数自体をrealpathで解決する既存挙動は変更しない。
+`.claude/skills` と `.codex/skills` はrootやその親を通常directoryとし、直下のleaf symlinkだけを既存契約の例外とする。
+より深い階層のsymlink、管理領域のuntracked／ignored linkは例外にしない。
+
+通常Skillについて、既存の操作ごとの契約を維持する。
+
+- 宣言済み通常Skillの正規host linkは維持し、正常linkを持つcandidateでbundle applyを成功させる。
+- 宣言名のGit追跡済み誤target、またはbaseにも存在しないlinkの欠落は、変更ありの既存apply経路では正規targetへ修復する。
+  baseの追跡済みlinkをcandidateだけで削除したdirty状態は、既存preflightの拒否対象である。
+  `skills:links` の既存修復契約も維持する。isolated applyの未追跡衝突拒否を現在checkoutのlinks操作と混同しない。
+  誤targetをたどらずlink自体を置き換える。宣言名の通常file／directory衝突は全write前に拒否する。
+- 変更なしupdateのverify経路とadopt-localのsnapshot検査は、従来どおり宣言名の誤targetを拒否する。
+  bundle導入を理由にこれらの操作へ修復を追加しない。
+- Git追跡済みの宣言外ユーザーlinkは、host領域直下なら先をたどらず保持する。
+  「通常Skillとして未宣言」と「Git未追跡」を同一視しない。bundleと同名であっても通常Skillの修復対象へ追加しない。
+
+root・親・深い階層・vendor内部などの禁止linkや未追跡衝突はwrite件数0を検証する。
+正常link、修復対象link、保持するlinkのfixtureも分け、単純な「不正linkは全拒否」へまとめない。
+
+## Cloneとapplyの権限
+
+Gitの実行属性とliveのPOSIX modeを分け、umask 022／077のfresh cloneをともに検証可能にする。
+bundleのfile／directoryは所有者read、実行file／directoryは所有者executeを必要とし、
+group／other writeと特殊bitを禁止する。全許容条件と生成式はmetadataを正とする。
+制限的な権限をlockの改ざんとして扱わず、非実行fileにexecuteが付いた状態や実行fileのowner execute欠落は拒否する。
+
+bundle applyは新規・置換fileと新規directoryにumaskを反映する。予定modeの必須権限欠落は全write前に拒否する。
+再利用する既存directoryをchmodせず、通常Skill・source／lock・host linkの書込規則を維持する。
+読み取り専用bundleをverifyできても、そのまま更新できるとは保証しない。書込失敗時は候補保持・停止を継承する。
 
 ## Pruneと下流
 
