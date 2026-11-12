@@ -7,6 +7,8 @@
 rootは既存の `{schemaVersion: 2, skills: [...]}`。remote entryにだけ `bundle` を任意追加する。
 `bundle` がないentryの必須field、target、構造、legal、serializationは変更しない。
 local／plugin entryの `bundle`、bundleなしentryのbundle用lock fieldは拒否する。
+bundle source／lockの `legacyRef` は、値にかかわらず拒否する。v1にはbundleが存在しないため、
+migration由来の例外を新規bundleへ持ち込まない。通常SkillのlegacyRef契約は変更しない。
 
 bundle entryは既存remoteの共通fieldと次の制約を持つ。
 
@@ -23,6 +25,10 @@ pathは既存のcanonical relative POSIX path規則に従い、source repository
 全pathがallowlistかつrequiredであり、任意fileやdirectoryを表す要素はない。
 重複、ASCII case-fold衝突、file／directory prefix衝突を拒否する。
 `executable` はboolean必須であり、trueのpathだけを0755、falseを0644へ配置する。
+これはupstream modeのoverrideではない。取得する固定commitのGit treeで、
+100644はfalse、100755はtrueとの一致を必須とする。どちら向きの不一致も同じcohortの本文取得前に拒否する。
+upstream modeを変更した版の採用には、対応する宣言変更と明示repinを必要とする。
+mode overrideの承認field・暗黙の権限正規化は提供しない。通常Skillのmode／hash規則は変更しない。
 
 `bundle.limits` は `{files, singleFileBytes, totalBytes}` のexact object。
 全値は正のsafe integerで、それぞれ100、1,048,576、2,097,152以下とする。
@@ -36,6 +42,24 @@ nameの全ownership間一意性、NFC、path長・深さ・metadata bytesの既�
 sourceはUTF-8 byte順のname、filesはpath順、legalMappingsは既存順でcanonical化する。
 `bundle` は既存remote fieldsの末尾に置き、内部順はfiles、limitsとする。
 files要素はpath、executable、limitsはfiles、singleFileBytes、totalBytesの順にする。
+
+## リソース上限の適用単位
+
+- bundle単位: 上記の100 files／単一1 MiB／合計2 MiBを上限とし、宣言値で引き下げられる。
+- cohort単位: 同じrepository／refの通常Skillとbundleが選択するpathの和集合に、既存の500 files／50 MiBを適用する。
+  同じcohortの同じpathは重複計上しない。bundle単位の上限は各bundleへ別々に適用する。
+- metadata単位: source／lock各fileは既存の10 MiB以下、sourceは最大500 entriesとする。
+  GitHub応答は既存GhRunnerの1回の起動につきstdout／stderr合計64 MiB上限を継承する。
+  これらは操作全体のmetadata累積上限ではなく、parse後のメモリ上限でもない。
+- 操作全体: cohort横断の累積file数・bytes・API metadata量の新しい予算は設けない。
+  source件数などによる間接的な有限性はあるが、低い総取得量・メモリ使用量を保証しない。
+  例えば500の独立bundleが各2 MiBなら、選択本文だけで計1,000 MiBになり得る。
+
+cohortは既存の決定的順序で順次検査・取得する。後続cohortの失敗時、先行cohortの本文を取得済みの場合がある。
+失敗したcohortの事前検査で拒否した場合、そのcohortのblob requestは0件とする。
+操作全体はstatus=failed、exit code=1、changes=[]となり、candidateへのapplyを開始しない。
+前半の取得コストを取り消したり、全cohort検査前のblob requestを0件にしたりする保証はない。
+この既存制約の継承理由と残存リスクは[design](design.md#操作全体の予算を追加しない判断)に定める。
 
 ## Lock
 
@@ -58,14 +82,21 @@ sourceのbundle位置を継承し、lock固有末尾fieldとしてfileDigestsを
 
 既存のGitHub API adapterでreleaseとrefを解決し、commitの完全tree metadataを読む。
 releaseはdraft=false、prerelease=false、tag_nameがsource refと一致することを要求する。
+本changeのstableはこのGitHub release属性による定義であり、SemVer正式版を意味しない。
+`v1.0.0` と `v1.0.0-rc.1` のどちらも、上記条件と既存tag名検証を満たせば受理する。
+属性の欠落・型不正は拒否する。SemVer parserやtag名からの安定性推測は追加しない。
 truncated／不正応答は拒否する。commitとtag objectの既存provenance検証を維持する。
+previewとapplyは別々にrelease／refを観測する。各取得処理でも本文取得後にrelease条件とref identityを再確認し、
+失敗・削除・draft化・prerelease化・tag移動を検出した場合は候補へ適用しない。
+過去のpreviewやこの文書のfeasibility記録を承認済みの永続tokenとして再利用しない。
+最後の観測後のGitHub側変更を原子的に防ぐ保証はない。
 
 選択fileと祖先directoryをmetadataから照合する。fileはblobかつ100644／100755、
 祖先は通常treeでなければ拒否する。symlink、submodule、未知mode/type、欠落、非整数sizeは拒否する。
 同じcohort内の各bundle上限と既存cohort上限を全対象分確認した後にだけ、選択blob本文を取得する。
 別cohortの後続検査で失敗した場合も操作全体をfailedとし、先行取得分だけを適用しない。
 選択外の正常entryは無視し、本文は取得・保存しない。応答全体のpath重複等の構造不正は拒否する。
-Gitのfile modeによる暗黙実行許可は与えず、配置時の実行bitは宣言値に限定する。
+upstream modeと宣言値の一致を確認し、配置時もその実行bitを保持する。
 取得した本文はmetadataのsizeとGit object SHAに照合し、legal hashを検証してから候補treeを作る。
 
 ## Offline検証とfilesystem
@@ -78,6 +109,9 @@ regular fileでもlink countが1以外ならhardlinkとして拒否する。syml
 committed snapshotではGitの通常file modeとpath／本文／実行bitを確認し、live権限検査とは区別する。
 `.agents/vendor` がない場合はbundle宣言0件なら許可し、宣言があれば欠落として拒否する。
 管理root内の未宣言bundle、source／lockのorphan、path種別不正を成功扱いしない。
+`.agents/vendor` 自身のsymlinkや通常file、直下の通常file・symlink・特殊file、未宣言directory、
+ASCII case-fold衝突とfile／directory prefix衝突も拒否する。
+committed snapshotでも宣言外のvendor pathを列挙して拒否し、宣言済みtargetだけの読込で見落とさない。
 通常Skillとbundleの宣言集合はそれぞれのrootで照合し、別形式の宣言名で未宣言実体を正当化しない。
 
 ## 非対応操作と互換性
@@ -86,6 +120,9 @@ committed snapshotではGitの通常file modeとpath／本文／実行bitを確�
 - v1→v2 migrateの既存変換は不変。完成済みv2のbundle混在入力は検証してno-opとする。
 - 通常Skillとbundleの相互変換、name／target変更はupdate／repinの対象外とする。
 - 旧v2 readerがbundleを読めないことを明記する。旧reader用の偽root Skillやfield除去を自動生成しない。
+- bundleの廃止は[明示的な撤去手順](design.md#repository-bundleの撤去)に従うGit変更として扱い、update／repinへ削除操作を追加しない。
+  撤去完了時のoffline verifyはsource entry・lock entry・vendor実体が全てない状態だけを受理する。
+  3要素の一部だけが残る6通りは拒否する。追加操作でsource-onlyから候補を作る既存経路とは区別する。
 
 ## Previewのfile差分
 
