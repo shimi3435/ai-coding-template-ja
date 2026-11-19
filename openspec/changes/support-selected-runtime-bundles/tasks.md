@@ -17,7 +17,7 @@
   - [x] 検証: filesystem再レビュー修正後のstrict validate、task gate、self-review、独立diff review、project gate、別draft verifierを確認した。
   - 再開状態: grillingの最終認識合わせで修正を承認済み。旧草案の証跡を保持し、新cycleの検証完了により親taskを再度完了とした。
 
-- [ ] 2. Bundle schemaとcanonical inventoryを実装する
+- [x] 2. Bundle schemaとcanonical inventoryを実装する
   - 成果: BD-1/3の厳密なdescriptor、limits、fileDigestsを既存v2へ追加する。
   - 依存: 1。
   - 対象:
@@ -27,23 +27,28 @@
     - `repo-tools/skill-updater/legal.ts`
     - `repo-tools/skill-updater/metadata.ts`
     - `repo-tools/skill-updater-bundle-schema.test.ts`
-  - [ ] 実装: 通常Skillのserialized bytes／hashを変えずbundleだけを拡張する。
-  - [ ] 検証: spec-holes項目1/4/16と既存golden fixtureを確認する。
+  - [x] 実装: 通常Skillのserialized bytes／hashを変えずbundleだけを拡張する。
+  - [x] 検証: spec-holes項目1/4/16と既存golden fixtureを確認する。
     bundle source／lockのlegacyRef拒否も含める。
-  - 開始条件: 利用者の具体仕様承認、executor preflightとdirty ownership確認。現時点では未成立。
+  - 証跡: schemaの正常bundle受理でREDを確認後、bundle-schema／v2-foundation／foundationの82 testsが成功した。
+    `npm run typecheck` はexit 0。初期CI parityの `./scripts/check.sh` はfresh実行exit 0（638 Node／662 Python成功、126 skip）。
+    後続実装を含む最終gateはTask 7で再実行する。
+  - 開始条件: 利用者の具体仕様承認、executor preflightとdirty ownership確認。2026-11-13の依頼と下記preflightにより成立。
 
-- [ ] 3. 既存GitHub adapterへ選択的bundle取得を追加する
+- [x] 3. 既存GitHub adapterへ選択的bundle取得を追加する
   - 成果: BD-2のstable release、metadata先行検査、選択blobのみの取得を提供する。
   - 依存: 2。
   - 対象:
     - `repo-tools/skill-updater/github.ts`
     - `repo-tools/skill-updater/bundle.ts`
     - `repo-tools/skill-updater-bundle-github.test.ts`
-  - [ ] 実装: 既存runner・固定commit・credential保護・legal検証を再利用する。
-  - [ ] 検証: spec-holes項目2/3/9/10/16のrequest順序、mode両方向不一致、祖先表記衝突、cohort内blob requestゼロ、
+  - [x] 実装: 既存runner・固定commit・credential保護・legal検証を再利用する。
+  - [x] 検証: spec-holes項目2/3/9/10/16のrequest順序、mode両方向不一致、祖先表記衝突、cohort内blob requestゼロ、
     SHA/size不一致、GitHub属性によるstable判定、取得後release再確認をfake応答で確認する。
+  - 証跡: 正常取得とrelease再確認のRED後、bundle-github／githubの73 tests成功。typecheckもexit 0。
+    cohort横断の累積予算非追加と後続失敗の公開操作検証はTask 5で行う。
 
-- [ ] 4. Offline／snapshot／linksとownership操作を統合する
+- [x] 4. Offline／snapshot／linksとownership操作を統合する
   - 成果: BD-3/5/6の実体検証、bundle link非生成、通常Skillとの混在を提供する。
   - 依存: 3。
   - 対象:
@@ -54,11 +59,16 @@
     - `repo-tools/skill-updater/links.ts`
     - `repo-tools/skill-updater/migration/index.ts`
     - `repo-tools/skill-updater-bundle-repository.test.ts`
-  - [ ] 実装: 未宣言vendor・mode・hardlink等を検査し、bundle adopt-localを拒否する。
-  - [ ] 検証: spec-holes項目4/5/7/8/11/13/14/15/16のoffline・混在・互換・no-op、vendor直下の種別不正、
+    - `repo-tools/skill-updater-bundle-test-fixture.ts`
+  - [x] 実装: 未宣言vendor・mode・hardlink等を検査し、bundle adopt-localを拒否する。
+  - [x] 検証: spec-holes項目4/5/7/8/11/13/14/15/16のoffline・混在・互換・no-op、vendor直下の種別不正、
     部分残存、全祖先path衝突、umask別clone／制限的権限のverifyをliveとsnapshotの適用可能な範囲で確認する。
+  - 証跡: bundle-repository／repository／ownership／migrationの47 tests成功。
+    公開verify／links／migrate／bundle adopt-local拒否、通常adopt-localとの混在、022／077独立clone、
+    POSIX各bit、hardlink／FIFO、partial retirement 6通り、snapshot余剰pathを確認した。
+    candidate差替え／host linkの操作別挙動／部分writeはTask 5の公開操作で確認する。
 
-- [ ] 5. 指名repinと隔離applyを統合する
+- [x] 5. 指名repinと隔離applyを統合する
   - 成果: BD-4の旧／新policy分離、最小preview差分、vendor衝突検査を提供する。
   - 依存: 4。
   - 対象:
@@ -67,11 +77,15 @@
     - `repo-tools/skill-updater/isolation.ts`
     - `repo-tools/skill-updater/apply.ts`
     - `repo-tools/skill-updater-bundle-command.test.ts`
-  - [ ] 実装: 既存command／independent candidate契約を維持してbundleを追加する。
-  - [ ] 検証: spec-holes項目3/5/6/9/13/15、元repository不変、後続cohort失敗時のno-apply、
+  - [x] 実装: 既存command／independent candidate契約を維持してbundleを追加する。
+  - [x] 検証: spec-holes項目3/5/6/9/13/15、元repository不変、後続cohort失敗時のno-apply、
     mode変更repin、policy-only変更、host linkの維持／修復／保持／拒否、umask別生成と再実行を公開commandで確認する。
+  - 証跡: bundle-command／remote-command／isolationの68 tests成功。新規bundle／旧新policy分離のRED後に実装した。
+    umask 022／077の追加・置換、0400／0100の全write前拒否、0222でowner writeを失うdirectoryのEACCES、
+    file 1件後のEIO、元repositoryのindex／refs／config保持、新candidate再試行を確認した。
+    26 MiB超の独立2 cohorts、後続cohort拒否、preview後再観測、host link別挙動もfake応答で確認した。
 
-- [ ] 6. 配布契約・prune・文書を整合させる
+- [x] 6. 配布契約・prune・文書を整合させる
   - 成果: BD-6の下流検証、公開schema／更新手順、#74への引渡しを完成させる。
   - 依存: 5。
   - 対象:
@@ -81,19 +95,85 @@
     - `template-maintenance/tests/test_prune_integration.py`
     - `template-maintenance/tests/template_prune_fixture.py`
     - `repo-tools/skill-updater-bundle-command.test.ts`
-  - [ ] 実装: 既存通常Skill互換、bundleの非対応操作、Git変更による撤去手順と残存リスクを記載する。
-  - [ ] 検証: synthetic bundle入りprune前後のoffline verify／通常checkとspec-holes項目8/11/12を確認する。
+  - [x] 実装: 既存通常Skill互換、bundleの非対応操作、Git変更による撤去手順と残存リスクを記載する。
+  - [x] 検証: synthetic bundle入りprune前後のoffline verify／通常checkとspec-holes項目8/11/12を確認する。
     撤去後commit基準のcheck、残存bundleあり／なしの撤去後prune、固定版feasibilityと最終制約の整合を含める。
+  - 証跡（2026-11-18）: `uv run --no-sync pytest template-maintenance/tests/test_prune_integration.py -q -x` はfresh実行exit 0、7 passed。
+    synthetic bundle入りsetup／rename／prune、隔離したoffline通常check、全撤去／他bundle保持の両方を確認した。
+    subprocess中心のためcoverage集計はNo data警告となるが、commandのexitとassertion結果で判定した。
+    固定版feasibilityの記録を現在のdecoder／inventory／size検査へ通し、25 files／128,556 bytes／33 entriesを再確認した。
+    7e06d8eの旧decoderとの一時probeで、同梱通常Skillのsource／lock serialized bytes一致と旧readerのbundle拒否を確認した。
+    このprobeは通常CIへGit履歴依存を追加せず、一時ファイルを削除した。
 
-- [ ] 7. Review・最終gate・引渡しを行う
+- [x] 7. Review・最終gate・引渡しを行う
   - 成果: 全要件とspec-holesの検証対応、必要review、#74再開条件を確認する。
   - 依存: 6。
   - 対象:
     - `openspec/changes/support-selected-runtime-bundles/tasks.md`
     - `docs/template/retrospectives.md`
-  - [ ] 実装: 検証結果・制限・引渡し先を記録する。
-  - [ ] 検証: self-review、独立review、必要なfix/validation/diff review、最新 `./scripts/check.sh`、
+  - [x] 実装: 検証結果・制限・引渡し先を記録する。最終review／gate結果は同taskの検証状態として追記する。
+  - [x] 検証: self-review、独立review、必要なfix/validation/diff review、最新 `./scripts/check.sh`、
     `task check:template`、別verifierをworkflow順に完了する。PRレビューは別途確認する。
+
+## 実装検証の対応と引渡し（2026-11-18）
+
+source commitは `7e06d8e45e4d4046c4dfa01d6c62283e9d6a7e45`、本branchのexecutor-owned差分を対象とする。
+以下は実装後のfresh検証であり、設計段階のsuite結果を代用しない。
+
+- `node --test repo-tools/skill-updater-*.test.ts`: 305 passed。その後追加した通常Skill混在umask回帰はfocused 1 passed。
+  `npm run typecheck`、変更Pythonのruff、`git diff --check` はexit 0。
+- spec-holes 1/4/16: bundle-schemaのdecoder／canonical順序／境界と既存foundation golden、bundle-repositoryのlive／snapshot集合照合。
+- spec-holes 2/3/9/10/16: bundle-githubのcohort全件metadata先行・Git mode・祖先・release属性／再確認・size／SHA拒否、
+  bundle-commandのpreview後再観測、後続cohort失敗、独立2 cohorts各26 MiBの累積予算非追加。
+- spec-holes 5/6/13/15: bundle-commandの公開update／repin、旧新policy分離、mode／content／policy-only差分、
+  host linkの操作別契約、全write前拒否、022／077生成、0400／0100拒否、0222のEACCESとEIO後のcandidate保持・新clone再試行。
+  元repositoryの実体／index／refs／config保持、通常Skillの0644／0755生成も確認した。
+- spec-holes 4/5/7/8/11/14/15/16: bundle-repositoryのoffline verify／links／migrate／adopt-local、
+  全8撤去状態、POSIX bit別判定とchmodなし、hardlink／FIFO／symlink／余剰path、読込中size／identity変更、022／077 fresh clone。
+  Gitで表せない特殊fileはlive側で検証し、device nodeの実作成は行わず通常file以外を拒否する同じ分岐をFIFOで検証した。
+- spec-holes 8/11/12: Task 6のprune integration、撤去commit基準の公開check、旧reader互換probe、固定版metadata記録との整合。
+- self-review: 7e06d8eからのtracked差分と新規6 files、直接依存、文書、spec-holesを照合した。
+  読込中size／identity変更と通常Skill混在umaskの検証不足を検出し、executorが回帰を追加して成功を確認した。
+  Task 6未完了中のfixture commit欠落／lint失敗も修正・再検証済み。現時点で未解決の製品欠陥・仕様判断はない。
+  self-review時点では独立review、最終project gate、別verifierは未実施だった。完了結果は下記cycle 1を参照する。
+- 残存リスク: 操作全体の累積予算は追加していない。同一ユーザーの任意の敵対的processとの完全排他、
+  複数file書込の原子性、最後の観測後のrelease／ref変更防止は保証しない。
+- Issue #74への引渡し: この先行changeの受入後、固定版の最終required file closure／legal本文承認、Genshijin実体同梱、
+  host adapter、caveman撤去、runtime smokeを別途実施する。本changeでは実upstream codeの取得・実行・importを追加しない。
+- 未検証／後続: hosted CIとPRレビューはPR作成後に確認する。PR作成、merge、close／archiveは今回の対象外である。
+  `docs/template/retrospectives.md` の正式1行は実PR番号とclose時点の集計を要するため未追記。
+  後続closeへの集計メモ: self-review=2（完了後に発見したrequired回帰検証不足2件）、review=0、CI=0、merge後=0。
+  未完了Task 6のfixture／lint修正は「実装checkbox完了後」の欠陥に数えない。今後PR review等で修正が生じた場合は更新する。
+
+## 実装review cycle 1（2026-11-19）
+
+- 再開preflightでbranch／HEAD／active change／未解決判断なしと25 pathsの累積snapshot一致を確認した。
+  Node.js 24.14.1／Python 3.14.6を再確認した。Task 2〜6の完了を保持し、Task 7の検証から再開した。
+- initial independent reviewer `bundle_initial_review` はtracked差分、新規6 files、正本7 artifactsと直接依存をread-onlyで検査した。
+  APPROVE、P0／P1／P2は全て0、blockerなし。fix／diff review iterationは0回である。
+- reviewerのfresh検証: `node --test repo-tools/skill-updater-bundle-*.test.ts` は113 passed、失敗／skip 0。
+  独自probeでLICENSEからCOPYINGへのlegal変更とfile追加の公開repin／apply／offline verifyが成功し、追加・削除差分が一致した。
+- executorのfresh検証: `node --test repo-tools/skill-updater-*.test.ts` は306 passed、失敗／skip 0。
+  `task openspec:validate` と `git diff --check` はexit 0。
+- reviewer承認後、同worktreeで最新入力の `./scripts/check.sh` をfresh実行しexit 0。
+  Node 751 passed、Python 662 passed／126 skipped、format／lint／typecheckが成功した。
+  `task check:template` もfresh実行exit 0、999 passed、保守側typecheckは0 errorsだった。
+  両commandのPATHは `/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PWD/.venv/bin:$PATH`。
+  Node.js 24.14.1／Python 3.14.6、Linux WSL2 x86_64、C.UTF-8で実行した。設計段階の結果は再利用していない。
+- 別の独立verifier `bundle_final_verifier` は一度usage limitで中断した。findingはなく、利用者の再開依頼後、
+  同agentを再開して検証を完了した。利用可能な成果を返さない連続2回の失敗には該当しない。
+- verifierのfresh focused検証は306 passed。独自の公開操作probeで、取得後release無効化時のwriteゼロ、
+  preview不変、空fileを含む選択blobだけの取得、rc tagのstable属性受理、umask 077、元repositoryのbytes／mode／Git不変、
+  readonly offline verify／chmodなし、不正execute拒否、bundle host link非生成を確認した。
+  固定版feasibility記録と実装の照合、`git diff --check` も成功した。
+- verifierはHEAD／realpath／dirty 25 pathsの集合・type・mode・SHAを独自に前後照合し、executorが環境・依存の無変更を確認した。
+  上記2つの全体gateは入力同一性を満たすgreen evidenceとして再利用した。blockerなし、required evidence不足なしと判定された。
+- 証跡更新もprune integrationのcopy対象になるため、最終記録反映後の `./scripts/check.sh` と `task check:template` の
+  fresh再実行を最終完了判定の条件とする。失敗した場合はTask 7の検証状態を未完了へ戻し、成功扱いしない。
+- Task 2〜7の実装とローカル検証を完了した。実装担当は1 executor、初回reviewerとverifierは別agentであり、
+  追加executor、仕様拡張、commit／push／PR作成／merge／close／archiveは実行していない。
+  運用はテンプレート保守向けcloseを継承する。PRレビュー／hosted CIとclose時のretrospective正式行は後続であり、
+  現段階ではclose-ready／archive-readyとせず、利用者の別途指示を待つ。
 
 ## Authoring state
 
@@ -102,10 +182,34 @@ worktreeは `/home/shimi3435/workspace/python/ai-coding-template-ja-genshijin-bu
 開始時tracked／untracked差分はなかった。#74草案と利用者差分は元worktreeに保持する。
 通常日本語の文書生成方針とテンプレート保守向けclose選択を会話から継承する。
 
-executor preflight／safe boundaryは未実行。新しいschema案の承認後に実装を開始する。
+設計段階ではexecutor preflight／safe boundaryは未実行だった。現在の開始状態は次節を正とする。
 authoring差分を自動的にexecutor-owned snapshotと読み替えず、開始時にownershipを照合する。
 実装は1 executorが所有し、追加executorは使用しない。必須reviewer／verifierは順次起動する。
-現在は設計段階であり、implementation complete／close-readyではない。
+この節は設計段階の履歴である。現在の実装・検証状態は各taskと実装開始承認を参照する。
+
+## 再開時の差分引継ぎ（2026-11-18）
+
+中断時の累積snapshotがなく、再開時はreport-onlyで停止した。利用者が現在の未コミット25ファイルを
+前回executor差分として引き継ぐことを「ok」で明示承認した。branch／HEAD／active changeは開始時と同じで、
+全artifactsとtasksの構造・依存・対象path・ignored対象なしを再確認し、safe boundaryを通過した。
+元worktreeの保護対象は引き続き参照・変更しない。実装担当は引き続き1 executorである。
+再開時点ではTask 6の文書とprune fixtureは実装途中だった。前回の一時logは現環境にないため、必須検証をfresh実行した。
+初回prune検証ではfixtureの撤去前commit欠落とPython lint違反が失敗原因だった。修正後の再検証で7 testsが成功した。
+self-reviewで読込中size／identity変更のtest不足を確認して追加した。再開時点では独立reviewと別verifierは未実施だった。
+
+## 実装開始承認とpreflight（2026-11-13）
+
+- 利用者がTask 2〜7の実装・検証と必要な独立reviewer／verifierを明示承認した。実装担当は1 executorとする。
+- branchは `design/genshijin-bundle-support`、HEADは `7e06d8e45e4d4046c4dfa01d6c62283e9d6a7e45`。
+  repository real pathは上記worktreeと一致し、開始時tracked／untracked差分は0件だった。対象外dirty paths／digestは該当なし。
+- active changeは本件だけ。必須7 artifacts、requirementのMUST、12分類のaudit、未解決判断なしを確認した。
+  Execution Constraints 3項目、7 taskの成果／依存／対象／実装・検証checkbox、依存の存在・非循環性、
+  exact pathと包含の重複順序、repository内解決、ignored対象なしを確認し、safe boundaryを通過した。
+- Node.js 24.14.1とPython 3.14.6の実在・起動を確認した。設計段階のsuite結果は再利用しない。
+- 第3回設計レビューAPPROVE（P0/P1/P2全て0）は設計の証跡であり、以下の過去の「実装未承認」は当時の状態である。
+  本依頼で実装開始を承認済みに更新した。開始時点では製品実装・機能検証・closeは未完了だった。
+- 元worktreeのIssue #74草案と利用者所有文書は参照・変更しない。linked worktreeはapply candidateへ流用しない。
+- commit／push／PR／merge／close／archiveは今回実行しない。
 
 ### Authoring preparation
 

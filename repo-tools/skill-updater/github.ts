@@ -1,3 +1,4 @@
+import { bundleInventory, validateBundleSizes, validateBundleTree } from "./bundle.ts";
 import type { RemoteSource as V2RemoteSource, RemoteLock as V2RemoteLock, SourceRef as V2Ref } from "./types.ts";
 import { validateInstalledTraversalPath, validateInstalledFilePaths } from "./installed-path.ts";
 import { spawn } from "node:child_process";
@@ -18,7 +19,7 @@ export type GhRunner = (args: readonly string[]) => Promise<GhRunnerResult>;
 
 export type RemoteEntryObservation = Readonly<{
   name: string;
-  metadata: SkillMetadata;
+  metadata?: SkillMetadata;
   tree: CanonicalTree;
   legalFiles: readonly RemoteLegalFile[];
 }>;
@@ -201,6 +202,23 @@ function prepareRemoteTrees(
   };
 
   return sources.map((source) => {
+    if (source.bundle) {
+      const inventory = bundleInventory(source.bundle.files.map(f => f.path));
+      const folded = new Map([...inventory.keys()].map(p => [p.replace(/[A-Z]/g,c=>c.toLowerCase()),p]));
+      for (const e of treeEntries) {
+        const expected = folded.get(e.path.replace(/[A-Z]/g,c=>c.toLowerCase()));
+        if (expected !== undefined && expected !== e.path) throw new Error(`bundle metadata path collision: ${e.path}`);
+      }
+      for (const [path, kind] of inventory) {
+        const e = treeByPath.get(path);
+        if (!e || (kind === "directory" ? e.type !== "tree" || e.mode !== "040000" : e.type !== "blob" || !["100644","100755"].includes(e.mode))) throw new Error(`bundle metadata path / type不正: ${path}`);
+      }
+      const files = source.bundle.files.map(f => ({ entry: treeByPath.get(f.path)!, relativePath: f.path }));
+      validateBundleSizes(source.bundle, files.map(({entry:e}) => ({path:e.path,executable:e.mode==="100755",byteCount:e.size!})));
+      for (const {entry} of files) addCohortFile(entry);
+      const legalEntries = new Map(source.legalMappings.map(m => [m.sourcePath,treeByPath.get(m.sourcePath)!]));
+      return Object.freeze({ source, files: Object.freeze(files), legalEntries });
+    }
     const prefix = "path" in source.subtree ? `${source.subtree.path}/` : "";
     const selected = "root" in source.subtree
       ? treeEntries
@@ -282,8 +300,8 @@ async function fetchPreparedSources(preparedSources: readonly PreparedSourceTree
     const subtreeLabel = "root" in source.subtree ? "repository root" : source.subtree.path;
     if (files.length === 0) throw new Error(`empty subtreeです: ${subtreeLabel}`);
     const skillFiles = files.filter((file) => file.path === "SKILL.md");
-    if (skillFiles.length !== 1) throw new Error(`root SKILL.mdはexactly one必要です: ${source.name}`);
-    const metadata = parseSkillMetadata(skillFiles[0]!.content, source.name);
+    if (!source.bundle && skillFiles.length !== 1) throw new Error(`root SKILL.mdはexactly one必要です: ${source.name}`);
+    const metadata = source.bundle ? undefined : parseSkillMetadata(skillFiles[0]!.content, source.name);
     const legalBlobs = [];
     for (const mapping of source.legalMappings) {
       let content = sourceContent.get(mapping.sourcePath);
@@ -295,7 +313,7 @@ async function fetchPreparedSources(preparedSources: readonly PreparedSourceTree
       legalBlobs.push({ ...mapping, content });
     }
     const candidate = addRemoteLegalFiles(files, legalBlobs);
-    entries.push({ name: source.name, metadata, tree: candidate.tree, legalFiles: candidate.legalFiles });
+    entries.push({ name: source.name, ...(metadata ? { metadata } : {}), tree: source.bundle ? validateBundleTree(candidate.tree.files,source.bundle) : candidate.tree, legalFiles: candidate.legalFiles });
   }
 
   return entries;
@@ -329,11 +347,18 @@ async function resolveV2Ref(repository:string, ref:V2Ref, runner:GhRunner):Promi
   }
   throw new Error("tag連鎖32段以内にcommitへ到達しません");
 }
+async function validateStableRelease(repository: string, ref: V2Ref, runner: GhRunner): Promise<void> {
+  if (!("tag" in ref)) throw new Error("bundleはtag限定です");
+  const release = object(await apiJson(runner, `repos/${repository}/releases/tags/${encodeURIComponent(ref.tag)}`), "release");
+  if (release.draft !== false || release.prerelease !== false || release.tag_name !== ref.tag) throw new Error("bundle stable release属性不一致");
+}
 export async function observeRemoteCohort(sources:readonly V2RemoteSource[],locks:readonly V2RemoteLock[],runner:GhRunner,approval?:RepinApproval):Promise<RemoteCohortObservation> {
   const first=sources[0]; if(!first) throw new Error("空cohort");
   if(sources.some(s=>s.repository!==first.repository || JSON.stringify(s.ref)!==JSON.stringify(first.ref))) throw new Error("cohortのrepository / ref不一致");
   const info=object(await apiJson(runner,`repos/${first.repository}`),"repository");
   if(info.private!==false || info.visibility!=="public") throw new Error("public repositoryだけ取得できます");
+  const hasBundle=sources.some(s=>s.bundle);
+  if(hasBundle) await validateStableRelease(first.repository,first.ref,runner);
   const resolved=await resolveV2Ref(first.repository,first.ref,runner);
   if(approval) {
     if(approval.commit!==resolved.commit || approval.tagObjectSha!==resolved.tagObjectSha) throw new Error("repin承認SHA / 観測SHA不一致");
@@ -349,6 +374,7 @@ export async function observeRemoteCohort(sources:readonly V2RemoteSource[],lock
   const tree=parseTree(await apiJson(runner,`repos/${first.repository}/git/trees/${resolved.commit}?recursive=1`));
   const prepared=prepareRemoteTrees(sources,tree);
   const entries=await fetchPreparedSources(prepared,first.repository,runner);
+  if(hasBundle) await validateStableRelease(first.repository,first.ref,runner);
   const rechecked=await resolveV2Ref(first.repository,first.ref,runner);
   if(JSON.stringify(rechecked)!==JSON.stringify(resolved)) throw new Error("取得中にrefが変化しました");
   return {repository:first.repository,ref:first.ref,resolvedCommit:resolved.commit,...(resolved.tagObjectSha ? {tagObjectSha:resolved.tagObjectSha}:{}),verification,warnings:verification==="verified"?[]:[`commit verification: ${verification}`],entries};

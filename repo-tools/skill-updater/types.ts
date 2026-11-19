@@ -1,3 +1,8 @@
+export type BundleDescriptor = Readonly<{
+  files: readonly Readonly<{ path: string; executable: boolean }>[];
+  limits: Readonly<{ files: number; singleFileBytes: number; totalBytes: number }>;
+}>;
+export type BundleFileDigest = Readonly<{ path: string; sha256: string; byteCount: number; executable: boolean }>;
 export type Redistribution = "allowed" | "blocked";
 export type Verification = "verified" | "unverified" | "unknown";
 export type SourceRef = Readonly<{ branch: string } | { commit: string } | { tag: string }>;
@@ -13,7 +18,7 @@ export type Origin = Readonly<{
 type Common = Readonly<{ name: string; license: string }>;
 export type RemoteSource = Common & Readonly<{
   ownership: "remote"; redistribution: "allowed"; target: string; repository: string;
-  ref: SourceRef; subtree: SubtreeSelector; legalMappings: readonly RemoteLegalMapping[]; legacyRef?: LegacyRef;
+  ref: SourceRef; subtree: SubtreeSelector; legalMappings: readonly RemoteLegalMapping[]; legacyRef?: LegacyRef; bundle?: BundleDescriptor;
 }>;
 export type LocalSource = Common & Readonly<{
   ownership: "local"; redistribution: "allowed"; target: string;
@@ -26,6 +31,6 @@ export type SkillSource = RemoteSource | LocalSource | PluginSource;
 export type SourcesDocument = Readonly<{ schemaVersion: 2; skills: readonly SkillSource[] }>;
 export type RemoteLock = Omit<RemoteSource, "legalMappings"> & Readonly<{
   resolvedCommit: string; verification: Verification; tagObjectSha?: string;
-  treeHash: string; fileCount: number; byteCount: number; legalFiles: readonly RemoteLegalFile[];
+  treeHash: string; fileCount: number; byteCount: number; legalFiles: readonly RemoteLegalFile[]; fileDigests?: readonly BundleFileDigest[];
 }>;
 export type LockDocument = Readonly<{ schemaVersion: 2; skills: readonly RemoteLock[] }>;

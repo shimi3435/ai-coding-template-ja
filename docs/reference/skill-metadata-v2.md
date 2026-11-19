@@ -14,7 +14,7 @@ JSON object内の重複keyも拒否し、後勝ちで承認情報を解釈しな
 nameは空でないNFCの単一路径要素で、ASCII case-foldによる衝突を拒否する。
 repositoryはgithub.com上の公開repositoryの `owner/name` とし、小文字へ正規化する。
 取得hostはgithub.comに固定し、GH_HOST等の外部環境によって変更しない。
-targetは `.agents/skills/<name>` の完全一致を要求する。任意配置先は追加しない。
+通常Skillのtargetは `.agents/skills/<name>`、remote bundleは `.agents/vendor/<name>` の完全一致を要求する。任意配置先は追加しない。
 pathは相対POSIX形式とし、絶対path、NUL、backslash、空segment、`.`、`..`、非NFCを拒否する。
 SHA-256は小文字64桁、Git SHAは小文字40桁とする。SHA-256 Git repositoryへの対応は対象外である。
 文字列は空・空白だけを拒否し、path / refを暗黙にtrimしない。
@@ -35,7 +35,7 @@ licenseは空でない識別文字列であり、文字列だけで再配布可�
 ### remote
 
 共通fieldに `target, repository, ref, subtree, legalMappings` を必須とし、
-移行履歴の `legacyRef` だけを任意fieldとして許す。
+移行履歴の `legacyRef` と配布形式の `bundle` を任意fieldとして許す。ただしbundleとlegacyRefの併用は禁止する。
 
 - ref: `{branch: string}` / `{commit: SHA}` / `{tag: string}` の厳密な一択。
   branch / tagはGit refとして有効な短い名前を指定する。完全refや略SHAとの曖昧な解決を行わない。
@@ -111,12 +111,97 @@ pathのUTF-8 byte昇順に並べ、ASCII case-fold衝突・重複pathを拒否�
 SHA-256への入力は、ASCII文字列 `skill-tree-v1` にNUL byte（0x00）を連結したdomain、file数（u64 big-endian）、
 各fileのpath長（u64）、UTF-8 path、実行bit（1 byte: 0 / 1）、本文長（u64）、本文bytesの連結とする。
 本文の改行・Unicode・空白を正規化しない。modeは実行bitを検証し、所有者や全POSIX permissionの一致は保証しない。
-配置modeは非実行file 0644、実行file 0755とする。
+通常Skillの配置modeは非実行file 0644、実行file 0755とする。bundleには後述のumaskとPOSIX権限契約を適用する。
 
 ## 共通のSkill構造検証
 
-remote / localとも、rootの通常file `SKILL.md` を必須とする。UTF-8で復号でき、YAML frontmatterが
+通常Skillのremote / localとも、rootの通常file `SKILL.md` を必須とする。UTF-8で復号でき、YAML frontmatterが
 mappingであり、nameが宣言名と一致し、descriptionが空白だけではない文字列でなければならない。
 重複keyとaliasを拒否する。BOM、CRLF、追加metadata key、nested SKILL.mdの併存は受理するが、
 nestedだけのSKILL.mdではroot要件を満たさない。取得、local化、移行でもこの検査を省略しない。
 local本文の編集はこの構造とlegalを保持する限り内容lock更新を要求しない。
+
+## Remote runtime bundle
+
+`bundle` はremoteだけに許可する配布形式であり、別のownershipではない。local／plugin、originへの追加は禁止する。
+旧schema v2 readerは未知fieldとして拒否する。通常Skillのserialize bytes、hash、公開操作は変更しない。
+root SKILL.mdは要求せず、nested Skillも自動登録しない。bundle用host linkは作らない。
+
+### source descriptor
+
+- target: `.agents/vendor/<name>` の完全一致。
+- subtree: `{root: true}` だけ。
+- ref: `{tag: string}` だけ。branch／commit、bundle source／lockのlegacyRefは値にかかわらず拒否する。
+- bundle: `{files, limits}` のexact object。null、未知field、JSON重複keyは拒否する。
+- files: 1件以上の `{path, executable}`。pathは取得元repository rootとtarget内で同じ相対POSIX path、executableはboolean必須。
+  全fileがallowlistかつrequiredであり、glob、optional、directory一括選択、renameはない。
+- limits: `{files, singleFileBytes, totalBytes}`。それぞれ正のsafe integerで100／1,048,576／2,097,152以下。
+  宣言値で引き下げられる。legalを件数・bytesに含め、空file（0 bytes）は許可する。
+- legalMappings: 既存形式のsourcePathとtargetPathが同一で、filesに非実行fileとして含まれること。
+  SPDX識別子だけでは再配布を承認しない。legal本文hashと人によるレビューが必要である。
+
+pathは全fileと全祖先directoryの元表記・種別を照合する。ASCII case-fold後に別表記となるpath、
+file重複、file／directory prefix衝突は拒否する。同一表記・同一種別の祖先だけ共有できる。
+`Lib/a` と `Lib/b` は許可し、`Lib/a` と `lib/b`、`Lib` と `lib/a` は拒否する。
+fileと非root祖先directoryの合計は500以下、directory depthは32以下、pathは4096 bytes以下、segmentは255 bytes以下。
+宣言、取得前metadata、live、snapshotで同じbundle専用inventoryを使い、通常Skillのhelperの受理範囲は変更しない。
+
+sourceのbundleは既存remote fieldの末尾に置く。内部順はfiles、limits。filesはpathのUTF-8 byte順で
+field順はpath、executable。limitsはfiles、singleFileBytes、totalBytesの順とする。
+
+### lock inventory
+
+bundle lockにはsourceと同じbundle、および末尾に必須fileDigestsを記録する。
+fileDigestsはpathのUTF-8 byte順の `{path, sha256, byteCount, executable}` 配列。
+path／executable集合は宣言と完全一致し、sha256は本文の小文字64桁、byteCountは非負safe integerとする。
+fileCountとbyteCountはinventoryの件数・合計と一致し、bundle limitsを満たす。
+legalのdigestはlegalFilesとsourceの承認hashにも一致する。通常SkillにfileDigestsを付けてはならない。
+
+既存skill-tree-v1をそのまま使い、実体・inventory・legalを全て照合する。
+lockに全POSIX modeやumaskは記録せず、論理的なexecutableだけを含める。
+通常verifyではsource／lockのbundle policy差分を拒否する。指名repinの旧treeは旧lock policy、新treeは新source policyで検査する。
+
+### 取得とリソース上限
+
+GitHub releaseのdraft=false、prerelease=false、tag_nameの完全一致を要求する。属性欠落・型不正・404は拒否する。
+stableはGitHubの属性による定義であり、SemVer正式版を保証しない。`v1.0.0-rc.1` も属性条件を満たせば受理する。
+previewとapplyは別々に観測し、各取得でも本文取得後にreleaseとref identityを再確認する。
+削除、draft化、prerelease化、tag移動を検出した場合は適用しない。最後の観測後の変更を原子的に防ぐ保証はない。
+
+完全なGit tree metadataから選択fileと全祖先を検査する。truncated、欠落、symlink、submodule、未知mode／type、
+非整数sizeを拒否する。fileはblobの100644／100755、祖先は040000のtreeが必要である。
+upstream 100644はexecutable=false、100755はtrueに完全一致させ、overrideを認めない。
+同じcohort全対象の上限・mode・path検査後にだけ選択blobを取得し、sizeとGit object SHA、legal hashを照合する。
+選択外の正常entryの本文は取得・保存・実行・importしない。応答全体のpath重複等の構造不正は拒否する。
+
+bundle上限に加え、同じrepository／refのcohortには通常Skillとの選択path和集合に500 files／50 MiBを適用する。
+同一cohortの同一pathは重複計上しない。metadata各fileの10 MiB、source 500件、GhRunnerの起動1回あたりstdout／stderr合計64 MiBは維持する。
+操作全体のcohort横断累積予算は追加しない。多数cohortの取得量・メモリ増大は残存リスクであり、
+500 bundlesが各2 MiBなら本文だけで1,000 MiBになり得る。応答上限はparse後のメモリ上限ではない。
+後続cohortの事前拒否時、先行本文は取得済みの場合があるが、失敗cohortのblob requestは0件、操作全体はfailed／exit 1／changes=[]、applyなしとなる。
+
+### Live filesystemと生成権限
+
+live treeは宣言fileと必要な祖先directoryだけを許可する。欠落、余剰file／directory、hardlink（nlinkが1以外）、
+symlink／特殊fileを拒否する。vendor root自身と直下の種別も検査し、未宣言directory、直下のfile／link、
+別rootにある同名の未宣言Skillでbundleを正当化しない。snapshotも全vendor pathを検査する。
+全bundle撤去時はvendor root不在を許可する。verifyはネットワークもchmodも行わない。
+
+通常file／directoryの種別確認後、mode & 07777へ次の条件を適用する。
+
+- 全対象: group／other write（0022）、setuid／setgid／sticky（07000）を禁止する。
+- 非実行file: owner read（0400）が必須、全execute（0111）を禁止する。
+- 実行file／directory: owner readとexecute（0500）が必須。
+- owner write、group／other read、実行file／directoryのgroup／other executeは任意である。
+
+0600／0644／0444の非実行file、0700／0755／0555の実行fileとdirectoryは受理する。
+非実行fileの0700、実行fileの0600／0641、0664／0775、特殊bitは拒否する。
+liveの論理実行属性はowner execute、snapshotはGit modeから得る。同一内容ならumask 022／077のcloneでhashは一致する。
+
+bundleの新規・置換file、新規directory（削除後の再生成を含む）の予定modeは、非実行file0644、
+実行file／directory0755を基準に `基準 & (~umask & 0777)` で決める。umask自体は変えない。
+owner read／必要executeを欠く予定はcandidateの最初のwrite前に拒否する。
+022では0644／0755、077では0600／0700となる。再利用する既存directoryはchmodしない。
+通常Skill、source／lock、host linkの既存書込規則は維持する。
+owner writeが落ちた新directoryは読取・実行条件を満たしても内部書込に失敗し得る。
+その場合も候補を保持して停止し、新candidateで再試行する。暗黙chmodやrollbackで成功へ読み替えない。

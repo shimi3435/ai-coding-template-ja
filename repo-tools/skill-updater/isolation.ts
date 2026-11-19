@@ -3,7 +3,7 @@ import { lstatSync, realpathSync, readFileSync, readlinkSync, readdirSync } from
 import { join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 
-export const managedRoots = [".agents/skills", ".claude/skills", ".codex/skills"] as const;
+export const managedRoots = [".agents/skills", ".agents/vendor", ".claude/skills", ".codex/skills"] as const;
 export type IsolationInput = Readonly<{ source: string; base: string; candidate: string }>;
 export type IsolatedCandidate = IsolationInput & Readonly<{ fingerprint: string }>;
 const forbiddenGitEnv = /^GIT_(?:DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|CONFIG(?:_.*)?|NAMESPACE|SHALLOW_FILE|REPLACE_REF_BASE)$/;
@@ -74,7 +74,7 @@ export function preflightIsolation(input: IsolationInput): IsolatedCandidate {
   parts.push(treeFingerprint(candidate.root,candidate.git,false,true));
   for (const p of managedRoots) {
     const target=resolve(candidate.root,p); assertSafeParents(candidate.root,join(target,"placeholder"));
-    parts.push(treeFingerprint(candidate.root,target,p!==".agents/skills",true));
+    parts.push(treeFingerprint(candidate.root,target,p===".claude/skills" || p===".codex/skills",true));
   }
   return {source:source.root,candidate:candidate.root,base:input.base,fingerprint:createHash("sha256").update(JSON.stringify(parts)).digest("hex")};
 }

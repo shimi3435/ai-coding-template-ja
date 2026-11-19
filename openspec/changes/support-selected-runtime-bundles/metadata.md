@@ -1,6 +1,6 @@
 # Remote bundle descriptor案
 
-文書種別: データ仕様。既存の `docs/reference/skill-metadata-v2.md` を補う設計案であり、未実装である。
+文書種別: データ仕様。承認済み設計の正本である。実装・検証状態はtasks.md、公開リファレンスは `docs/reference/skill-metadata-v2.md` を参照する。
 
 ## Source
 

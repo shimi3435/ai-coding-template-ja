@@ -48,7 +48,7 @@ export async function runSkillCommand(command:SkillCommandName,args:readonly str
         const {planMigration}=await import("./migration/index.ts");plan=planMigration(snapshot,parsed.get("--localize")??[]);
       } else {
         let sources=decodeSourcesJson(snapshot.readFile(".agents/skills/skills.sources.json"));const lock=decodeLockJson(snapshot.readFile(".agents/skills/skills.lock.json"));
-        const trees=readSnapshotTrees(snapshot,sources);
+        const trees=readSnapshotTrees(snapshot,sources,lock);
         if(command==="skills:adopt-local") {
           verifySnapshotLinks(snapshot,sources);plan=adoptLocal({sources,lock,installedTrees:trees},get("--name")!);
         } else {
@@ -57,6 +57,7 @@ export async function runSkillCommand(command:SkillCommandName,args:readonly str
             const selected=sources.skills.find(s=>s.name===get("--name"));
             if(!selected || selected.ownership!=="remote")throw new Error("repin対象remote不明");
             const ref=get("--branch")?{branch:validateRefName(get("--branch"))}:get("--tag")?{tag:validateRefName(get("--tag"))}:get("--pin-commit")?{commit:get("--commit")!}:selected.ref;
+            if(selected.bundle && (!("tag" in ref) || !get("--tag")))throw new Error("bundle repinは明示--tagが必要です");
             if(("tag" in ref)!==parsed.has("--tag-object"))throw new Error("tagObjectShaはtagだけに必須です");
             sources={...sources,skills:sources.skills.map(s=>s.name===selected.name?{...selected,ref}:s)};
             approval={name:selected.name,commit:get("--commit")!,...(get("--tag-object")?{tagObjectSha:get("--tag-object")!}:{})};
@@ -82,7 +83,12 @@ export async function runSkillCommand(command:SkillCommandName,args:readonly str
     report={...report,status:"failed",changes:[],errors:[redactCredentialText(error instanceof Error?error.message:String(error))]};exitCode=1;
   }
   const json=args.includes("--json");
-  const stdout=json?`${JSON.stringify(report,null,2)}\n`:`[${report.status}] ${command}\n${report.status === "failed" ? "" : approvalPreview}${report.changes.map(change=>JSON.stringify(change)).join("\n")}${report.changes.length?"\n":""}`;
+  const bundlePreview=report.changes.flatMap(change=>(change.bundleFileChanges??[]).map(file=>{
+    const action=file.before===null?"追加":file.after===null?"削除":"変更";
+    const mode=(v:typeof file.before)=>v===null?"なし":v.executable?"100755":"100644";
+    return `${action} ${file.path}: ${mode(file.before)} -> ${mode(file.after)}\n`;
+  })).join("");
+  const stdout=json?`${JSON.stringify(report,null,2)}\n`:`[${report.status}] ${command}\n${report.status === "failed" ? "" : approvalPreview}${report.changes.map(change=>JSON.stringify(change)).join("\n")}${report.changes.length?"\n":""}${bundlePreview}`;
   const stderr=[...report.warnings,...report.errors].map(text=>`${text}\n`).join("");
   return {report,exitCode,stdout,stderr};
 }
