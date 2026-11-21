@@ -1,3 +1,5 @@
+import { bundleInventory, bundleFileDigests, readLiveBundle, validateBundleDirectory, validateBundleSizes, validateBundleTree } from "./bundle.ts";
+import type { BundleDescriptor } from "./types.ts";
 import { closeSync, constants, fstatSync, lstatSync, opendirSync, openSync, readFileSync, readlinkSync, readdirSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalizeTree, utf8Compare, validateCanonicalPath, type CanonicalTree, type TreeFile } from "./canonical.ts";
@@ -134,7 +136,7 @@ export type CommittedEntry = Readonly<{ path: string; mode: string; sha: string 
 export type CommittedSnapshot = Readonly<{
   root: string; base: string; entries: ReadonlyMap<string, CommittedEntry>;
   readFile: (path: string) => Buffer;
-  readTree: (target: string, name: string) => CanonicalTree;
+  readTree: (target: string, name: string, bundle?: BundleDescriptor) => CanonicalTree;
 }>;
 export function readCommittedSnapshot(root: string, base: string): CommittedSnapshot {
   if (!/^[0-9a-f]{40}$/.test(base)) throw new Error("完全な開始commit SHAが必要です");
@@ -154,15 +156,23 @@ export function readCommittedSnapshot(root: string, base: string): CommittedSnap
     if (!Number.isSafeInteger(size) || size<0 || size>resourceLimits.singleFileBytes) throw new Error("snapshot file上限超過");
     return readonlyGit(root,["cat-file","blob",entry.sha]);
   };
-  const readTree=(target:string,name:string):CanonicalTree=>{
+  const readTree=(target:string,name:string,bundle?:BundleDescriptor):CanonicalTree=>{
     validateCanonicalPath(target); const files:TreeFile[]=[];
+    if (bundle) {
+      const selected=[...entries.values()].filter(e=>e.path.startsWith(`${target}/`));
+      bundleInventory(selected.map(e=>e.path.slice(target.length+1)));
+      validateBundleSizes(bundle,selected.map(e=>{
+        if(!["100644","100755"].includes(e.mode))throw new Error("bundle snapshot mode不正");
+        return {path:e.path.slice(target.length+1),executable:e.mode==="100755",byteCount:Number(readonlyGit(root,["cat-file","-s",e.sha]).toString().trim())};
+      }));
+    }
     validateInstalledFilePaths([...entries.keys()].filter(p=>p.startsWith(`${target}/`)).map(p=>p.slice(target.length+1)));
     for (const entry of entries.values()) if (entry.path.startsWith(`${target}/`)) {
       const path=entry.path.slice(target.length+1); validateInstalledTraversalPath(path);
       files.push({path,executable:entry.mode==="100755",content:readFile(entry.path)});
       validateSkillLimits(files);
     }
-    return validateSkillTree(files,name);
+    return bundle ? validateBundleTree(files,bundle) : validateSkillTree(files,name);
   };
   return {root,base,entries,readFile,readTree};
 }
@@ -178,15 +188,17 @@ export function verifyRepository(root: string): readonly string[] {
   try {
     const state=readRepositorySkillState(root);
     decodeV2Lock(JSON.stringify(state.lock),state.sources);
-    const declared=new Set(state.sources.skills.filter(s=>s.ownership!=="plugin").map(s=>s.name));
+    const declared=new Set(state.sources.skills.filter(s=>s.ownership!=="plugin" && !(s.ownership==="remote" && s.bundle)).map(s=>s.name));
     for (const name of readVendoredSkillNames(root)) if (!declared.has(name)) throw new Error(`未宣言Skill: ${name}`);
+    verifyVendorRoot(root,state.sources);
     for (const source of state.sources.skills) {
       if (source.ownership==="plugin") continue;
       assertSafeParents(root,join(root,source.target,"SKILL.md"));
-      const tree=readInstalledTree(root,source.target,source.name);
+      const tree=source.ownership==="remote" && source.bundle ? readLiveBundle(root,source) : readInstalledTree(root,source.target,source.name);
       if (source.ownership==="remote") {
         const lock=state.lock.skills.find(l=>l.name===source.name)!;
         if (tree.treeHash!==lock.treeHash || tree.fileCount!==lock.fileCount || tree.byteCount!==lock.byteCount) throw new Error(`remote tree / lock不一致: ${source.name}`);
+        if (source.bundle && JSON.stringify(bundleFileDigests(tree))!==JSON.stringify(lock.fileDigests)) throw new Error(`bundle inventory不一致: ${source.name}`);
         for (const legal of source.legalMappings) {
           const file=tree.files.find(f=>f.path===legal.targetPath);
           if (!file || sha256(file.content)!==legal.expectedSha256) throw new Error(`remote legal不一致: ${source.name}`);
@@ -195,6 +207,7 @@ export function verifyRepository(root: string): readonly string[] {
         const absolute=join(root,legal.path); assertSafeParents(root,absolute);
         if (!isTrackedPath(root,legal.path) || readBoundedRegularFile(absolute,legal.path).sha256!==legal.expectedSha256) throw new Error(`local legal不一致: ${source.name}`);
       }
+      if (source.ownership==="remote" && source.bundle) continue;
       for (const linkRoot of [".claude/skills",".codex/skills"]) {
         const path=join(root,linkRoot,source.name); assertSafeParents(root,path);
         if (!lstatSync(path).isSymbolicLink() || readlinkSync(path)!==`../../.agents/skills/${source.name}`) throw new Error(`link不一致: ${source.name}`);
@@ -202,4 +215,19 @@ export function verifyRepository(root: string): readonly string[] {
     }
   } catch(error) { errors.push(error instanceof Error ? error.message : String(error)); }
   return errors;
+}
+
+export function verifyVendorRoot(root: string, sources: V2Sources): void {
+  const path=join(root,".agents/vendor"); assertSafeParents(root,path);
+  const names=new Set(sources.skills.filter(s=>s.ownership==="remote" && s.bundle).map(s=>s.name));
+  if (!lstatSync(path,{throwIfNoEntry:false})) { if(names.size)throw new Error("vendor root欠落"); return; }
+  validateBundleDirectory(path);
+  const handle=opendirSync(path);
+  try {
+    for(let e=handle.readSync();e!==null;e=handle.readSync()) {
+      if(!names.has(e.name))throw new Error(`未宣言bundle: ${e.name}`);
+      validateBundleDirectory(join(path,e.name)); names.delete(e.name);
+    }
+  } finally {handle.closeSync();}
+  if(names.size)throw new Error("bundle target欠落");
 }

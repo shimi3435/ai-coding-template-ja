@@ -1,3 +1,4 @@
+import { decodeBundle, decodeBundleDigests, validateBundleSource } from "./bundle.ts";
 import { utf8Compare, validateCanonicalPath } from "./canonical.ts";
 import type { SourcesDocument, LockDocument, SkillSource, RemoteSource, RemoteLock, SourceRef, SubtreeSelector, RemoteLegalMapping, LocalLegalMapping, LegacyRef, Origin } from "./types.ts";
 
@@ -105,10 +106,12 @@ function source(v: unknown): SkillSource {
   }
   if (o.redistribution !== "allowed") throw new Error("redistributionはallowedが必要です");
   const target = path(o.target);
-  if (target !== `.agents/skills/${name}`) throw new Error("target不一致");
+  if (target !== `${o.ownership === "remote" && Object.hasOwn(o,"bundle") ? ".agents/vendor" : ".agents/skills"}/${name}`) throw new Error("target不一致");
   if (o.ownership === "remote") {
-    keys(o,[...commonKeys,"target","repository","ref","subtree","legalMappings"],["legacyRef"]);
-    return { ...common, ownership: "remote", redistribution: "allowed", target, repository: repository(o.repository), ref: ref(o.ref), subtree: subtree(o.subtree), legalMappings: remoteMappings(o.legalMappings), ...(o.legacyRef === undefined ? {} : { legacyRef: legacy(o.legacyRef) }) };
+    keys(o,[...commonKeys,"target","repository","ref","subtree","legalMappings"],["legacyRef","bundle"]);
+    if (Object.hasOwn(o,"bundle") && Object.hasOwn(o,"legacyRef")) throw new Error("bundle legacyRef禁止");
+    const result: RemoteSource = { ...common, ownership: "remote", redistribution: "allowed", target, repository: repository(o.repository), ref: ref(o.ref), subtree: subtree(o.subtree), legalMappings: remoteMappings(o.legalMappings), ...(o.legacyRef === undefined ? {} : { legacyRef: legacy(o.legacyRef) }), ...(Object.hasOwn(o,"bundle") ? { bundle: decodeBundle(o.bundle) } : {}) };
+    validateBundleSource(result); return result;
   }
   if (o.ownership === "local") {
     keys(o,[...commonKeys,"target","legalMappings"],["origin"]);
@@ -154,20 +157,23 @@ export function decodeSourcesJson(input: string | Buffer): SourcesDocument {
 }
 function lockEntry(v: unknown): RemoteLock {
   const o = object(v);
-  keys(o,[...commonKeys,"target","repository","ref","subtree","resolvedCommit","verification","treeHash","fileCount","byteCount","legalFiles"],["tagObjectSha","legacyRef"]);
+  keys(o,[...commonKeys,"target","repository","ref","subtree","resolvedCommit","verification","treeHash","fileCount","byteCount","legalFiles"],["tagObjectSha","legacyRef","bundle","fileDigests"]);
   if (o.ownership !== "remote") throw new Error("lockはremote専用です");
   const mappings = array(o.legalFiles).map(v => { const f=object(v); keys(f,["sourcePath","targetPath","sha256"]); return { sourcePath: f.sourcePath, targetPath: f.targetPath, expectedSha256: f.sha256 }; });
-  const s = source(Object.fromEntries([...commonKeys,"target","repository","ref","subtree",...(o.legacyRef === undefined ? [] : ["legacyRef"])].map(k=>[k,o[k]]).concat([["legalMappings",mappings]]))) as RemoteSource;
+  const s = source(Object.fromEntries([...commonKeys,"target","repository","ref","subtree",...(Object.hasOwn(o,"legacyRef") ? ["legacyRef"] : []),...(Object.hasOwn(o,"bundle") ? ["bundle"] : [])].map(k=>[k,o[k]]).concat([["legalMappings",mappings]]))) as RemoteSource;
   const commit = hash(o.resolvedCommit,40); validatePinnedRef(s.ref,commit,o.tagObjectSha);
   if (typeof o.verification !== "string" || !["verified","unverified","unknown"].includes(o.verification)) throw new Error("verification不正");
+  const inventory = s.bundle ? decodeBundleDigests(o.fileDigests, s.bundle) : undefined;
+  if (!s.bundle && Object.hasOwn(o,"fileDigests")) throw new Error("通常SkillのfileDigestsは禁止です");
+  if (inventory && (o.fileCount !== inventory.length || o.byteCount !== inventory.reduce((n,f)=>n+f.byteCount,0) || s.legalMappings.some(m=>inventory.find(f=>f.path===m.targetPath)?.sha256 !== m.expectedSha256))) throw new Error("bundle inventory / lock不一致");
   const { legalMappings, ...rest } = s;
   return { ...rest, resolvedCommit: commit, verification: o.verification as RemoteLock["verification"],
     ...("tag" in s.ref ? { tagObjectSha: hash(o.tagObjectSha,40) } : {}), treeHash: hash(o.treeHash,64), fileCount: count(o.fileCount), byteCount: count(o.byteCount),
-    legalFiles: legalMappings.map(m=>({ sourcePath: m.sourcePath, targetPath: m.targetPath, sha256: m.expectedSha256 })) };
+    legalFiles: legalMappings.map(m=>({ sourcePath: m.sourcePath, targetPath: m.targetPath, sha256: m.expectedSha256 })), ...(inventory ? { fileDigests: inventory } : {}) };
 }
 export function sourceFromLock(lock: RemoteLock): RemoteSource {
   return source({ name: lock.name, ownership: lock.ownership, license: lock.license, redistribution: lock.redistribution, target: lock.target, repository: lock.repository, ref: lock.ref, subtree: lock.subtree,
-    legalMappings: lock.legalFiles.map(f=>({ sourcePath:f.sourcePath,targetPath:f.targetPath,expectedSha256:f.sha256 })), ...(lock.legacyRef ? { legacyRef: lock.legacyRef } : {}) }) as RemoteSource;
+    legalMappings: lock.legalFiles.map(f=>({ sourcePath:f.sourcePath,targetPath:f.targetPath,expectedSha256:f.sha256 })), ...(lock.legacyRef ? { legacyRef: lock.legacyRef } : {}), ...(lock.bundle ? { bundle: lock.bundle } : {}) }) as RemoteSource;
 }
 export function validateLockStructure(lock: LockDocument, sources: SourcesDocument): void {
   const remote = sources.skills.filter(s=>s.ownership === "remote");

@@ -8,7 +8,7 @@
 
 固定削除対象は `docs/template/`、`template-maintenance/`、`.github/workflows/template-maintenance.yml`。
 `Taskfile.yml` の `check:template` task と、README / workflow の専用 marker 区画も除去する。
-下流向け `docs/reference/`、`docs/adr/`、`TEMPLATE_VERSION`、Skill・lock・legal・links、通常 CI は保持する。
+下流向け `docs/reference/`、`docs/adr/`、`TEMPLATE_VERSION`、Skill・lock・legal・links、`.agents/vendor` のruntime bundle、通常 CI は保持する。
 旧版の文書だけを消す prune とは削除範囲が異なる。
 
 構成状態は同梱・完全除去・不整合。scanner coverage は evaluated / partial の別軸である。
@@ -59,7 +59,9 @@ preview 後と各操作直前の同時変更検出は、正規化しない生 by
 適用は共有編集→固定削除→完全除去再検査の順。途中失敗は非ゼロ。
 複数ファイルの原子性、非協調 process への完全排他、kill 時の最終診断は保証しない。
 GitHub や host 登録解除は操作しない。#74 の Skill 除去・host 操作は別の責務であり、
-同梱中の Skill offline 検証はこの prune で省略しない。
+同梱中のSkill／bundleのoffline検証はこのpruneで省略しない。bundleの配布廃止は
+[明示的なGit撤去手順](skill-maintenance.md#repository-bundleの撤去手順)で先に完了させる。
+pruneはsource／lock／vendorの部分残存を修復せず、残存bundleあり・なしの両構成で通常checkを保持する。
 
 ## 旧参照corpusの扱い
 

@@ -1,13 +1,14 @@
 import { lstatSync, mkdirSync, readlinkSync, symlinkSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { assertSafeParents } from "./isolation.ts";
-import { readRepositorySkillState, readVendoredSkillNames } from "./repository.ts";
+import { readRepositorySkillState, readVendoredSkillNames, verifyVendorRoot } from "./repository.ts";
 import { utf8Compare } from "./canonical.ts";
 import { validateLockStructure } from "./schema.ts";
 
 export function repairLinks(root:string,afterWrite?:(path:string)=>void):readonly string[] {
   const state=readRepositorySkillState(root);validateLockStructure(state.lock,state.sources);
-  const names=state.sources.skills.filter(s=>s.ownership!=="plugin").map(s=>s.name);
+  verifyVendorRoot(root,state.sources);
+  const names=state.sources.skills.filter(s=>s.ownership!=="plugin" && !(s.ownership==="remote" && s.bundle)).map(s=>s.name);
   for(const name of readVendoredSkillNames(root))if(!names.includes(name))throw new Error(`未宣言Skill: ${name}`);
   const planned:Array<{path:string;expected:string;name:string}>=[];
   for(const name of names) {

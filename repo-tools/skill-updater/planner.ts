@@ -1,12 +1,24 @@
+import { bundleFileDigests, validateBundleTree } from "./bundle.ts";
 import { sha256 } from "./legal.ts";
 import { utf8Compare, type CanonicalTree } from "./canonical.ts";
 import { observeRemoteCohort, type GhRunner, type RepinApproval } from "./github.ts";
 import { decodeSourcesJson as decodeV2Sources, decodeLockJson as decodeV2Lock, serializeSources as serializeV2Sources, serializeLock as serializeV2Lock, sourceFromLock } from "./schema.ts";
 import { validateSkillTree } from "./metadata.ts";
 import type { SourcesDocument as V2Sources, LockDocument as V2Lock, RemoteSource as V2RemoteSource, RemoteLock as V2RemoteLock } from "./types.ts";
+import type { BundleDescriptor, BundleFileDigest } from "./types.ts";
+export type BundleFileChange = Readonly<{path:string;before:Omit<BundleFileDigest,"path">|null;after:Omit<BundleFileDigest,"path">|null}>;
+function fileChanges(before:V2RemoteLock|undefined,after:V2RemoteLock):readonly BundleFileChange[] {
+  const old=new Map((before?.fileDigests??[]).map(({path,...f})=>[path,f]));
+  const next=new Map((after.fileDigests??[]).map(({path,...f})=>[path,f]));
+  return [...new Set([...old.keys(),...next.keys()])].sort(utf8Compare).flatMap(path=>{
+    const b=old.get(path)??null;const a=next.get(path)??null;
+    return JSON.stringify(b)===JSON.stringify(a)?[]:[{path,before:b,after:a}];
+  });
+}
 export type MaintenanceChange = Readonly<{
   name:string; beforeCommit:string|null; afterCommit:string|null; beforeOwnership:string|null; afterOwnership:string|null;
   beforeRef?:unknown; afterRef?:unknown; beforeTagObjectSha?:string|null; afterTagObjectSha?:string|null;
+  beforeBundle?:BundleDescriptor|null; afterBundle?:BundleDescriptor; bundleFileChanges?:readonly BundleFileChange[];
   beforeLicense?:string|null; afterLicense?:string|null; beforeLegalMappings?:unknown; afterLegalMappings?:unknown;
 }>;
 export type MaintenancePlan = Readonly<{
@@ -15,7 +27,8 @@ export type MaintenancePlan = Readonly<{
 }>;
 export function remoteChange(before:V2RemoteLock|undefined,after:V2RemoteLock):MaintenanceChange {
   const old=before ? sourceFromLock(before):undefined; const next=sourceFromLock(after);
-  return {name:after.name,beforeCommit:before?.resolvedCommit??null,afterCommit:after.resolvedCommit,beforeOwnership:before?.ownership??null,afterOwnership:after.ownership,
+  return {name:after.name,
+    ...(after.bundle ? {bundleFileChanges:fileChanges(before,after),...(JSON.stringify(before?.bundle)!==JSON.stringify(after.bundle)?{beforeBundle:before?.bundle??null,afterBundle:after.bundle}:{})}:{}),beforeCommit:before?.resolvedCommit??null,afterCommit:after.resolvedCommit,beforeOwnership:before?.ownership??null,afterOwnership:after.ownership,
     ...(JSON.stringify(before?.ref)!==JSON.stringify(after.ref)?{beforeRef:before?.ref??null,afterRef:after.ref}:{}),
     ...(before?.tagObjectSha!==after.tagObjectSha?{beforeTagObjectSha:before?.tagObjectSha??null,afterTagObjectSha:after.tagObjectSha??null}:{}),
     ...(before?.license!==after.license?{beforeLicense:before?.license??null,afterLicense:after.license}:{}),
@@ -23,7 +36,8 @@ export function remoteChange(before:V2RemoteLock|undefined,after:V2RemoteLock):M
   };
 }
 export function verifyRemoteBefore(source:V2RemoteSource,lock:V2RemoteLock,tree:CanonicalTree,allowBodyChange=false):void {
-  const actual=validateSkillTree(tree.files,source.name);
+  const actual=lock.bundle ? validateBundleTree(tree.files,lock.bundle) : validateSkillTree(tree.files,source.name);
+  if(lock.bundle && JSON.stringify(bundleFileDigests(actual))!==JSON.stringify(lock.fileDigests))throw new Error("旧bundle inventory / lock不一致");
   if(!allowBodyChange && (actual.treeHash!==lock.treeHash || actual.fileCount!==lock.fileCount || actual.byteCount!==lock.byteCount)) throw new Error(`旧本文 / lock不一致: ${source.name}`);
   for(const legal of lock.legalFiles) {
     const file=actual.files.find(f=>f.path===legal.targetPath);
@@ -45,7 +59,7 @@ export async function planRemoteMaintenance(input:Readonly<{
       if(repin || tree) throw new Error("lock欠落 / 未管理path衝突");
       continue;
     }
-    if(previous.target!==s.target || previous.redistribution!==s.redistribution) throw new Error("identity / policy不一致");
+    if(previous.target!==s.target || previous.redistribution!==s.redistribution || Boolean(previous.bundle)!==Boolean(s.bundle)) throw new Error("identity / policy不一致");
     const old=sourceFromLock(previous);
     if(repin?.name!==s.name) {
       const normalize=(entry:V2RemoteSource)=>({...entry,legalMappings:entry.legalMappings.map(({expectedSha256,...mapping})=>repin ? {...mapping,expectedSha256}:mapping)});
@@ -67,7 +81,7 @@ export async function planRemoteMaintenance(input:Readonly<{
       const observed=observation.entries.find(e=>e.name===s.name)!;
       const {legalMappings:_,...identity}=s;
       const after:V2RemoteLock={...identity,resolvedCommit:observation.resolvedCommit,verification:observation.verification,
-        ...(observation.tagObjectSha?{tagObjectSha:observation.tagObjectSha}:{}),treeHash:observed.tree.treeHash,fileCount:observed.tree.fileCount,byteCount:observed.tree.byteCount,legalFiles:observed.legalFiles};
+        ...(observation.tagObjectSha?{tagObjectSha:observation.tagObjectSha}:{}),treeHash:observed.tree.treeHash,fileCount:observed.tree.fileCount,byteCount:observed.tree.byteCount,legalFiles:observed.legalFiles,...(s.bundle?{fileDigests:bundleFileDigests(observed.tree)}:{})};
       const before=byName.get(s.name);
       if(JSON.stringify(before)!==JSON.stringify(decodeV2Lock(serializeV2Lock({schemaVersion:2,skills:[after]})).skills[0])) {
         changes.push(remoteChange(before,after)); byName.set(s.name,after);

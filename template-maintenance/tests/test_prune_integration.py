@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from template_prune_fixture import install_runtime_bundles, retire_runtime_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -120,6 +121,8 @@ def execute_smoke(tmp_path: Path) -> None:
     copy_repository(tmp_path)
     assert_archive_routes(tmp_path, maintenance=True)
     run(tmp_path, "task", "setup")
+    install_runtime_bundles(tmp_path, ("synthetic-runtime",))
+    run(tmp_path, "task", "skills:verify")
     run(tmp_path, "./scripts/check.sh")
     run(tmp_path, "task", "doctor")
     run(
@@ -135,7 +138,7 @@ def execute_smoke(tmp_path: Path) -> None:
     run(tmp_path, "./scripts/check.sh")
     run(tmp_path, "task", "doctor")
 
-    run(tmp_path, "git", "add", "-u")
+    run(tmp_path, "git", "add", ".")
     run(
         tmp_path,
         "git",
@@ -156,6 +159,8 @@ def execute_smoke(tmp_path: Path) -> None:
         assert not (tmp_path / ".github/workflows/template-maintenance.yml").exists()
         assert (tmp_path / ".github/workflows/ci.yml").is_file()
         assert_archive_routes(tmp_path, maintenance=False)
+        assert (tmp_path / ".agents/vendor/synthetic-runtime/LICENSE").is_file()
+        run(tmp_path, "task", "skills:verify", offline=isolated)
         run(tmp_path, "./scripts/check.sh", offline=isolated)
         run(tmp_path, "task", "doctor", offline=isolated)
         rerun = run(
@@ -197,6 +202,8 @@ def test_smoke_cleans_its_repository_on_all_exit_paths(
             (root / name / "fixture").write_text("owned")
         (root / ".github/workflows").mkdir(parents=True)
         (root / ".github/workflows/ci.yml").write_text("fixture")
+        (root / ".agents/vendor/synthetic-runtime").mkdir(parents=True)
+        (root / ".agents/vendor/synthetic-runtime/LICENSE").write_text("fixture")
         if phase == "copy":
             raise OSError("injected copy failure")
 
@@ -209,6 +216,7 @@ def test_smoke_cleans_its_repository_on_all_exit_paths(
             raise OSError("injected command failure")
         return subprocess.CompletedProcess(args, 0, "partial no-op", "")
 
+    monkeypatch.setitem(globals(), "install_runtime_bundles", lambda *args: None)
     monkeypatch.setitem(globals(), "copy_repository", copy)
     monkeypatch.setitem(globals(), "run", command)
     monkeypatch.setitem(
@@ -220,3 +228,54 @@ def test_smoke_cleans_its_repository_on_all_exit_paths(
         with pytest.raises(OSError, match="injected"):
             test_full_lifecycle_uses_the_real_common_gate(tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("survivor", [False, True])
+def test_retired_bundle_prune_keeps_offline_common_gate(
+    tmp_path: Path, survivor: bool
+) -> None:
+    with tempfile.TemporaryDirectory(
+        prefix="bundle-retire-", dir=tmp_path
+    ) as directory:
+        root = Path(directory)
+        copy_repository(root)
+        run(root, "task", "setup")
+        names = (
+            ("retired-runtime", "surviving-runtime")
+            if survivor
+            else ("retired-runtime",)
+        )
+        install_runtime_bundles(root, names)
+        run(root, "task", "skills:verify")
+        run(root, "git", "add", ".")
+        run(
+            root,
+            "git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-qm",
+            "installed bundles",
+        )
+        retire_runtime_bundle(root, "retired-runtime")
+        run(root, "task", "skills:verify")
+        run(root, "git", "add", ".")
+        run(
+            root,
+            "git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-qm",
+            "retired bundle",
+        )
+        isolated = root.parent / (root.name + "-offline")
+        try:
+            run(root, "./scripts/check.sh", offline=isolated)
+            run(root, "task", "prune-template-docs", "--", "--apply", offline=isolated)
+            assert not (root / ".agents/vendor/retired-runtime").exists()
+            assert (root / ".agents/vendor/surviving-runtime").exists() is survivor
+            run(root, "task", "skills:verify", offline=isolated)
+            run(root, "./scripts/check.sh", offline=isolated)
+        finally:
+            shutil.rmtree(isolated, ignore_errors=True)

@@ -45,12 +45,12 @@ remote取得はgithub.com上の公開repositoryだけを対象とする。全 `g
 
 `--name <skill> --commit <approved-full-sha>` 必須。
 任意のref切替は `--branch <name>` / `--tag <name>` / `--pin-commit` の相互排他で表す。
-指定なしは現在refを維持する。`--pin-commit` は `--commit` の値をsource refにも設定する。
+通常Skillでは指定なしは現在refを維持する。`--pin-commit` は `--commit` の値をsource refにも設定する。
 tagを採用・維持する場合は `--tag-object <approved-full-sha>` も必須とし、tag以外では拒否する。
 repository / subtree / license / legalMappingsの変更はsourceへ記載して開始commitに記録し、
 repinでその対象名と固定先を承認する。legalMappingsはhash変更だけでなく、LICENSEの移動やNOTICEの追加・削除を含む。
 通常updateは同じmappingの承認hash変更だけを許し、licenseまたはmapping構造の変更は拒否する。
-tag削除後は別refまたはcommit固定へ明示的に切り替える。
+通常Skillのtag削除後は別refまたはcommit固定へ明示的に切り替える。bundleは別の有効なstable tagを選ぶ。
 
 repinは旧固定先からの履歴連続性・旧tag同一性を要求せず、skill-metadata-v2.mdで限定した対象名の出典・legal policy遷移を許可する。
 承認SHAとの一致、旧本文・旧legalの旧lock一致、取得前上限、integrity、新sourceのlegal承認、配置先検査は必須とする。
@@ -160,3 +160,45 @@ scriptがexit 0になった後も、差分の対象とlegalを人がレビュー
 後続のcommit / push / PRを実行しない。成功後に通常branchを作り、検証済み差分をcommitする。
 `git remote -v` で確認してoriginを意図したGitHub repositoryへ変更してからpushし、通常のPRを作成する。
 公開先やbranch名をこのscriptで決めたり、認証情報を引数へ埋め込んだりしない。
+
+## Runtime bundleの操作
+
+descriptorとPOSIX権限は[schema v2](skill-metadata-v2.md#remote-runtime-bundle)を正とする。
+新規bundleはsourceだけを開始commitに追加し、既存updateで独立candidateへ取得する。
+bundle repinは `--name <name> --tag <tag> --commit <full-sha> --tag-object <full-sha>` を明示する。
+branch／pin-commitは拒否する。file集合、mode、limits、legal policyの変更はsourceへ記録して指名repinする。
+旧treeは旧lock policyで検査するので、file削減・上限引下げを旧treeへ先に適用しない。
+name／target／ownership／通常Skillとbundleの相互変換はupdate／repinの対象外である。
+
+JSON envelopeは不変。bundleの変更entryにはbundleFileChangesを追加する。
+各要素は `{path, before, after}` で、before／afterはnullまたは `{sha256, byteCount, executable}`。
+旧新inventoryのpath和集合をUTF-8 byte順で比較し、本文・size・modeが同一のfileは省く。
+追加はbefore=null、削除はafter=null、policyだけの変更は空配列となる。
+bundle policy差分がある場合だけbeforeBundle／afterBundleも出力する。通常Skillには追加しない。
+人間向け表示も同じinventory差分から追加／変更／削除と `<bundle名>/<相対path>`・Git modeを示し、本文は出力しない。
+JSONのfile pathはbundle内の相対pathを維持する。
+
+bundleを含むapplyは、既存vendor rootの不正な権限・種別と未宣言の空directoryを含む不正な直下entryを、
+通常Skill本文・bundle本文・source・lock・host linkの全書込み前に拒否する。新規root／targetの未作成は許す。
+再利用directoryはchmodしない。0555は権限適合だが書込みは失敗し得るため、失敗候補を保持して新candidateで再試行する。
+
+links／setupは通常Skillだけを登録する。bundleと同名の利用者linkも所有・削除しない。
+変更ありapplyは正常host linkを保持し、宣言名の追跡済み誤target leaf linkとbaseにもない欠落linkを修復する。
+追跡済み宣言外leaf linkは先をたどらず保持する。変更なしupdate／adopt-localの誤target拒否は維持する。
+candidateだけでの追跡済みlink削除、未追跡／ignored衝突、管理root／親／実体内・hostの深いsymlinkは全write前に拒否する。
+
+bundle選択のadopt-localは非対応であり、write前に拒否する。他の通常Skillをlocal化する場合は併存bundleを検証して保持する。
+完成済みbundle混在v2のmigrateはoffline検証後no-opとし、v1変換の既存契約は変更しない。
+Genshijin実体の同梱、host adapter、caveman撤去、runtime smokeは別作業（Issue #74）であり、この機構のテスト成功では代替しない。
+
+### Repository bundleの撤去手順
+
+1. 対象name、source entry、lock entry、vendor実体、関連文書と利用者差分を確認する。差分を無条件の再帰削除へ巻き込まない。
+2. source entry、lock entry、追跡済みvendor実体を同じGit変更で撤去し、関連文書を更新する。他bundleと通常Skillを保持する。
+3. `task skills:verify` を実行する。source／lock／実体の一部だけが残る6通りは全て失敗であり、次へ進まない。
+4. review用commitへまとめ、そのrepositoryと撤去後commitの完全SHAで `skills:check --source <repository> --base <full-sha>` を実行する。
+   旧commitを基準にしない。残存remoteだけを確認し、撤去したbundleは再取得・再生成しない。
+5. 必要なfocused tests、撤去後のprune検証、`./scripts/check.sh` と差分reviewを行う。失敗・未実行を完了扱いしない。
+
+撤去は新しいsnapshotに対するGit変更であり、原子的削除を保証しない。旧checkout、cache、host登録は自動的には消えない。
+host解除が必要なら対象製品の手順に従う。source-only追加経路を撤去完了の代替検証にしない。
