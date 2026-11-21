@@ -168,3 +168,58 @@ test("umask 077 preserves ordinary Skill write modes in mixed bundle apply",()=>
  assert.equal(lstatSync(join(c,".agents/vendor/runtime/Lib/run.sh")).mode&0o777,0o700);
  assert.deepEqual(verifyRepository(c),[]);
 });
+
+import { createHash } from "node:crypto";
+import { readdirSync } from "node:fs";
+function bundleApplyState(root: string): string {
+ const hash=createHash("sha256");
+ const visit=(path:string):void=>{
+  const absolute=join(root,path);const stat=lstatSync(absolute);hash.update(JSON.stringify([path,stat.mode]));
+  if(stat.isSymbolicLink())hash.update(readlinkSync(absolute));
+  else if(stat.isDirectory())for(const name of readdirSync(absolute).sort())visit(path?`${path}/${name}`:name);
+  else hash.update(readFileSync(absolute));
+ };
+ visit("");return hash.digest("hex");
+}
+for(const invalid of [0o777,0o775,0o757,0o4755,0o2755,0o1755,"undeclared-empty"] as const)test(`bundle apply preflight rejects existing vendor ${invalid} before every write`,async()=>{
+ const r=bundleRepository(false);const state=readRepositorySkillState(r);const {bundle:_,...remote}=runtimeSource("demo");
+ const demo={...remote,target:".agents/skills/demo",subtree:{path:"skills/demo"}};
+ writeFileSync(join(r,".agents/skills/skills.sources.json"),serializeSources({...state.sources,skills:[...state.sources.skills,demo]}));
+ const link=join(r,".codex/skills/local-skill");rmSync(link);symlinkSync("wrong",link);
+ const base=commitFixture(r);const c=candidate(r);const vendor=join(c,".agents/vendor");mkdirSync(vendor);
+ if(typeof invalid==="number")chmodSync(vendor,invalid);else mkdirSync(join(vendor,"undeclared"));
+ const sourceBefore=bundleApplyState(r);const before=bundleApplyState(c);
+ const files=[...bundleFiles,{path:"skills/demo/SKILL.md",executable:false,content:Buffer.from("---\nname: demo\ndescription: fixture\n---\n")}];
+ const result=await runSkillCommand("skills:update",[...args(r,base,c),"--apply"],{repositoryRoot:r,ghRunner:bundleRunner(undefined,files).runner});
+ assert.equal(result.exitCode,1);assert.deepEqual(result.report.changes,[]);assert.equal(bundleApplyState(c),before);assert.equal(bundleApplyState(r),sourceBefore);
+ assert.doesNotMatch(result.stderr,/最終offline verify/);assert.equal(readlinkSync(join(c,".codex/skills/local-skill")),"wrong");
+ const current=readRepositorySkillState(r);const trees=readSnapshotTrees(readCommittedSnapshot(r,base),current.sources,current.lock);
+ const plan=await planRemoteMaintenance({...current,installedTrees:trees},bundleRunner(undefined,files).runner);const writes:string[]=[];
+ assert.throws(()=>applyCandidate(preflightIsolation({source:r,base,candidate:c}),plan,path=>writes.push(path)),/bundle/);
+ assert.deepEqual(writes,[]);assert.equal(bundleApplyState(c),before);assert.equal(bundleApplyState(r),sourceBefore);
+});
+for(const mode of [0o700,0o755])for(const mask of [0o022,0o077])test(`bundle apply reuses empty vendor ${mode.toString(8)} under umask ${mask.toString(8)}`,()=>{
+ const r=bundleRepository(false);const base=commitFixture(r);const c=candidate(r);const vendor=join(c,".agents/vendor");mkdirSync(vendor);chmodSync(vendor,mode);
+ const result=maskedCommand(r,base,c,mask);assert.equal(result.exitCode,0,result.stderr);assert.equal(lstatSync(vendor).mode&0o7777,mode);
+ assert.equal(lstatSync(join(vendor,"runtime/LICENSE")).mode&0o777,0o644&~mask);assert.deepEqual(verifyRepository(c),[]);
+});
+test("bundle apply keeps valid readonly vendor distinct from invalid permissions",()=>{
+ const r=bundleRepository(false);const base=commitFixture(r);const c=candidate(r);const vendor=join(c,".agents/vendor");mkdirSync(vendor);chmodSync(vendor,0o555);
+ const before=bundleApplyState(c);const original=bundleApplyState(r);const result=maskedCommand(r,base,c,0o077);
+ assert.equal(result.exitCode,1);assert.match(result.stderr,/EACCES/);assert.doesNotMatch(result.stderr,/POSIX/);
+ assert.equal(bundleApplyState(c),before);assert.equal(bundleApplyState(r),original);
+ const fresh=candidate(r);assert.equal(maskedCommand(r,base,fresh,0o077).exitCode,0);assert.deepEqual(verifyRepository(fresh),[]);
+});
+test("multi-bundle update labels identical relative file paths without changing JSON",async()=>{
+ const r=bundleRepository(false);const state=readRepositorySkillState(r);const second=runtimeSource("runtime-b");
+ writeFileSync(join(r,".agents/skills/skills.sources.json"),serializeSources({...state.sources,skills:[...state.sources.skills,second]}));
+ const base=commitFixture(r);const c=candidate(r);const before=bundleApplyState(c);const context={repositoryRoot:r,ghRunner:bundleRunner().runner};
+ const human=await runSkillCommand("skills:update",args(r,base,c),context);assert.equal(human.exitCode,0,human.stderr);
+ const json=await runSkillCommand("skills:update",[...args(r,base,c),"--json"],context);assert.equal(json.exitCode,0,json.stderr);
+ assert.deepEqual(JSON.parse(json.stdout),human.report);assert.deepEqual(Object.keys(human.report).sort(),["changes","command","errors","schemaVersion","status","warnings"]);
+ for(const name of ["runtime","runtime-b"]){
+  assert.ok(human.stdout.split("\n").includes(`追加 ${name}/LICENSE: なし -> 100644`));
+  const change=human.report.changes.find(change=>change.name===name)!;assert.deepEqual(change.bundleFileChanges?.map(f=>f.path),["LICENSE","Lib/run.sh"]);
+ }
+ assert.ok(!human.stdout.includes(bundleFiles[0].content.toString().trim()));assert.equal(bundleApplyState(c),before);
+});

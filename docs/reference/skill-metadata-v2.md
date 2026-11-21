@@ -187,6 +187,11 @@ symlink／特殊fileを拒否する。vendor root自身と直下の種別も検�
 別rootにある同名の未宣言Skillでbundleを正当化しない。snapshotも全vendor pathを検査する。
 全bundle撤去時はvendor root不在を許可する。verifyはネットワークもchmodも行わない。
 
+bundleを含むapplyでは、既存vendor rootの種別・権限と直下の宣言名・種別を、本文・source・lock・host linkの
+最初の書込み前に検査する。旧lockにbundleがない新規追加でも、未宣言の空directoryを拒否する。
+新規root／targetの未作成は許可する。既存bundleと再利用directoryは旧lock policyで検査し、暗黙chmodしない。
+`.agents`親と通常Skillの権限規則は拡張しない。
+
 通常file／directoryの種別確認後、mode & 07777へ次の条件を適用する。
 
 - 全対象: group／other write（0022）、setuid／setgid／sticky（07000）を禁止する。

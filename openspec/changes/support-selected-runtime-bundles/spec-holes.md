@@ -85,6 +85,16 @@ BD-1〜BD-6について固定12分類を確認した。以下は仕様案と検�
     decoder、取得前metadata、live、snapshotで同じbundle規則を適用し、通常Skillの受理範囲は変えない。
     処理先: metadataのpath inventory、Task 2/3/4。
 
+17. BD-4（3〜7,9,11,12）: 新規source-only bundleと既存空vendor rootで、0777／0775／0757と特殊bitを全write前に拒否する。
+    vendor直下の未宣言空directoryも同じ拒否とし、Git statusにfileが現れないことを拒否省略の根拠にしない。
+    本文だけでなくsource／lock／host link、同時更新の通常Skill、元repositoryのbytes／mode／Gitも不変とする。
+    vendor root／新target未作成は許し、正常な既存0700／0755をumask 022／077で再利用してmodeを維持する。
+    既存0555は権限適合とし、実際のEACCESと区別する。新規生成でumask 0222がowner writeを落とす既存の部分失敗契約も維持する。
+    処理先: apply事前検査、Task 8。
+18. BD-4（1,4,5,9,12）: 同じ相対path（LICENSE等）を持つ複数bundleの変更をfixture化する。
+    人間向けfile行にそれぞれのbundle名が含まれ、JSONのname／相対path／modeと一致し、本文を表示しないことを確認する。
+    通常Skillの出力とJSON schemaは変更しない。処理先: preview、Task 8。
+
 ## 判断状態
 
 仕様案の中で処理先を持たない未定義ケースは残さない。上記でscope外とした保証は明示する。
@@ -97,3 +107,7 @@ remoteへのbundle追加、schema v2維持、exact required list、tag限定、b
 再レビューのfilesystem指摘についても、grillingでhost linkの修復・保持契約、制限的なlive権限、
 umaskを反映する生成権限、全祖先directoryの表記衝突拒否を合意し、最終認識合わせで仕様修正を承認した。
 実装時に新しい仕様判断が必要になった場合は完了済みcheckboxを保持して停止する。
+
+2026-11-20のgrill-with-docsで、人間向け表示のbundle名追加、既存tasksへの検証証跡集約、
+既存vendor rootの権限違反と未宣言空directoryの全write前拒否を合意した。
+Q4への「OK」で方針全体と修正・検証開始も承認された。実装・検証の進捗はtasks.mdを正とする。

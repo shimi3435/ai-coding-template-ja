@@ -175,7 +175,12 @@ JSON envelopeは不変。bundleの変更entryにはbundleFileChangesを追加す
 旧新inventoryのpath和集合をUTF-8 byte順で比較し、本文・size・modeが同一のfileは省く。
 追加はbefore=null、削除はafter=null、policyだけの変更は空配列となる。
 bundle policy差分がある場合だけbeforeBundle／afterBundleも出力する。通常Skillには追加しない。
-人間向け表示も同じinventory差分から追加／変更／削除とpath・Git modeを示し、本文は出力しない。
+人間向け表示も同じinventory差分から追加／変更／削除と `<bundle名>/<相対path>`・Git modeを示し、本文は出力しない。
+JSONのfile pathはbundle内の相対pathを維持する。
+
+bundleを含むapplyは、既存vendor rootの不正な権限・種別と未宣言の空directoryを含む不正な直下entryを、
+通常Skill本文・bundle本文・source・lock・host linkの全書込み前に拒否する。新規root／targetの未作成は許す。
+再利用directoryはchmodしない。0555は権限適合だが書込みは失敗し得るため、失敗候補を保持して新candidateで再試行する。
 
 links／setupは通常Skillだけを登録する。bundleと同名の利用者linkも所有・削除しない。
 変更ありapplyは正常host linkを保持し、宣言名の追跡済み誤target leaf linkとbaseにもない欠落linkを修復する。

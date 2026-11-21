@@ -151,6 +151,13 @@ bundleを書き込む操作では、書込開始前に現在のumaskを読み、
 umask自体は変更せず、通常Skill、source／lock、host link領域の既存書込規則を変更しない。
 bundleの置換時に削除・再生成するdirectoryも新規生成に含む。再利用する既存directoryはchmodしない。
 
+bundleを含むapplyは、既存vendor rootと再利用するbundle directoryの種別・上記POSIX権限、およびvendor直下の
+宣言集合を全write前に検査する。旧lockにbundleがない新規追加にも適用する。未宣言directoryは空でも拒否する。
+新規bundleの追加では未作成のvendor root／targetを許すが、既存bundleの欠落・旧treeの不整合は引き続き拒否する。
+不正状態を検出した場合、通常Skill本文・bundle本文・source・lock・host linkを一切変更しない。
+0555のような適合modeにowner writeを要求せず、I/O失敗時の候補保持と新candidate再試行は維持する。
+この追加検査はbundleのapply境界に限定し、`.agents`親や通常Skillへbundle権限契約を広げない。
+
 予定modeが上記の所有者read／executeを欠くなら、candidateへの最初のwriteより前に操作全体を拒否する。
 生成後のfile／directoryは予定modeを満たすように設定・確認し、fileを後から一律0644／0755へ戻さない。
 umask 022では0644／0755、077では0600／0700となる。生成・確認途中のI/O失敗は候補を保持して停止し、
@@ -173,7 +180,8 @@ before／afterはそれぞれ `null` または `{sha256, byteCount, executable}`
 旧／新lock inventoryのpath和集合を照合し、片方がない場合はnull、両方同じ場合は要素を出力しない。
 全要素をpathのUTF-8 byte順にし、両方nullは許可しない。内容・mode・sizeのどれかが変われば列挙する。
 policy変更だけでfileに差分がなければ空配列とし、新規bundleではbeforeが全てnullになる。
-人間向けpreviewも同じ差分から追加／変更／削除、path、modeを表示し、本文は表示しない。
+人間向けpreviewも同じ差分から追加／変更／削除、`<bundle名>/<相対path>`、modeを表示し、本文は表示しない。
+JSONのnameとbundleFileChanges内の相対pathは従来どおり分離し、JSON schemaを変更しない。
 通常Skillのchangesにはこのfieldを追加しない。上限は旧／新の最大100 filesの和集合200 entriesとなる。
 
 ## 外部interfaceの確認元

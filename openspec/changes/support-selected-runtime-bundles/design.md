@@ -91,6 +91,7 @@ target／name／ownership／Skill↔bundleの変更はrepinでも許可しない
 previewは変更file path、mode、legal、bundle policyの差分を示す。本文・secretは結果へ出力しない。
 JSONの既存envelopeを維持し、bundle policyに差分があるentryだけ `beforeBundle`／`afterBundle` を加える。
 bundleの変更entryには旧／新lock inventoryから導出した `bundleFileChanges` を加え、人間向け表示も同じ値を使う。
+人間向けの各file行は `<bundle名>/<相対path>` を表示し、複数bundleで同名fileがあっても識別可能にする。
 形式は[metadata](metadata.md#previewのfile差分)に定める。通常Skillの出力fieldは変更しない。
 同じcommitでもpolicyや最終treeが違えば変更として扱う。
 
@@ -132,6 +133,12 @@ group／other writeと特殊bitを禁止する。全許容条件と生成式はm
 
 bundle applyは新規・置換fileと新規directoryにumaskを反映する。予定modeの必須権限欠落は全write前に拒否する。
 再利用する既存directoryをchmodせず、通常Skill・source／lock・host linkの書込規則を維持する。
+bundleを含むapplyでは、既存のvendor rootと再利用するbundle directoryの種別・権限、vendor直下の宣言集合を、
+旧bundle lockの有無にかかわらず候補への最初のwriteより前に検査する。未宣言の空directoryも拒否する。
+この事前検査は、新規bundleのsource-only状態でvendor root／targetが未作成であることを許す。
+通常Skill本文、source／lock、host linkへのwriteも同じ事前拒否の後に行う。
+共通のisolation helperや`.agents`親の権限規則は厳格化せず、bundle専用のapply検査として補う。
+権限契約への適合と実際の書込み可能性は区別し、0555を権限違反として拒否しない。
 読み取り専用bundleをverifyできても、そのまま更新できるとは保証しない。書込失敗時は候補保持・停止を継承する。
 
 ## Pruneと下流

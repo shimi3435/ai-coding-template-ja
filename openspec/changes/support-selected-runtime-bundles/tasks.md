@@ -105,15 +105,102 @@
     7e06d8eの旧decoderとの一時probeで、同梱通常Skillのsource／lock serialized bytes一致と旧readerのbundle拒否を確認した。
     このprobeは通常CIへGit履歴依存を追加せず、一時ファイルを削除した。
 
+- [x] 8. 外部実装レビューの事前検査漏れと表示を修正する
+  - 成果: P2-1と関連する未宣言空vendor directoryを全write前に拒否し、P3-1のbundle別表示を明確化する。
+  - 依存: 6。
+  - 対象:
+    - `repo-tools/skill-updater/apply.ts`
+    - `repo-tools/skill-updater/bundle.ts`
+    - `repo-tools/skill-updater/repository.ts`
+    - `repo-tools/skill-updater/commands.ts`
+    - `repo-tools/skill-updater-bundle-command.test.ts`
+    - `docs/reference/skill-metadata-v2.md`
+    - `docs/reference/skill-maintenance.md`
+    - `openspec/changes/support-selected-runtime-bundles/`
+  - [x] 実装: bundle専用の既存vendor root事前検査とbundle名付きfile表示を実装し、公開referenceと回帰testを更新した。
+  - [x] 検証: spec-holes 17/18のRED→GREEN、公開操作、既存bundle／通常Skill回帰、umask／host link／repin互換を確認した。
+  - 証跡: 2026-11-20、追加回帰8件のREDを確認後、`node --test repo-tools/skill-updater-*.test.ts` はfresh実行exit 0、319 passed／0 skipped。
+    `npm run typecheck` と `git diff --check` もexit 0。追加13件は不正root・未宣言空directory、正常root×umask、0555と新clone再試行、複数bundle表示を検証する。
+    拒否時は通常Skill・bundle本文、metadata、host link、元repositoryとcandidateのbytes／mode／Gitを比較し、直接applyのwrite callbackも0件だった。
+
 - [x] 7. Review・最終gate・引渡しを行う
   - 成果: 全要件とspec-holesの検証対応、必要review、#74再開条件を確認する。
-  - 依存: 6。
+  - 依存: 8。
   - 対象:
     - `openspec/changes/support-selected-runtime-bundles/tasks.md`
     - `docs/template/retrospectives.md`
   - [x] 実装: 検証結果・制限・引渡し先を記録する。最終review／gate結果は同taskの検証状態として追記する。
   - [x] 検証: self-review、独立review、必要なfix/validation/diff review、最新 `./scripts/check.sh`、
     `task check:template`、別verifierをworkflow順に完了する。PRレビューは別途確認する。
+  - 解消: 外部実装レビューP2-1／P3-1はTask 8で修正した。cycle 2の独立再レビュー、両gate、別verifierが成功した。
+    過去のTask 1〜6と成功証跡は保持する。hosted CI／PRレビューは別の未完了工程であり、close／archiveは実行しない。
+
+## 外部実装レビュー後の修正方針（2026-11-20）
+
+基点は `2e3825ef479b5e64d273c7502b280a6d6c3439d0`。branchは `design/genshijin-bundle-support`。
+文書更新前はcleanだった。active change、正本7 artifacts、既存tasksの構造・依存・対象pathとownershipを確認した。
+利用者がgrill-with-docsによる方針策定を依頼した。Q4の最終認識合わせを「OK」で承認したため、
+1 executorで修正・検証cycle 2を開始する。commit／push等の外部操作は今回実行しない。
+
+- 外部レビューはREQUEST CHANGES、P0=0／P1=0／P2=1／P3=1。以前のAPPROVEをこの新しいfindingの解消証拠には使わない。
+- read-only調査agentの自作独立candidate probeで、空vendor root 0777が事前検査を通り、bundle本文2件・source・lockを書いた後、
+  最終offline verifyで失敗することを再現した。元repositoryは不変だった。
+- 同probeで未宣言の空vendor子directoryも書込み後に拒否された。利用者はQ3で、この同種の漏れを今回へ含めることを承認した。
+  新規追加の未作成root／targetは許す。既存bundleの旧lock検証と、変更しないbundleの保持・検証は省略しない。
+- 権限適合と書込み可能性は別の概念である。既存vendor root 0555は権限適合だが、probeではmkdirがEACCESとなった。
+  owner writeを新しい必須条件にせず、暗黙chmod・rollback・同じcandidateの再利用によって成功扱いにしない。
+  削除後再生成するdirectoryは既存metadataの新規生成契約に従う。`.agents`親と通常Skillの権限規則は拡張しない。
+- Q1合意: 人間向けfile行は `<bundle名>/<相対path>` を使う。JSON schemaは維持し、同名fileを持つ複数bundleの回帰を追加する。
+- Q2合意: 対象source commit、必要な差分識別情報、command、環境、件数、exit code、fresh／再利用の別を既存tasksへ集約する。
+  生logやfull identity bundleを恒久文書へ複製しない。最終証跡反映後の再実行は、実行済み結果として確認可能な形で記録する。
+  結果記録commitと検証対象commitを同一と偽らず、記録によって検証入力が変わった場合は最新入力で再検証する。
+- 検証順序: RED／再現probe→最小修正→focused・通常Skill回帰→self-review→独立再レビューと必要なdiff review→
+  最新入力の `./scripts/check.sh`／`task check:template` →初回reviewerとは別のverifier。
+  この方針策定時点では修正後の必須検証は未実行だった。以後の結果は各taskと下記cycle 2証跡へ記録する。
+  hosted CI／PRレビューは後続の未完了工程として分離する。
+- 文書化先は既存OpenSpecと、実装修正時の既存公開referenceを使う。新しいドメイン用語や不可逆な設計選択は生じていないため、
+  GLOSSARYへの実装詳細追加や新ADRは行わない。Issue #74、累積予算、完全排他、rollbackのscopeは変更しない。
+- 計画文書のself-review、task構造・依存・対象path照合、`task openspec:validate`（1 passed）、`git diff --check` は成功した。
+  これは計画文書の検証であり、未実装の修正や製品gateの成功を意味しない。
+- Q4承認後、branch／HEAD／active change、正本・task構造・依存・対象path、計画文書5 pathsのtype／mode／digest一致を確認した。
+  Node.js 24.14.1／Python 3.14.6を再確認し、safe boundaryを通過した。未解決の仕様判断はない。
+  追加executor、commit／push、PR、merge、close／archiveは承認範囲に含めない。
+
+## 実装review cycle 2（2026-11-20）
+
+- source commitは `2e3825ef479b5e64d273c7502b280a6d6c3439d0`。同worktreeの未commit修正を含むfresh検証であり、cycle 1のgreen evidenceは再利用しない。
+- 環境: Node.js 24.14.1／Python 3.14.6。commandのPATHは `/home/shimi3435/.nvm/versions/node/v24.14.1/bin:$PWD/.venv/bin:$PATH`。
+- self-reviewは全11 pathsのdiff、直接依存、正本、spec-holes 17/18とTask 8の結果を照合した。製品blocker・追加仕様判断なし。
+  全write前のroot検査、旧lockでの既存tree検査、生成directoryと再利用の区別、JSON不変を確認した。
+  この時点では独立review、最新の両gate、別verifierは未実行であり、Task 7は未完了とする。
+- `task openspec:validate` はfresh実行exit 0、1 passed。focused 319 passedとtypecheckの詳細はTask 8を参照する。
+- initial independent reviewer `bundle_cycle2_review` は全11 filesと直接依存をread-onlyで検査し、APPROVE、P0／P1／P2／P3は全て0だった。
+  bundle command testsはfresh実行48 passed／0 skipped／exit 0。独自probe 4件もexit 0で、保持するbundle root／内部directoryの0777を無変更で拒否し、
+  `.agents`親0777の維持と、削除・再生成targetの生成modeを確認した。`git diff --check` はexit 0。fix／diff review iterationは0回。
+
+- 2026-11-21の再開時にbranch／HEAD／active change、11 pathsの累積snapshot完全一致、Node.js／Pythonを再確認した。
+  正本とtasksは記録済み状態から不変であり、safe boundaryを通過した。中断前gateの一時logと完了exitは現環境で確認できないため、成功証跡として再利用せず両gateをfresh実行する。
+
+### Cycle 2の完了検証（2026-11-21）
+
+- 再開後、同worktreeで `./scripts/check.sh` をfresh実行しexit 0。Node 764 passed／0 skipped、Python 662 passed／126 skipped。
+  format／lint／typecheck、通常Skillのoffline verifyも成功した。
+- 続けて `task check:template` をfresh実行しexit 0。999 passed、保守側typecheckは0 errorsだった。
+  subprocess主体のcoverage集計にはNo data警告が出たが、command exitと999件のassertion成功を確認した。
+- 両gateのsource commitは本節冒頭の `2e3825e`、検証入力には未commit修正11 pathsを含む。
+  `git diff --binary HEAD` のSHA-256は `9d38acb9f4950c9b00561e29333a419a0f239c724af3c5897c7e67ebe8b163f2`。
+  実行前後に全tracked fileのtype／mode／内容とdiffを照合し、不変を確認した。環境は上記PATH、Linux WSL2 x86_64、C.UTF-8で、依存・lockfile・設定の変更はない。
+  このdigestは本完了証跡を追記する直前の入力を識別する。追記後の文書を同じ入力と偽って扱わない。
+- 別の独立verifier `bundle_cycle2_verifier` はfresh focusedを319 passed／0 skipped／exit 0で確認した。
+  独自probe 3件もexit 0。既存bundle root／内部directoryの0777を新bundle追加前に拒否し、元repositoryとcandidateのbytes／mode／inode／Git不変を確認した。
+  0444／0555の既存bundleを保持する追加も成功し、既存inode／mode、`.agents`親0777、vendor root0700を維持した。
+  新bundleのumask 077とoffline verifyも成功した。
+- verifierはHEAD／realpath／全tracked入力とdirty diff、環境を独立照合し、上記両gateをgreen evidenceとして再利用した。
+  blockerなし、required evidence不足なし。初回reviewerと別agentであり、前cycleのverifierとも異なる。repository編集はexecutorだけが行った。
+- Task 8とTask 7のローカル実装・検証を完了した。製品コードとtestsは独立レビュー後に変更していない。
+  hosted CI／PRレビュー、Issue #74の実runtimeは未検証の後続工程である。commit／push／PR作成／merge／close／archiveは今回実行していない。
+  close-ready／archive-readyとは判定せず、テンプレート保守のcloseは別途指示とPRレビュー収束を待つ。
+  close時の集計メモはself-review=2、review=2（今回の外部P2-1／P3-1）、CI=0、merge後=0へ更新する。正式retrospective行は実PR番号とclose時点で記録する。
 
 ## 実装検証の対応と引渡し（2026-11-18）
 
@@ -168,8 +255,8 @@ source commitは `7e06d8e45e4d4046c4dfa01d6c62283e9d6a7e45`、本branchのexecut
   固定版feasibility記録と実装の照合、`git diff --check` も成功した。
 - verifierはHEAD／realpath／dirty 25 pathsの集合・type・mode・SHAを独自に前後照合し、executorが環境・依存の無変更を確認した。
   上記2つの全体gateは入力同一性を満たすgreen evidenceとして再利用した。blockerなし、required evidence不足なしと判定された。
-- 証跡更新もprune integrationのcopy対象になるため、最終記録反映後の `./scripts/check.sh` と `task check:template` の
-  fresh再実行を最終完了判定の条件とする。失敗した場合はTask 7の検証状態を未完了へ戻し、成功扱いしない。
+- 当時の記録では最終証跡反映後の両gate再実行を完了条件としたが、その結果の永続記録が不足していた。
+  今回はcycle 2で両gateをfresh実行し、command・入力識別・件数・exitと独立verifierの確認結果を上記へ記録した。
 - Task 2〜7の実装とローカル検証を完了した。実装担当は1 executor、初回reviewerとverifierは別agentであり、
   追加executor、仕様拡張、commit／push／PR作成／merge／close／archiveは実行していない。
   運用はテンプレート保守向けcloseを継承する。PRレビュー／hosted CIとclose時のretrospective正式行は後続であり、

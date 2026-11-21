@@ -96,6 +96,21 @@ export function validateBundleDirectory(absolute: string): void {
   if (!s.isDirectory() || s.isSymbolicLink()) throw new Error("bundle directory種別不正");
   validateBundleMode(s.mode, true, true);
 }
+/** 新規追加では未作成rootを許可し、既存rootは全書込み前に検査する。 */
+export function validateExistingVendorRoot(root: string, bundleNames: readonly string[]): void {
+  const target = join(root,".agents/vendor");
+  assertSafeParents(root,target);
+  if (!lstatSync(target,{throwIfNoEntry:false})) return;
+  validateBundleDirectory(target);
+  const dir = opendirSync(target);
+  try {
+    for (let entry = dir.readSync(); entry !== null; entry = dir.readSync()) {
+      if (!bundleNames.includes(entry.name)) throw new Error(`未宣言bundle directory: ${entry.name}`);
+      const stat = lstatSync(join(target,entry.name));
+      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("bundle directory種別不正");
+    }
+  } finally { dir.closeSync(); }
+}
 function sameFile(before: Stats, after: Stats): boolean {
   return after.isFile() && after.nlink === 1 && before.dev === after.dev && before.ino === after.ino && before.size === after.size && before.mode === after.mode && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs;
 }

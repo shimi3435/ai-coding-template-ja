@@ -118,6 +118,10 @@ bundleの新規・置換fileと新規directoryは基準0644／0755にumaskを反
 - **WHEN** bundle policyは同じで選択fileの本文だけが変わる
 - **THEN** JSONと人間向けpreviewは旧／新inventory由来のpathと変更情報を表示し、本文は出力しない
 
+#### Scenario: Multiple bundles change files with the same relative path
+- **WHEN** 複数bundleで同じ相対pathのfileが変更される
+- **THEN** 人間向けfile差分はbundle名と相対pathの組で識別でき、既存JSON schemaは変わらない
+
 #### Scenario: Reduce the selected file list through repin
 - **WHEN** 利用者が新file集合をsourceへ記録し、名前とstable tagのcommit／tag objectを明示repinする
 - **THEN** 旧treeを新file集合で誤判定せず、新候補の正確な集合を検証して適用する
@@ -125,6 +129,14 @@ bundleの新規・置換fileと新規directoryは基準0644／0755にumaskを反
 #### Scenario: Conflicting untracked file in the vendor target
 - **WHEN** candidateの管理領域にuntracked／ignored file・link、vendor／Skill実体内のsymlink、管理領域の親／root symlink、またはhost領域の深いsymlinkがある
 - **THEN** 全writeの開始前に拒否し、既存fileを置換しない
+
+#### Scenario: An existing empty vendor root has invalid permissions
+- **WHEN** 新規bundleのsource-only状態で、candidateの既存空vendor rootがgroup／other writeや特殊bitなどの権限違反を持つ
+- **THEN** bundle専用のapply事前検査で、通常Skill本文・bundle本文・source・lock・host linkへの全writeより前に拒否し、既存modeを変更しない
+
+#### Scenario: An undeclared empty vendor directory exists
+- **WHEN** candidateのvendor直下に宣言されていない空directoryがある
+- **THEN** bundleを含むapplyは全write前に拒否する。新規bundle用の未作成targetはこの拒否条件と区別して許可する
 
 #### Scenario: Apply preserves normal host links
 - **WHEN** candidateに宣言済み通常Skillの正規host linkとGit追跡済みの宣言外leaf linkがあり、bundleの変更を適用する

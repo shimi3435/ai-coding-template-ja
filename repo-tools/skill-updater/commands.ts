@@ -86,7 +86,7 @@ export async function runSkillCommand(command:SkillCommandName,args:readonly str
   const bundlePreview=report.changes.flatMap(change=>(change.bundleFileChanges??[]).map(file=>{
     const action=file.before===null?"追加":file.after===null?"削除":"変更";
     const mode=(v:typeof file.before)=>v===null?"なし":v.executable?"100755":"100644";
-    return `${action} ${file.path}: ${mode(file.before)} -> ${mode(file.after)}\n`;
+    return `${action} ${change.name}/${file.path}: ${mode(file.before)} -> ${mode(file.after)}\n`;
   })).join("");
   const stdout=json?`${JSON.stringify(report,null,2)}\n`:`[${report.status}] ${command}\n${report.status === "failed" ? "" : approvalPreview}${report.changes.map(change=>JSON.stringify(change)).join("\n")}${report.changes.length?"\n":""}${bundlePreview}`;
   const stderr=[...report.warnings,...report.errors].map(text=>`${text}\n`).join("");

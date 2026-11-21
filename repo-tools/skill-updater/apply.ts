@@ -1,4 +1,4 @@
-import { validateBundleTree, validateBundleMode, readLiveBundle } from "./bundle.ts";
+import { validateBundleTree, validateBundleMode, validateExistingVendorRoot, readLiveBundle } from "./bundle.ts";
 import { verifyRemoteBefore } from "./planner.ts";
 import { constants, openSync, closeSync, writeFileSync, fchmodSync, chmodSync, mkdirSync, rmSync, lstatSync, readlinkSync, symlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -28,6 +28,7 @@ export function applyCandidate(candidate:IsolatedCandidate, plan:CandidatePlan, 
   }
   recheckIsolation(candidate);
   if(plan.sources.skills.some(s=>s.ownership==="remote" && s.bundle)) {
+    validateExistingVendorRoot(candidate.candidate,plan.sources.skills.filter(s=>s.ownership==="remote" && s.bundle).map(s=>s.name));
     const previous=readRepositorySkillState(candidate.candidate);
     for(const lock of previous.lock.skills) if(lock.bundle) {
       const old=sourceFromLock(lock);verifyRemoteBefore(old,lock,readLiveBundle(candidate.candidate,old));
